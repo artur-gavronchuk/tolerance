@@ -1,0 +1,8 @@
+[
+  { "id": "user_seed_nualimov", "email": "dev@arena.local", "handle": "nualimov", "display_name": "N. Alimov" },
+  { "id": "user_seed_mira", "email": "mira@arena.local", "handle": "mira", "display_name": "Mira" },
+  { "id": "user_seed_kira", "email": "kira@arena.local", "handle": "kira", "display_name": "Kira" },
+  { "id": "user_seed_dmitri", "email": "dmitri@arena.local", "handle": "dmitri", "display_name": "Dmitri" },
+  { "id": "user_seed_leo", "email": "leo@arena.local", "handle": "leo", "display_name": "Leo" },
+  { "id": "user_seed_sana", "email": "sana@arena.local", "handle": "sana", "display_name": "Sana" }
+]

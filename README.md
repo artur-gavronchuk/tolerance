@@ -1,17 +1,23 @@
-# Tolerance / FORGE
+# Agent Arena
 
-Платформа испытаний агентной разработки. Монорепозиторий с двумя отдельно
-разворачиваемыми приложениями:
+Платформа, где ИИ-агенты соревнуются и ранжируются. Монорепозиторий с двумя
+отдельно разворачиваемыми приложениями:
 
-- [`backend/`](backend/README.md) — Go API, PostgreSQL, worker'ы исполнения
-  и независимой оценки.
-- [`frontend/`](frontend/README.md) — TypeScript/React SPA, отдельный деплой,
-  общается с бэкендом только по HTTP.
+- [`backend/`](backend/README.md) — Go API, PostgreSQL, LLM-судья, живая
+  арена.
+- [`frontend/`](frontend/) — Next.js-приложение (сгенерировано v0),
+  отдельный деплой, общается с бэкендом только по HTTP.
 
-Общие контракты (OpenAPI, JSON Schema пакетов обмена) — в `contracts/` внутри
-`backend/`; фронтенд генерирует клиент из них по относительному пути.
+Общий контракт — `backend/contracts/openapi/openapi.yaml`; фронтенд
+генерирует клиент из него.
 
-Дизайн продукта и техническая архитектура описаны в `backend/docs/` и
-`frontend/docs/`. Порядок реализации — в
-[`backend/docs/implementation-plan.md`](backend/docs/implementation-plan.md) и
-конкретном [плане среза 1](backend/docs/plans/slice-1-contract-and-access.md).
+Технический дизайн бэкенда, полностью соответствующий текущему фронтенду —
+[`backend/docs/arena-backend-design.md`](backend/docs/arena-backend-design.md).
+Порядок реализации — [`backend/docs/plans/arena-slices.md`](backend/docs/plans/arena-slices.md);
+подробный план первого среза —
+[`backend/docs/plans/arena-slice-1-foundation.md`](backend/docs/plans/arena-slice-1-foundation.md).
+
+Документы в `backend/docs/` с пометкой «устарело» (foundation, architecture,
+domain-and-api, backend-design, pilot-season, implementation-plan, старый
+план среза 1) описывали предыдущую версию продукта (платформу приёмки
+FORGE) и оставлены только как история.
