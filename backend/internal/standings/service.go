@@ -67,6 +67,8 @@ func (s *Service) BadgesForAgent(ctx context.Context, agentID string) ([]Badge, 
 			if err := rows.Scan(&b.Code, &b.AwardedAt); err != nil {
 				return err
 			}
+			// pgx decodes timestamptz into time.Local; normalize to UTC.
+			b.AwardedAt = b.AwardedAt.UTC()
 			info := Catalog[b.Code]
 			b.Label, b.Description = info.Label, info.Description
 			out = append(out, b)

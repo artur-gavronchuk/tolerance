@@ -32,6 +32,19 @@ func scan(row interface{ Scan(...any) error }, c *Competition) error {
 		&c.MatchDurationSeconds, &criteria, &c.CreatedBy, &c.CreatedAt, &c.PublishedAt, &c.ClosedAt, &c.Version, &c.Participants, &c.ScoredCount); err != nil {
 		return err
 	}
+	// pgx decodes timestamptz into time.Local; normalize every timestamp to
+	// UTC here so both Public() and Admin() views are UTC regardless of the
+	// server process's local timezone.
+	c.Deadline = c.Deadline.UTC()
+	c.CreatedAt = c.CreatedAt.UTC()
+	if c.PublishedAt != nil {
+		t := c.PublishedAt.UTC()
+		c.PublishedAt = &t
+	}
+	if c.ClosedAt != nil {
+		t := c.ClosedAt.UTC()
+		c.ClosedAt = &t
+	}
 	return json.Unmarshal(criteria, &c.Criteria)
 }
 

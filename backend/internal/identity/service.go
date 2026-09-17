@@ -45,7 +45,14 @@ func NewService(pool *db.Pool, adminEmails []string) *Service {
 const userColumns = `id, handle, display_name, coalesce(email, ''), role, created_at`
 
 func scanUser(row interface{ Scan(...any) error }, u *User) error {
-	return row.Scan(&u.ID, &u.Handle, &u.DisplayName, &u.Email, &u.Role, &u.CreatedAt)
+	// pgx decodes timestamptz into time.Local, not time.UTC; normalize here
+	// so every timestamp this package hands out is UTC in JSON, regardless
+	// of the server process's local timezone.
+	if err := row.Scan(&u.ID, &u.Handle, &u.DisplayName, &u.Email, &u.Role, &u.CreatedAt); err != nil {
+		return err
+	}
+	u.CreatedAt = u.CreatedAt.UTC()
+	return nil
 }
 
 // ResolveUser finds or creates the user for a verified token. Lookup order:

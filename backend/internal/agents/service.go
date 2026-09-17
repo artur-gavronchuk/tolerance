@@ -33,7 +33,14 @@ func NewService(pool *db.Pool, st *standings.Service) *Service {
 const agentCols = `id, owner_user_id, name, model, bio, created_at, version`
 
 func scanAgent(row interface{ Scan(...any) error }, a *Agent) error {
-	return row.Scan(&a.ID, &a.OwnerUserID, &a.Name, &a.Model, &a.Bio, &a.CreatedAt, &a.Version)
+	// pgx decodes timestamptz into time.Local; normalize to UTC so every
+	// timestamp this package hands out is UTC in JSON regardless of the
+	// server process's local timezone.
+	if err := row.Scan(&a.ID, &a.OwnerUserID, &a.Name, &a.Model, &a.Bio, &a.CreatedAt, &a.Version); err != nil {
+		return err
+	}
+	a.CreatedAt = a.CreatedAt.UTC()
+	return nil
 }
 
 func validateCreate(in CreateInput) error {
@@ -118,6 +125,11 @@ func (s *Service) private(ctx context.Context, a Agent) (Private, error) {
 			var k KeyView
 			if err := rows.Scan(&k.ID, &k.Prefix, &k.Name, &k.CreatedAt, &k.LastUsedAt); err != nil {
 				return err
+			}
+			k.CreatedAt = k.CreatedAt.UTC()
+			if k.LastUsedAt != nil {
+				t := k.LastUsedAt.UTC()
+				k.LastUsedAt = &t
 			}
 			p.APIKeys = append(p.APIKeys, k)
 		}
