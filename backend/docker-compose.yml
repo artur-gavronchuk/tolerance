@@ -1,0 +1,23 @@
+# Local development only. Real participants are never run here (see
+# docs/architecture.md §8); this brings up PostgreSQL for the api and
+# cmd/migrate to talk to. An OIDC provider (Dex/Keycloak) is added before
+# the first external pilot per docs/plans/slice-1-contract-and-access.md.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: forge_migrate
+      POSTGRES_PASSWORD: forge_migrate_dev_password
+      POSTGRES_DB: forge
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - forge-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forge_migrate -d forge"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  forge-postgres-data:

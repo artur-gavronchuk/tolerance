@@ -1,0 +1,13 @@
+{
+  "dataset_version": "city-synthetic-v1",
+  "date": "2026-09-17",
+  "start_minute": 600,
+  "time_limit_minutes": 180,
+  "walk_limit_minutes": 40,
+  "interests": ["culture", "nature", "food"],
+  "stops": [
+    {"place_id": "museum", "arrival_minute": 610, "departure_minute": 655},
+    {"place_id": "park", "arrival_minute": 667, "departure_minute": 697},
+    {"place_id": "cafe", "arrival_minute": 705, "departure_minute": 735}
+  ]
+}
