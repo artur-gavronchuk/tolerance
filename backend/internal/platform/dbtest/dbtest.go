@@ -1,9 +1,7 @@
 // Package dbtest starts a disposable PostgreSQL container, applies the real
 // migrations against it, and hands integration tests both an admin
-// connection (for arranging fixtures and asserting things RLS would
-// normally hide) and the same forge_app connection the running service
-// uses. Every module's integration tests share this so "does RLS actually
-// block this" is answered against the real schema, not a mock.
+// connection (for arranging fixtures) and the same arena_app connection the
+// running service uses.
 package dbtest
 
 import (
@@ -19,12 +17,12 @@ import (
 	"tolerance/internal/platform/db"
 )
 
-const forgeAppTestPassword = "forge_app_test_password" // ephemeral per-container, not a real secret
+const appTestPassword = "arena_app_test_password" // ephemeral per-container, not a real secret
 
 // DB is a fully migrated, disposable database plus both roles' pools.
 type DB struct {
-	AdminPool *db.Pool // migration/owner role; bypasses no RLS check but also isn't subject to the app's policies
-	AppPool   *db.Pool // forge_app; exactly what cmd/api connects as
+	AdminPool *db.Pool // migration/owner role, for arranging fixtures and asserting things
+	AppPool   *db.Pool // arena_app; exactly what cmd/api connects as
 	AdminDSN  string
 	AppDSN    string
 }
@@ -37,10 +35,10 @@ func New(t *testing.T) *DB {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	container, err := tcpostgres.Run(ctx, "postgres:14-alpine",
-		tcpostgres.WithDatabase("forge"),
-		tcpostgres.WithUsername("forge_migrate"),
-		tcpostgres.WithPassword("forge_migrate_test_password"),
+	container, err := tcpostgres.Run(ctx, "postgres:16-alpine",
+		tcpostgres.WithDatabase("arena"),
+		tcpostgres.WithUsername("arena_migrate"),
+		tcpostgres.WithPassword("arena_migrate_test_password"),
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second)),
 	)
 	if err != nil {
@@ -55,7 +53,7 @@ func New(t *testing.T) *DB {
 		t.Fatalf("connection string: %v", err)
 	}
 
-	t.Setenv("FORGE_APP_ROLE_PASSWORD", forgeAppTestPassword)
+	t.Setenv("ARENA_APP_ROLE_PASSWORD", appTestPassword)
 	if err := db.Migrate(adminDSN); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -68,7 +66,7 @@ func New(t *testing.T) *DB {
 	if err != nil {
 		t.Fatalf("mapped port: %v", err)
 	}
-	appDSN := fmt.Sprintf("postgres://forge_app:%s@%s:%s/forge?sslmode=disable", forgeAppTestPassword, host, port.Port())
+	appDSN := fmt.Sprintf("postgres://arena_app:%s@%s:%s/arena?sslmode=disable", appTestPassword, host, port.Port())
 
 	adminPool, err := db.Open(ctx, adminDSN)
 	if err != nil {

@@ -1,5 +1,5 @@
 // Command migrate applies pending schema migrations. It connects with the
-// migration role (which owns the schema) and never with forge_app.
+// migration role (which owns the schema) and never with arena_app.
 package main
 
 import (
@@ -11,12 +11,12 @@ import (
 )
 
 func main() {
-	dsn := os.Getenv("FORGE_MIGRATE_DATABASE_URL")
+	dsn := os.Getenv("ARENA_MIGRATE_DATABASE_URL")
 	if dsn == "" {
-		log.Fatal("FORGE_MIGRATE_DATABASE_URL must be set to a role that owns the schema")
+		log.Fatal("ARENA_MIGRATE_DATABASE_URL must be set to a role that owns the schema")
 	}
-	if os.Getenv("FORGE_APP_ROLE_PASSWORD") == "" {
-		log.Fatal("FORGE_APP_ROLE_PASSWORD must be set; migration 00001 uses it to (re)create the forge_app role")
+	if os.Getenv("ARENA_APP_ROLE_PASSWORD") == "" {
+		log.Fatal("ARENA_APP_ROLE_PASSWORD must be set; migration 00001 uses it to (re)create the arena_app role")
 	}
 	start := time.Now()
 	if err := db.Migrate(dsn); err != nil {
