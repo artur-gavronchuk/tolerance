@@ -41,7 +41,7 @@ func Unauthenticated(message string) *Problem {
 }
 func Forbidden(message string) *Problem { return New(http.StatusForbidden, "forbidden", message) }
 func NotFound() *Problem {
-	return New(http.StatusNotFound, "not_found", "Объект не найден.")
+	return New(http.StatusNotFound, "not_found", "Not found")
 }
 func StateConflict(message string) *Problem {
 	return New(http.StatusConflict, "state_conflict", message)
@@ -50,7 +50,7 @@ func InvalidBody(message string) *Problem {
 	return New(http.StatusUnprocessableEntity, "invalid_body", message)
 }
 func Internal() *Problem {
-	return New(http.StatusInternalServerError, "internal_error", "Не удалось сохранить или прочитать состояние.")
+	return New(http.StatusInternalServerError, "internal_error", "Internal error")
 }
 
 // WriteError writes err as a problem response. Errors that are not *Problem
@@ -105,10 +105,10 @@ func Decode(raw []byte, dst any) error {
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if err := d.Decode(dst); err != nil {
-		return InvalidBody("Некорректный JSON или неизвестное поле.")
+		return InvalidBody("Invalid JSON or unknown field")
 	}
 	if err := d.Decode(new(any)); err != io.EOF {
-		return InvalidBody("Ожидается один JSON-объект.")
+		return InvalidBody("Expected a single JSON object")
 	}
 	return nil
 }

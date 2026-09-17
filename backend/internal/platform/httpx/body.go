@@ -13,7 +13,7 @@ const maxBodyBytes = 1 << 20 // 1 MiB
 func ReadBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
-		return nil, New(http.StatusRequestEntityTooLarge, "body_too_large", "Тело запроса превышает 1 MiB.")
+		return nil, New(http.StatusRequestEntityTooLarge, "body_too_large", "Request body exceeds 1 MiB")
 	}
 	return raw, nil
 }

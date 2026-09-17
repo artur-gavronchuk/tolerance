@@ -20,10 +20,11 @@ import (
 // the ID token, not the access token, and slice 1 does not call userinfo to
 // backfill them.
 type Claims struct {
-	Issuer  string
-	Subject string
-	Email   string
-	Name    string
+	Issuer            string
+	Subject           string
+	Email             string
+	Name              string
+	PreferredUsername string
 }
 
 // Fetcher fetches a JWKS document. jwk.Fetch satisfies this; tests supply a
@@ -52,6 +53,14 @@ func NewVerifier(issuer, audience, jwksURL string, ttl time.Duration) *Verifier 
 	}
 	return &Verifier{issuer: issuer, audience: audience, jwksURL: jwksURL, ttl: ttl,
 		fetch: func(ctx context.Context, url string) (jwk.Set, error) { return jwk.Fetch(ctx, url) }}
+}
+
+// NewVerifierWithFetcher builds a Verifier with a custom Fetcher, for tests
+// that sign tokens against an in-process key set instead of a real JWKS
+// endpoint. jwksURL is passed as "" and never dereferenced since fetch
+// ignores its url argument in that case.
+func NewVerifierWithFetcher(issuer, audience string, f Fetcher) *Verifier {
+	return &Verifier{issuer: issuer, audience: audience, ttl: time.Hour, fetch: f}
 }
 
 func (v *Verifier) keySet(ctx context.Context) (jwk.Set, error) {
@@ -97,5 +106,6 @@ func (v *Verifier) Verify(ctx context.Context, rawToken string) (Claims, error) 
 	claims := Claims{Issuer: issuer, Subject: subject}
 	_ = token.Get("email", &claims.Email)
 	_ = token.Get("name", &claims.Name)
+	_ = token.Get("preferred_username", &claims.PreferredUsername)
 	return claims, nil
 }
