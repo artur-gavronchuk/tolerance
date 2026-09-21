@@ -27,6 +27,7 @@ import (
 	"tolerance/internal/platform/dbtest"
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/standings"
+	"tolerance/internal/submissions"
 )
 
 const e2eIssuer = "https://id.example/realms/arena"
@@ -98,8 +99,10 @@ func newTestServer(t *testing.T) (*httptest.Server, *testIdP) {
 	cfg := config{addr: "127.0.0.1:0", webOrigin: "http://localhost:3000", oidcIssuer: e2eIssuer, oidcAudience: e2eAudience,
 		adminEmails: []string{"admin@arena.local"}}
 	st := standings.NewService(d.AppPool)
+	at := attempts.NewService(d.AppPool)
 	dp := deps{pool: d.AppPool, verifier: idp.verifier(), users: identity.NewService(d.AppPool, cfg.adminEmails),
-		agents: agents.NewService(d.AppPool, st), standings: st, competitions: competitions.NewService(d.AppPool), attempts: attempts.NewService(d.AppPool)}
+		agents: agents.NewService(d.AppPool, st), standings: st, competitions: competitions.NewService(d.AppPool), attempts: at,
+		submissions: submissions.NewService(d.AppPool, at, "http://localhost:3000", false)}
 	srv := httptest.NewServer(newHandler(cfg, dp))
 	t.Cleanup(srv.Close)
 	return srv, idp
@@ -108,6 +111,16 @@ func newTestServer(t *testing.T) (*httptest.Server, *testIdP) {
 // call performs a request, validates the response against openapi.yaml,
 // and decodes the JSON body into out (if non-nil).
 func call(t *testing.T, router routers.Router, srv *httptest.Server, method, path, token string, body any, out any) int {
+	t.Helper()
+	key := ""
+	if method == http.MethodPost {
+		key = idgen.New("idem")
+	}
+	return callKey(t, router, srv, method, path, token, key, body, out)
+}
+
+// callKey is call with an explicit Idempotency-Key, for tests that replay it.
+func callKey(t *testing.T, router routers.Router, srv *httptest.Server, method, path, token, idemKey string, body any, out any) int {
 	t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
@@ -123,8 +136,8 @@ func call(t *testing.T, router routers.Router, srv *httptest.Server, method, pat
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	if method == http.MethodPost {
-		req.Header.Set("Idempotency-Key", idgen.New("idem"))
+	if idemKey != "" {
+		req.Header.Set("Idempotency-Key", idemKey)
 	}
 	resp, err := srv.Client().Do(req)
 	if err != nil {
@@ -444,5 +457,158 @@ func TestEndToEnd_Attempts(t *testing.T) {
 	}
 	if code := call(t, router, srv, "POST", base+"/attempts", key.Key, start, &retry); code != http.StatusCreated || retry.Attempt.No != 2 {
 		t.Fatalf("a new official attempt after the void: %d %+v", code, retry)
+	}
+}
+
+func TestEndToEnd_Submission(t *testing.T) {
+	srv, idp := newTestServer(t)
+	router, err := openapi.Router()
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminTok := idp.token(t, "admin-sub", "admin@arena.local", "Admin")
+	userTok := idp.token(t, "mira-sub", "mira@example.com", "Mira")
+	otherTok := idp.token(t, "kira-sub", "kira@example.com", "Kira")
+
+	in, err := seed.TaskCompetitionInput("city-day-planner", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created struct {
+		ID      string `json:"id"`
+		Version int    `json:"version"`
+	}
+	call(t, router, srv, "POST", "/api/v1/admin/competitions", adminTok, in, &created)
+	call(t, router, srv, "POST", "/api/v1/admin/competitions/"+created.ID+"/publish", adminTok, map[string]any{"expected_version": created.Version}, nil)
+
+	agentKey := func(tok, name string) string {
+		call(t, router, srv, "POST", "/api/v1/me/agent", tok, map[string]any{"name": name, "model": "model-a", "bio": "b"}, nil)
+		var k struct {
+			Key string `json:"key"`
+		}
+		call(t, router, srv, "POST", "/api/v1/me/agent/api-keys", tok, map[string]any{"name": "laptop"}, &k)
+		return k.Key
+	}
+	atlasKey, novaKey := agentKey(userTok, "Atlas"), agentKey(otherTok, "Nova")
+
+	var started struct {
+		Attempt struct {
+			ID string `json:"id"`
+		} `json:"attempt"`
+	}
+	call(t, router, srv, "POST", "/api/v1/agent/competitions/city-day-planner/attempts", atlasKey,
+		map[string]any{"kind": "official", "agent_config": map[string]any{"adapter": "command"}}, &started)
+	attemptID := started.Attempt.ID
+	submit := "/api/v1/agent/attempts/" + attemptID + "/submission"
+	body := map[string]any{
+		"summary":     "Static planner with greedy scheduling, remove/replace and localStorage.",
+		"preview_url": "https://a.github.io/planner/", "repo_url": "https://github.com/o/planner",
+		"commit_sha": "3f9a2b1c0d5e6f708192a3b4c5d6e7f801234567", "cost": map[string]any{"usd": 1.42, "source": "claude-code-cli"},
+	}
+
+	// Invalid input and foreign credentials come first: nothing may be created.
+	bad := map[string]any{"summary": body["summary"], "preview_url": "http://169.254.169.254/"}
+	if code := call(t, router, srv, "POST", submit, atlasKey, bad, nil); code != http.StatusUnprocessableEntity {
+		t.Fatalf("a metadata address as the preview: %d", code)
+	}
+	if code := call(t, router, srv, "POST", submit, userTok, body, nil); code != http.StatusUnauthorized {
+		t.Fatalf("a user token on the agent route: %d", code)
+	}
+	if code := call(t, router, srv, "POST", submit, novaKey, body, nil); code != http.StatusNotFound {
+		t.Fatalf("another agent's attempt: %d", code)
+	}
+	var open struct {
+		Items []any `json:"items"`
+	}
+	call(t, router, srv, "GET", "/api/v1/competitions/city-day-planner/submissions?include=pending", "", nil, &open)
+	if len(open.Items) != 0 {
+		t.Fatalf("nothing may exist yet: %+v", open)
+	}
+
+	var first struct {
+		ID        string `json:"id"`
+		ResultURL string `json:"result_url"`
+		Status    string `json:"score_status"`
+		CheckRun  struct {
+			Status string `json:"status"`
+		} `json:"check_run"`
+	}
+	const idemKey = "sub-attempt-replay-1"
+	if code := callKey(t, router, srv, "POST", submit, atlasKey, idemKey, body, &first); code != http.StatusCreated {
+		t.Fatalf("submit: %d", code)
+	}
+	if first.Status != "pending" || first.CheckRun.Status != "queued" || first.ResultURL != "http://localhost:3000/submissions/"+first.ID {
+		t.Fatalf("submitted: %+v", first)
+	}
+
+	// The connector retries after a lost response: same key, same body, same submission.
+	var replay struct {
+		ID string `json:"id"`
+	}
+	if code := callKey(t, router, srv, "POST", submit, atlasKey, idemKey, body, &replay); code != http.StatusCreated || replay.ID != first.ID {
+		t.Fatalf("an idempotent replay must return the first result: %d %+v", code, replay)
+	}
+	changed := map[string]any{"summary": "A different summary that is long enough to pass.", "preview_url": "https://a.github.io/planner/"}
+	if code := callKey(t, router, srv, "POST", submit, atlasKey, idemKey, changed, nil); code != http.StatusConflict {
+		t.Fatalf("the same key with another body: %d", code)
+	}
+	// A new key is a new request: the attempt already has its submission.
+	if code := call(t, router, srv, "POST", submit, atlasKey, body, nil); code != http.StatusConflict {
+		t.Fatalf("a second submission: %d", code)
+	}
+
+	var got struct {
+		Attempt struct {
+			Kind string `json:"kind"`
+			No   int    `json:"no"`
+		} `json:"attempt"`
+		Limitations []string `json:"limitations"`
+		Verify      string   `json:"verification"`
+	}
+	if code := call(t, router, srv, "GET", "/api/v1/submissions/"+first.ID, "", nil, &got); code != http.StatusOK || got.Attempt.Kind != "official" || got.Verify != "self_reported" || len(got.Limitations) == 0 {
+		t.Fatalf("public read: %d %+v", code, got)
+	}
+	call(t, router, srv, "GET", "/api/v1/competitions/city-day-planner/submissions", "", nil, &open)
+	if len(open.Items) != 0 {
+		t.Fatal("an unscored submission is not in the default list")
+	}
+	call(t, router, srv, "GET", "/api/v1/competitions/city-day-planner/submissions?include=pending", "", nil, &open)
+	if len(open.Items) != 1 {
+		t.Fatalf("include=pending: %+v", open)
+	}
+	call(t, router, srv, "GET", "/api/v1/agents/atlas/submissions?include=pending&kind=all", "", nil, &open)
+	if len(open.Items) != 1 {
+		t.Fatalf("agent list: %+v", open)
+	}
+	if code := call(t, router, srv, "GET", "/api/v1/competitions/city-day-planner/submissions?kind=bogus", "", nil, nil); code != http.StatusUnprocessableEntity {
+		t.Fatalf("bad kind: %d", code)
+	}
+	if code := call(t, router, srv, "GET", "/api/v1/submissions/sub_missing", "", nil, nil); code != http.StatusNotFound {
+		t.Fatalf("unknown submission: %d", code)
+	}
+	call(t, router, srv, "GET", "/api/v1/me/submissions", userTok, nil, &open)
+	if len(open.Items) != 1 {
+		t.Fatalf("my submissions: %+v", open)
+	}
+	call(t, router, srv, "GET", "/api/v1/me/submissions", otherTok, nil, &open)
+	if len(open.Items) != 0 {
+		t.Fatalf("another user's submissions must not leak: %+v", open)
+	}
+	if code := call(t, router, srv, "GET", "/api/v1/me/submissions", atlasKey, nil, nil); code != http.StatusUnauthorized {
+		t.Fatalf("an API key on /me: %d", code)
+	}
+
+	// Revoking the key stops the connector at once.
+	var me struct {
+		Agent struct {
+			APIKeys []struct {
+				ID string `json:"id"`
+			} `json:"api_keys"`
+		} `json:"agent"`
+	}
+	call(t, router, srv, "GET", "/api/v1/me", userTok, nil, &me)
+	call(t, router, srv, "DELETE", "/api/v1/me/agent/api-keys/"+me.Agent.APIKeys[0].ID, userTok, nil, nil)
+	if code := call(t, router, srv, "POST", submit, atlasKey, body, nil); code != http.StatusUnauthorized {
+		t.Fatalf("a revoked key: %d", code)
 	}
 }

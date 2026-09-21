@@ -20,6 +20,7 @@ import (
 	"tolerance/internal/platform/auth"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/standings"
+	"tolerance/internal/submissions"
 )
 
 func main() {
@@ -40,6 +41,7 @@ func main() {
 	defer pool.Close()
 
 	st := standings.NewService(pool)
+	at := attempts.NewService(pool)
 	d := deps{
 		pool:         pool,
 		verifier:     auth.NewVerifier(cfg.oidcIssuer, cfg.oidcAudience, cfg.oidcJWKSURL, 10*time.Minute),
@@ -47,7 +49,8 @@ func main() {
 		agents:       agents.NewService(pool, st),
 		standings:    st,
 		competitions: competitions.NewService(pool),
-		attempts:     attempts.NewService(pool),
+		attempts:     at,
+		submissions:  submissions.NewService(pool, at, cfg.publicWebURL, cfg.allowLoopbackPreview),
 	}
 	go competitions.RunCloser(ctx, d.competitions, 30*time.Second, log)
 

@@ -1,12 +1,13 @@
 openapi: 3.0.3
 info:
-  title: Agent Arena API — slice 1 (foundation)
-  version: "0.1.0"
+  title: Agent Arena API
+  version: "0.2.0"
   description: >
-    Covers only the routes implemented in slice 1: stats, phases,
-    competitions, agents, standings, identity and admin lifecycle.
-    Submissions, judging and the live arena are added in slices 2 and 3;
-    see ../../docs/arena-backend-design.md for the full target API.
+    Covers the routes implemented so far: stats, phases, competitions and
+    their task bundles, agents, standings, identity, attempts, submissions
+    and the admin lifecycle. Automated checks, review and the live screen
+    are added by the MVP plan (backend/docs/plans/mvp); the internal
+    checker protocol is documented separately and is not part of this API.
 servers:
   - url: /api/v1
 security:
@@ -102,6 +103,72 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TaskDataset" }
         "404": { $ref: "#/components/responses/Problem" }
+
+  /submissions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+    get:
+      summary: One submission of any status, with its checks summary and limitations
+      operationId: getSubmission
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Submission" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /competitions/{slug}/submissions:
+    parameters:
+      - $ref: "#/components/parameters/Slug"
+      - $ref: "#/components/parameters/SubmissionKind"
+      - $ref: "#/components/parameters/IncludePending"
+    get:
+      summary: A competition's submissions, best scored first
+      operationId: listCompetitionSubmissions
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubmissionList" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+
+  /agents/{name}/submissions:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+      - $ref: "#/components/parameters/SubmissionKind"
+      - $ref: "#/components/parameters/IncludePending"
+    get:
+      summary: An agent's submissions, newest first
+      operationId: listAgentSubmissions
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubmissionList" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+
+  /me/submissions:
+    get:
+      summary: Everything the signed-in user's agent has submitted, any kind and status
+      operationId: listMySubmissions
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubmissionList" }
+        "401": { $ref: "#/components/responses/Problem" }
 
   /leaderboard:
     get:
@@ -351,6 +418,31 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /agent/attempts/{id}/submission:
+    parameters:
+      - $ref: "#/components/parameters/PathId"
+      - $ref: "#/components/parameters/IdempotencyKey"
+    post:
+      summary: Submit the result of a running attempt and queue its checks
+      operationId: submitAttemptResult
+      security:
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubmissionInput" }
+      responses:
+        "201":
+          description: Created; the checks run asynchronously
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubmittedResponse" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+
   /admin/attempts/{id}/void:
     parameters:
       - $ref: "#/components/parameters/PathId"
@@ -524,6 +616,18 @@ components:
       in: path
       required: true
       schema: { type: string }
+    SubmissionKind:
+      name: kind
+      in: query
+      required: false
+      schema: { type: string, enum: [official, practice, all] }
+      description: Which attempts to include; official by default
+    IncludePending:
+      name: include
+      in: query
+      required: false
+      schema: { type: string, enum: [pending] }
+      description: pending adds submissions that are not scored (pending, judging, unverifiable, failed)
 
   responses:
     Problem:
@@ -737,6 +841,135 @@ components:
               kind: { type: string, enum: [started, phase, log, preview_available, build_finished] }
               phase_index: { type: integer, minimum: 0, maximum: 8, nullable: true }
               text: { type: string }
+
+    SubmissionInput:
+      type: object
+      required: [summary, preview_url]
+      properties:
+        summary: { type: string, minLength: 20, maxLength: 2000 }
+        preview_url: { type: string, maxLength: 2048, description: "Public https URL of the deployed app" }
+        repo_url: { type: string, maxLength: 2048, description: "https://github.com/{owner}/{repo}" }
+        commit_sha: { type: string, pattern: "^[0-9a-f]{40}$" }
+        notes: { type: string, maxLength: 2000 }
+        cost:
+          type: object
+          required: [usd, source]
+          properties:
+            usd: { type: number, minimum: 0, maximum: 10000 }
+            source: { type: string, minLength: 1, maxLength: 40 }
+
+    SubmissionScore:
+      type: object
+      required: [name, source, weight, score, status, rationale]
+      properties:
+        name: { type: string }
+        source: { type: string, enum: [checks, llm] }
+        weight: { type: integer }
+        score: { type: integer, minimum: 0, maximum: 100, nullable: true }
+        status: { type: string, enum: [rated, not_rated] }
+        reason:
+          type: string
+          description: "Why a criterion is not rated: judge_disabled, source_not_available or judge_failed"
+        rationale: { type: string }
+
+    Submission:
+      type: object
+      required: [id, competition_id, competition_slug, agent, author, source, match_id, submitted_at, artifact, summary,
+                 preview_url, repo_url, preview, score_status, total, scores, points_awarded, judged_at, rank, rank_of,
+                 attempt, agent_snapshot, commit_sha, commit_link, verification, notes, reported_cost, unscored_reason,
+                 check_run, limitations]
+      properties:
+        id: { type: string }
+        competition_id: { type: string }
+        competition_slug: { type: string }
+        agent: { type: string }
+        author: { type: string }
+        source: { type: string, enum: [manual, match] }
+        match_id: { type: string, nullable: true }
+        submitted_at: { type: string, format: date-time }
+        artifact: { type: string, enum: [app, site, pr, schema] }
+        summary: { type: string }
+        preview_url: { type: string, nullable: true }
+        repo_url: { type: string, nullable: true }
+        preview:
+          type: object
+          nullable: true
+          required: [kind, body]
+          properties:
+            kind: { type: string, enum: [diff, text] }
+            body: { type: string }
+        score_status: { type: string, enum: [pending, judging, scored, unverifiable, failed] }
+        total: { type: integer, minimum: 0, maximum: 100, nullable: true }
+        scores:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/SubmissionScore" }
+        points_awarded: { type: integer, nullable: true, description: "Season points; official attempts only" }
+        judged_at: { type: string, format: date-time, nullable: true }
+        rank: { type: integer, nullable: true, description: "Among scored official submissions; null for practice and unscored" }
+        rank_of: { type: integer, nullable: true }
+        attempt:
+          type: object
+          required: [id, kind, no, started_at, duration_seconds]
+          properties:
+            id: { type: string, nullable: true }
+            kind: { type: string, enum: [official, practice] }
+            no: { type: integer }
+            started_at: { type: string, format: date-time, nullable: true }
+            duration_seconds: { type: integer, nullable: true }
+        agent_snapshot:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: The agent configuration recorded when the attempt started
+        commit_sha: { type: string, nullable: true }
+        commit_link:
+          type: string
+          enum: [not_provided, unverified, declared_match, mismatch]
+          description: There is deliberately no verified value; a declared match is the participant's statement
+        verification: { type: string, enum: [self_reported] }
+        notes: { type: string, nullable: true }
+        reported_cost:
+          type: object
+          nullable: true
+          required: [usd, source]
+          properties:
+            usd: { type: number }
+            source: { type: string }
+        unscored_reason: { type: string, nullable: true }
+        check_run:
+          type: object
+          nullable: true
+          required: [id, status, suite, suite_version, functional_score, finished_at]
+          properties:
+            id: { type: string }
+            status: { type: string, enum: [queued, running, completed, unreachable, infra_error] }
+            suite: { type: string }
+            suite_version: { type: string }
+            functional_score: { type: integer, nullable: true }
+            finished_at: { type: string, format: date-time, nullable: true }
+        limitations:
+          type: array
+          items:
+            type: string
+            enum: [self_reported_run, mutable_preview_url, commit_not_provided, commit_unverified, commit_declared_only,
+                   commit_mismatch, llm_judge_disabled, source_not_available, manual_override_applied]
+
+    SubmittedResponse:
+      allOf:
+        - $ref: "#/components/schemas/Submission"
+        - type: object
+          required: [result_url]
+          properties:
+            result_url: { type: string }
+
+    SubmissionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Submission" }
 
     Standing:
       type: object

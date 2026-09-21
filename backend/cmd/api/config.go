@@ -15,6 +15,13 @@ type config struct {
 	oidcAudience string
 	oidcJWKSURL  string
 	adminEmails  []string
+
+	// publicWebURL is the frontend origin used to build result links.
+	publicWebURL string
+	// allowLoopbackPreview accepts http://127.0.0.1 and http://localhost as
+	// preview URLs. Local development only: it lets the checker open apps
+	// served from the developer's own machine.
+	allowLoopbackPreview bool
 }
 
 func loadConfig() (config, error) {
@@ -25,6 +32,9 @@ func loadConfig() (config, error) {
 		oidcIssuer:   os.Getenv("ARENA_OIDC_ISSUER"),
 		oidcAudience: env("ARENA_OIDC_AUDIENCE", "arena-web"),
 		oidcJWKSURL:  os.Getenv("ARENA_OIDC_JWKS_URL"),
+
+		publicWebURL:         env("ARENA_PUBLIC_WEB_URL", "http://localhost:3000"),
+		allowLoopbackPreview: os.Getenv("ARENA_ALLOW_LOOPBACK_PREVIEW") == "true",
 	}
 	for _, e := range strings.Split(os.Getenv("ARENA_ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {

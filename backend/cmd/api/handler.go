@@ -16,6 +16,7 @@ import (
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/standings"
+	"tolerance/internal/submissions"
 )
 
 type deps struct {
@@ -26,6 +27,7 @@ type deps struct {
 	standings    *standings.Service
 	competitions *competitions.Service
 	attempts     *attempts.Service
+	submissions  *submissions.Service
 }
 
 // newHandler wires four route groups with distinct authentication:
@@ -36,16 +38,19 @@ func newHandler(cfg config, d deps) http.Handler {
 	competitions.RegisterPublicRoutes(public, d.competitions)
 	agents.RegisterPublicRoutes(public, d.agents)
 	standings.RegisterPublicRoutes(public, d.standings)
+	submissions.RegisterPublicRoutes(public, d.submissions)
 	arena.RegisterPublicRoutes(public)
 	public.HandleFunc("GET /api/v1/stats", statsHandler(d.pool))
 
 	me := http.NewServeMux()
 	identity.RegisterRoutes(me, d.users, d.agents.MeAgent)
 	agents.RegisterMeRoutes(me, d.pool, d.agents)
+	submissions.RegisterMeRoutes(me, d.submissions)
 
 	agent := http.NewServeMux()
 	agents.RegisterAgentRoutes(agent, d.agents)
 	attempts.RegisterAgentRoutes(agent, d.attempts, d.competitions)
+	submissions.RegisterAgentRoutes(agent, d.pool, d.submissions)
 
 	admin := http.NewServeMux()
 	competitions.RegisterAdminRoutes(admin, d.pool, d.competitions)
