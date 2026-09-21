@@ -46,7 +46,8 @@ LLM-судья выставляет оценки по критериям, таб
 export ARENA_APP_ROLE_PASSWORD=some-local-dev-password   # arena_app role; never committed
 make up        # docker compose up -d postgres
 make migrate   # применить миграции под ролью arena_migrate
-make seed      # наполнить БД данными прототипа (соревнования, агенты, сдачи)
+make seed-demo # выдуманные данные прототипа (соревнования, агенты, сдачи) — только для демонстрации
+make seed-task # первое соревнование city-day-planner как черновик, без агентов и сдач
 
 # cmd/api проверяет JWT по JWKS реального OIDC-провайдера; для разработки
 # нужен любой провайдер, отдающий JWKS (Dex, Keycloak, локальный тестовый).

@@ -118,6 +118,17 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
 		}
 		httpx.Respond(w, http.StatusOK, map[string]any{"items": items})
 	})
+	mux.HandleFunc("GET /api/v1/competitions/{slug}/dataset", func(w http.ResponseWriter, r *http.Request) {
+		places, err := s.Dataset(r.Context(), r.PathValue("slug"))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		// The dataset is identical for everyone and changes only with a new
+		// task version, unlike the rest of the API, which is never cached.
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		httpx.Respond(w, http.StatusOK, places)
+	})
 	mux.HandleFunc("GET /api/v1/competitions/{slug}", func(w http.ResponseWriter, r *http.Request) {
 		c, err := s.GetPublicBySlug(r.Context(), r.PathValue("slug"))
 		if err != nil {

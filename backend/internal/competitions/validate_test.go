@@ -1,6 +1,7 @@
 package competitions_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -49,4 +50,47 @@ func make11() []competitions.Criterion {
 	}
 	out[10].Weight = 10
 	return out
+}
+
+func withSuite() competitions.Input {
+	in := valid()
+	in.CheckSuite = "city-day-planner"
+	in.Task = json.RawMessage(`{"version":"1"}`)
+	in.Criteria[0].Source = "checks"
+	in.Criteria[1].Source = "llm"
+	return in
+}
+
+func TestValidate_CriterionSourceAndSuite(t *testing.T) {
+	now := time.Now()
+	in := withSuite()
+	if err := competitions.Validate(in, now); err != nil {
+		t.Fatalf("competition with a suite rejected: %v", err)
+	}
+
+	plain := valid()
+	if err := competitions.Validate(plain, now); err != nil {
+		t.Fatal(err)
+	}
+	if plain.Criteria[0].Source != "llm" || plain.Criteria[1].Source != "llm" {
+		t.Fatalf("an empty source defaults to llm, got %q and %q", plain.Criteria[0].Source, plain.Criteria[1].Source)
+	}
+
+	cases := map[string]func(*competitions.Input){
+		"unknown source":         func(i *competitions.Input) { i.Criteria[1].Source = "vibes" },
+		"two checks criteria":    func(i *competitions.Input) { i.Criteria[1].Source = "checks" },
+		"checks without suite":   func(i *competitions.Input) { i.CheckSuite = ""; i.Task = nil },
+		"unknown suite":          func(i *competitions.Input) { i.CheckSuite = "no-such-suite" },
+		"suite without task":     func(i *competitions.Input) { i.Task = nil },
+		"task is not an object":  func(i *competitions.Input) { i.Task = json.RawMessage(`[1]`) },
+		"suite without checks":   func(i *competitions.Input) { i.Criteria[0].Source = "llm" },
+		"suite path in the name": func(i *competitions.Input) { i.CheckSuite = "../seed" },
+	}
+	for name, mutate := range cases {
+		in := withSuite()
+		mutate(&in)
+		if err := competitions.Validate(in, now); err == nil {
+			t.Errorf("%s: expected error", name)
+		}
+	}
 }

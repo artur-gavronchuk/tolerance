@@ -1,11 +1,22 @@
 package competitions
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
+
+// Criterion sources: "checks" is measured by the automated check suite,
+// "llm" is rated qualitatively (or reported as not rated).
+const (
+	SourceChecks = "checks"
+	SourceLLM    = "llm"
+)
 
 type Criterion struct {
 	Name        string `json:"name"`
 	Weight      int    `json:"weight"`
 	Description string `json:"description"`
+	Source      string `json:"source,omitempty"`
 }
 
 const (
@@ -34,24 +45,28 @@ type Competition struct {
 	Version              int
 	Participants         int
 	ScoredCount          int
+	Task                 json.RawMessage
+	CheckSuite           string
 }
 
 // PublicView is the shape the frontend's Competition type maps onto.
 type PublicView struct {
-	ID                   string      `json:"id"`
-	Slug                 string      `json:"slug"`
-	Title                string      `json:"title"`
-	Summary              string      `json:"summary"`
-	Brief                string      `json:"brief"`
-	Category             string      `json:"category"`
-	Difficulty           string      `json:"difficulty"`
-	Status               string      `json:"status"` // active | past
-	Points               int         `json:"points"`
-	Deadline             time.Time   `json:"deadline"`
-	Participants         int         `json:"participants"`
-	ScoredCount          int         `json:"scored_count"`
-	MatchDurationSeconds int         `json:"match_duration_seconds"`
-	Criteria             []Criterion `json:"criteria"`
+	ID                   string          `json:"id"`
+	Slug                 string          `json:"slug"`
+	Title                string          `json:"title"`
+	Summary              string          `json:"summary"`
+	Brief                string          `json:"brief"`
+	Category             string          `json:"category"`
+	Difficulty           string          `json:"difficulty"`
+	Status               string          `json:"status"` // active | past
+	Points               int             `json:"points"`
+	Deadline             time.Time       `json:"deadline"`
+	Participants         int             `json:"participants"`
+	ScoredCount          int             `json:"scored_count"`
+	MatchDurationSeconds int             `json:"match_duration_seconds"`
+	Criteria             []Criterion     `json:"criteria"`
+	Task                 json.RawMessage `json:"task"`
+	CheckSuite           string          `json:"check_suite,omitempty"`
 }
 
 func (c Competition) Public() PublicView {
@@ -61,7 +76,8 @@ func (c Competition) Public() PublicView {
 	}
 	return PublicView{ID: c.ID, Slug: c.Slug, Title: c.Title, Summary: c.Summary, Brief: c.Brief, Category: c.Category,
 		Difficulty: c.Difficulty, Status: status, Points: c.Points, Deadline: c.Deadline.UTC(), Participants: c.Participants,
-		ScoredCount: c.ScoredCount, MatchDurationSeconds: c.MatchDurationSeconds, Criteria: c.Criteria}
+		ScoredCount: c.ScoredCount, MatchDurationSeconds: c.MatchDurationSeconds, Criteria: c.Criteria,
+		Task: c.Task, CheckSuite: c.CheckSuite}
 }
 
 // AdminView adds lifecycle fields and the raw status.
@@ -81,14 +97,16 @@ func (c Competition) Admin() AdminView {
 }
 
 type Input struct {
-	Slug                 string      `json:"slug"`
-	Title                string      `json:"title"`
-	Summary              string      `json:"summary"`
-	Brief                string      `json:"brief"`
-	Category             string      `json:"category"`
-	Difficulty           string      `json:"difficulty"`
-	Points               int         `json:"points"`
-	Deadline             time.Time   `json:"deadline"`
-	MatchDurationSeconds int         `json:"match_duration_seconds"`
-	Criteria             []Criterion `json:"criteria"`
+	Slug                 string          `json:"slug"`
+	Title                string          `json:"title"`
+	Summary              string          `json:"summary"`
+	Brief                string          `json:"brief"`
+	Category             string          `json:"category"`
+	Difficulty           string          `json:"difficulty"`
+	Points               int             `json:"points"`
+	Deadline             time.Time       `json:"deadline"`
+	MatchDurationSeconds int             `json:"match_duration_seconds"`
+	Criteria             []Criterion     `json:"criteria"`
+	Task                 json.RawMessage `json:"task,omitempty"`
+	CheckSuite           string          `json:"check_suite,omitempty"`
 }

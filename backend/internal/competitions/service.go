@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"tolerance/fixtures/tasks"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/audit"
 	"tolerance/internal/platform/db"
@@ -23,13 +24,14 @@ func NewService(pool *db.Pool) *Service { return &Service{pool: pool} }
 
 const cols = `c.id, c.slug, c.title, c.summary, c.brief, c.category, c.difficulty, c.status, c.points, c.deadline,
 	c.match_duration_seconds, c.criteria, c.created_by, c.created_at, c.published_at, c.closed_at, c.version,
-	(SELECT count(DISTINCT agent_id) FROM submissions s WHERE s.competition_id = c.id)::int,
-	(SELECT count(*) FROM submissions s WHERE s.competition_id = c.id AND s.score_status = 'scored')::int`
+	(SELECT count(DISTINCT agent_id) FROM submissions s WHERE s.competition_id = c.id AND s.attempt_kind = 'official')::int,
+	(SELECT count(*) FROM submissions s WHERE s.competition_id = c.id AND s.attempt_kind = 'official' AND s.score_status = 'scored')::int,
+	c.task, coalesce(c.check_suite, '')`
 
 func scan(row interface{ Scan(...any) error }, c *Competition) error {
 	var criteria []byte
 	if err := row.Scan(&c.ID, &c.Slug, &c.Title, &c.Summary, &c.Brief, &c.Category, &c.Difficulty, &c.Status, &c.Points, &c.Deadline,
-		&c.MatchDurationSeconds, &criteria, &c.CreatedBy, &c.CreatedAt, &c.PublishedAt, &c.ClosedAt, &c.Version, &c.Participants, &c.ScoredCount); err != nil {
+		&c.MatchDurationSeconds, &criteria, &c.CreatedBy, &c.CreatedAt, &c.PublishedAt, &c.ClosedAt, &c.Version, &c.Participants, &c.ScoredCount, &c.Task, &c.CheckSuite); err != nil {
 		return err
 	}
 	// pgx decodes timestamptz into time.Local; normalize every timestamp to
@@ -46,6 +48,14 @@ func scan(row interface{ Scan(...any) error }, c *Competition) error {
 		c.ClosedAt = &t
 	}
 	return json.Unmarshal(criteria, &c.Criteria)
+}
+
+// taskParam turns an absent task into SQL NULL rather than an empty jsonb.
+func taskParam(task json.RawMessage) any {
+	if len(task) == 0 {
+		return nil
+	}
+	return []byte(task)
 }
 
 func requireAdmin(actor identity.Actor) error {
@@ -66,9 +76,10 @@ func (s *Service) Create(ctx context.Context, actor identity.Actor, in Input) (C
 	id := idgen.New("comp")
 	var c Competition
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO competitions (id, slug, title, summary, brief, category, difficulty, status, points, deadline, match_duration_seconds, criteria, created_by)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,'draft',$8,$9,$10,$11,$12)`,
-			id, in.Slug, in.Title, in.Summary, in.Brief, in.Category, in.Difficulty, in.Points, in.Deadline.UTC(), in.MatchDurationSeconds, criteria, actor.UserID); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO competitions (id, slug, title, summary, brief, category, difficulty, status, points, deadline, match_duration_seconds, criteria, created_by, task, check_suite)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,'draft',$8,$9,$10,$11,$12,$13,NULLIF($14,''))`,
+			id, in.Slug, in.Title, in.Summary, in.Brief, in.Category, in.Difficulty, in.Points, in.Deadline.UTC(), in.MatchDurationSeconds, criteria, actor.UserID,
+			taskParam(in.Task), in.CheckSuite); err != nil {
 			return err
 		}
 		if err := scan(tx.QueryRow(ctx, `SELECT `+cols+` FROM competitions c WHERE c.id = $1`, id), &c); err != nil {
@@ -102,8 +113,9 @@ func (s *Service) Update(ctx context.Context, actor identity.Actor, id string, i
 		}
 		before := c.Version
 		if _, err := tx.Exec(ctx, `UPDATE competitions SET slug=$2, title=$3, summary=$4, brief=$5, category=$6, difficulty=$7, points=$8, deadline=$9,
-			match_duration_seconds=$10, criteria=$11, version = version + 1 WHERE id = $1`,
-			id, in.Slug, in.Title, in.Summary, in.Brief, in.Category, in.Difficulty, in.Points, in.Deadline.UTC(), in.MatchDurationSeconds, criteria); err != nil {
+			match_duration_seconds=$10, criteria=$11, task=$12, check_suite=NULLIF($13,''), version = version + 1 WHERE id = $1`,
+			id, in.Slug, in.Title, in.Summary, in.Brief, in.Category, in.Difficulty, in.Points, in.Deadline.UTC(), in.MatchDurationSeconds, criteria,
+			taskParam(in.Task), in.CheckSuite); err != nil {
 			return err
 		}
 		if err := scan(tx.QueryRow(ctx, `SELECT `+cols+` FROM competitions c WHERE c.id = $1`, id), &c); err != nil {
@@ -220,6 +232,23 @@ func (s *Service) GetPublicBySlug(ctx context.Context, slug string) (Competition
 		return Competition{}, httpx.NotFound()
 	}
 	return c, err
+}
+
+// Dataset returns the places of the competition's published task bundle.
+// A competition without a check suite has none.
+func (s *Service) Dataset(ctx context.Context, slug string) (json.RawMessage, error) {
+	c, err := s.GetPublicBySlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	if c.CheckSuite == "" {
+		return nil, httpx.NotFound()
+	}
+	b, err := tasks.Load(c.CheckSuite)
+	if err != nil {
+		return nil, err
+	}
+	return b.Places, nil
 }
 
 func (s *Service) list(ctx context.Context, where string, args ...any) ([]Competition, error) {

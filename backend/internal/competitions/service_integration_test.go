@@ -2,12 +2,14 @@ package competitions_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"tolerance/fixtures/seed"
 	"tolerance/internal/competitions"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/dbtest"
@@ -139,4 +141,111 @@ func TestCloseExpired(t *testing.T) {
 		t.Fatalf("not closed: %+v", got)
 	}
 	_ = time.Second
+}
+
+func TestCompetitions_TaskBundleAndDataset(t *testing.T) {
+	d := dbtest.New(t)
+	seedAdmin(t, d)
+	ctx := context.Background()
+	s := competitions.NewService(d.AppPool)
+
+	in, err := seed.TaskCompetitionInput("city-day-planner", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.Create(ctx, admin, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.CheckSuite != "city-day-planner" || len(c.Task) == 0 {
+		t.Fatalf("task bundle not stored: suite=%q task=%d bytes", c.CheckSuite, len(c.Task))
+	}
+	pub, err := s.Publish(ctx, admin, c.ID, c.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetPublicBySlug(ctx, pub.Slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := got.Public()
+	var task map[string]any
+	if err := json.Unmarshal(view.Task, &task); err != nil || task["what_to_build"] == nil {
+		t.Fatalf("public view must carry the task: %v %v", err, task)
+	}
+	if view.Criteria[0].Source != "checks" {
+		t.Fatalf("Functionality must be sourced from checks, got %q", view.Criteria[0].Source)
+	}
+
+	places, err := s.Dataset(ctx, pub.Slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ds struct {
+		Places []json.RawMessage `json:"places"`
+	}
+	if err := json.Unmarshal(places, &ds); err != nil || len(ds.Places) != 24 {
+		t.Fatalf("dataset: %v (%d places)", err, len(ds.Places))
+	}
+
+	plain, err := s.Create(ctx, admin, valid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Publish(ctx, admin, plain.ID, plain.Version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Dataset(ctx, "weekend-planner"); code(t, err) != "not_found" {
+		t.Fatal("a competition without a suite has no dataset")
+	}
+}
+
+func TestCompetitions_ParticipantsCountOfficialSubmissionsOnly(t *testing.T) {
+	d := dbtest.New(t)
+	seedAdmin(t, d)
+	ctx := context.Background()
+	s := competitions.NewService(d.AppPool)
+	c, err := s.Create(ctx, admin, valid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Publish(ctx, admin, c.ID, c.Version); err != nil {
+		t.Fatal(err)
+	}
+	err = d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		for _, h := range []string{"a", "b"} {
+			if _, err := tx.Exec(ctx, `INSERT INTO users (id, oidc_issuer, oidc_subject, handle, display_name) VALUES ($1,'seed',$2,$2,$2)`, "user_"+h, h); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO agents (id, owner_user_id, name, model) VALUES ($1,$2,$3,'m')`, "agent_"+h, "user_"+h, "Agent"+h); err != nil {
+				return err
+			}
+		}
+		ins := `INSERT INTO submissions (id, competition_id, agent_id, source, artifact, summary, attempt_kind, attempt_no, score_status, total)
+			VALUES ($1,$2,$3,'manual','app','a summary long enough',$4,$5,$6,80)`
+		// agent a: official (scored) plus a practice; agent b: practice only.
+		for _, r := range [][]any{
+			{"sub_a1", c.ID, "agent_a", "official", 1, "scored"},
+			{"sub_a2", c.ID, "agent_a", "practice", 2, "scored"},
+			{"sub_b1", c.ID, "agent_b", "practice", 1, "scored"},
+		} {
+			if _, err := tx.Exec(ctx, ins, r...); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetByID(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Participants != 1 {
+		t.Fatalf("only agents with an official submission are participants, got %d", got.Participants)
+	}
+	if got.ScoredCount != 1 {
+		t.Fatalf("scored_count counts official scored submissions, got %d", got.ScoredCount)
+	}
 }

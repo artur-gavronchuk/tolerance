@@ -18,6 +18,7 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwt"
 
 	"tolerance/contracts/openapi"
+	"tolerance/fixtures/seed"
 	"tolerance/internal/agents"
 	"tolerance/internal/competitions"
 	"tolerance/internal/identity"
@@ -248,5 +249,74 @@ func TestEndToEnd_Slice1(t *testing.T) {
 	call(t, router, srv, "GET", "/api/v1/stats", "", nil, &stats)
 	if stats.ActiveCompetitions != 1 {
 		t.Fatalf("stats: %+v", stats)
+	}
+}
+
+func TestEndToEnd_TaskCompetitionAndDataset(t *testing.T) {
+	srv, idp := newTestServer(t)
+	router, err := openapi.Router()
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminTok := idp.token(t, "admin-sub", "admin@arena.local", "Admin")
+
+	in, err := seed.TaskCompetitionInput("city-day-planner", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created struct {
+		ID      string `json:"id"`
+		Version int    `json:"version"`
+	}
+	if code := call(t, router, srv, "POST", "/api/v1/admin/competitions", adminTok, in, &created); code != http.StatusCreated {
+		t.Fatalf("create: %d", code)
+	}
+	// A draft has no public dataset.
+	if code := call(t, router, srv, "GET", "/api/v1/competitions/city-day-planner/dataset", "", nil, nil); code != http.StatusNotFound {
+		t.Fatalf("draft dataset: %d", code)
+	}
+	if code := call(t, router, srv, "POST", "/api/v1/admin/competitions/"+created.ID+"/publish", adminTok,
+		map[string]any{"expected_version": created.Version}, nil); code != http.StatusOK {
+		t.Fatalf("publish: %d", code)
+	}
+
+	var comp struct {
+		CheckSuite string         `json:"check_suite"`
+		Task       map[string]any `json:"task"`
+		Criteria   []struct {
+			Name   string `json:"name"`
+			Source string `json:"source"`
+		} `json:"criteria"`
+	}
+	if code := call(t, router, srv, "GET", "/api/v1/competitions/city-day-planner", "", nil, &comp); code != http.StatusOK {
+		t.Fatalf("get: %d", code)
+	}
+	if comp.CheckSuite != "city-day-planner" || comp.Task["ui_contract"] == nil || comp.Task["travel_rule"] == nil {
+		t.Fatalf("the public competition must carry the task: %+v", comp)
+	}
+	if comp.Criteria[0].Name != "Functionality" || comp.Criteria[0].Source != "checks" {
+		t.Fatalf("criteria: %+v", comp.Criteria)
+	}
+
+	var ds struct {
+		City   string `json:"city"`
+		Places []struct {
+			ID string `json:"id"`
+		} `json:"places"`
+	}
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/competitions/city-day-planner/dataset", nil)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if got := resp.Header.Get("Cache-Control"); got != "public, max-age=300" {
+		t.Fatalf("the dataset is cacheable, got Cache-Control %q", got)
+	}
+	if code := call(t, router, srv, "GET", "/api/v1/competitions/city-day-planner/dataset", "", nil, &ds); code != http.StatusOK {
+		t.Fatalf("dataset: %d", code)
+	}
+	if ds.City != "Alderhaven" || len(ds.Places) != 24 {
+		t.Fatalf("dataset: %+v", ds)
 	}
 }
