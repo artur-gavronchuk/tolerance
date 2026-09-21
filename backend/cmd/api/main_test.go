@@ -20,6 +20,7 @@ import (
 	"tolerance/contracts/openapi"
 	"tolerance/fixtures/seed"
 	"tolerance/internal/agents"
+	"tolerance/internal/attempts"
 	"tolerance/internal/competitions"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/auth"
@@ -98,7 +99,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *testIdP) {
 		adminEmails: []string{"admin@arena.local"}}
 	st := standings.NewService(d.AppPool)
 	dp := deps{pool: d.AppPool, verifier: idp.verifier(), users: identity.NewService(d.AppPool, cfg.adminEmails),
-		agents: agents.NewService(d.AppPool, st), standings: st, competitions: competitions.NewService(d.AppPool)}
+		agents: agents.NewService(d.AppPool, st), standings: st, competitions: competitions.NewService(d.AppPool), attempts: attempts.NewService(d.AppPool)}
 	srv := httptest.NewServer(newHandler(cfg, dp))
 	t.Cleanup(srv.Close)
 	return srv, idp
@@ -318,5 +319,130 @@ func TestEndToEnd_TaskCompetitionAndDataset(t *testing.T) {
 	}
 	if ds.City != "Alderhaven" || len(ds.Places) != 24 {
 		t.Fatalf("dataset: %+v", ds)
+	}
+}
+
+func TestEndToEnd_Attempts(t *testing.T) {
+	srv, idp := newTestServer(t)
+	router, err := openapi.Router()
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminTok := idp.token(t, "admin-sub", "admin@arena.local", "Admin")
+	userTok := idp.token(t, "mira-sub", "mira@example.com", "Mira")
+
+	in, err := seed.TaskCompetitionInput("city-day-planner", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created struct {
+		ID      string `json:"id"`
+		Version int    `json:"version"`
+	}
+	call(t, router, srv, "POST", "/api/v1/admin/competitions", adminTok, in, &created)
+	call(t, router, srv, "POST", "/api/v1/admin/competitions/"+created.ID+"/publish", adminTok, map[string]any{"expected_version": created.Version}, nil)
+
+	call(t, router, srv, "POST", "/api/v1/me/agent", userTok, map[string]any{"name": "Atlas", "model": "model-a", "bio": "b"}, nil)
+	var key struct {
+		Key string `json:"key"`
+	}
+	call(t, router, srv, "POST", "/api/v1/me/agent/api-keys", userTok, map[string]any{"name": "laptop"}, &key)
+
+	base := "/api/v1/agent/competitions/city-day-planner"
+	// Wrong kind of credential.
+	if code := call(t, router, srv, "GET", base+"/task", userTok, nil, nil); code != http.StatusUnauthorized {
+		t.Fatalf("a user token on an agent route: %d", code)
+	}
+	if code := call(t, router, srv, "GET", base+"/task", "", nil, nil); code != http.StatusUnauthorized {
+		t.Fatalf("no credentials: %d", code)
+	}
+
+	var task struct {
+		DatasetURL        string `json:"dataset_url"`
+		OfficialAvailable bool   `json:"official_available"`
+		Attempts          []any  `json:"attempts"`
+		Competition       struct {
+			Slug string `json:"slug"`
+		} `json:"competition"`
+	}
+	if code := call(t, router, srv, "GET", base+"/task", key.Key, nil, &task); code != http.StatusOK {
+		t.Fatalf("task: %d", code)
+	}
+	if task.DatasetURL != "/api/v1/competitions/city-day-planner/dataset" || !task.OfficialAvailable || len(task.Attempts) != 0 || task.Competition.Slug != "city-day-planner" {
+		t.Fatalf("unexpected task response: %+v", task)
+	}
+
+	start := map[string]any{"kind": "official", "agent_config": map[string]any{"adapter": "command", "connector_version": "0.1.0", "os": "linux/amd64"}}
+	var started struct {
+		Attempt struct {
+			ID   string `json:"id"`
+			Kind string `json:"kind"`
+			No   int    `json:"no"`
+		} `json:"attempt"`
+		Resumed bool `json:"resumed"`
+	}
+	if code := call(t, router, srv, "POST", base+"/attempts", key.Key, start, &started); code != http.StatusCreated {
+		t.Fatalf("start: %d", code)
+	}
+	if started.Resumed || started.Attempt.Kind != "official" || started.Attempt.No != 1 {
+		t.Fatalf("start: %+v", started)
+	}
+	attemptID := started.Attempt.ID
+	var again struct {
+		Attempt struct {
+			ID string `json:"id"`
+		} `json:"attempt"`
+		Resumed bool `json:"resumed"`
+	}
+	if code := call(t, router, srv, "POST", base+"/attempts", key.Key, start, &again); code != http.StatusOK || !again.Resumed || again.Attempt.ID != attemptID {
+		t.Fatalf("the running attempt must be resumed with 200: %d %+v", code, again)
+	}
+	if code := call(t, router, srv, "POST", base+"/attempts", key.Key, map[string]any{"kind": "sideways", "agent_config": map[string]any{}}, nil); code != http.StatusUnprocessableEntity {
+		t.Fatalf("bad kind: %d", code)
+	}
+
+	events := "/api/v1/agent/attempts/" + attemptID + "/events"
+	good := map[string]any{"events": []map[string]any{
+		{"kind": "phase", "phase_index": 3, "text": "Writing the scheduling logic"},
+		{"kind": "log", "text": "export ANTHROPIC_API_KEY=sk-ant-abc123def456"},
+	}}
+	if code := call(t, router, srv, "POST", events, key.Key, good, nil); code != http.StatusNoContent {
+		t.Fatalf("events: %d", code)
+	}
+	forged := map[string]any{"events": []map[string]any{{"kind": "result", "text": "score 100"}}}
+	if code := call(t, router, srv, "POST", events, key.Key, forged, nil); code != http.StatusUnprocessableEntity {
+		t.Fatalf("a connector must not forge a result event: %d", code)
+	}
+
+	if code := call(t, router, srv, "POST", "/api/v1/agent/attempts/"+attemptID+"/abandon", key.Key, nil, nil); code != http.StatusNoContent {
+		t.Fatalf("abandon: %d", code)
+	}
+	if code := call(t, router, srv, "POST", events, key.Key, good, nil); code != http.StatusConflict {
+		t.Fatalf("events after abandon: %d", code)
+	}
+	// The official slot stays used until an admin voids the attempt.
+	if code := call(t, router, srv, "POST", base+"/attempts", key.Key, start, nil); code != http.StatusConflict {
+		t.Fatalf("second official attempt: %d", code)
+	}
+	void := "/api/v1/admin/attempts/" + attemptID + "/void"
+	if code := call(t, router, srv, "POST", void, userTok, map[string]any{"reason": "a perfectly good reason"}, nil); code != http.StatusForbidden {
+		t.Fatalf("a non-admin voiding: %d", code)
+	}
+	if code := call(t, router, srv, "POST", void, key.Key, map[string]any{"reason": "a perfectly good reason"}, nil); code != http.StatusUnauthorized {
+		t.Fatalf("an API key on an admin route: %d", code)
+	}
+	if code := call(t, router, srv, "POST", void, adminTok, map[string]any{"reason": "short"}, nil); code != http.StatusUnprocessableEntity {
+		t.Fatalf("a short reason: %d", code)
+	}
+	if code := call(t, router, srv, "POST", void, adminTok, map[string]any{"reason": "abandoned by mistake, granting a retry"}, nil); code != http.StatusNoContent {
+		t.Fatalf("void: %d", code)
+	}
+	var retry struct {
+		Attempt struct {
+			No int `json:"no"`
+		} `json:"attempt"`
+	}
+	if code := call(t, router, srv, "POST", base+"/attempts", key.Key, start, &retry); code != http.StatusCreated || retry.Attempt.No != 2 {
+		t.Fatalf("a new official attempt after the void: %d %+v", code, retry)
 	}
 }

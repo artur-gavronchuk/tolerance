@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tolerance/internal/agents"
+	"tolerance/internal/attempts"
 	"tolerance/internal/competitions"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/auth"
@@ -46,6 +47,7 @@ func main() {
 		agents:       agents.NewService(pool, st),
 		standings:    st,
 		competitions: competitions.NewService(pool),
+		attempts:     attempts.NewService(pool),
 	}
 	go competitions.RunCloser(ctx, d.competitions, 30*time.Second, log)
 

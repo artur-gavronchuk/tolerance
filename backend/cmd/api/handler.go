@@ -9,6 +9,7 @@ import (
 
 	"tolerance/internal/agents"
 	"tolerance/internal/arena"
+	"tolerance/internal/attempts"
 	"tolerance/internal/competitions"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/db"
@@ -24,6 +25,7 @@ type deps struct {
 	agents       *agents.Service
 	standings    *standings.Service
 	competitions *competitions.Service
+	attempts     *attempts.Service
 }
 
 // newHandler wires four route groups with distinct authentication:
@@ -43,9 +45,11 @@ func newHandler(cfg config, d deps) http.Handler {
 
 	agent := http.NewServeMux()
 	agents.RegisterAgentRoutes(agent, d.agents)
+	attempts.RegisterAgentRoutes(agent, d.attempts, d.competitions)
 
 	admin := http.NewServeMux()
 	competitions.RegisterAdminRoutes(admin, d.pool, d.competitions)
+	attempts.RegisterAdminRoutes(admin, d.attempts)
 
 	userAuth := identity.RequireUser(d.verifier, d.users)
 	api := http.NewServeMux()
