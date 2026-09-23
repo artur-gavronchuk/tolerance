@@ -6,12 +6,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	"tolerance/internal/agents"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/auth"
 	"tolerance/internal/platform/dbtest"
 	"tolerance/internal/platform/httpx"
-	"tolerance/internal/standings"
+	"tolerance/internal/platform/idgen"
 )
 
 func problem(t *testing.T, err error) *httpx.Problem {
@@ -23,32 +25,52 @@ func problem(t *testing.T, err error) *httpx.Problem {
 	return p
 }
 
-func TestAgents_CreateKeysProfile(t *testing.T) {
+// createUser inserts a user row directly: identity.Service in this slice
+// only reads users (login/session creation lands in a later task), so
+// tests that need one arrange it themselves.
+func createUser(t *testing.T, d *dbtest.DB, email string) string {
+	t.Helper()
+	id := idgen.New("user")
+	err := d.AdminPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`, id, email, "test_hash")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	return id
+}
+
+func strPtr(s string) *string { return &s }
+
+func TestAgents_CreatePatchKeysRevoke(t *testing.T) {
 	d := dbtest.New(t)
 	ctx := context.Background()
-	users := identity.NewService(d.AppPool, nil)
-	u, _ := users.ResolveUser(ctx, auth.Claims{Issuer: "iss", Subject: "s", Email: "mira@example.com"})
-	other, _ := users.ResolveUser(ctx, auth.Claims{Issuer: "iss", Subject: "o", Email: "other@example.com"})
-	s := agents.NewService(d.AppPool, standings.NewService(d.AppPool))
+	uID := createUser(t, d, "mira@example.com")
+	otherID := createUser(t, d, "other@example.com")
+	s := agents.NewService(d.AppPool)
 
-	if got, _ := s.PrivateForUser(ctx, u.ID); got != nil {
+	if got, _ := s.PrivateForUser(ctx, uID); got != nil {
 		t.Fatal("no agent yet")
 	}
-	if _, err := s.Create(ctx, u.ID, agents.CreateInput{Name: "bad name!", Model: "m"}); problem(t, err).Code != "invalid_body" {
+	if _, err := s.Create(ctx, uID, agents.CreateInput{Name: "bad name!"}); problem(t, err).Code != "invalid_body" {
 		t.Fatal("name format must be validated")
 	}
-	p, err := s.Create(ctx, u.ID, agents.CreateInput{Name: "Atlas", Model: "Custom · GPT-based", Bio: "bio"})
+	p, err := s.Create(ctx, uID, agents.CreateInput{Name: "Atlas", Description: "desc"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Create(ctx, u.ID, agents.CreateInput{Name: "Second", Model: "m"}); problem(t, err).Code != "agent_exists" {
+	if p.Name != "Atlas" || p.Description != "desc" {
+		t.Fatalf("unexpected private view %+v", p)
+	}
+	if _, err := s.Create(ctx, uID, agents.CreateInput{Name: "Second"}); problem(t, err).Code != "agent_exists" {
 		t.Fatal("second agent for the same user must be rejected")
 	}
-	if _, err := s.Create(ctx, other.ID, agents.CreateInput{Name: "atlas", Model: "m"}); problem(t, err).Code != "name_taken" {
+	if _, err := s.Create(ctx, otherID, agents.CreateInput{Name: "atlas"}); problem(t, err).Code != "name_taken" {
 		t.Fatal("name must be unique case-insensitively")
 	}
 
-	kv, key, err := s.CreateKey(ctx, u.ID, "laptop")
+	kv, key, err := s.CreateKey(ctx, uID, "laptop")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,21 +81,29 @@ func TestAgents_CreateKeysProfile(t *testing.T) {
 	if err != nil || id != p.ID {
 		t.Fatalf("key must resolve to the agent: %v %q", err, id)
 	}
-	if err := s.RevokeKey(ctx, other.ID, kv.ID); problem(t, err).Status != 404 {
+	if err := s.RevokeKey(ctx, otherID, kv.ID); problem(t, err).Status != 404 {
 		t.Fatal("another user must not revoke the key")
 	}
-	if err := s.RevokeKey(ctx, u.ID, kv.ID); err != nil {
+	if err := s.RevokeKey(ctx, uID, kv.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.AgentIDByKeyHash(ctx, auth.HashAPIKey(key)); !errors.Is(err, identity.ErrNoAgent) {
 		t.Fatal("revoked key must not resolve")
 	}
 
-	prof, st, err := s.ProfileByName(ctx, "ATLAS")
+	patched, err := s.Patch(ctx, uID, agents.PatchInput{Description: strPtr("new bio")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prof.Agent != "Atlas" || prof.Author != "mira" || st.Rank != nil || len(prof.Badges) != 0 {
-		t.Fatalf("unexpected profile %+v %+v", prof, st)
+	if patched.Name != "Atlas" || patched.Description != "new bio" {
+		t.Fatalf("unexpected patched view %+v", patched)
+	}
+
+	thirdID := createUser(t, d, "third@example.com")
+	if _, err := s.Create(ctx, thirdID, agents.CreateInput{Name: "Zeta"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Patch(ctx, thirdID, agents.PatchInput{Name: strPtr("atlas")}); problem(t, err).Code != "name_taken" {
+		t.Fatal("renaming to a name only distinct by case must be rejected")
 	}
 }

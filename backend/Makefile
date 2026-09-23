@@ -1,4 +1,4 @@
-.PHONY: run migrate seed-demo seed-task test check up down
+.PHONY: run migrate test check up down
 
 # `docker compose` (plugin) when present, otherwise the standalone docker-compose binary.
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
@@ -15,14 +15,6 @@ down:
 
 migrate:
 	ARENA_MIGRATE_DATABASE_URL="$(ARENA_MIGRATE_DATABASE_URL)" go run ./cmd/migrate
-
-# Invented prototype data (agents, submissions) for demonstrations only.
-seed-demo:
-	ARENA_MIGRATE_DATABASE_URL="$(ARENA_MIGRATE_DATABASE_URL)" go run ./cmd/seed -demo
-
-# The first competition, as a draft, and nothing else.
-seed-task:
-	ARENA_MIGRATE_DATABASE_URL="$(ARENA_MIGRATE_DATABASE_URL)" go run ./cmd/seed -task city-day-planner
 
 run:
 	ARENA_ADDR="$(ARENA_ADDR)" ARENA_APP_DATABASE_URL="$(ARENA_APP_DATABASE_URL)" go run ./cmd/api
