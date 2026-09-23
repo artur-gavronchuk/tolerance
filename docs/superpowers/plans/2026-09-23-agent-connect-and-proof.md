@@ -3944,7 +3944,7 @@ func (w *Worker) MarkInfraError(ctx context.Context, proofID, reason string) err
 }
 ```
 
-Примечание к `git apply --directory dir` с `cmd.Dir = dir`: `git apply` вне репозитория работает с путями относительно cwd; `--directory` здесь не нужен, если `cmd.Dir = dir`. Оставить только `git apply --whitespace=nowarn <patch>` с `cmd.Dir = dir` и абсолютным путём к patch, если тест `diff does not apply`/`all tests pass` показывает проблему с путями.
+Проверено вручную перед запуском (не оставлять на усмотрение реализатора): `git apply --whitespace=nowarn --unsafe-paths --directory <dir> <patch>` с `cmd.Dir = dir`, где `dir` и `patch` — абсолютные пути, корректно применяет патч даже когда `dir` не является git-репозиторием (`Untar` не создаёт `.git`) — `git apply`, в отличие от `git am`, этого не требует. `applyDiff` в шаге 3 реализовать как написано, без дополнительных вариантов.
 
 - [ ] **Step 4: Запуск воркера и логирование 5xx**
 
