@@ -21,6 +21,13 @@ func NewDocker() *Docker { return &Docker{} }
 const maxOutput = 256 << 10
 
 func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
+	// --read-only is deliberately omitted here, unlike the original design: it
+	// is incompatible with the docker-cp-based file injection below (docker cp
+	// fails with "container rootfs is marked read-only" against a read-only
+	// container, and docker update cannot re-apply --read-only afterward).
+	// Network isolation, resource limits and immediate container removal after
+	// each run remain in place; only in-container filesystem tampering during
+	// a single ephemeral run is no longer prevented.
 	create := exec.CommandContext(ctx, "docker", "create",
 		"--network", "none", "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
 		"--tmpfs", "/tmp:rw,exec,size=512m",
