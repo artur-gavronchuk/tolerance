@@ -2,3 +2,4 @@
 .env
 .DS_Store
 frontend/.DS_Store
+backend/dev/dex/config.generated.yaml

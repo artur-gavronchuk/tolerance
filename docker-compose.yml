@@ -20,9 +20,9 @@ services:
     image: ghcr.io/dexidp/dex:v2.45.1
     command: ["dex", "serve", "/etc/dex/config.yaml"]
     volumes:
-      - ./backend/dev/dex/config.yaml:/etc/dex/config.yaml:ro
+      - ${ARENA_DEX_CONFIG:-./backend/dev/dex/config.yaml}:/etc/dex/config.yaml:ro
     ports:
-      - "127.0.0.1:5556:5556"
+      - "127.0.0.1:${DEX_PORT:-5556}:5556"
 
   api:
     build: ./backend
