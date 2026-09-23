@@ -17,6 +17,7 @@ import (
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/proofs"
+	"tolerance/internal/proofs/sandbox"
 )
 
 func main() {
@@ -38,6 +39,12 @@ func main() {
 
 	ps := proofs.NewService(pool)
 	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps, limiter: ratelimit.New(nil)}
+
+	var runner sandbox.Runner = sandbox.NewDocker()
+	if cfg.sandbox == "fake" {
+		runner = &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: []sandbox.TestResult{{Name: "fake", Passed: true}}}}
+	}
+	go proofs.NewWorker(pool, runner, cfg.workDir, log).Run(ctx)
 
 	server := &http.Server{
 		Addr:              cfg.addr,

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -62,6 +63,13 @@ func newHandler(cfg config, d deps) http.Handler {
 	return withMiddleware(top, d.log)
 }
 
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (s *statusWriter) WriteHeader(code int) { s.status = code; s.ResponseWriter.WriteHeader(code) }
+
 func withMiddleware(next http.Handler, log *slog.Logger) http.Handler {
 	withRequestID := httpx.WithRequestID(func() string { return idgen.New("req") })(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +78,12 @@ func withMiddleware(next http.Handler, log *slog.Logger) http.Handler {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Cache-Control", "no-store")
 		}
-		withRequestID.ServeHTTP(w, r)
+		sw := &statusWriter{ResponseWriter: w, status: 200}
+		start := time.Now()
+		withRequestID.ServeHTTP(sw, r)
+		if sw.status >= 500 {
+			log.Error("request failed", "method", r.Method, "path", r.URL.Path, "status", sw.status, "request_id", sw.Header().Get("X-Request-Id"))
+		}
+		log.Info("request", "method", r.Method, "path", r.URL.Path, "status", sw.status, "ms", time.Since(start).Milliseconds())
 	})
 }

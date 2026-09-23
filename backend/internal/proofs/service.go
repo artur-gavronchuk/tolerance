@@ -262,6 +262,24 @@ func (s *Service) Started(ctx context.Context, agentID, proofID string) error {
 	})
 }
 
+// ExpireStale ends proofs nobody will finish: queued ones no connector
+// claimed within 5 minutes, and claimed/running ones whose agent timeout
+// (plus a minute of slack) has passed without a result.
+func (s *Service) ExpireStale(ctx context.Context) (int, error) {
+	var n int64
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `
+			UPDATE proofs p SET status = 'expired', finished_at = now(),
+			  failure_reason = CASE WHEN p.status = 'queued' THEN 'not_claimed' ELSE 'agent_timeout' END
+			FROM proof_tasks t WHERE t.slug = p.task_slug AND (
+			  (p.status = 'queued' AND p.created_at < now() - interval '5 minutes') OR
+			  (p.status IN ('claimed', 'running_agent') AND p.claimed_at < now() - make_interval(secs => t.agent_timeout_s + 60)))`)
+		n = tag.RowsAffected()
+		return err
+	})
+	return int(n), err
+}
+
 // SubmitResult stores the agent's diff and enqueues the sandbox run in the
 // same transaction, so a stored diff is always followed by a run.
 func (s *Service) SubmitResult(ctx context.Context, agentID, proofID string, in ResultInput) error {
