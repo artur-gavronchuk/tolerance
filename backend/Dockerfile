@@ -8,13 +8,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -trimpath -o /out/api ./cmd/api \
- && CGO_ENABLED=0 go build -trimpath -o /out/migrate ./cmd/migrate \
- && CGO_ENABLED=0 go build -trimpath -o /out/seed ./cmd/seed
+ && CGO_ENABLED=0 go build -trimpath -o /out/migrate ./cmd/migrate
 
 FROM alpine:3.22
-RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 arena
-COPY --from=build /out/api /out/migrate /out/seed /usr/local/bin/
+RUN apk add --no-cache ca-certificates tzdata git docker-cli && adduser -D -u 10001 arena
+COPY --from=build /out/api /out/migrate /usr/local/bin/
 COPY dev/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY fixtures/proofs /opt/arena/proofs
+ENV ARENA_PROOFS_DIR=/opt/arena/proofs
 USER arena
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

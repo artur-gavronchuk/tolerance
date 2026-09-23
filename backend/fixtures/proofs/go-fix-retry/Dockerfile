@@ -1,0 +1,3 @@
+FROM golang:1.27-alpine
+ENV GOTOOLCHAIN=local GOFLAGS=-mod=mod CGO_ENABLED=0
+WORKDIR /work

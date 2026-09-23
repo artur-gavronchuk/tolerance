@@ -1,0 +1,11 @@
+{
+  "slug": "go-fix-retry",
+  "title": "Fix exponential backoff in a Go retry helper",
+  "language": "go",
+  "image": "arena-proof-go:1",
+  "run_cmd": "go test ./... -json -count=1",
+  "agent_timeout_s": 900,
+  "sandbox_timeout_s": 120,
+  "visible_tests": 3,
+  "hidden_tests": 5
+}

@@ -14,7 +14,7 @@ down:
 	$(COMPOSE) down
 
 migrate:
-	ARENA_MIGRATE_DATABASE_URL="$(ARENA_MIGRATE_DATABASE_URL)" go run ./cmd/migrate
+	ARENA_MIGRATE_DATABASE_URL="$(ARENA_MIGRATE_DATABASE_URL)" ARENA_PROOFS_DIR=./fixtures/proofs go run ./cmd/migrate
 
 run:
 	ARENA_ADDR="$(ARENA_ADDR)" ARENA_APP_DATABASE_URL="$(ARENA_APP_DATABASE_URL)" go run ./cmd/api
