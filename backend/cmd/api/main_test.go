@@ -176,6 +176,8 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 	if err != nil || resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "application/gzip" {
 		t.Fatalf("repo: %v %v", err, resp)
 	}
+	raw, _ := io.ReadAll(resp.Body)
+	openapi.ValidateResponse(t, e.router, req, resp, raw)
 	resp.Body.Close()
 	if code := e.call(t, plain, "POST", "/api/v1/connector/proofs/"+proof.ID+"/started", keyResp.Key, map[string]string{}, nil); code != 204 {
 		t.Fatalf("started: %d", code)
