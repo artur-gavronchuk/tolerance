@@ -34,6 +34,7 @@ func newHandler(cfg config, d deps) http.Handler {
 
 	connector := http.NewServeMux()
 	agents.RegisterConnectorRoutes(connector, d.agents)
+	proofs.RegisterConnectorRoutes(connector, d.proofs)
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()

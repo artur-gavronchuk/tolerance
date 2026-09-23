@@ -15,6 +15,8 @@ import (
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
+	"tolerance/internal/platform/jobs"
+	"tolerance/internal/platform/sanitize"
 )
 
 type Service struct{ pool *db.Pool }
@@ -191,4 +193,93 @@ func (s *Service) ProofFacts(ctx context.Context, agentID string) (agents.ProofF
 			agentID, openStatuses).Scan(&f.HasPassed, &f.HasOpen, &f.LastFinishedStatus)
 	})
 	return f, err
+}
+
+type ResultInput struct {
+	Diff       string `json:"diff"`
+	LogTail    string `json:"log_tail"`
+	DurationMS int    `json:"duration_ms"`
+	ExitCode   int    `json:"exit_code"`
+}
+
+type RunProofPayload struct {
+	ProofID string `json:"proof_id"`
+}
+
+func (s *Service) task(ctx context.Context, tx pgx.Tx, slug string) (*Task, error) {
+	var t Task
+	err := tx.QueryRow(ctx, `SELECT slug, title, language, image, run_cmd, agent_timeout_s, sandbox_timeout_s, visible_tests, hidden_tests, task_md, repo_sha256 FROM proof_tasks WHERE slug = $1`, slug).
+		Scan(&t.Slug, &t.Title, &t.Language, &t.Image, &t.RunCmd, &t.AgentTimeoutS, &t.SandboxTimeoutS, &t.VisibleTests, &t.HiddenTests, &t.TaskMD, &t.RepoSHA256)
+	return &t, err
+}
+
+// Claim hands the agent's oldest queued proof to the connector. SKIP LOCKED
+// makes two connectors on one key race safely: one wins, the other sees nil.
+func (s *Service) Claim(ctx context.Context, agentID string) (*Proof, *Task, error) {
+	var p Proof
+	var t *Task
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		err := scanProof(tx.QueryRow(ctx, `UPDATE proofs SET status = 'claimed', claimed_at = now()
+			WHERE id = (SELECT id FROM proofs WHERE agent_id = $1 AND status = 'queued' ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
+			RETURNING `+proofCols, agentID), &p)
+		if err != nil {
+			return err
+		}
+		t, err = s.task(ctx, tx, p.TaskSlug)
+		return err
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return &p, t, nil
+}
+
+func (s *Service) RepoTar(ctx context.Context, agentID, proofID string) ([]byte, error) {
+	var tar []byte
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT t.repo_tar FROM proofs p JOIN proof_tasks t ON t.slug = p.task_slug
+			WHERE p.id = $1 AND p.agent_id = $2 AND p.status IN ('claimed', 'running_agent')`, proofID, agentID).Scan(&tar)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, httpx.NotFound()
+	}
+	return tar, err
+}
+
+func (s *Service) Started(ctx context.Context, agentID, proofID string) error {
+	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE proofs SET status = 'running_agent' WHERE id = $1 AND agent_id = $2 AND status = 'claimed'`, proofID, agentID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return httpx.StateConflict("Proof is not in claimed state")
+		}
+		return nil
+	})
+}
+
+// SubmitResult stores the agent's diff and enqueues the sandbox run in the
+// same transaction, so a stored diff is always followed by a run.
+func (s *Service) SubmitResult(ctx context.Context, agentID, proofID string, in ResultInput) error {
+	if len(in.Diff) > maxDiffBytes {
+		return httpx.New(http.StatusRequestEntityTooLarge, "diff_too_large", "Diff exceeds 256 KiB")
+	}
+	logTail := sanitize.CleanLog(in.LogTail, maxLogTailBytes)
+	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE proofs SET status = 'diff_submitted', diff_submitted_at = now(), diff = $3, agent_log_tail = $4,
+			agent_duration_ms = $5, agent_exit_code = $6
+			WHERE id = $1 AND agent_id = $2 AND status IN ('claimed', 'running_agent')`, proofID, agentID, in.Diff, logTail, in.DurationMS, in.ExitCode)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return httpx.StateConflict("Proof already has a result or is not running")
+		}
+		_, err = jobs.Enqueue(ctx, tx, "run_proof", RunProofPayload{ProofID: proofID}, "run_proof:"+proofID)
+		return err
+	})
 }
