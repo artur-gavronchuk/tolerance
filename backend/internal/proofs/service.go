@@ -174,7 +174,7 @@ func (s *Service) Retry(ctx context.Context, userID, id string) (Proof, error) {
 			WHERE id = $1 RETURNING `+proofCols, id), &p)
 	})
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, "proofs_one_open_idx") {
 		return Proof{}, httpx.New(http.StatusConflict, "proof_in_progress", "A proof is already in progress")
 	}
 	return p, err
