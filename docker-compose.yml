@@ -1,59 +1,87 @@
-# The whole Agent Arena on one machine: `make up` (local) or the same file
-# on a VPS with a different .env. Ports are published to the host loopback
-# only; a reverse proxy (Caddy/nginx) with TLS goes in front on a server.
+# Local: `make up` → web on :3000 (proxies /api to api), api on :8080.
+# Server: same file with ARENA_DOMAIN set and `--profile prod` → Caddy
+# terminates TLS and routes /api/* to api, everything else to web.
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: arena_migrate
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: arena
     volumes:
       - arena-postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U arena_migrate -d arena"]
       interval: 2s
       timeout: 2s
       retries: 30
 
-  dex:
-    image: ghcr.io/dexidp/dex:v2.45.1
-    command: ["dex", "serve", "/etc/dex/config.yaml"]
-    volumes:
-      - ./backend/dev/dex/config.yaml:/etc/dex/config.yaml:ro
-    ports:
-      - "127.0.0.1:5556:5556"
-
   api:
     build: ./backend
+    restart: unless-stopped
     environment:
       ARENA_ADDR: 0.0.0.0:8080
       ARENA_ALLOW_NON_LOOPBACK: "true"
       ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable
       ARENA_MIGRATE_DATABASE_URL: postgres://arena_migrate:${POSTGRES_PASSWORD}@postgres:5432/arena?sslmode=disable
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
-      ARENA_WEB_ORIGIN: ${ARENA_WEB_ORIGIN:-http://localhost:3000}
-      ARENA_PUBLIC_WEB_URL: ${ARENA_WEB_ORIGIN:-http://localhost:3000}
-      ARENA_OIDC_ISSUER: ${ARENA_OIDC_ISSUER:-http://localhost:5556/dex}
-      ARENA_OIDC_JWKS_URL: ${ARENA_OIDC_JWKS_URL:-http://dex:5556/dex/keys}
-      ARENA_OIDC_AUDIENCE: arena-web
-      ARENA_ADMIN_EMAILS: ${ARENA_ADMIN_EMAILS:-admin@arena.local}
+      ARENA_ADMIN_EMAILS: ${ARENA_ADMIN_EMAILS:-}
+      ARENA_SECURE_COOKIES: ${ARENA_SECURE_COOKIES:-false}
+      ARENA_WORK_DIR: /var/lib/arena/work
+      ARENA_SANDBOX: docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - arena-work:/var/lib/arena/work
     ports:
       - "127.0.0.1:${API_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
-      dex:
-        condition: service_started
-    restart: unless-stopped
 
   web:
     build: ./frontend
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8080
     ports:
       - "127.0.0.1:${WEB_PORT:-3000}:3000"
     depends_on:
       - api
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: [prod]
     restart: unless-stopped
+    environment:
+      ARENA_DOMAIN: ${ARENA_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - arena-caddy-data:/data
+    depends_on:
+      - web
+
+  backup:
+    image: postgres:16-alpine
+    profiles: [prod]
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - arena-backups:/backups
+      - ./backend/dev/backup.sh:/backup.sh:ro
+    entrypoint: ["sh", "/backup.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   arena-postgres-data:
+  arena-work:
+  arena-caddy-data:
+  arena-backups:

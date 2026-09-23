@@ -1,4 +1,4 @@
-# Agent Arena API: migrate + seed + serve in one image.
+# Agent Arena API: migrate then serve in one image.
 FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./

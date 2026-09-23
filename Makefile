@@ -1,34 +1,55 @@
-.PHONY: up down logs reset ps
+.PHONY: up down logs reset ps proof-image test check migrate run-api run-web
 
-# `docker compose` (plugin) when present, otherwise the standalone docker-compose binary.
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
-
 -include .env
 WEB_PORT ?= 3000
 API_PORT ?= 8080
+ARENA_ENV ?= development
+PROFILE := $(if $(filter production,$(ARENA_ENV)),--profile prod,)
 
-# Site + API + PostgreSQL + Dex (local OIDC). Starts Colima on a Mac if Docker is down.
-up: .env
+up: .env proof-image
 	@docker info >/dev/null 2>&1 || (command -v colima >/dev/null && colima start) || (echo "Docker is not running"; exit 1)
-	$(COMPOSE) up --build -d
+	@if [ "$(ARENA_ENV)" = "production" ] && grep -q "dev_password" .env; then echo "refusing to start production with dev passwords in .env"; exit 1; fi
+	$(COMPOSE) $(PROFILE) up --build -d
 	@echo
 	@echo "  site:  http://localhost:$(WEB_PORT)"
-	@echo "  api:   http://localhost:$(API_PORT)/api/v1/competitions"
-	@echo "  login: admin@arena.local / password   (dev@arena.local, dev2@arena.local)"
+	@echo "  api:   http://localhost:$(API_PORT)/healthz"
 	@echo "  logs:  make logs"
 
-down:
-	$(COMPOSE) down
+# The sandbox image for the first proof task; the api container reaches the
+# host daemon through docker.sock, so the image has to exist on the host.
+proof-image:
+	docker build -q -t arena-proof-go:1 backend/fixtures/proofs/go-fix-retry
 
-# Wipe the database too.
+down:
+	$(COMPOSE) $(PROFILE) down
+
 reset:
-	$(COMPOSE) down -v
+	@read -p "This deletes the database. Type yes: " a && [ "$$a" = "yes" ] && $(COMPOSE) down -v
 
 logs:
 	$(COMPOSE) logs -f --tail=100
 
 ps:
 	$(COMPOSE) ps
+
+# Native development (postgres from compose, api and web on the host).
+migrate:
+	cd backend && ARENA_MIGRATE_DATABASE_URL="postgres://arena_migrate:$(POSTGRES_PASSWORD)@127.0.0.1:5432/arena?sslmode=disable" \
+		ARENA_APP_ROLE_PASSWORD="$(ARENA_APP_ROLE_PASSWORD)" ARENA_PROOFS_DIR=./fixtures/proofs go run ./cmd/migrate
+
+run-api:
+	cd backend && ARENA_APP_DATABASE_URL="postgres://arena_app:$(ARENA_APP_ROLE_PASSWORD)@127.0.0.1:5432/arena?sslmode=disable" go run ./cmd/api
+
+run-web:
+	cd frontend && API_URL=http://127.0.0.1:$(API_PORT) pnpm dev
+
+test:
+	cd backend && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...
+	cd frontend && pnpm typecheck && pnpm build
+
+check:
+	cd backend && go vet ./... && test -z "$$(gofmt -l .)"
 
 .env:
 	cp .env.example .env
