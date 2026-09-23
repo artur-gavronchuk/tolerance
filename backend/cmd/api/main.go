@@ -15,6 +15,7 @@ import (
 	"tolerance/internal/agents"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/db"
+	"tolerance/internal/platform/ratelimit"
 )
 
 func main() {
@@ -34,7 +35,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool)}
+	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool), limiter: ratelimit.New(nil)}
 
 	server := &http.Server{
 		Addr:              cfg.addr,

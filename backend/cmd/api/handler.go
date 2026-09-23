@@ -13,17 +13,21 @@ import (
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
+	"tolerance/internal/platform/ratelimit"
 )
 
 type deps struct {
-	pool   *db.Pool
-	log    *slog.Logger
-	users  *identity.Service
-	agents *agents.Service
+	pool    *db.Pool
+	log     *slog.Logger
+	users   *identity.Service
+	agents  *agents.Service
+	limiter *ratelimit.Limiter
 }
 
 func newHandler(cfg config, d deps) http.Handler {
 	api := http.NewServeMux()
+
+	identity.RegisterAuthRoutes(api, d.users, d.limiter, cfg.secureCookies)
 
 	top := http.NewServeMux()
 	top.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

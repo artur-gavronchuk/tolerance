@@ -58,3 +58,27 @@ func RequireAgent(l AgentLookup) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// RequireSession authenticates the arena_session cookie and attaches a user Actor.
+func RequireSession(s *Service) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			c, err := r.Cookie(SessionCookie)
+			if err != nil {
+				httpx.WriteError(w, r, httpx.Unauthenticated("Sign in required"))
+				return
+			}
+			u, err := s.UserBySession(r.Context(), c.Value)
+			if errors.Is(err, ErrNoSession) {
+				httpx.WriteError(w, r, httpx.Unauthenticated("Session expired, sign in again"))
+				return
+			}
+			if err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(WithActor(r.Context(),
+				Actor{Kind: KindUser, ID: u.ID, UserID: u.ID, Role: u.Role})))
+		})
+	}
+}
