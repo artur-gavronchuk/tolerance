@@ -59,7 +59,7 @@ func runTask(ctx context.Context, task nextTask, repo []byte, command string) (r
 		return result{}, err
 	}
 
-	logFile, err := os.Create(filepath.Join(os.TempDir(), "arena-"+task.ProofID+".log"))
+	logFile, err := os.OpenFile(filepath.Join(dir, "arena-agent.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return result{}, err
 	}
@@ -91,6 +91,7 @@ func runTask(ctx context.Context, task nextTask, repo []byte, command string) (r
 	res.LogTail = sanitize.CleanLog(string(raw), logTailBytes)
 
 	_ = os.Remove(filepath.Join(dir, "TASK.md"))
+	_ = os.Remove(logFile.Name())
 	if _, err := git(ctx, dir, "add", "-A"); err != nil {
 		return result{}, err
 	}
