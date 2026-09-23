@@ -41,3 +41,20 @@ type PatchInput struct {
 	Name        *string `json:"name"`
 	Description *string `json:"description"`
 }
+
+type Presence struct {
+	LastSeenAt       time.Time `json:"last_seen_at"`
+	ConnectorVersion string    `json:"connector_version"`
+	Hostname         string    `json:"hostname"`
+}
+
+type Overview struct {
+	Private
+	Stage    string    `json:"stage"`
+	Presence *Presence `json:"presence"`
+}
+
+type heartbeatInput struct {
+	ConnectorVersion string `json:"connector_version"`
+	Hostname         string `json:"hostname"`
+}

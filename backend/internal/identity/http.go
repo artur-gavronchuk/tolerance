@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strings"
@@ -71,5 +72,24 @@ func RegisterAuthRoutes(mux *http.ServeMux, s *Service, limiter *ratelimit.Limit
 		}
 		ClearSessionCookie(w, secure)
 		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// RegisterMeRoute mounts GET /me. The agent part comes from the agents
+// module as an opaque value so identity does not import it.
+func RegisterMeRoute(mux *http.ServeMux, s *Service, agentFor func(ctx context.Context, userID string) (any, error)) {
+	mux.HandleFunc("GET /api/v1/me", func(w http.ResponseWriter, r *http.Request) {
+		actor := MustFromContext(r.Context())
+		u, err := s.Get(r.Context(), actor.UserID)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		agent, err := agentFor(r.Context(), actor.UserID)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, map[string]any{"user": u, "agent": agent})
 	})
 }

@@ -21,11 +21,12 @@ import (
 const maxActiveKeys = 5
 
 type Service struct {
-	pool *db.Pool
+	pool   *db.Pool
+	proofs ProofFactsSource
 }
 
-func NewService(pool *db.Pool) *Service {
-	return &Service{pool: pool}
+func NewService(pool *db.Pool, proofs ProofFactsSource) *Service {
+	return &Service{pool: pool, proofs: proofs}
 }
 
 const agentCols = `id, owner_user_id, name, description, created_at, version`
@@ -141,29 +142,14 @@ func (s *Service) byOwner(ctx context.Context, ownerID string) (Agent, error) {
 	return a, err
 }
 
-// PrivateForUser returns nil, nil when the user has no agent yet.
-func (s *Service) PrivateForUser(ctx context.Context, userID string) (*Private, error) {
-	a, err := s.byOwner(ctx, userID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	p, err := s.private(ctx, a)
-	return &p, err
-}
-
-// MeAgent adapts PrivateForUser for identity.RegisterRoutes: a missing
-// agent must serialise as JSON null, which a typed nil pointer boxed in an
-// any would not (it would encode as {"...": nil-ish struct}); returning an
-// untyped nil interface value does encode as null.
+// MeAgent adapts Overview for identity.RegisterMeRoute: an untyped nil
+// interface encodes as JSON null, a typed nil pointer would not.
 func (s *Service) MeAgent(ctx context.Context, userID string) (any, error) {
-	p, err := s.PrivateForUser(ctx, userID)
-	if err != nil || p == nil {
+	o, err := s.Overview(ctx, userID)
+	if err != nil || o == nil {
 		return nil, err
 	}
-	return p, nil
+	return o, nil
 }
 
 func (s *Service) ByID(ctx context.Context, id string) (Agent, error) {

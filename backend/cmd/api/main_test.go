@@ -18,7 +18,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	d := dbtest.New(t)
 	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake"}
 	dp := deps{pool: d.AppPool, log: slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		users: identity.NewService(d.AppPool, cfg.adminEmails), agents: agents.NewService(d.AppPool), limiter: ratelimit.New(nil)}
+		users: identity.NewService(d.AppPool, cfg.adminEmails), agents: agents.NewService(d.AppPool, agents.NoProofFacts{}), limiter: ratelimit.New(nil)}
 	srv := httptest.NewServer(newHandler(cfg, dp))
 	t.Cleanup(srv.Close)
 	return srv

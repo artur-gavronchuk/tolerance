@@ -35,7 +35,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool), limiter: ratelimit.New(nil)}
+	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, agents.NoProofFacts{}), limiter: ratelimit.New(nil)}
 
 	server := &http.Server{
 		Addr:              cfg.addr,

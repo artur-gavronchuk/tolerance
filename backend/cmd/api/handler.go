@@ -25,9 +25,20 @@ type deps struct {
 }
 
 func newHandler(cfg config, d deps) http.Handler {
-	api := http.NewServeMux()
+	owner := http.NewServeMux()
+	identity.RegisterMeRoute(owner, d.users, d.agents.MeAgent)
+	agents.RegisterOwnerRoutes(owner, d.agents)
 
+	connector := http.NewServeMux()
+	agents.RegisterConnectorRoutes(connector, d.agents)
+
+	session := identity.RequireSession(d.users)
+	api := http.NewServeMux()
 	identity.RegisterAuthRoutes(api, d.users, d.limiter, cfg.secureCookies)
+	api.Handle("/api/v1/me", session(owner))
+	api.Handle("/api/v1/agent", session(owner))
+	api.Handle("/api/v1/agent/", session(owner))
+	api.Handle("/api/v1/connector/", identity.RequireAgent(d.agents)(connector))
 
 	top := http.NewServeMux()
 	top.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

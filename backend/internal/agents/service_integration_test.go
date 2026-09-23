@@ -48,9 +48,9 @@ func TestAgents_CreatePatchKeysRevoke(t *testing.T) {
 	ctx := context.Background()
 	uID := createUser(t, d, "mira@example.com")
 	otherID := createUser(t, d, "other@example.com")
-	s := agents.NewService(d.AppPool)
+	s := agents.NewService(d.AppPool, agents.NoProofFacts{})
 
-	if got, _ := s.PrivateForUser(ctx, uID); got != nil {
+	if got, _ := s.Overview(ctx, uID); got != nil {
 		t.Fatal("no agent yet")
 	}
 	if _, err := s.Create(ctx, uID, agents.CreateInput{Name: "bad name!"}); problem(t, err).Code != "invalid_body" {
