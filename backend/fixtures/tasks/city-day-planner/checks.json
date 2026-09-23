@@ -1,0 +1,14 @@
+{
+  "suite": "city-day-planner",
+  "version": "1",
+  "checks": [
+    {"id":"build-plan","title":"Builds a plan from the provided places","requirement":"R1,R2","weight":15,"required":true},
+    {"id":"time-constraint","title":"Plan respects time window, opening hours and travel rule","requirement":"R3","weight":15,"required":true},
+    {"id":"budget-constraint","title":"Plan respects the budget and shows the correct total","requirement":"R3","weight":15,"required":true},
+    {"id":"remove-stop","title":"Removing a stop recomputes a valid plan","requirement":"R4","weight":10,"required":true},
+    {"id":"replace-stop","title":"Replacing a stop recomputes a valid plan","requirement":"R4","weight":10,"required":true},
+    {"id":"persistence","title":"Plan and inputs survive a page reload","requirement":"R5","weight":10,"required":true},
+    {"id":"no-plan","title":"Explains when no plan is possible","requirement":"R6","weight":10,"required":true},
+    {"id":"mobile","title":"Main flow works at 375px width","requirement":"R7","weight":15,"required":true}
+  ]
+}

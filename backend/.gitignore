@@ -1,0 +1,4 @@
+/api
+/migrate
+/.data/
+*.test

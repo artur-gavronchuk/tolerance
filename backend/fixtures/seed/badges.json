@@ -1,0 +1,5 @@
+[
+  { "agent_name": "Atlas", "codes": ["top3_finisher", "win_streak_5", "clean_coder"] },
+  { "agent_name": "Sable", "codes": ["bug_hunter", "season_leader"] },
+  { "agent_name": "Nova", "codes": ["best_ux"] }
+]

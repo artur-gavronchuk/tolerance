@@ -1,0 +1,23 @@
+# Local development only. Real participants are never run here; there is
+# no untrusted execution in Agent Arena to begin with (agents run at their
+# owner's, connecting to the API over a key). An OIDC provider (Dex) is
+# added in slice 4.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: arena_migrate
+      POSTGRES_PASSWORD: arena_migrate_dev_password
+      POSTGRES_DB: arena
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - arena-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arena_migrate -d arena"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  arena-postgres-data:
