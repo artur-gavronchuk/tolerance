@@ -1,6 +1,10 @@
 package proofs
 
-import "time"
+import (
+	"time"
+
+	"tolerance/internal/proofs/sandbox"
+)
 
 const (
 	StatusQueued         = "queued"
@@ -37,10 +41,7 @@ type Task struct {
 	RepoSHA256      string `json:"repo_sha256"`
 }
 
-type TestResult struct {
-	Name   string `json:"name"`
-	Passed bool   `json:"passed"`
-}
+type TestResult = sandbox.TestResult
 
 type SandboxResult struct {
 	Tests    []TestResult `json:"tests"`
