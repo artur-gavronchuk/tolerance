@@ -3395,75 +3395,160 @@ func bytesIndex(b, sub []byte) int {
 
 - [ ] **Step 4: Docker runner**
 
-`backend/internal/proofs/sandbox/docker.go`:
+`backend/internal/proofs/sandbox/docker.go` (проверено против Docker 28 до запуска плана: хорошее решение 8/8, плохое 3 красных, таймаут убивает контейнер без остатков, отсутствующий образ → ошибка платформы; прежняя схема `docker create` + `docker cp` не работает: демон отказывает в `docker cp` для контейнера с `--read-only`):
 
 ```go
 package sandbox
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"os"
 	"os/exec"
-	"strings"
-	"time"
+	"path/filepath"
 )
 
 // Docker runs the work directory in a throwaway container via the docker
-// CLI. The directory is copied in with `docker cp` rather than bind-mounted
-// so the same code works when the API itself runs in a container that only
-// has the host's docker.sock (its filesystem is invisible to the daemon).
+// CLI. Two facts verified against Docker 28 shape this code:
+//
+//   - `docker cp` into a container created with --read-only is refused
+//     ("container rootfs is marked read-only"), so the work directory is
+//     streamed in as a tar on stdin and unpacked into a size-limited tmpfs
+//     at /work. This also works when the API itself runs in a container
+//     that only has the host's docker.sock (no bind mounts needed).
+//   - Killing the `docker run` client leaves the container running, so a
+//     timeout kills the container by name.
 type Docker struct{}
 
 func NewDocker() *Docker { return &Docker{} }
 
-const maxOutput = 256 << 10
+const (
+	maxOutput = 256 << 10
+	// exitUnpack is what the wrapper script returns when the work tarball
+	// could not be unpacked: a platform failure, not the participant's.
+	exitUnpack = 97
+)
 
 func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
-	create := exec.CommandContext(ctx, "docker", "create",
+	name := "arena-sbx-" + randHex(8)
+	script := fmt.Sprintf("tar -xf - -C /work || exit %d; cd /work && %s", exitUnpack, req.RunCmd)
+	cmd := exec.Command("docker", "run", "-i", "--rm", "--name", name, "--pull", "never",
 		"--network", "none", "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
-		"--read-only", "--tmpfs", "/tmp:rw,exec,size=512m",
+		"--read-only", "--tmpfs", "/tmp:rw,exec,size=512m", "--tmpfs", "/work:rw,exec,size=512m",
 		"-e", "HOME=/tmp", "-e", "GOCACHE=/tmp/gocache", "-e", "GOPATH=/tmp/gopath", "-e", "GOTMPDIR=/tmp",
-		"-w", "/work", req.Image, "sh", "-c", req.RunCmd)
-	idRaw, err := create.CombinedOutput()
-	if err != nil {
-		return Result{}, fmt.Errorf("sandbox: docker create: %w: %s", err, strings.TrimSpace(string(idRaw)))
+		"-w", "/work", req.Image, "sh", "-c", script)
+	pr, pw := io.Pipe()
+	go func() { pw.CloseWithError(writeTar(pw, req.WorkDir)) }()
+	var buf bytes.Buffer
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = pr, &buf, &buf
+	if err := cmd.Start(); err != nil {
+		pr.Close()
+		return Result{}, fmt.Errorf("sandbox: docker run: %w", err)
 	}
-	id := strings.TrimSpace(string(idRaw))
-	defer exec.Command("docker", "rm", "-f", id).Run() //nolint:errcheck
-
-	if out, err := exec.CommandContext(ctx, "docker", "cp", req.WorkDir+"/.", id+":/work").CombinedOutput(); err != nil {
-		return Result{}, fmt.Errorf("sandbox: docker cp: %w: %s", err, strings.TrimSpace(string(out)))
-	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
 
 	runCtx, cancel := context.WithTimeout(ctx, req.Timeout)
 	defer cancel()
-	var buf bytes.Buffer
-	start := exec.CommandContext(runCtx, "docker", "start", "-a", id)
-	start.Stdout, start.Stderr = &buf, &buf
-	err = start.Run()
+	var waitErr error
+	stopped := false
+	select {
+	case waitErr = <-done:
+	case <-runCtx.Done():
+		stopped = true
+		_ = exec.Command("docker", "kill", name).Run()
+		waitErr = <-done
+	}
+	pr.Close() // unblocks writeTar if the container exited before reading everything
+
 	res := Result{Output: tail(buf.String(), maxOutput)}
 	res.Tests = ParseGoTestJSON([]byte(res.Output))
-	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+	if stopped {
+		if ctx.Err() != nil { // the caller gave up (shutdown), not the task's time limit
+			return Result{}, fmt.Errorf("sandbox: cancelled: %w", ctx.Err())
+		}
 		res.TimedOut, res.ExitCode = true, -1
 		return res, nil
 	}
 	var exitErr *exec.ExitError
 	switch {
-	case err == nil:
+	case waitErr == nil:
 		res.ExitCode = 0
-	case errors.As(err, &exitErr):
+	case errors.As(waitErr, &exitErr):
 		res.ExitCode = exitErr.ExitCode()
 	default:
-		return Result{}, fmt.Errorf("sandbox: docker start: %w", err)
+		return Result{}, fmt.Errorf("sandbox: docker run: %w", waitErr)
 	}
-	// `docker start -a` exits 125 when the container itself could not run
-	// (e.g. the command is missing); that is ours, not the participant's.
-	if res.ExitCode == 125 {
-		return Result{}, fmt.Errorf("sandbox: container failed to start: %s", tail(res.Output, 2000))
+	// 125: docker could not create or start the container (missing image
+	// with --pull never, bad flags); 126/127: the platform's run command is
+	// broken inside the image; exitUnpack: our tarball. None of these are
+	// the participant's fault.
+	switch res.ExitCode {
+	case 125, 126, 127, exitUnpack:
+		return Result{}, fmt.Errorf("sandbox: container could not run (exit %d): %s", res.ExitCode, tail(res.Output, 2000))
 	}
 	return res, nil
+}
+
+// writeTar streams dir as an uncompressed tar. Only regular files and
+// directories are included; symlinks and devices are dropped.
+func writeTar(w io.Writer, dir string) error {
+	tw := tar.NewWriter(w)
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(dir, p)
+		if err != nil || rel == "." {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() && !info.IsDir() {
+			return nil
+		}
+		hdr, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		hdr.Name = filepath.ToSlash(rel)
+		hdr.Uname, hdr.Gname, hdr.Uid, hdr.Gid = "", "", 0, 0
+		if info.IsDir() {
+			hdr.Name += "/"
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		f, err := os.Open(p)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(tw, f)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return tw.Close()
+}
+
+func randHex(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 func tail(s string, n int) string {
@@ -3472,9 +3557,9 @@ func tail(s string, n int) string {
 	}
 	return s[len(s)-n:]
 }
-
-var _ = time.Second
 ```
+
+В `docker_integration_test.go` после проверки таймаута добавить: `docker ps -q --filter name=arena-sbx-` пусто (контейнер после таймаута не остался работать).
 
 Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/proofs/sandbox/ -v -run TestDocker` → PASS (собирает образ `arena-proof-go:1`, три прогона; ожидать 1–2 минуты).
 
@@ -3482,7 +3567,7 @@ Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/proofs/sandbox/ -v -run Tes
 
 ```bash
 cd backend && gofmt -l . && go vet ./... && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...
-git add -A backend && git commit -m "Add sandbox runner: docker create/cp/start with limits, go test parser
+git add -A backend && git commit -m "Add sandbox runner: stdin tar into tmpfs /work, read-only rootfs, named-container timeout
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -6736,7 +6821,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ## Самопроверка плана
 
-**Покрытие спеки.** §3 сущности и статусы → задачи 1, 5, 6, 8. §3.3 стадия → задача 3. §4.1 → задача 2. §4.2 → задачи 3, 5. §4.3 → задачи 3, 6 (tarball под ключом вместо подписанного URL, отступление названо). §5 коннектор → задача 9 (`arena status` есть, `arena init` пишет yaml). §6 каталог → задача 4. §7 песочница → задачи 7, 8 (`docker create/cp/start` вместо bind mount, причина названа). §8 кабинет → задачи 11–13 (маршруты `/signup`, `/login`, `/app`, `/app/agent/new`, `/app/agent/connect`, `/app/proofs/[id]`). §9 удаление → задачи 1, 14. §10 эксплуатация → задачи 8 (логи 5xx), 14 (Caddy, бэкап, CI, отказ от dev-паролей). §11 тесты → в каждой задаче; живой прогон в задаче 14. Rate limiting на публичной кромке кроме логина не реализован: осознанно, Caddy в этом срезе без лимитов, зафиксировать как долг в README при сдаче.
+**Покрытие спеки.** §3 сущности и статусы → задачи 1, 5, 6, 8. §3.3 стадия → задача 3. §4.1 → задача 2. §4.2 → задачи 3, 5. §4.3 → задачи 3, 6 (tarball под ключом вместо подписанного URL, отступление названо). §5 коннектор → задача 9 (`arena status` есть, `arena init` пишет yaml). §6 каталог → задача 4. §7 песочница → задачи 7, 8 (тарбол через stdin в tmpfs `/work` вместо bind mount; `docker cp` при `--read-only` запрещён демоном — проверено). §8 кабинет → задачи 11–13 (маршруты `/signup`, `/login`, `/app`, `/app/agent/new`, `/app/agent/connect`, `/app/proofs/[id]`). §9 удаление → задачи 1, 14. §10 эксплуатация → задачи 8 (логи 5xx), 14 (Caddy, бэкап, CI, отказ от dev-паролей). §11 тесты → в каждой задаче; живой прогон в задаче 14. Rate limiting на публичной кромке кроме логина не реализован: осознанно, Caddy в этом срезе без лимитов, зафиксировать как долг в README при сдаче.
 
 **Плейсхолдеры.** Нет «TBD»/«implement later». В задаче 1 шаг 4 и задаче 3 описание правок `agents/service.go` дано текстом со сигнатурами, а не полным файлом: файл существует в репозитории, правки точечные.
 
