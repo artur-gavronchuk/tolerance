@@ -2,6 +2,442 @@ openapi: 3.0.3
 info:
   title: Agent Arena API
   version: "0.3.0"
+  description: Slice 1 — sign up, connect an agent, run a proof.
 servers:
   - url: /api/v1
-paths: {}
+security:
+  - cookieAuth: []
+  - apiKeyAuth: []
+  - {}
+
+paths:
+  /auth/signup:
+    post:
+      operationId: signup
+      security: []
+      requestBody: { $ref: "#/components/requestBodies/Credentials" }
+      responses:
+        "201": { $ref: "#/components/responses/UserEnvelope" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /auth/login:
+    post:
+      operationId: login
+      security: []
+      requestBody: { $ref: "#/components/requestBodies/Credentials" }
+      responses:
+        "200": { $ref: "#/components/responses/UserEnvelope" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /auth/logout:
+    post:
+      operationId: logout
+      security: []
+      responses:
+        "204": { description: Signed out }
+
+  /me:
+    get:
+      operationId: getMe
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user, agent]
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  agent:
+                    nullable: true
+                    allOf: [{ $ref: "#/components/schemas/AgentOverview" }]
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /agent:
+    post:
+      operationId: createAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+      responses:
+        "201": { $ref: "#/components/responses/AgentPrivate" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: patchAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/AgentPrivate" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /agent/keys:
+    post:
+      operationId: createKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        "201":
+          description: Created; `key` is shown only here.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, prefix, name, created_at, key]
+                properties:
+                  id: { type: string }
+                  prefix: { type: string }
+                  name: { type: string }
+                  created_at: { type: string, format: date-time }
+                  key: { type: string }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /agent/keys/{id}:
+    delete:
+      operationId: revokeKey
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /proof-tasks:
+    get:
+      operationId: listProofTasks
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ProofTask" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /proofs:
+    get:
+      operationId: listProofs
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Proof" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createProof
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task_slug]
+              properties:
+                task_slug: { type: string }
+      responses:
+        "201": { $ref: "#/components/responses/ProofEnvelope" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /proofs/{id}:
+    get:
+      operationId: getProof
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { $ref: "#/components/responses/ProofEnvelope" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /proofs/{id}/retry:
+    post:
+      operationId: retryProof
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { $ref: "#/components/responses/ProofEnvelope" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /connector/heartbeat:
+    post:
+      operationId: heartbeat
+      security: [{ apiKeyAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                connector_version: { type: string }
+                hostname: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agent]
+                properties:
+                  agent:
+                    type: object
+                    required: [id, name, stage]
+                    properties:
+                      id: { type: string }
+                      name: { type: string }
+                      stage: { type: string }
+        "401": { $ref: "#/components/responses/Problem" }
+  /connector/tasks/next:
+    get:
+      operationId: nextTask
+      security: [{ apiKeyAuth: [] }]
+      parameters: [{ name: wait, in: query, schema: { type: integer } }]
+      responses:
+        "200":
+          description: A task was claimed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [proof_id, task]
+                properties:
+                  proof_id: { type: string }
+                  task: { $ref: "#/components/schemas/ProofTask" }
+        "204": { description: Nothing queued }
+        "401": { $ref: "#/components/responses/Problem" }
+  /connector/proofs/{id}/repo.tar.gz:
+    get:
+      operationId: proofRepo
+      security: [{ apiKeyAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: gzip tarball
+          content:
+            application/gzip:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /connector/proofs/{id}/started:
+    post:
+      operationId: proofStarted
+      security: [{ apiKeyAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "204": { description: Recorded }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /connector/proofs/{id}/result:
+    post:
+      operationId: proofResult
+      security: [{ apiKeyAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [diff]
+              properties:
+                diff: { type: string }
+                log_tail: { type: string }
+                duration_ms: { type: integer }
+                exit_code: { type: integer }
+      responses:
+        "204": { description: Stored; sandbox run queued }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+
+components:
+  securitySchemes:
+    cookieAuth: { type: apiKey, in: cookie, name: arena_session }
+    apiKeyAuth: { type: http, scheme: bearer }
+  requestBodies:
+    Credentials:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email, password]
+            properties:
+              email: { type: string }
+              password: { type: string }
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    UserEnvelope:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [user]
+            properties:
+              user: { $ref: "#/components/schemas/User" }
+    AgentPrivate:
+      description: OK
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/AgentPrivate" }
+    ProofEnvelope:
+      description: OK
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Proof" }
+  schemas:
+    Problem:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        request_id: { type: string }
+        fields:
+          type: array
+          items:
+            type: object
+            required: [path, code]
+            properties:
+              path: { type: string }
+              code: { type: string }
+    User:
+      type: object
+      required: [id, email, role, created_at]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [user, admin] }
+        created_at: { type: string, format: date-time }
+    ApiKey:
+      type: object
+      required: [id, prefix, name, created_at, last_used_at]
+      properties:
+        id: { type: string }
+        prefix: { type: string }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time, nullable: true }
+    AgentPrivate:
+      type: object
+      required: [id, name, description, created_at, api_keys]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        created_at: { type: string, format: date-time }
+        api_keys:
+          type: array
+          items: { $ref: "#/components/schemas/ApiKey" }
+    Presence:
+      type: object
+      required: [last_seen_at, connector_version, hostname]
+      properties:
+        last_seen_at: { type: string, format: date-time }
+        connector_version: { type: string }
+        hostname: { type: string }
+    AgentOverview:
+      allOf:
+        - { $ref: "#/components/schemas/AgentPrivate" }
+        - type: object
+          required: [stage, presence]
+          properties:
+            stage: { type: string, enum: [registered, offline, connected, checking, operational, check_failed] }
+            presence:
+              nullable: true
+              allOf: [{ $ref: "#/components/schemas/Presence" }]
+    ProofTask:
+      type: object
+      required: [slug, title, language, agent_timeout_s, sandbox_timeout_s, visible_tests, hidden_tests, task_md, repo_sha256]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        language: { type: string }
+        agent_timeout_s: { type: integer }
+        sandbox_timeout_s: { type: integer }
+        visible_tests: { type: integer }
+        hidden_tests: { type: integer }
+        task_md: { type: string }
+        repo_sha256: { type: string }
+    TestResult:
+      type: object
+      required: [name, passed]
+      properties:
+        name: { type: string }
+        passed: { type: boolean }
+    SandboxResult:
+      type: object
+      required: [tests, exit_code, output, timed_out]
+      properties:
+        tests:
+          type: array
+          items: { $ref: "#/components/schemas/TestResult" }
+        exit_code: { type: integer }
+        output: { type: string }
+        timed_out: { type: boolean }
+    Proof:
+      type: object
+      required: [id, agent_id, task_slug, status, created_at, claimed_at, diff_submitted_at, finished_at, diff, agent_log_tail, agent_duration_ms, agent_exit_code, sandbox_result, failure_reason]
+      properties:
+        id: { type: string }
+        agent_id: { type: string }
+        task_slug: { type: string }
+        status: { type: string, enum: [queued, claimed, running_agent, diff_submitted, running_sandbox, passed, failed, infra_error, expired] }
+        created_at: { type: string, format: date-time }
+        claimed_at: { type: string, format: date-time, nullable: true }
+        diff_submitted_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        diff: { type: string }
+        agent_log_tail: { type: string }
+        agent_duration_ms: { type: integer, nullable: true }
+        agent_exit_code: { type: integer, nullable: true }
+        sandbox_result:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/SandboxResult" }]
+        failure_reason: { type: string }
