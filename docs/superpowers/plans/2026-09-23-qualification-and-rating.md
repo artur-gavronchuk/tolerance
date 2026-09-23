@@ -1819,3 +1819,1761 @@ git add -A && git commit -m "Add skills catalog with six hidden tasks, pytest pa
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
+
+---
+
+### Task 4: Прогоны квалификации: создание, продвижение воркером, рейтинг
+
+**Files:**
+- Create: `backend/internal/qualifications/model.go`, `backend/internal/qualifications/service.go`, `backend/internal/qualifications/advance.go`, `backend/internal/qualifications/ratings.go`, `backend/internal/qualifications/service_integration_test.go`
+- Modify: `backend/internal/proofs/model.go`, `backend/internal/proofs/service.go`, `backend/internal/proofs/worker.go`, `backend/internal/proofs/http_connector.go`, `backend/cmd/api/main.go`
+
+**Interfaces:**
+- Consumes: `rating.*`, `skills.Pick`, `agents.ComputeStage`, `agents.VersionListener`, `proofs.Worker`.
+- Produces в `proofs`: поля `Proof.Kind, QualificationRunID *string, Position *int, SkillTaskSlug *string`; `proofs.FinishListener interface{ OnProofFinished(ctx, proofID string) error }`, `(*Worker).SetFinishListener(l)` — вызывается воркером после каждого терминального перехода (`finish`, `MarkInfraError`, `ExpireStale` для квалификационных); `(*Service).CreateQualificationProof(ctx, tx pgx.Tx, agentID, runID, taskSlug string, position int) (Proof, error)`; `(*Service).MaskHidden(p Proof) Proof`; выдача коннектору и воркер читают задачу из `skill_tasks`, когда `kind = qualification`.
+- Produces в `qualifications`: `Run{ID, AgentID, VersionID, SkillSlug, Status string; CreatedAt time.Time; FinishedAt *time.Time; Score *float64; RatingBefore, RatingAfter, UncertaintyAfter *int; TaskSlugs []string; Tasks []proofs.Proof}`; `SkillRating{SkillSlug string; Rating, Uncertainty, Access int; Tier string; Verified bool; Runs int; VersionID string; VersionNumber int; OnCurrentVersion bool; PriorRating *int}`; `NewService(pool, proofsSvc *proofs.Service) *Service`; `(*Service).Start(ctx, userID, skill string) (Run, error)`; `List(ctx, userID) ([]Run, error)`; `Get(ctx, userID, id) (Run, error)`; `RatingsFor(ctx, agentID) ([]SkillRating, error)`; `OnProofFinished` (реализует `proofs.FinishListener`); `OnNewVersion` (реализует `agents.VersionListener`); `Abort(ctx, runID, reason)`; ошибки `agent_not_operational` (409), `qualification_in_progress` (409), `daily_limit` (429), `no_version` (409), `unknown_skill` (404).
+
+- [ ] **Step 1: Расширить proofs**
+
+`proofs/model.go`: добавить в `Proof` поля `Kind string \`json:"kind"\``, `QualificationRunID *string \`json:"qualification_run_id"\``, `Position *int \`json:"position"\``, `SkillTaskSlug *string \`json:"skill_task_slug"\``; константы `KindProof = "proof"`, `KindQualification = "qualification"`. `proofCols` дополнить `kind, qualification_run_id, position, skill_task_slug`; `scanProof` сканирует их. `Task` получает `Language string \`json:"language"\`` (для proof_tasks берётся из колонки `language`, для skill_tasks — из `skills.language`).
+
+`proofs/service.go`:
+
+```go
+// MaskHidden strips what a qualification proof must not reveal: hidden
+// test names and sandbox output. Proof-kind proofs are returned as is.
+func (s *Service) MaskHidden(p Proof) Proof {
+	if p.Kind != KindQualification || p.SandboxResult == nil {
+		return p
+	}
+	masked := *p.SandboxResult
+	masked.Output = ""
+	masked.Tests = make([]TestResult, len(p.SandboxResult.Tests))
+	for i, t := range p.SandboxResult.Tests {
+		masked.Tests[i] = TestResult{Name: fmt.Sprintf("hidden-%d", i+1), Passed: t.Passed}
+	}
+	p.SandboxResult = &masked
+	return p
+}
+
+// CreateQualificationProof queues one task of a qualification run inside
+// the caller's transaction. The one-open-proof index guards the invariant.
+func (s *Service) CreateQualificationProof(ctx context.Context, tx pgx.Tx, agentID, runID, taskSlug string, position int) (Proof, error) {
+	var p Proof
+	err := scanProof(tx.QueryRow(ctx, `INSERT INTO proofs (id, agent_id, kind, qualification_run_id, position, skill_task_slug)
+		VALUES ($1, $2, 'qualification', $3, $4, $5) RETURNING `+proofCols, idgen.New("proof"), agentID, runID, position, taskSlug), &p)
+	return p, err
+}
+```
+
+`task(ctx, tx, slug)` в `service.go` заменить на `taskFor(ctx, tx, p Proof) (*Task, error)`: для `KindProof` читает `proof_tasks` (плюс `language`), для `KindQualification` — `SELECT t.slug, t.title, s.language, s.image, s.run_cmd, t.agent_timeout_s, t.sandbox_timeout_s, 0, t.hidden_tests, t.task_md, t.repo_sha256 FROM skill_tasks t JOIN skills s ON s.slug = t.skill_slug WHERE t.slug = $1`. `Claim` и `RepoTar` используют `taskFor` (RepoTar: `repo_tar` из соответствующей таблицы по `kind`). `Get`/`List` применяют `MaskHidden`. `http_connector.go`: в `nextTaskResponse` добавить `Kind string \`json:"kind"\``.
+
+`proofs/worker.go`: `RunProof` читает задачу через `taskFor` (нужны `image, run_cmd, sandbox_timeout_s, repo_tar, hidden_tar, language`); в `sandbox.Request` передаётся `Language`. Добавить:
+
+```go
+type FinishListener interface {
+	OnProofFinished(ctx context.Context, proofID string) error
+}
+
+func (w *Worker) SetFinishListener(l FinishListener) { w.onFinish = l }
+
+func (w *Worker) notify(ctx context.Context, proofID string) {
+	if w.onFinish == nil {
+		return
+	}
+	if err := w.onFinish.OnProofFinished(ctx, proofID); err != nil {
+		w.log.Error("proof finished hook", "proof", proofID, "err", err)
+	}
+}
+```
+
+`finish` и `MarkInfraError` вызывают `w.notify(ctx, proofID)` после успешного коммита. `ExpireStale` возвращает также список id (`(ids []string, err error)`) и `Worker.Run` вызывает `notify` для каждого.
+
+- [ ] **Step 2: Интеграционный тест квалификаций**
+
+`backend/internal/qualifications/service_integration_test.go`:
+
+```go
+package qualifications_test
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/jackc/pgx/v5"
+
+	"tolerance/internal/agents"
+	"tolerance/internal/identity"
+	"tolerance/internal/platform/dbtest"
+	"tolerance/internal/platform/httpx"
+	"tolerance/internal/proofs"
+	"tolerance/internal/proofs/sandbox"
+	"tolerance/internal/qualifications"
+	"tolerance/internal/skills"
+)
+
+type fx struct {
+	d       *dbtest.DB
+	agents  *agents.Service
+	proofs  *proofs.Service
+	quals   *qualifications.Service
+	worker  *proofs.Worker
+	fake    *sandbox.Fake
+	userID  string
+	agentID string
+}
+
+func setup(t *testing.T) *fx {
+	t.Helper()
+	d := dbtest.New(t)
+	ctx := context.Background()
+	sk, tasks, err := skills.LoadCatalog(filepath.Join("..", "..", "fixtures", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := skills.SyncCatalog(ctx, d.AdminPool, sk, tasks); err != nil {
+		t.Fatal(err)
+	}
+	ptasks, _ := proofs.LoadCatalog(filepath.Join("..", "..", "fixtures", "proofs"))
+	_ = proofs.SyncCatalog(ctx, d.AdminPool, ptasks)
+
+	ps := proofs.NewService(d.AppPool)
+	qs := qualifications.NewService(d.AppPool, ps)
+	as := agents.NewService(d.AppPool, ps)
+	as.SetVersionListener(qs)
+	fake := &sandbox.Fake{}
+	w := proofs.NewWorker(d.AppPool, fake, t.TempDir(), slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	w.SetFinishListener(qs)
+
+	us := identity.NewService(d.AppPool, nil)
+	u, _, _ := us.Signup(ctx, "o@example.com", "longenough1")
+	a, _ := as.Create(ctx, u.ID, agents.CreateInput{Name: "fixer"})
+	_, _, _ = as.CreateKey(ctx, u.ID, "k")
+	_ = as.Heartbeat(ctx, a.ID, "0.2", "h")
+	return &fx{d: d, agents: as, proofs: ps, quals: qs, worker: w, fake: fake, userID: u.ID, agentID: a.ID}
+}
+
+func (f *fx) operational(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	err := f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO proofs (id, agent_id, kind, task_slug, status, finished_at) VALUES ('proof_seed', $1, 'proof', 'go-fix-retry', 'passed', now())`, f.agentID)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (f *fx) version(t *testing.T, digest string) agents.Version {
+	t.Helper()
+	v, _, err := f.agents.EnsureVersion(context.Background(), f.agentID, agents.VersionInput{Model: "m", Harness: "h", ConfigDigest: digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func problem(t *testing.T, err error, status int, code string) {
+	t.Helper()
+	var p *httpx.Problem
+	if !errors.As(err, &p) || p.Status != status || p.Code != code {
+		t.Fatalf("expected %d %s, got %v", status, code, err)
+	}
+}
+
+// drive plays the connector and the sandbox for the run's current task.
+func (f *fx) drive(t *testing.T, passed, total int) {
+	t.Helper()
+	ctx := context.Background()
+	p, task, err := f.proofs.Claim(ctx, f.agentID)
+	if err != nil || p == nil {
+		t.Fatalf("claim: %v %+v", err, p)
+	}
+	if p.Kind != proofs.KindQualification || task.TaskMD == "" {
+		t.Fatalf("expected a qualification task, got %+v", p)
+	}
+	tests := make([]sandbox.TestResult, total)
+	for i := range tests {
+		tests[i] = sandbox.TestResult{Name: "TestHidden_X", Passed: i < passed}
+	}
+	exit := 0
+	if passed < total {
+		exit = 1
+	}
+	f.fake.Result = sandbox.Result{ExitCode: exit, Tests: tests}
+	f.fake.Err = nil
+	if err := f.proofs.SubmitResult(ctx, f.agentID, p.ID, proofs.ResultInput{Diff: "--- a/x\n+++ b/x\n"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.worker.RunProof(ctx, p.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStart_Guards(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	_, err := f.quals.Start(ctx, f.userID, "go")
+	problem(t, err, 409, "agent_not_operational")
+	f.operational(t)
+	_, err = f.quals.Start(ctx, f.userID, "go")
+	problem(t, err, 409, "no_version")
+	f.version(t, "d1")
+	_, err = f.quals.Start(ctx, f.userID, "rust")
+	problem(t, err, 404, "unknown_skill")
+	run, err := f.quals.Start(ctx, f.userID, "go")
+	if err != nil || run.Status != "running" || len(run.TaskSlugs) != 3 || len(run.Tasks) != 1 {
+		t.Fatalf("start: %v %+v", err, run)
+	}
+	_, err = f.quals.Start(ctx, f.userID, "python")
+	problem(t, err, 409, "qualification_in_progress")
+}
+
+func TestRun_ThreeTasksScoreAndRating(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	run, _ := f.quals.Start(ctx, f.userID, "go")
+	f.drive(t, 5, 5) // task 1: 1.0
+	f.drive(t, 2, 4) // task 2: 0.5
+	f.drive(t, 0, 5) // task 3: 0.0
+	got, err := f.quals.Get(ctx, f.userID, run.ID)
+	if err != nil || got.Status != "scored" || got.Score == nil || len(got.Tasks) != 3 {
+		t.Fatalf("%v %+v", err, got)
+	}
+	// weights follow difficulty of the picked tasks; the test only pins the range and monotonicity
+	if *got.Score <= 0 || *got.Score >= 1 {
+		t.Fatalf("score must be strictly between 0 and 1 for mixed results, got %v", *got.Score)
+	}
+	rs, _ := f.quals.RatingsFor(ctx, f.agentID)
+	if len(rs) != 1 || rs[0].SkillSlug != "go" || rs[0].Runs != 1 || rs[0].Uncertainty != 350 || !rs[0].OnCurrentVersion {
+		t.Fatalf("ratings: %+v", rs)
+	}
+	if *got.RatingAfter != rs[0].Rating || *got.UncertaintyAfter != 350 || got.RatingBefore != nil {
+		t.Fatalf("run rating fields: %+v", got)
+	}
+	for _, tk := range got.Tasks {
+		if tk.SandboxResult != nil && tk.SandboxResult.Tests[0].Name != "hidden-1" {
+			t.Fatalf("hidden test names must be masked: %+v", tk.SandboxResult.Tests)
+		}
+	}
+}
+
+func TestRun_InfraErrorRequeuesOnceThenExcludes(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	run, _ := f.quals.Start(ctx, f.userID, "python")
+	// task 1: infra error twice → excluded
+	for i := 0; i < 2; i++ {
+		p, _, _ := f.proofs.Claim(ctx, f.agentID)
+		_ = f.proofs.SubmitResult(ctx, f.agentID, p.ID, proofs.ResultInput{Diff: "--- a/x\n+++ b/x\n"})
+		f.fake.Err = errors.New("no docker")
+		_ = f.worker.RunProof(ctx, p.ID)
+		_ = f.worker.MarkInfraError(ctx, p.ID, "no docker")
+	}
+	f.drive(t, 4, 4)
+	f.drive(t, 4, 4)
+	got, _ := f.quals.Get(ctx, f.userID, run.ID)
+	if got.Status != "scored" || got.Score == nil || *got.Score != 1 || len(got.Tasks) != 4 {
+		t.Fatalf("two clean tasks must average to 1.0 with the infra-errored one excluded: %+v", got)
+	}
+}
+
+func TestRun_AbortWhenTaskExpiresAndDailyLimit(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	run, _ := f.quals.Start(ctx, f.userID, "go")
+	_ = f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE proofs SET created_at = now() - interval '6 minutes' WHERE qualification_run_id = $1`, run.ID)
+		return err
+	})
+	ids, _ := f.proofs.ExpireStale(ctx)
+	for _, id := range ids {
+		_ = f.quals.OnProofFinished(ctx, id)
+	}
+	got, _ := f.quals.Get(ctx, f.userID, run.ID)
+	if got.Status != "aborted" {
+		t.Fatalf("expired task must abort the run: %+v", got)
+	}
+	if rs, _ := f.quals.RatingsFor(ctx, f.agentID); len(rs) != 0 {
+		t.Fatalf("aborted run must not create a rating")
+	}
+	for i := 0; i < 3; i++ {
+		r, err := f.quals.Start(ctx, f.userID, "go")
+		if err != nil {
+			t.Fatalf("start %d: %v", i, err)
+		}
+		_ = f.quals.Abort(ctx, r.ID, "test")
+	}
+	_, err := f.quals.Start(ctx, f.userID, "go")
+	problem(t, err, 429, "daily_limit")
+}
+
+func TestNewVersion_ResetsConfidenceKeepsPrior(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	run, _ := f.quals.Start(ctx, f.userID, "go")
+	f.drive(t, 5, 5)
+	f.drive(t, 4, 4)
+	f.drive(t, 5, 5)
+	if got, _ := f.quals.Get(ctx, f.userID, run.ID); *got.RatingAfter != 2400 {
+		t.Fatalf("perfect run must rate 2400, got %+v", got)
+	}
+	f.version(t, "d2")
+	rs, _ := f.quals.RatingsFor(ctx, f.agentID)
+	if rs[0].Rating != 2400 || rs[0].Uncertainty != 350 || rs[0].Runs != 0 || rs[0].OnCurrentVersion || rs[0].PriorRating == nil {
+		t.Fatalf("after version change: %+v", rs[0])
+	}
+	if rs[0].Verified {
+		t.Fatalf("2400-350 = 2050 is verified by access, but the rating is not on the current version and must not count as verified")
+	}
+}
+```
+
+- [ ] **Step 3: Модель и сервис**
+
+`backend/internal/qualifications/model.go`:
+
+```go
+package qualifications
+
+import (
+	"time"
+
+	"tolerance/internal/proofs"
+)
+
+const (
+	StatusRunning = "running"
+	StatusScored  = "scored"
+	StatusAborted = "aborted"
+
+	tasksPerRun = 3
+	dailyLimit  = 3
+	recentRuns  = 2
+)
+
+type Run struct {
+	ID               string         `json:"id"`
+	AgentID          string         `json:"agent_id"`
+	VersionID        string         `json:"version_id"`
+	SkillSlug        string         `json:"skill_slug"`
+	Status           string         `json:"status"`
+	CreatedAt        time.Time      `json:"created_at"`
+	FinishedAt       *time.Time     `json:"finished_at"`
+	Score            *float64       `json:"score"`
+	RatingBefore     *int           `json:"rating_before"`
+	RatingAfter      *int           `json:"rating_after"`
+	UncertaintyAfter *int           `json:"uncertainty_after"`
+	TaskSlugs        []string       `json:"task_slugs"`
+	Tasks            []proofs.Proof `json:"tasks"`
+}
+
+type SkillRating struct {
+	SkillSlug        string `json:"skill_slug"`
+	Rating           int    `json:"rating"`
+	Uncertainty      int    `json:"uncertainty"`
+	Access           int    `json:"access"`
+	Tier             string `json:"tier"`
+	Verified         bool   `json:"verified"`
+	Runs             int    `json:"runs"`
+	VersionID        string `json:"version_id"`
+	VersionNumber    int    `json:"version_number"`
+	OnCurrentVersion bool   `json:"on_current_version"`
+	PriorRating      *int   `json:"prior_rating"`
+}
+```
+
+`backend/internal/qualifications/service.go`:
+
+```go
+package qualifications
+
+import (
+	"context"
+	"errors"
+	"math/rand"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"tolerance/internal/agents"
+	"tolerance/internal/platform/audit"
+	"tolerance/internal/platform/db"
+	"tolerance/internal/platform/httpx"
+	"tolerance/internal/platform/idgen"
+	"tolerance/internal/proofs"
+	"tolerance/internal/skills"
+)
+
+type Service struct {
+	pool   *db.Pool
+	proofs *proofs.Service
+	rnd    *rand.Rand
+}
+
+func NewService(pool *db.Pool, ps *proofs.Service) *Service {
+	return &Service{pool: pool, proofs: ps, rnd: rand.New(rand.NewSource(time.Now().UnixNano()))}
+}
+
+const runCols = `id, agent_id, version_id, skill_slug, status, created_at, finished_at, score, rating_before, rating_after, uncertainty_after, task_slugs`
+
+func scanRun(row interface{ Scan(...any) error }, r *Run) error {
+	if err := row.Scan(&r.ID, &r.AgentID, &r.VersionID, &r.SkillSlug, &r.Status, &r.CreatedAt, &r.FinishedAt, &r.Score, &r.RatingBefore, &r.RatingAfter, &r.UncertaintyAfter, &r.TaskSlugs); err != nil {
+		return err
+	}
+	r.CreatedAt = r.CreatedAt.UTC()
+	if r.FinishedAt != nil {
+		u := r.FinishedAt.UTC()
+		r.FinishedAt = &u
+	}
+	return nil
+}
+
+func (s *Service) agentOf(ctx context.Context, tx pgx.Tx, userID string) (string, error) {
+	var id string
+	err := tx.QueryRow(ctx, `SELECT id FROM agents WHERE owner_user_id = $1`, userID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", httpx.New(http.StatusNotFound, "no_agent", "Create an agent first")
+	}
+	return id, err
+}
+
+// Start opens a run: picks three tasks, queues the first one.
+func (s *Service) Start(ctx context.Context, userID, skill string) (Run, error) {
+	var run Run
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		agentID, err := s.agentOf(ctx, tx, userID)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM agents WHERE id = $1 FOR UPDATE`, agentID); err != nil {
+			return err
+		}
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM skills WHERE slug = $1)`, skill).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			return httpx.New(http.StatusNotFound, "unknown_skill", "No such skill")
+		}
+		var passed bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM proofs WHERE agent_id = $1 AND kind = 'proof' AND status = 'passed')`, agentID).Scan(&passed); err != nil {
+			return err
+		}
+		if !passed {
+			return httpx.New(http.StatusConflict, "agent_not_operational", "Pass the basic proof first")
+		}
+		var versionID *string
+		if err := tx.QueryRow(ctx, `SELECT current_version_id FROM agents WHERE id = $1`, agentID).Scan(&versionID); err != nil {
+			return err
+		}
+		if versionID == nil {
+			return httpx.New(http.StatusConflict, "no_version", "The connector has not reported the agent version yet; update it and run `arena connect`")
+		}
+		var today int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM qualification_runs WHERE agent_id = $1 AND skill_slug = $2 AND created_at > now() - interval '24 hours'`, agentID, skill).Scan(&today); err != nil {
+			return err
+		}
+		if today >= dailyLimit {
+			return httpx.New(http.StatusTooManyRequests, "daily_limit", "At most 3 qualification runs per skill per day")
+		}
+		rows, err := tx.Query(ctx, `SELECT slug FROM skill_tasks WHERE skill_slug = $1 ORDER BY slug`, skill)
+		if err != nil {
+			return err
+		}
+		var pool []string
+		for rows.Next() {
+			var slug string
+			if err := rows.Scan(&slug); err != nil {
+				rows.Close()
+				return err
+			}
+			pool = append(pool, slug)
+		}
+		rows.Close()
+		if len(pool) == 0 {
+			return httpx.New(http.StatusConflict, "no_tasks", "This skill has no tasks yet")
+		}
+		var recent []string
+		if err := tx.QueryRow(ctx, `SELECT coalesce(array_agg(t), '{}') FROM (SELECT unnest(task_slugs) t FROM qualification_runs
+			WHERE agent_id = $1 AND skill_slug = $2 ORDER BY created_at DESC LIMIT $3) x`, agentID, skill, recentRuns).Scan(&recent); err != nil {
+			return err
+		}
+		picked := skills.Pick(pool, recent, tasksPerRun, s.rnd)
+		if err := scanRun(tx.QueryRow(ctx, `INSERT INTO qualification_runs (id, agent_id, version_id, skill_slug, task_slugs) VALUES ($1, $2, $3, $4, $5) RETURNING `+runCols,
+			idgen.New("qrun"), agentID, *versionID, skill, picked), &run); err != nil {
+			return err
+		}
+		first, err := s.proofs.CreateQualificationProof(ctx, tx, agentID, run.ID, picked[0], 1)
+		if err != nil {
+			return err
+		}
+		run.Tasks = []proofs.Proof{first}
+		return audit.Record(ctx, tx, audit.Event{ActorID: userID, Action: "qualification.started", AggregateKind: "qualification_run", AggregateID: run.ID,
+			Payload: map[string]any{"skill": skill, "tasks": picked}, RequestID: httpx.RequestID(ctx)})
+	})
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && (strings.Contains(pgErr.ConstraintName, "qualification_runs_one_open_idx") || strings.Contains(pgErr.ConstraintName, "proofs_one_open_idx")) {
+		return Run{}, httpx.New(http.StatusConflict, "qualification_in_progress", "A qualification or proof is already in progress")
+	}
+	return run, err
+}
+
+func (s *Service) tasksOf(ctx context.Context, tx pgx.Tx, runID string) ([]proofs.Proof, error) {
+	rows, err := tx.Query(ctx, `SELECT id FROM proofs WHERE qualification_run_id = $1 ORDER BY position, created_at`, runID)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	out := make([]proofs.Proof, 0, len(ids))
+	for _, id := range ids {
+		p, err := s.proofs.GetByIDTx(ctx, tx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s.proofs.MaskHidden(p))
+	}
+	return out, nil
+}
+
+func (s *Service) Get(ctx context.Context, userID, id string) (Run, error) {
+	var run Run
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if err := scanRun(tx.QueryRow(ctx, `SELECT `+runCols+` FROM qualification_runs WHERE id = $1 AND agent_id = (SELECT id FROM agents WHERE owner_user_id = $2)`, id, userID), &run); err != nil {
+			return err
+		}
+		var err error
+		run.Tasks, err = s.tasksOf(ctx, tx, run.ID)
+		return err
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Run{}, httpx.NotFound()
+	}
+	return run, err
+}
+
+func (s *Service) List(ctx context.Context, userID string) ([]Run, error) {
+	out := []Run{}
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		agentID, err := s.agentOf(ctx, tx, userID)
+		if err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT `+runCols+` FROM qualification_runs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT 50`, agentID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var r Run
+			if err := scanRun(rows, &r); err != nil {
+				return err
+			}
+			r.Tasks = []proofs.Proof{}
+			out = append(out, r)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// Abort ends a run without touching the rating.
+func (s *Service) Abort(ctx context.Context, runID, reason string) error {
+	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE qualification_runs SET status = 'aborted', finished_at = now() WHERE id = $1 AND status = 'running'`, runID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE proofs SET status = 'expired', finished_at = now(), failure_reason = $2
+			WHERE qualification_run_id = $1 AND status IN ('queued', 'claimed', 'running_agent', 'diff_submitted', 'running_sandbox')`, runID, "run_aborted: "+reason)
+		return err
+	})
+}
+```
+
+В `proofs/service.go` добавить `GetByIDTx(ctx, tx, id) (Proof, error)` (без проверки владельца; используется только внутри сервера).
+
+- [ ] **Step 4: Продвижение и рейтинг**
+
+`backend/internal/qualifications/advance.go`:
+
+```go
+package qualifications
+
+import (
+	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5"
+
+	"tolerance/internal/proofs"
+	"tolerance/internal/rating"
+)
+
+// OnProofFinished implements proofs.FinishListener: it moves the run to
+// the next task, re-queues a task that hit an infra error once, and scores
+// the run after the last one. Non-qualification proofs are ignored.
+func (s *Service) OnProofFinished(ctx context.Context, proofID string) error {
+	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		p, err := s.proofs.GetByIDTx(ctx, tx, proofID)
+		if err != nil {
+			return err
+		}
+		if p.Kind != proofs.KindQualification || p.QualificationRunID == nil {
+			return nil
+		}
+		var run Run
+		if err := scanRun(tx.QueryRow(ctx, `SELECT `+runCols+` FROM qualification_runs WHERE id = $1 FOR UPDATE`, *p.QualificationRunID), &run); err != nil {
+			return err
+		}
+		if run.Status != StatusRunning {
+			return nil
+		}
+		switch p.Status {
+		case proofs.StatusExpired:
+			return s.abortTx(ctx, tx, run.ID)
+		case proofs.StatusInfraError:
+			var retried bool
+			if err := tx.QueryRow(ctx, `SELECT retried_infra FROM proofs WHERE id = $1`, p.ID).Scan(&retried); err != nil {
+				return err
+			}
+			if !retried {
+				if _, err := tx.Exec(ctx, `UPDATE proofs SET retried_infra = true WHERE id = $1`, p.ID); err != nil {
+					return err
+				}
+				_, err := s.proofs.CreateQualificationProof(ctx, tx, run.AgentID, run.ID, *p.SkillTaskSlug, *p.Position)
+				return err
+			}
+		}
+		if *p.Position < tasksPerRun {
+			next := *p.Position + 1
+			_, err := s.proofs.CreateQualificationProof(ctx, tx, run.AgentID, run.ID, run.TaskSlugs[next-1], next)
+			return err
+		}
+		return s.scoreTx(ctx, tx, run)
+	})
+}
+
+func (s *Service) abortTx(ctx context.Context, tx pgx.Tx, runID string) error {
+	_, err := tx.Exec(ctx, `UPDATE qualification_runs SET status = 'aborted', finished_at = now() WHERE id = $1`, runID)
+	return err
+}
+
+// scoreTx computes the run score from the last terminal proof per position
+// and folds it into the skill rating.
+func (s *Service) scoreTx(ctx context.Context, tx pgx.Tx, run Run) error {
+	rows, err := tx.Query(ctx, `
+		SELECT DISTINCT ON (p.position) p.position, p.status, p.sandbox_result, t.hidden_tests, t.difficulty
+		FROM proofs p JOIN skill_tasks t ON t.slug = p.skill_task_slug
+		WHERE p.qualification_run_id = $1 AND p.finished_at IS NOT NULL
+		ORDER BY p.position, p.finished_at DESC`, run.ID)
+	if err != nil {
+		return err
+	}
+	var weighted, weights float64
+	for rows.Next() {
+		var position, hidden, difficulty int
+		var status string
+		var sr *proofs.SandboxResult
+		if err := rows.Scan(&position, &status, &sr, &hidden, &difficulty); err != nil {
+			rows.Close()
+			return err
+		}
+		if status == proofs.StatusInfraError {
+			continue // excluded: the platform failed, not the agent
+		}
+		passed := 0
+		if sr != nil {
+			for _, t := range sr.Tests {
+				if t.Passed {
+					passed++
+				}
+			}
+		}
+		if passed > hidden {
+			passed = hidden
+		}
+		w := float64(difficulty)
+		weighted += w * float64(passed) / float64(hidden)
+		weights += w
+	}
+	rows.Close()
+	if weights == 0 {
+		return s.abortTx(ctx, tx, run.ID)
+	}
+	score := weighted / weights
+
+	st, before, err := s.loadState(ctx, tx, run.AgentID, run.SkillSlug, run.VersionID)
+	if err != nil {
+		return err
+	}
+	next := rating.Apply(st, score)
+	if err := s.saveState(ctx, tx, run.AgentID, run.SkillSlug, run.VersionID, next); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `UPDATE qualification_runs SET status = 'scored', finished_at = now(), score = $2, rating_before = $3, rating_after = $4, uncertainty_after = $5 WHERE id = $1`,
+		run.ID, score, before, next.Rating, next.Uncertainty)
+	return err
+}
+```
+
+`backend/internal/qualifications/ratings.go`:
+
+```go
+package qualifications
+
+import (
+	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5"
+
+	"tolerance/internal/rating"
+)
+
+// loadState returns the rating state for (agent, skill) on versionID. A
+// row on an older version means the agent changed version without the
+// listener having run (should not happen) and is treated as a fresh one
+// with the old rating as prior. before is the displayed rating before this
+// run, nil when there was none.
+func (s *Service) loadState(ctx context.Context, tx pgx.Tx, agentID, skill, versionID string) (rating.State, *int, error) {
+	var st rating.State
+	var rowVersion string
+	err := tx.QueryRow(ctx, `SELECT version_id, rating, uncertainty, runs, sum_targets, prior_rating FROM skill_ratings WHERE agent_id = $1 AND skill_slug = $2 FOR UPDATE`,
+		agentID, skill).Scan(&rowVersion, &st.Rating, &st.Uncertainty, &st.Runs, &st.SumTargets, &st.Prior)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return rating.State{}, nil, nil
+	}
+	if err != nil {
+		return rating.State{}, nil, err
+	}
+	before := st.Rating
+	if rowVersion != versionID {
+		st = rating.NewVersion(st)
+	}
+	return st, &before, nil
+}
+
+func (s *Service) saveState(ctx context.Context, tx pgx.Tx, agentID, skill, versionID string, st rating.State) error {
+	_, err := tx.Exec(ctx, `INSERT INTO skill_ratings (agent_id, skill_slug, version_id, rating, uncertainty, runs, sum_targets, prior_rating, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+		ON CONFLICT (agent_id, skill_slug) DO UPDATE SET version_id = $3, rating = $4, uncertainty = $5, runs = $6, sum_targets = $7, prior_rating = $8, updated_at = now()`,
+		agentID, skill, versionID, st.Rating, st.Uncertainty, st.Runs, st.SumTargets, st.Prior)
+	return err
+}
+
+// OnNewVersion implements agents.VersionListener: every skill rating moves
+// to the new version with confidence reset and the old rating as prior.
+func (s *Service) OnNewVersion(ctx context.Context, tx pgx.Tx, agentID, versionID string) error {
+	rows, err := tx.Query(ctx, `SELECT skill_slug, rating, uncertainty, runs, sum_targets, prior_rating FROM skill_ratings WHERE agent_id = $1 FOR UPDATE`, agentID)
+	if err != nil {
+		return err
+	}
+	type row struct {
+		skill string
+		st    rating.State
+	}
+	var all []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.skill, &r.st.Rating, &r.st.Uncertainty, &r.st.Runs, &r.st.SumTargets, &r.st.Prior); err != nil {
+			rows.Close()
+			return err
+		}
+		all = append(all, r)
+	}
+	rows.Close()
+	for _, r := range all {
+		if err := s.saveState(ctx, tx, agentID, r.skill, versionID, rating.NewVersion(r.st)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RatingsFor lists the agent's skill ratings with derived fields. Verified
+// requires the rating to be on the agent's current version with at least
+// one run there.
+func (s *Service) RatingsFor(ctx context.Context, agentID string) ([]SkillRating, error) {
+	out := []SkillRating{}
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT r.skill_slug, r.rating, r.uncertainty, r.runs, r.version_id, v.number, r.prior_rating,
+			(a.current_version_id = r.version_id)
+			FROM skill_ratings r JOIN agent_versions v ON v.id = r.version_id JOIN agents a ON a.id = r.agent_id
+			WHERE r.agent_id = $1 ORDER BY r.skill_slug`, agentID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var r SkillRating
+			if err := rows.Scan(&r.SkillSlug, &r.Rating, &r.Uncertainty, &r.Runs, &r.VersionID, &r.VersionNumber, &r.PriorRating, &r.OnCurrentVersion); err != nil {
+				return err
+			}
+			r.Access = rating.Access(r.Rating, r.Uncertainty)
+			r.Tier = rating.Tier(r.Access)
+			r.Verified = r.OnCurrentVersion && r.Runs > 0 && rating.Verified(r.Rating, r.Uncertainty)
+			out = append(out, r)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+```
+
+В `cmd/api/main.go`: `qs := qualifications.NewService(pool, ps); agentsSvc.SetVersionListener(qs); worker.SetFinishListener(qs)`; `qs` в `deps`.
+
+Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/qualifications/ ./internal/proofs/... -v` → PASS.
+
+- [ ] **Step 5: Коммит**
+
+```bash
+cd backend && gofmt -l . && go vet ./... && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...
+git add -A && git commit -m "Add qualification runs: three hidden tasks, worker-driven advance, skill ratings
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 5: API кабинета, публичный профиль, OpenAPI, e2e
+
+**Files:**
+- Create: `backend/internal/qualifications/http.go`, `backend/internal/skills/http.go`, `backend/internal/agents/public.go`
+- Modify: `backend/cmd/api/handler.go`, `backend/cmd/api/main_test.go`, `backend/contracts/openapi/openapi.yaml`, `backend/internal/agents/model.go`, `backend/internal/agents/presence.go`
+
+**Interfaces:**
+- Produces: `GET /api/v1/skills`, `POST /api/v1/qualifications`, `GET /api/v1/qualifications`, `GET /api/v1/qualifications/{id}` (cookie); `GET /api/v1/agents/{name}` (без auth); `Overview.Skills []qualifications.SkillRating` в `/me`; `agents.SkillsSource interface{ RatingsFor(ctx, agentID) ([]qualifications.SkillRating, error) }` — чтобы `agents` не импортировал `qualifications`, тип рейтинга переезжает в отдельный пакет `internal/rating` как `rating.SkillRating` (тот же набор полей), а `qualifications.SkillRating = rating.SkillRating` через alias.
+
+- [ ] **Step 1: Маршруты**
+
+`backend/internal/skills/http.go`:
+
+```go
+package skills
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/jackc/pgx/v5"
+
+	"tolerance/internal/identity"
+	"tolerance/internal/platform/db"
+	"tolerance/internal/platform/httpx"
+	"tolerance/internal/rating"
+)
+
+type SkillView struct {
+	Skill
+	PoolSize      int                 `json:"pool_size"`
+	Rating        *rating.SkillRating `json:"rating"`
+	RunsToday     int                 `json:"runs_today"`
+	CanStart      bool                `json:"can_start"`
+	BlockedReason string              `json:"blocked_reason"`
+}
+
+type RatingsSource interface {
+	RatingsFor(ctx context.Context, agentID string) ([]rating.SkillRating, error)
+}
+
+// RegisterOwnerRoutes mounts GET /skills: the catalog with the caller's
+// rating and whether a run can start right now.
+func RegisterOwnerRoutes(mux *http.ServeMux, pool *db.Pool, ratings RatingsSource, stageOf func(ctx context.Context, userID string) (agentID, stage string, hasVersion bool, err error)) {
+	mux.HandleFunc("GET /api/v1/skills", func(w http.ResponseWriter, r *http.Request) {
+		userID := identity.MustFromContext(r.Context()).UserID
+		agentID, stage, hasVersion, err := stageOf(r.Context(), userID)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		var items []SkillView
+		err = pool.Tx(r.Context(), func(ctx context.Context, tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `SELECT s.slug, s.title, s.language, s.description, (SELECT count(*) FROM skill_tasks t WHERE t.skill_slug = s.slug),
+				(SELECT count(*) FROM qualification_runs q WHERE q.skill_slug = s.slug AND q.agent_id = $1 AND q.created_at > now() - interval '24 hours')
+				FROM skills s ORDER BY s.slug`, agentID)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var v SkillView
+				if err := rows.Scan(&v.Slug, &v.Title, &v.Language, &v.Description, &v.PoolSize, &v.RunsToday); err != nil {
+					return err
+				}
+				items = append(items, v)
+			}
+			return rows.Err()
+		})
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		var rs []rating.SkillRating
+		if agentID != "" {
+			if rs, err = ratings.RatingsFor(r.Context(), agentID); err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+		}
+		for i := range items {
+			for j := range rs {
+				if rs[j].SkillSlug == items[i].Slug {
+					items[i].Rating = &rs[j]
+				}
+			}
+			switch {
+			case agentID == "":
+				items[i].BlockedReason = "no_agent"
+			case stage == "checking":
+				items[i].BlockedReason = "in_progress"
+			case stage != "operational":
+				items[i].BlockedReason = "not_operational"
+			case !hasVersion:
+				items[i].BlockedReason = "no_version"
+			case items[i].RunsToday >= 3:
+				items[i].BlockedReason = "daily_limit"
+			case items[i].PoolSize == 0:
+				items[i].BlockedReason = "no_tasks"
+			default:
+				items[i].CanStart = true
+			}
+		}
+		if items == nil {
+			items = []SkillView{}
+		}
+		httpx.Respond(w, http.StatusOK, map[string]any{"items": items})
+	})
+}
+```
+
+Функция `stageOf` реализуется в `agents`: `(*Service).StageOf(ctx, userID) (agentID, stage string, hasVersion bool, err error)` через `Overview` (пустой `agentID` когда агента нет).
+
+`backend/internal/qualifications/http.go`:
+
+```go
+package qualifications
+
+import (
+	"net/http"
+
+	"tolerance/internal/identity"
+	"tolerance/internal/platform/httpx"
+)
+
+type startInput struct {
+	Skill string `json:"skill"`
+}
+
+func RegisterOwnerRoutes(mux *http.ServeMux, s *Service) {
+	mux.HandleFunc("POST /api/v1/qualifications", func(w http.ResponseWriter, r *http.Request) {
+		raw, err := httpx.ReadBody(w, r)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		var in startInput
+		if err := httpx.Decode(raw, &in); err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		run, err := s.Start(r.Context(), identity.MustFromContext(r.Context()).UserID, in.Skill)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusCreated, run)
+	})
+	mux.HandleFunc("GET /api/v1/qualifications", func(w http.ResponseWriter, r *http.Request) {
+		items, err := s.List(r.Context(), identity.MustFromContext(r.Context()).UserID)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, map[string]any{"items": items})
+	})
+	mux.HandleFunc("GET /api/v1/qualifications/{id}", func(w http.ResponseWriter, r *http.Request) {
+		run, err := s.Get(r.Context(), identity.MustFromContext(r.Context()).UserID, r.PathValue("id"))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, run)
+	})
+}
+```
+
+`backend/internal/agents/public.go`:
+
+```go
+package agents
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"tolerance/internal/platform/httpx"
+	"tolerance/internal/rating"
+)
+
+type PublicVersion struct {
+	Number  int    `json:"number"`
+	Model   string `json:"model"`
+	Harness string `json:"harness"`
+}
+
+type PublicProfile struct {
+	Name        string               `json:"name"`
+	Description string               `json:"description"`
+	Joined      time.Time            `json:"joined"`
+	Stage       string               `json:"stage"`
+	Version     *PublicVersion       `json:"version"`
+	Skills      []rating.SkillRating `json:"skills"`
+}
+
+type SkillsSource interface {
+	RatingsFor(ctx context.Context, agentID string) ([]rating.SkillRating, error)
+}
+
+// PublicByName is the profile anyone can see: no email, no keys.
+func (s *Service) PublicByName(ctx context.Context, name string, skills SkillsSource) (PublicProfile, error) {
+	var a Agent
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return scanAgent(tx.QueryRow(ctx, `SELECT `+agentCols+` FROM agents WHERE lower(name) = lower($1)`, name), &a)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PublicProfile{}, httpx.NotFound()
+	}
+	if err != nil {
+		return PublicProfile{}, err
+	}
+	o, err := s.overview(ctx, a)
+	if err != nil {
+		return PublicProfile{}, err
+	}
+	rs, err := skills.RatingsFor(ctx, a.ID)
+	if err != nil {
+		return PublicProfile{}, err
+	}
+	p := PublicProfile{Name: a.Name, Description: a.Description, Joined: a.CreatedAt, Stage: o.Stage, Skills: rs}
+	if o.Version != nil {
+		p.Version = &PublicVersion{Number: o.Version.Number, Model: o.Version.Model, Harness: o.Version.Harness}
+	}
+	return p, nil
+}
+
+func RegisterPublicRoutes(mux *http.ServeMux, s *Service, skills SkillsSource) {
+	mux.HandleFunc("GET /api/v1/agents/{name}", func(w http.ResponseWriter, r *http.Request) {
+		p, err := s.PublicByName(r.Context(), r.PathValue("name"), skills)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, p)
+	})
+}
+```
+
+`rating.SkillRating` — перенести структуру из `qualifications/model.go` в `rating/rating.go` (те же поля и json-теги); в `qualifications`: `type SkillRating = rating.SkillRating`.
+
+`agents/model.go`: `Overview.Skills []rating.SkillRating \`json:"skills"\``; `presence.go` `overview` заполняет через `s.skills.RatingsFor`, где `s.skills SkillsSource` задаётся `SetSkillsSource` (в тестах среза 1 без него — пустой список).
+
+`cmd/api/handler.go`:
+
+```go
+	skills.RegisterOwnerRoutes(owner, d.pool, d.quals, d.agents.StageOf)
+	qualifications.RegisterOwnerRoutes(owner, d.quals)
+	api.Handle("/api/v1/skills", session(owner))
+	api.Handle("/api/v1/qualifications", session(owner))
+	api.Handle("/api/v1/qualifications/", session(owner))
+
+	public := http.NewServeMux()
+	agents.RegisterPublicRoutes(public, d.agents, d.quals)
+	api.Handle("/api/v1/agents/", public)
+```
+
+- [ ] **Step 2: OpenAPI**
+
+Добавить в `openapi.yaml` пути `/skills`, `/qualifications`, `/qualifications/{id}`, `/agents/{name}` (security `[]`), схемы `SkillRating` (`skill_slug, rating, uncertainty, access, tier{none,verified,strong,elite}, verified, runs, version_id, version_number, on_current_version, prior_rating nullable`), `SkillView`, `QualificationRun` (все поля `Run`, `tasks: array of Proof`), `PublicProfile`, `AgentVersion` (`id, number, model, harness, config_digest, created_at`). `Proof` дополняется `kind{proof,qualification}`, `qualification_run_id nullable`, `position nullable`, `skill_task_slug nullable`. `AgentOverview` дополняется `version nullable AgentVersion` и `skills array`. Ответ `/connector/heartbeat` дополняется `version nullable`. `/connector/tasks/next` ответ дополняется `kind`.
+
+- [ ] **Step 3: e2e**
+
+Добавить в `cmd/api/main_test.go` (в `newE2E` синхронизировать `skills`-каталог и подключить `qualifications` как в задаче 4):
+
+```go
+func TestEndToEnd_Qualification(t *testing.T) {
+	e := newE2E(t)
+	owner := e.browser(t)
+	plain := &http.Client{}
+	e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "q@example.com", "password": "longenough1"}, nil)
+	e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "Fixer-7"}, nil)
+	var keyResp struct{ Key string `json:"key"` }
+	e.call(t, owner, "POST", "/api/v1/agent/keys", "", map[string]string{"name": "k"}, &keyResp)
+	hb := map[string]any{"connector_version": "0.2.0", "hostname": "h", "version": map[string]string{"model": "claude-opus-5-5", "harness": "claude-code", "config_digest": "abc"}}
+	e.call(t, plain, "POST", "/api/v1/connector/heartbeat", keyResp.Key, hb, nil)
+
+	// skills are blocked until the basic proof passes
+	var sk struct{ Items []struct {
+		Slug string `json:"slug"`; CanStart bool `json:"can_start"`; BlockedReason string `json:"blocked_reason"`
+	} `json:"items"` }
+	e.call(t, owner, "GET", "/api/v1/skills", "", nil, &sk)
+	if len(sk.Items) != 2 || sk.Items[0].CanStart || sk.Items[0].BlockedReason != "not_operational" {
+		t.Fatalf("skills before proof: %+v", sk.Items)
+	}
+	if code := e.call(t, owner, "POST", "/api/v1/qualifications", "", map[string]string{"skill": "go"}, nil); code != 409 {
+		t.Fatalf("qualification before proof: %d", code)
+	}
+
+	// basic proof via the same path as slice 1
+	var proof proofs.Proof
+	e.call(t, owner, "POST", "/api/v1/proofs", "", map[string]string{"task_slug": "go-fix-retry"}, &proof)
+	e.call(t, plain, "GET", "/api/v1/connector/tasks/next?wait=1", keyResp.Key, nil, nil)
+	e.call(t, plain, "POST", "/api/v1/connector/proofs/"+proof.ID+"/result", keyResp.Key, map[string]any{"diff": "--- a/x\n+++ b/x\n"}, nil)
+	_ = e.worker.RunProof(context.Background(), proof.ID)
+
+	e.call(t, owner, "GET", "/api/v1/skills", "", nil, &sk)
+	if !sk.Items[0].CanStart {
+		t.Fatalf("skills after proof: %+v", sk.Items)
+	}
+	var run qualifications.Run
+	if code := e.call(t, owner, "POST", "/api/v1/qualifications", "", map[string]string{"skill": "go"}, &run); code != 201 || len(run.Tasks) != 1 {
+		t.Fatalf("start: %d %+v", code, run)
+	}
+	for i := 0; i < 3; i++ {
+		var next struct{ ProofID string `json:"proof_id"`; Kind string `json:"kind"` }
+		if code := e.call(t, plain, "GET", "/api/v1/connector/tasks/next?wait=1", keyResp.Key, nil, &next); code != 200 || next.Kind != "qualification" {
+			t.Fatalf("task %d: %d %+v", i, code, next)
+		}
+		e.call(t, plain, "POST", "/api/v1/connector/proofs/"+next.ProofID+"/result", keyResp.Key, map[string]any{"diff": "--- a/x\n+++ b/x\n"}, nil)
+		e.fake.Result = sandbox.Result{ExitCode: 0, Tests: []sandbox.TestResult{{Name: "TestHidden_A", Passed: true}, {Name: "TestHidden_B", Passed: true}, {Name: "TestHidden_C", Passed: true}, {Name: "TestHidden_D", Passed: true}, {Name: "TestHidden_E", Passed: true}}}
+		if err := e.worker.RunProof(context.Background(), next.ProofID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.call(t, owner, "GET", "/api/v1/qualifications/"+run.ID, "", nil, &run)
+	if run.Status != "scored" || run.Score == nil || *run.Score != 1 || *run.RatingAfter != 2400 || len(run.Tasks) != 3 {
+		t.Fatalf("scored run: %+v", run)
+	}
+	if run.Tasks[0].SandboxResult == nil || run.Tasks[0].SandboxResult.Tests[0].Name != "hidden-1" || run.Tasks[0].SandboxResult.Output != "" {
+		t.Fatalf("hidden tests leaked: %+v", run.Tasks[0].SandboxResult)
+	}
+
+	var prof struct {
+		Name   string `json:"name"`
+		Skills []rating.SkillRating `json:"skills"`
+		Version *struct{ Number int `json:"number"` } `json:"version"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/agents/fixer-7", "", nil, &prof); code != 200 || prof.Name != "Fixer-7" || len(prof.Skills) != 1 || !prof.Skills[0].Verified || prof.Skills[0].Tier != "strong" || prof.Version.Number != 1 {
+		t.Fatalf("public profile: %d %+v", code, prof)
+	}
+	raw := e.rawGet(t, plain, "/api/v1/agents/fixer-7")
+	if strings.Contains(raw, "q@example.com") || strings.Contains(raw, keyResp.Key[:12]) {
+		t.Fatalf("profile leaks private data: %s", raw)
+	}
+
+	// version change: confidence resets, verified drops until a run on v2
+	hb["version"] = map[string]string{"model": "claude-sonnet-5", "harness": "claude-code", "config_digest": "def"}
+	e.call(t, plain, "POST", "/api/v1/connector/heartbeat", keyResp.Key, hb, nil)
+	e.call(t, plain, "GET", "/api/v1/agents/fixer-7", "", nil, &prof)
+	if prof.Version.Number != 2 || prof.Skills[0].Verified || prof.Skills[0].OnCurrentVersion || prof.Skills[0].Rating != 2400 {
+		t.Fatalf("after version change: %+v", prof)
+	}
+}
+```
+
+Хелпер `rawGet` в тесте: GET без валидации, возвращает тело строкой (для проверки утечек). Обратить внимание: `newE2E` из среза 1 должен вызвать `SetVersionListener`/`SetFinishListener` и синхронизировать каталог направлений.
+
+Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./cmd/api/ -v` → PASS.
+
+- [ ] **Step 4: Коммит**
+
+```bash
+cd backend && gofmt -l . && go vet ./... && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...
+git add -A && git commit -m "Add skills and qualification API, public agent profile, contract and e2e
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 6: Коннектор: версия агента из digest конфигурации
+
+**Files:**
+- Create: `backend/cmd/arena/version.go`, `backend/cmd/arena/version_test.go`
+- Modify: `backend/cmd/arena/config.go`, `backend/cmd/arena/client.go`, `backend/cmd/arena/main.go`
+
+**Interfaces:**
+- Produces: `config.Agent.Model, Harness string; FingerprintFiles []string`; `configDigest(cfg config, read func(string) ([]byte, error)) (string, error)`; `client.Heartbeat(ctx, v versionInfo)`; `versionInfo{Model, Harness, ConfigDigest string}`; `heartbeatResp.Version *struct{Number int}`; константа `version = "0.2.0"`.
+
+- [ ] **Step 1: Тест digest**
+
+`backend/cmd/arena/version_test.go`:
+
+```go
+package main
+
+import (
+	"errors"
+	"testing"
+)
+
+func cfgWith(model, harness, command string, files ...string) config {
+	var c config
+	c.URL = "https://a.example"
+	c.Agent.Command = command
+	c.Agent.Model = model
+	c.Agent.Harness = harness
+	c.Agent.FingerprintFiles = files
+	return c
+}
+
+func TestConfigDigest(t *testing.T) {
+	fs := map[string][]byte{"/home/u/.claude/CLAUDE.md": []byte("be careful")}
+	read := func(p string) ([]byte, error) {
+		b, ok := fs[p]
+		if !ok {
+			return nil, errors.New("missing")
+		}
+		return b, nil
+	}
+	base := cfgWith("claude-opus-5-5", "claude-code", "claude -p x", "/home/u/.claude/CLAUDE.md")
+	d1, err := configDigest(base, read)
+	if err != nil || len(d1) != 64 {
+		t.Fatalf("digest: %v %q", err, d1)
+	}
+	d2, _ := configDigest(base, read)
+	if d1 != d2 {
+		t.Fatalf("digest must be deterministic")
+	}
+	other := base
+	other.URL = "https://other.example"
+	if d3, _ := configDigest(other, read); d3 != d1 {
+		t.Fatalf("url must not be part of the digest")
+	}
+	model := cfgWith("claude-sonnet-5", "claude-code", "claude -p x", "/home/u/.claude/CLAUDE.md")
+	if d4, _ := configDigest(model, read); d4 == d1 {
+		t.Fatalf("model change must change the digest")
+	}
+	fs["/home/u/.claude/CLAUDE.md"] = []byte("be bold")
+	if d5, _ := configDigest(base, read); d5 == d1 {
+		t.Fatalf("fingerprint file change must change the digest")
+	}
+	missing := cfgWith("m", "h", "c", "/nope")
+	if _, err := configDigest(missing, read); err == nil {
+		t.Fatalf("missing fingerprint file must be an error")
+	}
+	none := cfgWith("m", "h", "c")
+	if d, err := configDigest(none, read); err != nil || len(d) != 64 {
+		t.Fatalf("no fingerprint files is fine: %v", err)
+	}
+}
+```
+
+- [ ] **Step 2: Реализация**
+
+`backend/cmd/arena/config.go`: в структуре `Agent` добавить `Model string \`yaml:"model"\``, `Harness string \`yaml:"harness"\``, `FingerprintFiles []string \`yaml:"fingerprint_files"\``; `defaultConfig` дополнить:
+
+```yaml
+  # Shown on your public profile and part of the agent version.
+  model: claude-opus-5-5
+  harness: claude-code
+  # Files that define your agent's behaviour. Their content is hashed into
+  # the version: change them and the platform treats it as a new version
+  # whose ratings need re-proving. Contents never leave this machine.
+  fingerprint_files:
+    - ~/.claude/CLAUDE.md
+```
+
+`backend/cmd/arena/version.go`:
+
+```go
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+func expandHome(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, p[2:])
+		}
+	}
+	return p
+}
+
+// configDigest identifies the agent version: the agent block of the config
+// (never the url) plus the hash of every fingerprint file. Only hashes
+// leave the machine.
+func configDigest(cfg config, read func(string) ([]byte, error)) (string, error) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "model=%s\nharness=%s\ncommand=%s\n", cfg.Agent.Model, cfg.Agent.Harness, cfg.Agent.Command)
+	for _, f := range cfg.Agent.FingerprintFiles {
+		content, err := read(expandHome(f))
+		if err != nil {
+			return "", fmt.Errorf("fingerprint file %s: %w (remove it from fingerprint_files or create it)", f, err)
+		}
+		sum := sha256.Sum256(content)
+		fmt.Fprintf(&b, "file %s %s\n", f, hex.EncodeToString(sum[:]))
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:]), nil
+}
+```
+
+`client.go`: `const version = "0.2.0"`; тип `versionInfo struct{ Model string \`json:"model"\`; Harness string \`json:"harness"\`; ConfigDigest string \`json:"config_digest"\` }`; `Heartbeat(ctx, v versionInfo)` шлёт `{"connector_version", "hostname", "version": v}`; `heartbeatResp` получает `Version *struct{ Number int \`json:"number"\` } \`json:"version"\``.
+
+`main.go`: `newClient` дополнительно считает `digest, err := configDigest(cfg, os.ReadFile)` и возвращает `versionInfo`; `cmdConnect` и `cmdStatus` передают её в `Heartbeat`; вывод `connect`: `"%s is online (%s, v%d). Waiting for tasks..."`; `status`: `"%s: %s · v%d · model %s"`.
+
+Run: `go test ./cmd/arena/ -v` → PASS.
+
+- [ ] **Step 3: Коммит**
+
+```bash
+cd backend && gofmt -l . && go vet ./cmd/arena/ && go test ./cmd/arena/
+git add -A && git commit -m "Connector reports agent version from a config digest
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 7: Кабинет: направления, страница прогона, профиль, версия в шапке
+
+**Files:**
+- Create: `frontend/app/app/skills/page.tsx`, `frontend/app/app/qualifications/[id]/page.tsx`, `frontend/app/agents/[name]/page.tsx`, `frontend/components/rating-pill.tsx`, `frontend/components/skill-card.tsx`, `frontend/components/qualification/lanes.tsx`
+- Modify: `frontend/lib/types.ts`, `frontend/lib/format.ts`, `frontend/components/app-shell.tsx`, `frontend/components/stage-card.tsx`, `frontend/app/app/page.tsx`, `frontend/app/app/agent/connect/page.tsx`, `frontend/app/app/proofs/[id]/page.tsx`
+
+**Interfaces:**
+- Consumes: API задачи 5. Produces: `RatingPill({r})`, `SkillCard({skill, onStart, starting})`, `Lanes({run})`.
+
+- [ ] **Step 1: Типы и формат**
+
+Добавить в `frontend/lib/types.ts`:
+
+```ts
+export interface AgentVersion { id: string; number: number; model: string; harness: string; config_digest: string; created_at: string }
+export type Tier = 'none' | 'verified' | 'strong' | 'elite'
+export interface SkillRating {
+  skill_slug: string; rating: number; uncertainty: number; access: number; tier: Tier; verified: boolean
+  runs: number; version_id: string; version_number: number; on_current_version: boolean; prior_rating: number | null
+}
+export interface SkillView {
+  slug: string; title: string; language: string; description: string; pool_size: number
+  rating: SkillRating | null; runs_today: number; can_start: boolean; blocked_reason: string
+}
+export interface QualificationRun {
+  id: string; agent_id: string; version_id: string; skill_slug: string; status: 'running' | 'scored' | 'aborted'
+  created_at: string; finished_at: string | null; score: number | null
+  rating_before: number | null; rating_after: number | null; uncertainty_after: number | null
+  task_slugs: string[]; tasks: Proof[]
+}
+export interface PublicProfile {
+  name: string; description: string; joined: string; stage: Stage
+  version: { number: number; model: string; harness: string } | null; skills: SkillRating[]
+}
+```
+
+`AgentOverview` дополнить `version: AgentVersion | null; skills: SkillRating[]`; `Proof` дополнить `kind: 'proof' | 'qualification'; qualification_run_id: string | null; position: number | null; skill_task_slug: string | null`.
+
+Добавить в `frontend/lib/format.ts`:
+
+```ts
+export const TIER_LABEL: Record<string, string> = { none: 'Unverified', verified: 'Verified', strong: 'Strong', elite: 'Elite' }
+export const BLOCKED_LABEL: Record<string, string> = {
+  no_agent: 'Create an agent first.',
+  not_operational: 'Pass the basic proof first.',
+  in_progress: 'A proof or qualification is already running.',
+  no_version: 'Update the connector and run `arena connect` so it reports your agent version.',
+  daily_limit: 'Daily limit reached (3 per skill). Try tomorrow.',
+  no_tasks: 'No tasks in this skill yet.',
+}
+export function pct(x: number | null) { return x == null ? '—' : `${Math.round(x * 100)}%` }
+```
+
+- [ ] **Step 2: Компоненты**
+
+`frontend/components/rating-pill.tsx`:
+
+```tsx
+import type { SkillRating } from '@/lib/types'
+import { TIER_LABEL } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
+export function RatingPill({ r }: { r: SkillRating }) {
+  const stale = !r.on_current_version
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2 text-sm">
+      <span className="font-mono text-lg font-semibold">{r.rating}</span>
+      <span className="font-mono text-xs text-muted-foreground">± {r.uncertainty}</span>
+      <span className={cn('rounded-full border px-2 py-0.5 text-xs',
+        r.verified ? 'border-success/40 text-success' : 'border-border text-muted-foreground')}>
+        {r.verified ? TIER_LABEL[r.tier] : stale ? `not confirmed on v${r.version_number + 1}+` : 'Unverified'}
+      </span>
+      {stale && <span className="text-xs text-muted-foreground">earned on v{r.version_number}</span>}
+    </span>
+  )
+}
+```
+
+`frontend/components/skill-card.tsx`:
+
+```tsx
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { RatingPill } from '@/components/rating-pill'
+import type { SkillView } from '@/lib/types'
+import { BLOCKED_LABEL } from '@/lib/format'
+
+export function SkillCard({ skill, onStart, starting }: { skill: SkillView; onStart: (slug: string) => void; starting: boolean }) {
+  return (
+    <Card className="flex flex-col gap-3 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">{skill.title}</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">{skill.description}</p>
+        </div>
+        <span className="shrink-0 font-mono text-xs text-muted-foreground">{skill.pool_size} tasks</span>
+      </div>
+      {skill.rating ? <RatingPill r={skill.rating} /> : <p className="text-sm text-muted-foreground">Not proven yet. Three hidden tasks, ~30 minutes of agent time.</p>}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground">{skill.runs_today}/3 today</span>
+        {skill.can_start ? (
+          <Button size="sm" onClick={() => onStart(skill.slug)} disabled={starting}>{skill.rating ? 'Prove again' : `Prove ${skill.title}`}</Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">{BLOCKED_LABEL[skill.blocked_reason] ?? skill.blocked_reason}</span>
+        )}
+      </div>
+    </Card>
+  )
+}
+```
+
+`frontend/components/qualification/lanes.tsx`:
+
+```tsx
+import Link from 'next/link'
+import { Loader2, Check, X } from 'lucide-react'
+import type { QualificationRun, Proof } from '@/lib/types'
+import { STATUS_LABEL, REASON_LABEL } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
+function latest(run: QualificationRun, position: number): Proof | undefined {
+  return [...run.tasks].reverse().find((t) => t.position === position)
+}
+
+export function Lanes({ run }: { run: QualificationRun }) {
+  return (
+    <ol className="flex flex-col gap-2">
+      {[1, 2, 3].map((pos) => {
+        const p = latest(run, pos)
+        const done = p && ['passed', 'failed', 'infra_error', 'expired'].includes(p.status)
+        const passed = p?.sandbox_result ? p.sandbox_result.tests.filter((t) => t.passed).length : null
+        const total = p?.sandbox_result ? p.sandbox_result.tests.length : null
+        return (
+          <li key={pos} className="flex items-center gap-3 rounded-md border border-border p-3 text-sm">
+            <span className={cn('flex size-6 items-center justify-center rounded-full border text-xs',
+              done && p!.status === 'passed' && 'border-success text-success',
+              done && p!.status !== 'passed' && 'border-destructive text-destructive',
+              !done && p && 'border-primary')}>
+              {!p ? pos : done ? (p.status === 'passed' ? <Check className="size-3" /> : <X className="size-3" />) : <Loader2 className="size-3 animate-spin" />}
+            </span>
+            <div className="flex-1">
+              <p className="font-medium">Task {pos}{p?.skill_task_slug ? <span className="ml-2 font-mono text-xs text-muted-foreground">{p.skill_task_slug}</span> : null}</p>
+              <p className="text-xs text-muted-foreground">
+                {!p ? 'Waiting for the previous task' : STATUS_LABEL[p.status]}
+                {p?.failure_reason ? ` · ${REASON_LABEL[p.failure_reason] ?? p.failure_reason}` : ''}
+              </p>
+            </div>
+            {passed != null && <span className="font-mono text-xs">{passed}/{total} hidden</span>}
+            {p && <Link href={`/app/proofs/${p.id}`} className="text-xs text-muted-foreground hover:text-foreground">details</Link>}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+```
+
+- [ ] **Step 3: Страницы**
+
+`frontend/app/app/skills/page.tsx`:
+
+```tsx
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { SkillCard } from '@/components/skill-card'
+import { api, post, ApiError } from '@/lib/api'
+import type { SkillView, QualificationRun } from '@/lib/types'
+
+export default function SkillsPage() {
+  const router = useRouter()
+  const [items, setItems] = useState<SkillView[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
+  const load = useCallback(async () => {
+    try {
+      setItems((await api<{ items: SkillView[] }>('/skills')).items)
+    } catch (e) {
+      setError((e as ApiError).message)
+    }
+  }, [])
+  useEffect(() => { void load() }, [load])
+
+  async function start(slug: string) {
+    setStarting(true)
+    setError(null)
+    try {
+      const run = await post<QualificationRun>('/qualifications', { skill: slug })
+      router.push(`/app/qualifications/${run.id}`)
+    } catch (e) {
+      setError((e as ApiError).message)
+      await load()
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Skills</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Each skill is proven by three hidden tasks. Your agent works alone; hidden tests never leave the platform.</p>
+      </div>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {!items ? <p className="text-sm text-muted-foreground">Loading…</p> : (
+        <div className="grid gap-4 sm:grid-cols-2">{items.map((s) => <SkillCard key={s.slug} skill={s} onStart={start} starting={starting} />)}</div>
+      )}
+    </div>
+  )
+}
+```
+
+`frontend/app/app/qualifications/[id]/page.tsx`:
+
+```tsx
+'use client'
+
+import { use, useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { Card } from '@/components/ui/card'
+import { Lanes } from '@/components/qualification/lanes'
+import { api, ApiError } from '@/lib/api'
+import type { QualificationRun } from '@/lib/types'
+import { pct } from '@/lib/format'
+
+export default function QualificationPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+  const [run, setRun] = useState<QualificationRun | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const load = useCallback(async () => {
+    try {
+      setRun(await api<QualificationRun>(`/qualifications/${id}`))
+    } catch (e) {
+      setError((e as ApiError).message)
+    }
+  }, [id])
+  useEffect(() => {
+    void load()
+    const t = setInterval(() => { if (!run || run.status === 'running') void load() }, 3000)
+    return () => clearInterval(t)
+  }, [load, run?.status])
+
+  if (error) return <p role="alert" className="text-sm text-destructive">{error}</p>
+  if (!run) return <p className="text-sm text-muted-foreground">Loading…</p>
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-mono text-xs text-muted-foreground">{run.skill_slug}</p>
+          <h1 className="text-2xl font-semibold">
+            {run.status === 'running' ? 'Proving…' : run.status === 'scored' ? 'Result' : 'Aborted'}
+          </h1>
+        </div>
+        <Link href="/app/skills" className="text-sm text-muted-foreground hover:text-foreground">← Skills</Link>
+      </div>
+      {run.status === 'scored' && (
+        <Card className="p-5">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+            <div><p className="text-xs text-muted-foreground">Score</p><p className="font-mono text-3xl font-semibold">{pct(run.score)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Rating</p>
+              <p className="font-mono text-3xl font-semibold">{run.rating_before != null && <span className="text-muted-foreground">{run.rating_before} → </span>}{run.rating_after} <span className="text-base text-muted-foreground">± {run.uncertainty_after}</span></p></div>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">The ± shrinks with every run on this agent version. Change the model or prompts and it resets.</p>
+        </Card>
+      )}
+      {run.status === 'aborted' && <p className="text-sm text-muted-foreground">The run ended before all three tasks finished (connector went away or a task expired). Rating unchanged; start a new run.</p>}
+      <Lanes run={run} />
+      {run.status === 'running' && <p className="text-sm text-muted-foreground">This page refreshes on its own. Hidden test names are not shown, by design.</p>}
+    </div>
+  )
+}
+```
+
+`frontend/app/agents/[name]/page.tsx` (публичная, без `/app` layout):
+
+```tsx
+'use client'
+
+import { use, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { RatingPill } from '@/components/rating-pill'
+import { api, ApiError } from '@/lib/api'
+import type { PublicProfile } from '@/lib/types'
+import { ago } from '@/lib/format'
+
+export default function AgentProfilePage({ params }: { params: Promise<{ name: string }> }) {
+  const { name } = use(params)
+  const [p, setP] = useState<PublicProfile | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    api<PublicProfile>(`/agents/${encodeURIComponent(name)}`).then(setP).catch((e: ApiError) => setError(e.status === 404 ? 'No such agent.' : e.message))
+  }, [name])
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-10">
+      <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">Agent Arena</Link>
+      {error && <p role="alert" className="mt-6 text-sm text-destructive">{error}</p>}
+      {p && (
+        <div className="mt-6 space-y-6">
+          <div>
+            <h1 className="text-3xl font-semibold">{p.name}{p.version && <span className="ml-2 font-mono text-base text-muted-foreground">v{p.version.number}</span>}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{p.description || 'No description.'}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {p.version ? `${p.version.model} · ${p.version.harness} · ` : ''}joined {ago(p.joined)} · {p.stage}
+            </p>
+          </div>
+          <section>
+            <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Verified skills</h2>
+            {p.skills.length === 0 ? <p className="text-sm text-muted-foreground">Nothing proven yet.</p> : (
+              <ul className="divide-y divide-border rounded-md border border-border">
+                {p.skills.map((s) => (
+                  <li key={s.skill_slug} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <span className="font-medium">{s.skill_slug}</span>
+                    <RatingPill r={s} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <p className="text-xs text-muted-foreground">Ratings come from hidden tasks run by the platform on the agent's own diffs. The agent runs on its owner's machine; the platform cannot rule out human help and says so.</p>
+        </div>
+      )}
+    </main>
+  )
+}
+```
+
+`components/app-shell.tsx`: `NAV` получает `{ label: 'Skills', href: '/app/skills' }`; заголовок ссылки: `` `${me.agent.name} · v${me.agent.version?.number ?? '—'}` `` когда агент есть. `components/stage-card.tsx`: в ветке `operational` кнопка «Prove a skill» → `/app/skills` вместо «Run the proof again» (второй кнопкой оставить `variant="outline"`). `app/app/page.tsx`: под карточкой стадии блок «Skills» со списком `me.agent.skills` через `RatingPill`, пустое состояние «No skills proven yet» с ссылкой на `/app/skills`. `app/app/agent/connect/page.tsx`: в шаге 3 показать пример `config.yaml` с `model`, `harness`, `fingerprint_files` и пояснением «change these and your ratings need re-proving». `app/app/proofs/[id]/page.tsx`: если `proof.kind === 'qualification'`, над таймлайном ссылка `← Qualification run` на `/app/qualifications/${proof.qualification_run_id}` и подпись, что имена скрытых тестов скрыты.
+
+- [ ] **Step 4: Проверка и коммит**
+
+```bash
+cd frontend && pnpm typecheck && pnpm build
+```
+
+Проверить 375px на `/app/skills`, `/app/qualifications/<id>`, `/agents/<name>` (как в срезе 1). Руками с запущенным API: `make up`, пройти базовую проверку, «Prove Go» → страница прогона обновляется, три дорожки, результат с рейтингом; `/agents/<name>` открывается без входа.
+
+```bash
+git add -A frontend && git commit -m "Add skills page, qualification run page, public profile and version in header
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 8: README, приёмка живым агентом
+
+**Files:**
+- Modify: `README.md`, `backend/README.md`, `frontend/app/app/agent/connect/page.tsx` (если текст отличается от README)
+
+- [ ] **Step 1: README**
+
+В корневой `README.md` после раздела «Подключить агента» добавить:
+
+```markdown
+## Доказать направление
+
+После базовой проверки на странице «Skills» нажмите «Prove Go» (или Python).
+Агент получит три скрытые задачи по очереди; платформа прогонит скрытые
+тесты и выведет рейтинг направления с неопределённостью. Рейтинг привязан
+к версии агента: `model`, `harness`, `command` и файлы из
+`fingerprint_files` в `~/.arena/config.yaml` хэшируются в номер версии.
+Поменяли модель или промпты — рейтинг остаётся виден, но помечается
+«не подтверждён на новой версии», пока не пройдёте прогон заново.
+Лимит: 3 прогона на направление в сутки. Публичный профиль:
+`/agents/<имя>`.
+
+Что проверяется честно: diff агента на скрытых тестах в песочнице без сети.
+Чего платформа гарантировать не может: что человек не помогал агенту —
+он работает на вашей машине. Это написано в профиле.
+```
+
+`backend/README.md`: добавить пакеты `rating`, `skills`, `qualifications`, каталог `fixtures/skills`, переменную `ARENA_SKILLS_DIR`, образы `arena-skill-go:1`, `arena-skill-python:1`.
+
+- [ ] **Step 2: Приёмка**
+
+1. `make up` (соберёт три образа). Зарегистрироваться, создать агента, `arena login`, `arena init` с `model: claude-opus-5-5`, `harness: claude-code`, `command: claude -p "$(cat TASK.md)" --dangerously-skip-permissions`, `arena connect`.
+2. «Run basic proof» → `passed`.
+3. «Prove Go» → три задачи проходят по очереди (по 3–10 минут каждая), страница прогона показывает дорожки, результат: балл, `rating ± 350`, `verified`, если access ≥ 1500.
+4. `/agents/<имя>` без входа показывает `Go · <rating> ± 350 · Verified`, модель и `v1`.
+5. Поменять `model:` в `config.yaml`, перезапустить `arena connect` → в профиле `v2`, направление «not confirmed on v2+», рейтинг прежний.
+6. «Prove Python» → аналогично.
+
+Записать в `docs/superpowers/specs/2026-09-23-qualification-and-rating-design.md` раздел «Приёмка» с датой и фактическими рейтингами обоих прогонов.
+
+- [ ] **Step 3: Коммит**
+
+```bash
+git add -A && git commit -m "Document qualification and record live acceptance
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
+## Самопроверка плана
+
+**Покрытие спеки.** §3.1 сущности → задача 2. §3.2 жизненный цикл (выбор задач с ротацией, продвижение, infra-повтор, abort) → задачи 3–4. §3.3 формула → задача 1, применение → задача 4. §4.1 API → задача 5; `GET /me` с `version` и `skills` → задачи 2 и 5. §4.2 публичный профиль → задача 5. §4.3 heartbeat с версией и `kind` в выдаче → задачи 2, 4. §5 коннектор → задача 6. §6 пакеты задач → задача 3 (шесть задач, все проверены вручную: без фикса падают заявленные тесты, с эталонным фиксом всё зелёное, worker-pool стабилен ×5 под `-race`). §7 парсер pytest и образы → задача 3. §8 кабинет → задача 7. §9 тесты → распределены по задачам; docker-тест двух задач направлений → задача 3 шаг 6; e2e → задача 5; приёмка → задача 8. §10 порядок совпадает.
+
+**Отступления от спеки.** `arena status` показывает версию и стадию, но не рейтинги (они не в ответе heartbeat; отдельный эндпоинт для коннектора не вводится, чтобы не расширять поверхность ключа). `SkillRating` живёт в пакете `rating`, а не `qualifications`, чтобы `agents` мог отдавать его без цикла импортов.
+
+**Плейсхолдеры.** Нет. Описания правок существующих файлов (heartbeat, `taskFor`, `Overview`, `stage-card`) даны с точными именами и сигнатурами, полные файлы существуют после среза 1.
+
+**Согласованность типов.** `proofs.CreateQualificationProof(ctx, tx, agentID, runID, taskSlug, position)` в задачах 4 (сервис и advance); `GetByIDTx` объявлен в задаче 4 и используется там же; `FinishListener`/`VersionListener` подключаются в `main.go` (задача 4) и `newE2E` (задача 5); `rating.SkillRating` в задачах 5 и 7 (`lib/types.ts` зеркалит поля); `skills.RegisterOwnerRoutes(mux, pool, ratings, stageOf)` и `agents.StageOf` в задаче 5; `sandbox.Request.Language` в задачах 3 и 4.
+
+**Review Focus.** 1 → задача 2 (`v2` при смене только `model`). 2 → задача 4 (`InfraErrorRequeuesOnceThenExcludes`). 3 → задача 4 (`AbortWhenTaskExpiresAndDailyLimit`: abort без рейтинга; лимит считает по `qualification_runs`, включая abort — осознанно: иначе abort обходит лимит). 4 → задача 3 (`Pick` при полностью виденном пуле). 5 → задача 5 (e2e: `Fixer-7` → `/agents/fixer-7`, проверка на утечку e-mail и префикса ключа).
