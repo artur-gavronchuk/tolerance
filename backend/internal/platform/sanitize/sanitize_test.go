@@ -31,3 +31,16 @@ func TestCleanLog_KeepsLinesRedactsAndKeepsTail(t *testing.T) {
 		t.Fatalf("expected the last 10 bytes, got %q", tail)
 	}
 }
+
+func TestCleanText_RedactsHexSecretWithDigitAnywhere(t *testing.T) {
+	// Regression test: digit in the middle, not at position 0 — this is the case
+	// where the first fix attempt (position-0-only regex) silently failed to redact.
+	secret := "abcdefabcdefabcdefabcdef1abcdefa" // 32 hex chars with digit at position 24 (middle-ish)
+	if len(secret) != 32 {
+		t.Fatalf("test setup: secret must be exactly 32 chars, got %d", len(secret))
+	}
+	got := CleanText("prefix "+secret+" suffix", 200)
+	if strings.Contains(got, secret) {
+		t.Fatalf("32-char hex secret with a digit not at position 0 was not redacted: %q", got)
+	}
+}

@@ -27,11 +27,13 @@ var (
 		regexp.MustCompile(`(?i)\bbearer\s+\S+`),
 		// key=value and key: value where the key names a secret.
 		regexp.MustCompile(`(?i)\b[a-z0-9_]*(?:token|secret|password|passwd|api[_-]?key|access[_-]?key|private[_-]?key)[a-z0-9_]*\s*[:=]\s*\S+`),
-		// Long hex strings (hashes, keys) - requires at least one digit to avoid false positives.
-		regexp.MustCompile(`\b[A-Fa-f0-9]*[0-9][A-Fa-f0-9]{31,}\b`),
 		// PEM blocks: the header and everything after it.
 		regexp.MustCompile(`-----BEGIN [A-Z ]+-----.*`),
 	}
+
+	// hexRe matches 32+ character hex strings; redaction is gated by containsDigit
+	// to avoid false positives on pure-letter sequences (tested by CleanText truncation test).
+	hexRe = regexp.MustCompile(`\b[A-Fa-f0-9]{32,}\b`)
 
 	// longTokenRe finds base64-ish blobs. Ordinary long file paths match it
 	// too, so a candidate is redacted only when it mixes letters and digits.
@@ -49,6 +51,15 @@ func looksLikeToken(s string) bool {
 		}
 	}
 	return digit && letter
+}
+
+func containsDigit(s string) bool {
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			return true
+		}
+	}
+	return false
 }
 
 // CleanText prepares free text from a client for storage and display: it
@@ -72,6 +83,12 @@ func CleanText(s string, maxRunes int) string {
 	for _, re := range secretPatterns {
 		s = re.ReplaceAllString(s, redacted)
 	}
+	s = hexRe.ReplaceAllStringFunc(s, func(m string) string {
+		if containsDigit(m) {
+			return redacted
+		}
+		return m
+	})
 	s = longTokenRe.ReplaceAllStringFunc(s, func(m string) string {
 		if looksLikeToken(m) {
 			return redacted
@@ -104,6 +121,12 @@ func CleanLog(s string, maxBytes int) string {
 		for _, re := range secretPatterns {
 			line = re.ReplaceAllString(line, redacted)
 		}
+		line = hexRe.ReplaceAllStringFunc(line, func(m string) string {
+			if containsDigit(m) {
+				return redacted
+			}
+			return m
+		})
 		lines[i] = longTokenRe.ReplaceAllStringFunc(line, func(m string) string {
 			if looksLikeToken(m) {
 				return redacted
