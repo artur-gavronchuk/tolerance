@@ -90,36 +90,59 @@ func (q *Queue) Claim(ctx context.Context, owner string, kinds []string, lease t
 // Complete marks a leased job done. A job whose lease was lost in the
 // meantime is left alone.
 func (q *Queue) Complete(ctx context.Context, id string) error {
-	return q.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE jobs SET state = 'done', lease_owner = NULL, lease_until = NULL
-			WHERE id = $1 AND state = 'leased'`, id)
-		return err
-	})
+	return q.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error { return CompleteTx(ctx, tx, id) })
+}
+
+// CompleteTx is Complete inside the caller's transaction, so a job is done
+// if and only if the work it stood for was recorded.
+func CompleteTx(ctx context.Context, tx pgx.Tx, id string) error {
+	_, err := tx.Exec(ctx, `UPDATE jobs SET state = 'done', lease_owner = NULL, lease_until = NULL
+		WHERE id = $1 AND state = 'leased'`, id)
+	return err
 }
 
 // Fail records the error and either schedules a retry (30 s, 2 min, then
 // 10 min) or, once max_attempts is used up, parks the job as failed.
 func (q *Queue) Fail(ctx context.Context, id string, cause error) (final bool, err error) {
+	err = q.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		var e error
+		final, e = FailTx(ctx, tx, id, cause)
+		return e
+	})
+	return final, err
+}
+
+// FailTx is Fail inside the caller's transaction.
+func FailTx(ctx context.Context, tx pgx.Tx, id string, cause error) (final bool, err error) {
 	msg := cause.Error()
 	if len(msg) > maxErrorLen {
 		msg = msg[:maxErrorLen]
 	}
-	err = q.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		var state string
-		err := tx.QueryRow(ctx, `
-			UPDATE jobs SET
-			  state = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
-			  run_after = CASE WHEN attempts >= max_attempts THEN run_after ELSE now() +
-			      CASE attempts WHEN 1 THEN interval '30 seconds' WHEN 2 THEN interval '2 minutes' ELSE interval '10 minutes' END END,
-			  last_error = $2, lease_owner = NULL, lease_until = NULL
-			WHERE id = $1 AND state = 'leased' RETURNING state`, id, msg).Scan(&state)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil // lease already lost; whoever holds the job now decides its fate
-		}
-		final = state == "failed"
-		return err
-	})
-	return final, err
+	var state string
+	err = tx.QueryRow(ctx, `
+		UPDATE jobs SET
+		  state = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
+		  run_after = CASE WHEN attempts >= max_attempts THEN run_after ELSE now() +
+		      CASE attempts WHEN 1 THEN interval '30 seconds' WHEN 2 THEN interval '2 minutes' ELSE interval '10 minutes' END END,
+		  last_error = $2, lease_owner = NULL, lease_until = NULL
+		WHERE id = $1 AND state = 'leased' RETURNING state`, id, msg).Scan(&state)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil // lease already lost; whoever holds the job now decides its fate
+	}
+	return state == "failed", err
+}
+
+// GetTx returns one job, locking it for the rest of the transaction.
+func GetTx(ctx context.Context, tx pgx.Tx, id string) (*Job, error) {
+	var j Job
+	err := scan(tx.QueryRow(ctx, `SELECT `+cols+` FROM jobs WHERE id = $1 FOR UPDATE`, id), &j)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, httpx.NotFound()
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &j, nil
 }
 
 // Reclaim returns jobs whose lease expired to the queue, or parks them as

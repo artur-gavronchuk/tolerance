@@ -261,3 +261,52 @@ func TestJobs_CompleteAndRetry(t *testing.T) {
 		t.Fatalf("a retried job starts counting from zero: %+v %v", j, err)
 	}
 }
+
+func TestJobs_TxVariantsShareTheCallersTransaction(t *testing.T) {
+	d := dbtest.New(t)
+	q := jobs.New(d.AppPool)
+	ctx := context.Background()
+	id := enqueue(t, d, "check_submission", "")
+	if j, _ := q.Claim(ctx, "w", []string{"check_submission"}, time.Minute); j == nil {
+		t.Fatal("claim")
+	}
+
+	// Rolled back: the job must still be leased, not done.
+	rollback := errors.New("work failed")
+	err := d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if err := jobs.CompleteTx(ctx, tx, id); err != nil {
+			return err
+		}
+		return rollback
+	})
+	if !errors.Is(err, rollback) {
+		t.Fatal(err)
+	}
+	var state string
+	if err := d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT state FROM jobs WHERE id = $1`, id).Scan(&state)
+	}); err != nil || state != "leased" {
+		t.Fatalf("a rolled-back CompleteTx must not complete the job: %s %v", state, err)
+	}
+
+	err = d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		j, err := jobs.GetTx(ctx, tx, id)
+		if err != nil || j.Kind != "check_submission" || j.State != "leased" || j.Attempts != 1 {
+			t.Errorf("GetTx: %+v %v", j, err)
+		}
+		final, err := jobs.FailTx(ctx, tx, id, errors.New("boom"))
+		if err != nil || final {
+			t.Errorf("first failure is not final: %v %v", final, err)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := jobs.GetTx(ctx, tx, "job_missing")
+		return err
+	}); err == nil {
+		t.Fatal("GetTx of an unknown job must fail")
+	}
+}

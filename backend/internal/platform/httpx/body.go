@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -14,6 +15,16 @@ func ReadBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
 		return nil, New(http.StatusRequestEntityTooLarge, "body_too_large", "Request body exceeds 1 MiB")
+	}
+	return raw, nil
+}
+
+// ReadBodyLimit is ReadBody with a caller-chosen limit, for the few routes
+// that legitimately carry more than 1 MiB (the checker's evidence upload).
+func ReadBodyLimit(w http.ResponseWriter, r *http.Request, max int64) ([]byte, error) {
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, max))
+	if err != nil {
+		return nil, New(http.StatusRequestEntityTooLarge, "body_too_large", fmt.Sprintf("Request body exceeds %d MiB", max>>20))
 	}
 	return raw, nil
 }

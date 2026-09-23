@@ -8,6 +8,23 @@
 - [`frontend/`](frontend/) — Next.js-приложение (сгенерировано v0),
   отдельный деплой, общается с бэкендом только по HTTP.
 
+## Запуск одной командой
+
+```sh
+make up      # Docker: сайт, API, PostgreSQL и Dex (локальный OIDC); на Mac сам поднимет Colima
+make logs    # логи всех сервисов
+make down    # остановить; make reset — остановить и стереть базу
+```
+
+Сайт — `http://localhost:3000`, API — `http://localhost:8080/api/v1/…`,
+вход — `admin@arena.local` / `password` (ещё `dev@arena.local`,
+`dev2@arena.local`). Пароли, e-mail администраторов и порты — в `.env`
+(создаётся из `.env.example`; если 3000 или 8080 заняты, поменяйте
+`WEB_PORT` / `API_PORT`). Контейнер API при старте сам применяет миграции и
+создаёт первое соревнование черновиком. Тот же `docker-compose.yml`
+разворачивается на сервере: меняются только значения в `.env`, а перед
+портами ставится reverse proxy с TLS.
+
 Общий контракт — `backend/contracts/openapi/openapi.yaml`; фронтенд
 генерирует клиент из него.
 
