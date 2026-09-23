@@ -14,6 +14,7 @@ import (
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/platform/ratelimit"
+	"tolerance/internal/proofs"
 )
 
 type deps struct {
@@ -21,6 +22,7 @@ type deps struct {
 	log     *slog.Logger
 	users   *identity.Service
 	agents  *agents.Service
+	proofs  *proofs.Service
 	limiter *ratelimit.Limiter
 }
 
@@ -28,6 +30,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	owner := http.NewServeMux()
 	identity.RegisterMeRoute(owner, d.users, d.agents.MeAgent)
 	agents.RegisterOwnerRoutes(owner, d.agents)
+	proofs.RegisterOwnerRoutes(owner, d.proofs)
 
 	connector := http.NewServeMux()
 	agents.RegisterConnectorRoutes(connector, d.agents)
@@ -38,6 +41,9 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/me", session(owner))
 	api.Handle("/api/v1/agent", session(owner))
 	api.Handle("/api/v1/agent/", session(owner))
+	api.Handle("/api/v1/proof-tasks", session(owner))
+	api.Handle("/api/v1/proofs", session(owner))
+	api.Handle("/api/v1/proofs/", session(owner))
 	api.Handle("/api/v1/connector/", identity.RequireAgent(d.agents)(connector))
 
 	top := http.NewServeMux()

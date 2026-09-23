@@ -16,6 +16,7 @@ import (
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/ratelimit"
+	"tolerance/internal/proofs"
 )
 
 func main() {
@@ -35,7 +36,8 @@ func main() {
 	}
 	defer pool.Close()
 
-	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, agents.NoProofFacts{}), limiter: ratelimit.New(nil)}
+	ps := proofs.NewService(pool)
+	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps, limiter: ratelimit.New(nil)}
 
 	server := &http.Server{
 		Addr:              cfg.addr,
