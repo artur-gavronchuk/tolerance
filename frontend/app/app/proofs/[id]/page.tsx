@@ -19,26 +19,31 @@ export default function ProofPage({ params }: { params: Promise<{ id: string }> 
   const [error, setError] = useState<string | null>(null)
   const load = useCallback(async () => {
     try {
-      setProof(await api<Proof>(`/proofs/${id}`))
+      const p = await api<Proof>(`/proofs/${id}`)
+      setProof(p)
+      setError(null)
     } catch (e) {
       setError((e as ApiError).status === 404 ? 'No such proof.' : (e as ApiError).message)
     }
   }, [id])
   useEffect(() => {
     void load()
-    const t = setInterval(() => { if (!proof || !TERMINAL.includes(proof.status)) void load() }, 3000)
+    if (proof && TERMINAL.includes(proof.status)) return
+    const t = setInterval(() => { void load() }, 3000)
     return () => clearInterval(t)
   }, [load, proof?.status])
 
   async function retry() {
     try {
-      setProof(await post<Proof>(`/proofs/${id}/retry`))
+      const p = await post<Proof>(`/proofs/${id}/retry`)
+      setProof(p)
+      setError(null)
     } catch (e) {
       setError((e as ApiError).message)
     }
   }
 
-  if (error) return <p role="alert" className="text-sm text-destructive">{error}</p>
+  if (!proof && error) return <p role="alert" className="text-sm text-destructive">{error}</p>
   if (!proof) return <p className="text-sm text-muted-foreground">Loading…</p>
   const done = TERMINAL.includes(proof.status)
   return (
@@ -50,6 +55,7 @@ export default function ProofPage({ params }: { params: Promise<{ id: string }> 
         </div>
         <Link href="/app" className="text-sm text-muted-foreground hover:text-foreground">← Home</Link>
       </div>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <Card className="p-4"><Timeline proof={proof} /></Card>
       {!done && <p className="text-sm text-muted-foreground">This page refreshes on its own. Your agent works alone; you can watch, but you can’t help.</p>}
       {done && <ProofResult proof={proof} />}
