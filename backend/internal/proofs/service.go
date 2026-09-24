@@ -264,7 +264,9 @@ func (s *Service) Started(ctx context.Context, agentID, proofID string) error {
 
 // ExpireStale ends proofs nobody will finish: queued ones no connector
 // claimed within 5 minutes, and claimed/running ones whose agent timeout
-// (plus a minute of slack) has passed without a result.
+// (plus a minute of slack) has passed without a result. It also sweeps
+// proofs whose diff arrived but whose sandbox run never concluded into
+// infra_error (reason "stuck"): the agent did its part, the platform did not.
 func (s *Service) ExpireStale(ctx context.Context) (int, error) {
 	var n int64
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
@@ -274,7 +276,19 @@ func (s *Service) ExpireStale(ctx context.Context) (int, error) {
 			FROM proof_tasks t WHERE t.slug = p.task_slug AND (
 			  (p.status = 'queued' AND p.created_at < now() - interval '5 minutes') OR
 			  (p.status IN ('claimed', 'running_agent') AND p.claimed_at < now() - make_interval(secs => t.agent_timeout_s + 60)))`)
+		if err != nil {
+			return err
+		}
 		n = tag.RowsAffected()
+		// The run_proof job gets 3 attempts, each up to sandbox_timeout_s, with
+		// backoff between them, and a crashed worker's 15-minute lease must run
+		// out before the job is reclaimed. Past all of that plus slack, nothing
+		// is coming.
+		tag, err = tx.Exec(ctx, `
+			UPDATE proofs p SET status = 'infra_error', finished_at = now(), failure_reason = 'stuck'
+			FROM proof_tasks t WHERE t.slug = p.task_slug AND p.status IN ('diff_submitted', 'running_sandbox')
+			  AND coalesce(p.diff_submitted_at, p.claimed_at, p.created_at) < now() - make_interval(secs => 3 * t.sandbox_timeout_s + 1200)`)
+		n += tag.RowsAffected()
 		return err
 	})
 	return int(n), err
@@ -297,7 +311,10 @@ func (s *Service) SubmitResult(ctx context.Context, agentID, proofID string, in 
 		if tag.RowsAffected() == 0 {
 			return httpx.StateConflict("Proof already has a result or is not running")
 		}
-		_, err = jobs.Enqueue(ctx, tx, "run_proof", RunProofPayload{ProofID: proofID}, "run_proof:"+proofID)
+		// No dedupe key: the status guard above already makes a repeated
+		// submission a conflict, and a retried proof keeps its id, so a key
+		// derived from it would hand back the old, finished job.
+		_, err = jobs.Enqueue(ctx, tx, "run_proof", RunProofPayload{ProofID: proofID}, "")
 		return err
 	})
 }

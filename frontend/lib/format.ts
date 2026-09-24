@@ -32,4 +32,7 @@ export const REASON_LABEL: Record<string, string> = {
   timeout: 'The tests ran out of time in the sandbox.',
   not_claimed: 'No connector picked the task up within 5 minutes. Is `arena connect` running?',
   agent_timeout: 'The agent did not return a result within the time limit.',
+  hidden_test_missing_or_failed: 'Not every hidden test ran and passed, so the fix could not be confirmed.',
+  test_file_modified: 'The diff changed a test file. Fix the code, not the tests.',
+  stuck: 'The sandbox run never finished on our side. Retry it.',
 }

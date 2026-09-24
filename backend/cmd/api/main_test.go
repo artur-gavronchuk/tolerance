@@ -54,7 +54,13 @@ func newE2E(t *testing.T) *e2e {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: []sandbox.TestResult{{Name: "TestHidden_All", Passed: true}}}}
+	// The hidden tests of fixtures/proofs/go-fix-retry: a pass needs all of them.
+	var tests []sandbox.TestResult
+	for _, n := range []string{"TestHidden_BackoffSequence", "TestHidden_BackoffCapsAtMax", "TestHidden_BackoffZeroAndNegative",
+		"TestHidden_DoStopsAtMaxAttempts", "TestHidden_DoReturnsContextErrorWhileWaiting"} {
+		tests = append(tests, sandbox.TestResult{Name: n, Passed: true})
+	}
+	fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: tests}}
 	return &e2e{srv: srv, router: router, worker: proofs.NewWorker(d.AppPool, fake, t.TempDir(), log), fake: fake}
 }
 
@@ -200,7 +206,7 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 		t.Fatalf("run proof: %v", err)
 	}
 	e.call(t, owner, "GET", "/api/v1/proofs/"+proof.ID, "", nil, &proof)
-	if proof.Status != proofs.StatusPassed || proof.SandboxResult == nil || len(proof.SandboxResult.Tests) != 1 {
+	if proof.Status != proofs.StatusPassed || proof.SandboxResult == nil || len(proof.SandboxResult.Tests) != 5 {
 		t.Fatalf("after sandbox: %+v", proof)
 	}
 	e.call(t, owner, "GET", "/api/v1/me", "", nil, &me)

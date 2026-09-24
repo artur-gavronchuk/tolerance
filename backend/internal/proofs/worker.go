@@ -1,14 +1,20 @@
 package proofs
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -59,7 +65,7 @@ func (w *Worker) Run(ctx context.Context) {
 			if n, err := w.svc.ExpireStale(ctx); err != nil {
 				w.log.Error("expire proofs", "err", err)
 			} else if n > 0 {
-				w.log.Info("expired proofs", "count", n)
+				w.log.Info("swept stale proofs", "count", n)
 			}
 		case <-time.After(2 * time.Second):
 		}
@@ -123,8 +129,15 @@ func (w *Worker) RunProof(ctx context.Context, proofID string) error {
 		return err
 	}
 	defer os.RemoveAll(dir)
+	hidden, err := hiddenTestNames(in.hiddenTr)
+	if err != nil {
+		return err
+	}
 	if err := Untar(in.repoTar, dir); err != nil {
 		return err
+	}
+	if diffTouchesTestFiles(in.diff) {
+		return w.finish(ctx, proofID, StatusFailed, "test_file_modified", nil)
 	}
 	if reason := applyDiff(ctx, dir, in.diff); reason != "" {
 		return w.finish(ctx, proofID, StatusFailed, reason, nil)
@@ -146,8 +159,82 @@ func (w *Worker) RunProof(ctx context.Context, proofID string) error {
 		return w.finish(ctx, proofID, StatusFailed, "build_failed", sr)
 	case res.ExitCode != 0 || anyFailed(res.Tests):
 		return w.finish(ctx, proofID, StatusFailed, "tests_failed", sr)
+	case !allPassed(hidden, res.Tests):
+		// Everything that ran passed, but not every hidden test ran: the
+		// change narrowed what go test executes (a TestMain, a -run filter
+		// smuggled in via init, ...). Only a run of all hidden tests counts.
+		return w.finish(ctx, proofID, StatusFailed, "hidden_test_missing_or_failed", sr)
 	}
 	return w.finish(ctx, proofID, StatusPassed, "", sr)
+}
+
+// allPassed reports whether every named test appears in tests as passed.
+func allPassed(names []string, tests []sandbox.TestResult) bool {
+	passed := make(map[string]bool, len(tests))
+	for _, t := range tests {
+		if t.Passed {
+			passed[t.Name] = true
+		}
+	}
+	for _, n := range names {
+		if !passed[n] {
+			return false
+		}
+	}
+	return true
+}
+
+var goTestFunc = regexp.MustCompile(`(?m)^func (Test\w+)\(`)
+
+// hiddenTestNames lists the top-level test functions in the hidden-tests
+// tarball, which comes from the server's own catalog and is never touched by
+// the participant. Go-specific parsing; extend when a pytest task is added.
+func hiddenTestNames(hiddenTar []byte) ([]string, error) {
+	gz, err := gzip.NewReader(bytes.NewReader(hiddenTar))
+	if err != nil {
+		return nil, fmt.Errorf("proofs: hidden tests: %w", err)
+	}
+	tr := tar.NewReader(gz)
+	var names []string
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("proofs: hidden tests: %w", err)
+		}
+		if h.Typeflag != tar.TypeReg || !strings.HasSuffix(h.Name, ".go") {
+			continue
+		}
+		body, err := io.ReadAll(io.LimitReader(tr, 16<<20))
+		if err != nil {
+			return nil, fmt.Errorf("proofs: hidden tests: %w", err)
+		}
+		for _, m := range goTestFunc.FindAllStringSubmatch(string(body), -1) {
+			if m[1] != "TestMain" {
+				names = append(names, m[1])
+			}
+		}
+	}
+	return names, nil
+}
+
+// testFileHeaders are the patch lines that name a file the patch touches.
+var testFileHeaders = []string{"diff --git ", "--- ", "+++ ", "rename from ", "rename to ", "copy from ", "copy to "}
+
+// diffTouchesTestFiles reports whether the patch adds, edits, deletes or
+// renames a Go test file. Participants fix the code, not the tests: editing
+// a visible test or adding a TestMain could weaken what the sandbox checks.
+func diffTouchesTestFiles(diff string) bool {
+	for _, line := range strings.Split(diff, "\n") {
+		for _, prefix := range testFileHeaders {
+			if strings.HasPrefix(line, prefix) && strings.Contains(line, "_test.go") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func anyFailed(tests []sandbox.TestResult) bool {
@@ -161,7 +248,13 @@ func anyFailed(tests []sandbox.TestResult) bool {
 
 // applyDiff applies the participant's patch with git; CRLF and missing
 // trailing newlines are tolerated. Returns "" on success or a failure
-// reason. Binary patches are refused by git, which is what we want.
+// reason. Binary patches without --binary data are refused by git.
+//
+// Plain `git apply` (no --unsafe-paths, no --directory) resolves paths
+// relative to cmd.Dir and refuses absolute paths, ".." and anything under
+// .git, so a patch cannot write outside dir. It can still create a symlink,
+// and the hidden tests are later extracted into dir by following paths, so
+// any symlink in the result is refused as well.
 func applyDiff(ctx context.Context, dir, diff string) string {
 	diff = strings.ReplaceAll(diff, "\r\n", "\n")
 	if strings.TrimSpace(diff) == "" {
@@ -175,26 +268,40 @@ func applyDiff(ctx context.Context, dir, diff string) string {
 		return "diff_not_applicable"
 	}
 	defer os.Remove(patch)
-	// dir may reach us through a symlinked temp root (e.g. macOS's /tmp ->
-	// /private/tmp); git apply's --directory safety check rejects an
-	// affected file "beyond a symbolic link" in that case, so resolve to the
-	// real path before invoking it. Same directory either way.
-	realDir := dir
-	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
-		realDir = resolved
+	cmd := exec.CommandContext(ctx, "git", "apply", "--whitespace=nowarn", patch)
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		return "diff_not_applicable"
 	}
-	cmd := exec.CommandContext(ctx, "git", "apply", "--whitespace=nowarn", "--unsafe-paths", "--directory", realDir, patch)
-	cmd.Dir = realDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		_ = out
+	if hasSymlink(dir) {
 		return "diff_not_applicable"
 	}
 	return ""
 }
 
+// hasSymlink reports whether anything under dir is a symlink (or dir cannot
+// be walked, which is treated the same way: refuse rather than guess).
+func hasSymlink(dir string) bool {
+	found := false
+	err := filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found || err != nil
+}
+
 func (w *Worker) finish(ctx context.Context, proofID, status, reason string, sr *SandboxResult) error {
 	return w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE proofs SET status = $2, failure_reason = $3, sandbox_result = $4, finished_at = now() WHERE id = $1`,
+		// Only a proof this run moved to running_sandbox gets a verdict: if the
+		// stuck-proof sweep or a retry got there first, this run is stale.
+		_, err := tx.Exec(ctx, `UPDATE proofs SET status = $2, failure_reason = $3, sandbox_result = $4, finished_at = now()
+			WHERE id = $1 AND status = 'running_sandbox'`,
 			proofID, status, reason, sr)
 		return err
 	})

@@ -42,7 +42,7 @@ func main() {
 
 	var runner sandbox.Runner = sandbox.NewDocker()
 	if cfg.sandbox == "fake" {
-		runner = &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: []sandbox.TestResult{{Name: "fake", Passed: true}}}}
+		runner = sandbox.PassAll{}
 	}
 	go proofs.NewWorker(pool, runner, cfg.workDir, log).Run(ctx)
 

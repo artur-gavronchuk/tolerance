@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"tolerance/internal/platform/jobs"
 	"tolerance/internal/proofs"
 	"tolerance/internal/proofs/sandbox"
 )
@@ -35,6 +36,20 @@ const goodDiff = `--- a/retry.go
  // Do calls fn until it succeeds or maxAttempts is used up.
 `
 
+// hiddenNames are the test functions in fixtures/proofs/go-fix-retry/_hidden.
+var hiddenNames = []string{"TestHidden_BackoffSequence", "TestHidden_BackoffCapsAtMax", "TestHidden_BackoffZeroAndNegative",
+	"TestHidden_DoStopsAtMaxAttempts", "TestHidden_DoReturnsContextErrorWhileWaiting"}
+
+// passing returns a test list with the given extra results plus every hidden
+// test passing.
+func passing(extra ...sandbox.TestResult) []sandbox.TestResult {
+	out := append([]sandbox.TestResult{}, extra...)
+	for _, n := range hiddenNames {
+		out = append(out, sandbox.TestResult{Name: n, Passed: true})
+	}
+	return out
+}
+
 func submitted(t *testing.T, f fixture, diff string) string {
 	t.Helper()
 	ctx := context.Background()
@@ -55,7 +70,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 
 	t.Run("all tests pass", func(t *testing.T) {
 		f := setup(t)
-		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: []sandbox.TestResult{{Name: "TestA", Passed: true}}}}
+		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing(sandbox.TestResult{Name: "TestA", Passed: true})}}
 		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
 		id := submitted(t, f, goodDiff)
 		if err := w.RunProof(ctx, id); err != nil {
@@ -102,9 +117,81 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 		}
 	})
 
+	t.Run("a diff escaping the work dir is refused", func(t *testing.T) {
+		f := setup(t)
+		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}
+		workDir := t.TempDir()
+		w := proofs.NewWorker(f.d.AppPool, fake, workDir, log)
+		escapes := map[string]string{
+			"dotdot":  "diff --git a/../escape.txt b/../escape.txt\nnew file mode 100644\n--- /dev/null\n+++ b/../escape.txt\n@@ -0,0 +1 @@\n+pwned\n",
+			"plain":   "--- /dev/null\n+++ b/../../escape.txt\n@@ -0,0 +1 @@\n+pwned\n",
+			"git":     "diff --git a/.git/config b/.git/config\nnew file mode 100644\n--- /dev/null\n+++ b/.git/config\n@@ -0,0 +1 @@\n+pwned\n",
+			"symlink": "diff --git a/link b/link\nnew file mode 120000\n--- /dev/null\n+++ b/link\n@@ -0,0 +1 @@\n+" + workDir + "\n\\ No newline at end of file\n",
+		}
+		for name, diff := range escapes {
+			id := submitted(t, f, diff)
+			if err := w.RunProof(ctx, id); err != nil {
+				t.Fatal(err)
+			}
+			p, _ := f.proofs.Get(ctx, f.userID, id)
+			if p.Status != proofs.StatusFailed || p.FailureReason != "diff_not_applicable" {
+				t.Fatalf("%s: %+v", name, p)
+			}
+		}
+		if len(fake.Calls) != 0 {
+			t.Fatalf("sandbox must not run: %d calls", len(fake.Calls))
+		}
+		for _, p := range []string{filepath.Join(workDir, "escape.txt"), filepath.Join(filepath.Dir(workDir), "escape.txt")} {
+			if _, err := os.Stat(p); err == nil {
+				t.Fatalf("patch wrote outside the work dir: %s", p)
+			}
+		}
+	})
+
+	t.Run("hidden tests that did not run fail the proof", func(t *testing.T) {
+		f := setup(t)
+		// Everything that ran passed, but only the visible tests ran.
+		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: []sandbox.TestResult{
+			{Name: "TestDo_SucceedsFirstTry", Passed: true}, {Name: "TestBackoff_Doubles", Passed: true}}}}
+		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		id := submitted(t, f, goodDiff)
+		if err := w.RunProof(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		p, _ := f.proofs.Get(ctx, f.userID, id)
+		if p.Status != proofs.StatusFailed || p.FailureReason != "hidden_test_missing_or_failed" {
+			t.Fatalf("%+v", p)
+		}
+		// One hidden test missing is enough.
+		f2 := setup(t)
+		fake2 := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()[1:]}}
+		w2 := proofs.NewWorker(f2.d.AppPool, fake2, t.TempDir(), log)
+		id2 := submitted(t, f2, goodDiff)
+		_ = w2.RunProof(ctx, id2)
+		p, _ = f2.proofs.Get(ctx, f2.userID, id2)
+		if p.Status != proofs.StatusFailed || p.FailureReason != "hidden_test_missing_or_failed" {
+			t.Fatalf("%+v", p)
+		}
+	})
+
+	t.Run("a diff touching a test file is refused", func(t *testing.T) {
+		f := setup(t)
+		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}
+		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		testMain := "diff --git a/main_test.go b/main_test.go\nnew file mode 100644\n--- /dev/null\n+++ b/main_test.go\n@@ -0,0 +1,3 @@\n+package retry\n+\n+// TestMain here\n"
+		id := submitted(t, f, goodDiff+testMain)
+		if err := w.RunProof(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		p, _ := f.proofs.Get(ctx, f.userID, id)
+		if p.Status != proofs.StatusFailed || p.FailureReason != "test_file_modified" || len(fake.Calls) != 0 {
+			t.Fatalf("%+v calls=%d", p, len(fake.Calls))
+		}
+	})
+
 	t.Run("CRLF diff still applies", func(t *testing.T) {
 		f := setup(t)
-		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: []sandbox.TestResult{{Name: "T", Passed: true}}}}
+		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}
 		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
 		crlf := ""
 		for _, line := range splitLines(goodDiff) {
@@ -199,4 +286,81 @@ func TestExpireStale(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 	_ = time.Second
+}
+
+func TestExpireStale_StuckSandboxRunIsInfraError(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	id := submitted(t, f, goodDiff)
+	_ = f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE proofs SET diff_submitted_at = now() - interval '10 minutes' WHERE id = $1`, id)
+		return err
+	})
+	if n, _ := f.proofs.ExpireStale(ctx); n != 0 {
+		t.Fatalf("a run still inside its retry window must be left alone, swept %d", n)
+	}
+	_ = f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE proofs SET status = 'running_sandbox', diff_submitted_at = now() - interval '2 hours' WHERE id = $1`, id)
+		return err
+	})
+	if n, err := f.proofs.ExpireStale(ctx); err != nil || n != 1 {
+		t.Fatalf("sweep: %v %d", err, n)
+	}
+	p, _ := f.proofs.Get(ctx, f.userID, id)
+	if p.Status != proofs.StatusInfraError || p.FailureReason != "stuck" || p.FinishedAt == nil {
+		t.Fatalf("%+v", p)
+	}
+	if _, err := f.proofs.Retry(ctx, f.userID, id); err != nil {
+		t.Fatalf("a stuck proof must be retriable: %v", err)
+	}
+}
+
+// A retried proof keeps its id; resubmitting it must enqueue a new run
+// rather than resolve to the first, already finished job.
+func TestRetry_ResubmitRunsAgain(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	q := jobs.New(f.d.AppPool)
+	fake := &sandbox.Fake{Err: errors.New("no docker")}
+	w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+
+	id := submitted(t, f, goodDiff)
+	job, err := q.Claim(ctx, "test", []string{"run_proof"}, time.Minute)
+	if err != nil || job == nil {
+		t.Fatalf("first job: %v %v", job, err)
+	}
+	if err := w.RunProof(ctx, id); err == nil {
+		t.Fatal("runner error must propagate")
+	}
+	if err := q.Complete(ctx, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.MarkInfraError(ctx, id, "no docker"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.proofs.Retry(ctx, f.userID, id); err != nil {
+		t.Fatal(err)
+	}
+	p, _, err := f.proofs.Claim(ctx, f.agent)
+	if err != nil || p == nil || p.ID != id {
+		t.Fatalf("claim after retry: %v %+v", err, p)
+	}
+	if err := f.proofs.SubmitResult(ctx, f.agent, id, proofs.ResultInput{Diff: goodDiff}); err != nil {
+		t.Fatal(err)
+	}
+	second, err := q.Claim(ctx, "test", []string{"run_proof"}, time.Minute)
+	if err != nil || second == nil || second.ID == job.ID {
+		t.Fatalf("resubmission must enqueue a fresh job: %+v %v", second, err)
+	}
+
+	fake.Err, fake.Result = nil, sandbox.Result{ExitCode: 0, Tests: passing()}
+	if err := w.RunProof(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := f.proofs.Get(ctx, f.userID, id)
+	if got.Status != proofs.StatusPassed || len(fake.Calls) != 2 {
+		t.Fatalf("second run: %+v calls=%d", got, len(fake.Calls))
+	}
 }
