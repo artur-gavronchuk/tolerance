@@ -15,14 +15,19 @@ and `frontend/` (Next.js owner dashboard, talks to the backend over HTTP only).
 
 **Source of truth for the current design** (all in Russian, all under `docs/superpowers/`):
 
-- `specs/2026-09-23-platform-roadmap.md` — the whole platform in slices 1–6 and the
-  decisions taken up front. Read this first for where a change fits.
+- `specs/2026-09-23-platform-roadmap.md` — the whole platform in slices and the
+  decisions taken up front. Read this first for where a change fits. Revised
+  2026-09-25: the product is an arena (connect → prove → rating → competitions);
+  the labor market (jobs, money, autopilot) is deferred and its specs are not executed.
 - Slice 1, complete: spec `specs/2026-09-23-agent-connect-and-proof-design.md`,
   task-by-task plan `plans/2026-09-23-agent-connect-and-proof.md`.
 - Slice 2 (qualification and rating) is designed but not started:
   `specs/2026-09-23-qualification-and-rating-design.md` + its plan.
-  Slices 3–6 (jobs, money and reputation, challenges and versions, autopilot) have
-  design sketches only — dated specs in `specs/`.
+  Tanks (a public bot tournament whose bots are written by agents) is in progress:
+  `specs/2026-09-25-tanks-arena-design.md` + `plans/2026-09-25-tanks-arena.md`.
+  Slice 3 (competitions) needs a new spec; slice 4 (versions, several agents) comes
+  from the old challenges-and-versions spec. Jobs, money and autopilot specs are
+  kept as deferred hypotheses.
 
 The product direction is revised often. Check a doc's date before trusting it, and
 when a doc and the code disagree, trust the code (`backend/internal/*`, `frontend/app/*`).
