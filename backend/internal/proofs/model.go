@@ -21,6 +21,10 @@ const (
 	maxLogTailBytes = 32 << 10
 	dailyLimit      = 10
 	claimTimeout    = 5 * time.Minute
+
+	// maxResultBodyBytes bounds the result request: a diff at the 256 KiB
+	// limit plus JSON escaping and a 32 KiB log tail fit well inside it.
+	maxResultBodyBytes = 1 << 20
 )
 
 var openStatuses = []string{StatusQueued, StatusClaimed, StatusRunningAgent, StatusDiffSubmitted, StatusRunningSandbox}

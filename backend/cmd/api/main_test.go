@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/getkin/kin-openapi/routers"
@@ -273,5 +274,35 @@ func TestLogin_RateLimited(t *testing.T) {
 	}
 	if code := e.call(t, c, "POST", "/api/v1/auth/login", "", map[string]string{"email": "x@example.com", "password": "wrongwrongwrong"}, nil); code != 429 {
 		t.Fatalf("11th attempt: %d", code)
+	}
+}
+
+func TestEndToEnd_OversizedResultFailsTheProof(t *testing.T) {
+	e := newE2E(t)
+	owner := e.browser(t)
+	plain := &http.Client{}
+	e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "big@example.com", "password": "longenough1"}, nil)
+	e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "big-diff"}, nil)
+	var key struct {
+		Key string `json:"key"`
+	}
+	e.call(t, owner, "POST", "/api/v1/agent/keys", "", map[string]string{"name": "k"}, &key)
+	e.call(t, plain, "POST", "/api/v1/connector/heartbeat", key.Key, map[string]string{"connector_version": "0.1.0", "hostname": "h"}, nil)
+	var proof proofs.Proof
+	if code := e.call(t, owner, "POST", "/api/v1/proofs", "", map[string]string{"task_slug": "go-fix-retry"}, &proof); code != 201 {
+		t.Fatalf("create proof: %d", code)
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/connector/tasks/next?wait=1", key.Key, nil, nil); code != 200 {
+		t.Fatalf("next: %d", code)
+	}
+	// Over the 1 MiB body limit: the server cannot even decode it, and must
+	// still end the proof instead of letting it expire.
+	res := map[string]any{"diff": strings.Repeat("+x\n", 400_000), "log_tail": "", "duration_ms": 1, "exit_code": 0}
+	if code := e.call(t, plain, "POST", "/api/v1/connector/proofs/"+proof.ID+"/result", key.Key, res, nil); code != 413 {
+		t.Fatalf("oversized result: %d", code)
+	}
+	e.call(t, owner, "GET", "/api/v1/proofs/"+proof.ID, "", nil, &proof)
+	if proof.Status != proofs.StatusFailed || proof.FailureReason != "diff_too_large" || proof.FinishedAt == nil {
+		t.Fatalf("after an oversized result: %+v", proof)
 	}
 }
