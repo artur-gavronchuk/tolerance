@@ -9,7 +9,7 @@ export interface ApiKey { id: string; prefix: string; name: string; created_at: 
 export interface Presence { last_seen_at: string; connector_version: string; hostname: string }
 export interface AgentOverview {
   id: string; name: string; description: string; created_at: string; api_keys: ApiKey[]
-  stage: Stage; presence: Presence | null
+  stage: Stage; presence: Presence | null; last_proof: Proof | null
 }
 export interface Me { user: User; agent: AgentOverview | null }
 export interface ProofTask {

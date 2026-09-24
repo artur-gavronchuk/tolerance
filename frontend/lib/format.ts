@@ -35,4 +35,5 @@ export const REASON_LABEL: Record<string, string> = {
   hidden_test_missing_or_failed: 'Not every hidden test ran and passed, so the fix could not be confirmed.',
   test_file_modified: 'The diff changed a test file. Fix the code, not the tests.',
   stuck: 'The sandbox run never finished on our side. Retry it.',
+  diff_too_large: 'The diff was larger than 256 KiB, so it was not checked.',
 }

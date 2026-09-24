@@ -1,10 +1,12 @@
+import type { ReactElement } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import type { Me, Proof } from '@/lib/types'
+import type { Me } from '@/lib/types'
 import { ago } from '@/lib/format'
 
-export function StageCard({ me, last, onStart, starting }: { me: Me; last: Proof | null; onStart: () => void; starting: boolean }) {
+// Every proof starts from /app/proofs/new, which shows the task first.
+export function StageCard({ me }: { me: Me }): ReactElement {
   const a = me.agent
   if (!a) {
     return (
@@ -15,7 +17,7 @@ export function StageCard({ me, last, onStart, starting }: { me: Me; last: Proof
       </Card>
     )
   }
-  const open = last && !['passed', 'failed', 'infra_error', 'expired'].includes(last.status)
+  const last = a.last_proof
   switch (a.stage) {
     case 'registered':
       return (
@@ -38,7 +40,7 @@ export function StageCard({ me, last, onStart, starting }: { me: Me; last: Proof
         <Card className="p-6">
           <h2 className="text-lg font-semibold">Proof in progress</h2>
           <p className="mt-1 text-sm text-muted-foreground">{a.name} is working. You can watch, but you can’t help.</p>
-          {open && <Button render={<Link href={`/app/proofs/${last.id}`} />} nativeButton={false} className="mt-4">Watch</Button>}
+          {last && <Button render={<Link href={`/app/proofs/${last.id}`} />} nativeButton={false} className="mt-4">Watch</Button>}
         </Card>
       )
     case 'check_failed':
@@ -46,9 +48,9 @@ export function StageCard({ me, last, onStart, starting }: { me: Me; last: Proof
         <Card className="p-6">
           <h2 className="text-lg font-semibold">Not verified yet</h2>
           <p className="mt-1 text-sm text-muted-foreground">The last proof failed. Read the breakdown, improve the agent, try again.</p>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             {last && <Button variant="outline" render={<Link href={`/app/proofs/${last.id}`} />} nativeButton={false}>See why</Button>}
-            <Button onClick={onStart} disabled={starting}>Run proof again</Button>
+            <Button render={<Link href="/app/proofs/new" />} nativeButton={false}>Run proof again</Button>
           </div>
         </Card>
       )
@@ -57,15 +59,15 @@ export function StageCard({ me, last, onStart, starting }: { me: Me; last: Proof
         <Card className="p-6">
           <h2 className="text-lg font-semibold">{a.name} is operational</h2>
           <p className="mt-1 text-sm text-muted-foreground">It has proven it can take a task, change code and pass hidden tests on its own.</p>
-          <Button variant="outline" onClick={onStart} disabled={starting} className="mt-4">Run the proof again</Button>
+          <Button variant="outline" render={<Link href="/app/proofs/new" />} nativeButton={false} className="mt-4">Run the proof again</Button>
         </Card>
       )
-    default:
+    case 'connected':
       return (
         <Card className="p-6">
           <h2 className="text-lg font-semibold">{a.name} is online</h2>
           <p className="mt-1 text-sm text-muted-foreground">Run the basic proof: a small repository with a failing test. Your agent works alone; the platform runs hidden tests on its diff.</p>
-          <Button onClick={onStart} disabled={starting} className="mt-4">{starting ? 'Starting…' : 'Run basic proof'}</Button>
+          <Button render={<Link href="/app/proofs/new" />} nativeButton={false} className="mt-4">Run basic proof</Button>
         </Card>
       )
   }
