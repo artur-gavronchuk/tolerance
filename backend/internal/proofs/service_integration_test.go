@@ -141,3 +141,27 @@ func TestRetry_OnlyForInfraErrorOrExpired(t *testing.T) {
 		t.Fatalf("retry: %v %+v", err, r)
 	}
 }
+
+func TestLatest_NilThenNewestWithoutDiff(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	if p, err := f.proofs.Latest(ctx, f.agent); err != nil || p != nil {
+		t.Fatalf("an agent without proofs has no latest one: %v %+v", err, p)
+	}
+	_ = f.agents.Heartbeat(ctx, f.agent, "0.1", "h")
+	created, err := f.proofs.Create(ctx, f.userID, "go-fix-retry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed, _, err := f.proofs.Claim(ctx, f.agent)
+	if err != nil || claimed == nil {
+		t.Fatalf("claim: %v %+v", err, claimed)
+	}
+	if err := f.proofs.SubmitResult(ctx, f.agent, claimed.ID, proofs.ResultInput{Diff: "--- a/x\n+++ b/x\n", LogTail: "log"}); err != nil {
+		t.Fatal(err)
+	}
+	p, err := f.proofs.Latest(ctx, f.agent)
+	if err != nil || p == nil || p.ID != created.ID || p.Status != proofs.StatusDiffSubmitted || p.Diff != "" || p.AgentLogTail != "" {
+		t.Fatalf("latest must be the newest proof without diff and log: %v %+v", err, p)
+	}
+}

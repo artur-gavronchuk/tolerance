@@ -29,13 +29,14 @@ type deps struct {
 
 func newHandler(cfg config, d deps) http.Handler {
 	owner := http.NewServeMux()
-	identity.RegisterMeRoute(owner, d.users, d.agents.MeAgent)
+	identity.RegisterMeRoute(owner, d.users, meAgent(d.agents, d.proofs))
 	agents.RegisterOwnerRoutes(owner, d.agents)
 	proofs.RegisterOwnerRoutes(owner, d.proofs)
 
 	connector := http.NewServeMux()
 	agents.RegisterConnectorRoutes(connector, d.agents)
 	proofs.RegisterConnectorRoutes(connector, d.proofs)
+	connector.HandleFunc("GET /api/v1/connector/status", connectorStatus(d.agents, d.proofs))
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()

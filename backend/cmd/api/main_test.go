@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/getkin/kin-openapi/routers"
 
@@ -110,8 +109,11 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 
 	// signup, me
 	var me struct {
-		User  identity.User    `json:"user"`
-		Agent *agents.Overview `json:"agent"`
+		User  identity.User `json:"user"`
+		Agent *struct {
+			agents.Overview
+			LastProof *proofs.Proof `json:"last_proof"`
+		} `json:"agent"`
 	}
 	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "Owner@Example.com", "password": "longenough1"}, nil); code != 201 {
 		t.Fatalf("signup: %d", code)
@@ -137,8 +139,25 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 		t.Fatalf("create key: %d", code)
 	}
 	e.call(t, owner, "GET", "/api/v1/me", "", nil, &me)
-	if me.Agent == nil || me.Agent.Stage != agents.StageRegistered || len(me.Agent.APIKeys) != 1 {
+	if me.Agent == nil || me.Agent.Stage != agents.StageRegistered || len(me.Agent.APIKeys) != 1 || me.Agent.LastProof != nil {
 		t.Fatalf("me after key: %+v", me.Agent)
+	}
+
+	// `arena status` before the connector ever connected: it answers, but it
+	// is not a heartbeat, so the agent must not look online afterwards.
+	var st struct {
+		Agent struct {
+			Name  string `json:"name"`
+			Stage string `json:"stage"`
+		} `json:"agent"`
+		LastProof *proofs.Proof `json:"last_proof"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/connector/status", keyResp.Key, nil, &st); code != 200 || st.Agent.Name != "fixer-7" || st.Agent.Stage != agents.StageRegistered || st.LastProof != nil {
+		t.Fatalf("status before connect: %d %+v", code, st)
+	}
+	e.call(t, owner, "GET", "/api/v1/me", "", nil, &me)
+	if me.Agent.Stage != agents.StageRegistered {
+		t.Fatalf("status must not mark the agent online, stage %s", me.Agent.Stage)
 	}
 
 	// proof before the connector is online
@@ -166,8 +185,8 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 		t.Fatalf("create proof: %d %+v", code, proof)
 	}
 	e.call(t, owner, "GET", "/api/v1/me", "", nil, &me)
-	if me.Agent.Stage != agents.StageChecking {
-		t.Fatalf("stage while queued: %s", me.Agent.Stage)
+	if me.Agent.Stage != agents.StageChecking || me.Agent.LastProof == nil || me.Agent.LastProof.ID != proof.ID || me.Agent.LastProof.Status != proofs.StatusQueued {
+		t.Fatalf("me while queued: %+v", me.Agent)
 	}
 	var next struct {
 		ProofID string      `json:"proof_id"`
@@ -210,8 +229,11 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 		t.Fatalf("after sandbox: %+v", proof)
 	}
 	e.call(t, owner, "GET", "/api/v1/me", "", nil, &me)
-	if me.Agent.Stage != agents.StageOperational {
-		t.Fatalf("final stage: %s", me.Agent.Stage)
+	if me.Agent.Stage != agents.StageOperational || me.Agent.LastProof == nil || me.Agent.LastProof.Status != proofs.StatusPassed || me.Agent.LastProof.Diff != "" {
+		t.Fatalf("final me: %+v", me.Agent)
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/connector/status", keyResp.Key, nil, &st); code != 200 || st.Agent.Stage != agents.StageOperational || st.LastProof == nil || st.LastProof.Status != proofs.StatusPassed {
+		t.Fatalf("status after pass: %d %+v", code, st)
 	}
 	var list struct{ Items []proofs.Proof }
 	e.call(t, owner, "GET", "/api/v1/proofs", "", nil, &list)
@@ -226,6 +248,9 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 	if code := e.call(t, plain, "POST", "/api/v1/connector/heartbeat", keyResp.Key, map[string]string{}, nil); code != 401 {
 		t.Fatalf("revoked key heartbeat: %d", code)
 	}
+	if code := e.call(t, plain, "GET", "/api/v1/connector/status", keyResp.Key, nil, nil); code != 401 {
+		t.Fatalf("revoked key status: %d", code)
+	}
 	e.call(t, owner, "GET", "/api/v1/me", "", nil, &me)
 	if me.Agent.Stage != agents.StageRegistered {
 		t.Fatalf("stage after revoke: %s", me.Agent.Stage)
@@ -238,7 +263,6 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 	if code := e.call(t, owner, "GET", "/api/v1/me", "", nil, nil); code != 401 {
 		t.Fatalf("me after logout: %d", code)
 	}
-	_ = time.Second
 }
 
 func TestLogin_RateLimited(t *testing.T) {

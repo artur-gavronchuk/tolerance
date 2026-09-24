@@ -142,16 +142,6 @@ func (s *Service) byOwner(ctx context.Context, ownerID string) (Agent, error) {
 	return a, err
 }
 
-// MeAgent adapts Overview for identity.RegisterMeRoute: an untyped nil
-// interface encodes as JSON null, a typed nil pointer would not.
-func (s *Service) MeAgent(ctx context.Context, userID string) (any, error) {
-	o, err := s.Overview(ctx, userID)
-	if err != nil || o == nil {
-		return nil, err
-	}
-	return o, nil
-}
-
 func (s *Service) ByID(ctx context.Context, id string) (Agent, error) {
 	var a Agent
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {

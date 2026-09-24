@@ -143,6 +143,23 @@ func (s *Service) List(ctx context.Context, userID string) ([]Proof, error) {
 	return out, err
 }
 
+// Latest returns the agent's most recent proof in list form (no diff, no
+// log), or nil when it has none. /me and `arena status` show it.
+func (s *Service) Latest(ctx context.Context, agentID string) (*Proof, error) {
+	var p Proof
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return scanProof(tx.QueryRow(ctx, `SELECT `+proofCols+` FROM proofs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT 1`, agentID), &p)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	p.Diff, p.AgentLogTail = "", ""
+	return &p, nil
+}
+
 func (s *Service) Get(ctx context.Context, userID, id string) (Proof, error) {
 	var p Proof
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
