@@ -43,7 +43,7 @@ set_env_var() {
 
 echo "==> Allocating dev-server ports for this workspace"
 
-port_base=$(arena_allocate_port_base 0 1 2) || {
+port_base=$(arena_allocate_port_base 0 1) || {
   echo "  Could not allocate a port base, leaving .env ports untouched" >&2
   port_base=""
 }
@@ -51,26 +51,11 @@ port_base=$(arena_allocate_port_base 0 1 2) || {
 if [ -n "$port_base" ]; then
   web_port=$((port_base + 0))
   api_port=$((port_base + 1))
-  dex_port=$((port_base + 2))
 
   set_env_var WEB_PORT "$web_port"
   set_env_var API_PORT "$api_port"
-  set_env_var DEX_PORT "$dex_port"
-  set_env_var ARENA_WEB_ORIGIN "http://localhost:${web_port}"
-  set_env_var ARENA_PUBLIC_WEB_URL "http://localhost:${web_port}"
-  set_env_var ARENA_OIDC_ISSUER "http://localhost:${dex_port}/dex"
-  set_env_var ARENA_DEX_CONFIG "./backend/dev/dex/config.generated.yaml"
 
-  # Dex bakes its issuer and OAuth redirect URI into its static config, so a
-  # per-workspace copy is generated with this workspace's ports substituted
-  # in. The stock config.yaml (and hence plain `make up` outside Superset)
-  # is untouched.
-  sed \
-    -e "s#http://localhost:5556/dex#http://localhost:${dex_port}/dex#" \
-    -e "s#http://localhost:3000/auth/callback#http://localhost:${web_port}/auth/callback#" \
-    backend/dev/dex/config.yaml >backend/dev/dex/config.generated.yaml
-
-  echo "  web=${web_port} api=${api_port} dex=${dex_port}"
+  echo "  web=${web_port} api=${api_port}"
 fi
 
 echo "==> Setup complete"

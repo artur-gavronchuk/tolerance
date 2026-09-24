@@ -2,67 +2,51 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"tolerance/internal/agents"
-	"tolerance/internal/arena"
-	"tolerance/internal/attempts"
-	"tolerance/internal/competitions"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
-	"tolerance/internal/standings"
-	"tolerance/internal/submissions"
+	"tolerance/internal/platform/ratelimit"
+	"tolerance/internal/proofs"
 )
 
 type deps struct {
-	pool         *db.Pool
-	verifier     identity.TokenVerifier
-	users        *identity.Service
-	agents       *agents.Service
-	standings    *standings.Service
-	competitions *competitions.Service
-	attempts     *attempts.Service
-	submissions  *submissions.Service
+	pool    *db.Pool
+	log     *slog.Logger
+	users   *identity.Service
+	agents  *agents.Service
+	proofs  *proofs.Service
+	limiter *ratelimit.Limiter
 }
 
-// newHandler wires four route groups with distinct authentication:
-// public GETs (no auth), /me/* (user JWT), /agent/* (API key),
-// /admin/* (user JWT + admin role).
 func newHandler(cfg config, d deps) http.Handler {
-	public := http.NewServeMux()
-	competitions.RegisterPublicRoutes(public, d.competitions)
-	agents.RegisterPublicRoutes(public, d.agents)
-	standings.RegisterPublicRoutes(public, d.standings)
-	submissions.RegisterPublicRoutes(public, d.submissions)
-	arena.RegisterPublicRoutes(public)
-	public.HandleFunc("GET /api/v1/stats", statsHandler(d.pool))
+	owner := http.NewServeMux()
+	identity.RegisterMeRoute(owner, d.users, d.agents.MeAgent)
+	agents.RegisterOwnerRoutes(owner, d.agents)
+	proofs.RegisterOwnerRoutes(owner, d.proofs)
 
-	me := http.NewServeMux()
-	identity.RegisterRoutes(me, d.users, d.agents.MeAgent)
-	agents.RegisterMeRoutes(me, d.pool, d.agents)
-	submissions.RegisterMeRoutes(me, d.submissions)
+	connector := http.NewServeMux()
+	agents.RegisterConnectorRoutes(connector, d.agents)
+	proofs.RegisterConnectorRoutes(connector, d.proofs)
 
-	agent := http.NewServeMux()
-	agents.RegisterAgentRoutes(agent, d.agents)
-	attempts.RegisterAgentRoutes(agent, d.attempts, d.competitions)
-	submissions.RegisterAgentRoutes(agent, d.pool, d.submissions)
-
-	admin := http.NewServeMux()
-	competitions.RegisterAdminRoutes(admin, d.pool, d.competitions)
-	attempts.RegisterAdminRoutes(admin, d.attempts)
-
-	userAuth := identity.RequireUser(d.verifier, d.users)
+	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
-	api.Handle("/api/v1/me", userAuth(me))
-	api.Handle("/api/v1/me/", userAuth(me))
-	api.Handle("/api/v1/agent/", identity.RequireAgent(d.agents)(agent))
-	api.Handle("/api/v1/admin/", userAuth(identity.RequireAdmin(admin)))
-	api.Handle("/api/v1/", public)
+	identity.RegisterAuthRoutes(api, d.users, d.limiter, cfg.secureCookies)
+	api.Handle("/api/v1/me", session(owner))
+	api.Handle("/api/v1/agent", session(owner))
+	api.Handle("/api/v1/agent/", session(owner))
+	api.Handle("/api/v1/proof-tasks", session(owner))
+	api.Handle("/api/v1/proofs", session(owner))
+	api.Handle("/api/v1/proofs/", session(owner))
+	api.Handle("/api/v1/connector/", identity.RequireAgent(d.agents)(connector))
 
 	top := http.NewServeMux()
 	top.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -76,27 +60,17 @@ func newHandler(cfg config, d deps) http.Handler {
 		httpx.Respond(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	top.Handle("/api/", api)
-	return withMiddleware(top, cfg)
+	return withMiddleware(top, d.log)
 }
 
-func statsHandler(pool *db.Pool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var active, agentsN, scored int
-		err := pool.Tx(r.Context(), func(ctx context.Context, tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT
-				(SELECT count(*) FROM competitions WHERE status = 'active'),
-				(SELECT count(*) FROM agents),
-				(SELECT count(*) FROM submissions WHERE score_status = 'scored')`).Scan(&active, &agentsN, &scored)
-		})
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
-		}
-		httpx.Respond(w, http.StatusOK, map[string]int{"active_competitions": active, "agents": agentsN, "scored_submissions": scored})
-	}
+type statusWriter struct {
+	http.ResponseWriter
+	status int
 }
 
-func withMiddleware(next http.Handler, cfg config) http.Handler {
+func (s *statusWriter) WriteHeader(code int) { s.status = code; s.ResponseWriter.WriteHeader(code) }
+
+func withMiddleware(next http.Handler, log *slog.Logger) http.Handler {
 	withRequestID := httpx.WithRequestID(func() string { return idgen.New("req") })(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -104,24 +78,12 @@ func withMiddleware(next http.Handler, cfg config) http.Handler {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Cache-Control", "no-store")
 		}
-		if !applyCORS(w, r, cfg.webOrigin) {
-			return
+		sw := &statusWriter{ResponseWriter: w, status: 200}
+		start := time.Now()
+		withRequestID.ServeHTTP(sw, r)
+		if sw.status >= 500 {
+			log.Error("request failed", "method", r.Method, "path", r.URL.Path, "status", sw.status, "request_id", sw.Header().Get("X-Request-Id"))
 		}
-		withRequestID.ServeHTTP(w, r)
+		log.Info("request", "method", r.Method, "path", r.URL.Path, "status", sw.status, "ms", time.Since(start).Milliseconds())
 	})
-}
-
-func applyCORS(w http.ResponseWriter, r *http.Request, allowed string) bool {
-	if origin := r.Header.Get("Origin"); origin != "" && origin == allowed {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Vary", "Origin")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, Last-Event-ID")
-		w.Header().Set("Access-Control-Max-Age", "600")
-	}
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
-		return false
-	}
-	return true
 }

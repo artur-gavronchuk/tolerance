@@ -3,11 +3,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
 
 	"tolerance/internal/platform/db"
+	"tolerance/internal/proofs"
 )
 
 func main() {
@@ -23,4 +25,20 @@ func main() {
 		log.Fatalf("migrate: %v", err)
 	}
 	log.Printf("migrations applied in %s", time.Since(start))
+
+	if dir := os.Getenv("ARENA_PROOFS_DIR"); dir != "" {
+		tasks, err := proofs.LoadCatalog(dir)
+		if err != nil {
+			log.Fatalf("catalog: %v", err)
+		}
+		pool, err := db.Open(context.Background(), dsn)
+		if err != nil {
+			log.Fatalf("open: %v", err)
+		}
+		defer pool.Close()
+		if err := proofs.SyncCatalog(context.Background(), pool, tasks); err != nil {
+			log.Fatalf("catalog: %v", err)
+		}
+		log.Printf("catalog: %d task(s) synced", len(tasks))
+	}
 }

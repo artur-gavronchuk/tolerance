@@ -1,5 +1,5 @@
 node_modules/
 .next/
+.npmrc
 next-env.d.ts
-*.tsbuildinfo
-.env*.local
+tsconfig.tsbuildinfo

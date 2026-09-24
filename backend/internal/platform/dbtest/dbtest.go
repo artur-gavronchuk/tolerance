@@ -7,6 +7,7 @@ package dbtest
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -29,7 +30,9 @@ type DB struct {
 
 // New starts a container, migrates it, and returns ready-to-use pools. It
 // skips the test (rather than failing it) if Docker is not reachable, since
-// that is an environment limitation, not a code defect.
+// that is normally an environment limitation, not a code defect — unless
+// ARENA_TEST_REQUIRE_DOCKER=1, which turns that skip into a failure so CI
+// can insist the integration suite actually ran.
 func New(t *testing.T) *DB {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -42,6 +45,9 @@ func New(t *testing.T) *DB {
 		testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second)),
 	)
 	if err != nil {
+		if os.Getenv("ARENA_TEST_REQUIRE_DOCKER") == "1" {
+			t.Fatalf("postgres testcontainer unavailable and ARENA_TEST_REQUIRE_DOCKER=1: %v", err)
+		}
 		t.Skipf("postgres testcontainer unavailable, skipping integration test: %v", err)
 	}
 	t.Cleanup(func() {

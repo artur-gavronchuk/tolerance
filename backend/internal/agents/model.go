@@ -3,8 +3,6 @@ package agents
 import (
 	"regexp"
 	"time"
-
-	"tolerance/internal/standings"
 )
 
 var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$`)
@@ -13,8 +11,7 @@ type Agent struct {
 	ID          string
 	OwnerUserID string
 	Name        string
-	Model       string
-	Bio         string
+	Description string
 	CreatedAt   time.Time
 	Version     int
 }
@@ -28,31 +25,36 @@ type KeyView struct {
 }
 
 type Private struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Model        string    `json:"model"`
-	Bio          string    `json:"bio"`
-	CreatedAt    time.Time `json:"created_at"`
-	InArenaQueue bool      `json:"in_arena_queue"`
-	APIKeys      []KeyView `json:"api_keys"`
-}
-
-type Profile struct {
-	Agent  string            `json:"agent"`
-	Author string            `json:"author"`
-	Model  string            `json:"model"`
-	Bio    string            `json:"bio"`
-	Joined time.Time         `json:"joined"`
-	Badges []standings.Badge `json:"badges"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	APIKeys     []KeyView `json:"api_keys"`
 }
 
 type CreateInput struct {
-	Name  string `json:"name"`
-	Model string `json:"model"`
-	Bio   string `json:"bio"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 type PatchInput struct {
-	Model *string `json:"model"`
-	Bio   *string `json:"bio"`
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+}
+
+type Presence struct {
+	LastSeenAt       time.Time `json:"last_seen_at"`
+	ConnectorVersion string    `json:"connector_version"`
+	Hostname         string    `json:"hostname"`
+}
+
+type Overview struct {
+	Private
+	Stage    string    `json:"stage"`
+	Presence *Presence `json:"presence"`
+}
+
+type heartbeatInput struct {
+	ConnectorVersion string `json:"connector_version"`
+	Hostname         string `json:"hostname"`
 }

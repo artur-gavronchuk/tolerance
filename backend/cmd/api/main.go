@@ -1,6 +1,5 @@
-// Command api is the whole Agent Arena backend: HTTP API plus the
-// background loops (competition auto-close now; arena coordinator and
-// judge worker in later slices).
+// Command api is the Agent Arena backend: HTTP API plus background loops
+// (added in later tasks as the connector and sandbox pieces land).
 package main
 
 import (
@@ -14,13 +13,11 @@ import (
 	"time"
 
 	"tolerance/internal/agents"
-	"tolerance/internal/attempts"
-	"tolerance/internal/competitions"
 	"tolerance/internal/identity"
-	"tolerance/internal/platform/auth"
 	"tolerance/internal/platform/db"
-	"tolerance/internal/standings"
-	"tolerance/internal/submissions"
+	"tolerance/internal/platform/ratelimit"
+	"tolerance/internal/proofs"
+	"tolerance/internal/proofs/sandbox"
 )
 
 func main() {
@@ -40,26 +37,21 @@ func main() {
 	}
 	defer pool.Close()
 
-	st := standings.NewService(pool)
-	at := attempts.NewService(pool)
-	d := deps{
-		pool:         pool,
-		verifier:     auth.NewVerifier(cfg.oidcIssuer, cfg.oidcAudience, cfg.oidcJWKSURL, 10*time.Minute),
-		users:        identity.NewService(pool, cfg.adminEmails),
-		agents:       agents.NewService(pool, st),
-		standings:    st,
-		competitions: competitions.NewService(pool),
-		attempts:     at,
-		submissions:  submissions.NewService(pool, at, cfg.publicWebURL, cfg.allowLoopbackPreview),
+	ps := proofs.NewService(pool)
+	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps, limiter: ratelimit.New(nil)}
+
+	var runner sandbox.Runner = sandbox.NewDocker()
+	if cfg.sandbox == "fake" {
+		runner = sandbox.PassAll{}
 	}
-	go competitions.RunCloser(ctx, d.competitions, 30*time.Second, log)
+	go proofs.NewWorker(pool, runner, cfg.workDir, log).Run(ctx)
 
 	server := &http.Server{
 		Addr:              cfg.addr,
 		Handler:           newHandler(cfg, d),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      0, // SSE in slice 3 needs long-lived responses
+		WriteTimeout:      0, // long-lived responses arrive in a later task
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    16 << 10,
 	}

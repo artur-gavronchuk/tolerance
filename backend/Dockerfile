@@ -1,4 +1,4 @@
-# Agent Arena API: migrate + seed + serve in one image.
+# Agent Arena API: migrate then serve in one image.
 FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -8,13 +8,17 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -trimpath -o /out/api ./cmd/api \
- && CGO_ENABLED=0 go build -trimpath -o /out/migrate ./cmd/migrate \
- && CGO_ENABLED=0 go build -trimpath -o /out/seed ./cmd/seed
+ && CGO_ENABLED=0 go build -trimpath -o /out/migrate ./cmd/migrate
 
 FROM alpine:3.22
-RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 arena
-COPY --from=build /out/api /out/migrate /out/seed /usr/local/bin/
+RUN apk add --no-cache ca-certificates tzdata git docker-cli && adduser -D -u 10001 arena
+COPY --from=build /out/api /out/migrate /usr/local/bin/
 COPY dev/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY fixtures/proofs /opt/arena/proofs
+ENV ARENA_PROOFS_DIR=/opt/arena/proofs
+# The arena-work volume is initialised from this directory, so it has to
+# exist and belong to arena before the volume is first created.
+RUN mkdir -p /var/lib/arena/work && chown arena:arena /var/lib/arena/work
 USER arena
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

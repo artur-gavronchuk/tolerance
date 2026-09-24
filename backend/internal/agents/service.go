@@ -16,27 +16,26 @@ import (
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
-	"tolerance/internal/standings"
 )
 
 const maxActiveKeys = 5
 
 type Service struct {
-	pool      *db.Pool
-	standings *standings.Service
+	pool   *db.Pool
+	proofs ProofFactsSource
 }
 
-func NewService(pool *db.Pool, st *standings.Service) *Service {
-	return &Service{pool: pool, standings: st}
+func NewService(pool *db.Pool, proofs ProofFactsSource) *Service {
+	return &Service{pool: pool, proofs: proofs}
 }
 
-const agentCols = `id, owner_user_id, name, model, bio, created_at, version`
+const agentCols = `id, owner_user_id, name, description, created_at, version`
 
 func scanAgent(row interface{ Scan(...any) error }, a *Agent) error {
 	// pgx decodes timestamptz into time.Local; normalize to UTC so every
 	// timestamp this package hands out is UTC in JSON regardless of the
 	// server process's local timezone.
-	if err := row.Scan(&a.ID, &a.OwnerUserID, &a.Name, &a.Model, &a.Bio, &a.CreatedAt, &a.Version); err != nil {
+	if err := row.Scan(&a.ID, &a.OwnerUserID, &a.Name, &a.Description, &a.CreatedAt, &a.Version); err != nil {
 		return err
 	}
 	a.CreatedAt = a.CreatedAt.UTC()
@@ -47,11 +46,8 @@ func validateCreate(in CreateInput) error {
 	if !nameRe.MatchString(in.Name) {
 		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "name must match ^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$", "name", "invalid")
 	}
-	if !httpx.ValidText(in.Model, 1, 80) {
-		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "model must be 1-80 characters", "model", "invalid")
-	}
-	if len(in.Bio) > 500 {
-		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "bio must be at most 500 characters", "bio", "too_long")
+	if len(in.Description) > 500 {
+		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "description must be at most 500 characters", "description", "too_long")
 	}
 	return nil
 }
@@ -65,10 +61,10 @@ func (s *Service) Create(ctx context.Context, ownerID string, in CreateInput) (P
 	if err := validateCreate(in); err != nil {
 		return Private{}, err
 	}
-	a := Agent{ID: idgen.New("agent"), OwnerUserID: ownerID, Name: in.Name, Model: strings.TrimSpace(in.Model), Bio: in.Bio, CreatedAt: time.Now().UTC(), Version: 1}
+	a := Agent{ID: idgen.New("agent"), OwnerUserID: ownerID, Name: in.Name, Description: in.Description, CreatedAt: time.Now().UTC(), Version: 1}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO agents (id, owner_user_id, name, model, bio, created_at) VALUES ($1,$2,$3,$4,$5,$6)`,
-			a.ID, a.OwnerUserID, a.Name, a.Model, a.Bio, a.CreatedAt); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO agents (id, owner_user_id, name, description, created_at) VALUES ($1,$2,$3,$4,$5)`,
+			a.ID, a.OwnerUserID, a.Name, a.Description, a.CreatedAt); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{ActorID: ownerID, ActorKind: identity.KindUser, Action: "agent.created",
@@ -86,16 +82,16 @@ func (s *Service) Create(ctx context.Context, ownerID string, in CreateInput) (P
 }
 
 func (s *Service) Patch(ctx context.Context, ownerID string, in PatchInput) (Private, error) {
-	if in.Model != nil && !httpx.ValidText(*in.Model, 1, 80) {
-		return Private{}, httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "model must be 1-80 characters", "model", "invalid")
+	if in.Name != nil && !nameRe.MatchString(*in.Name) {
+		return Private{}, httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "name must match ^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$", "name", "invalid")
 	}
-	if in.Bio != nil && len(*in.Bio) > 500 {
-		return Private{}, httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "bio must be at most 500 characters", "bio", "too_long")
+	if in.Description != nil && len(*in.Description) > 500 {
+		return Private{}, httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "description must be at most 500 characters", "description", "too_long")
 	}
 	var a Agent
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		if err := scanAgent(tx.QueryRow(ctx, `UPDATE agents SET model = coalesce($2, model), bio = coalesce($3, bio), version = version + 1
-			WHERE owner_user_id = $1 RETURNING `+agentCols, ownerID, in.Model, in.Bio), &a); err != nil {
+		if err := scanAgent(tx.QueryRow(ctx, `UPDATE agents SET name = coalesce($2, name), description = coalesce($3, description), version = version + 1
+			WHERE owner_user_id = $1 RETURNING `+agentCols, ownerID, in.Name, in.Description), &a); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{ActorID: ownerID, ActorKind: identity.KindUser, Action: "agent.updated",
@@ -104,6 +100,9 @@ func (s *Service) Patch(ctx context.Context, ownerID string, in PatchInput) (Pri
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Private{}, httpx.NotFound()
 	}
+	if uniqueViolation(err, "agents_name_ci_idx") {
+		return Private{}, httpx.New(http.StatusConflict, "name_taken", "This agent name is already taken")
+	}
 	if err != nil {
 		return Private{}, err
 	}
@@ -111,11 +110,8 @@ func (s *Service) Patch(ctx context.Context, ownerID string, in PatchInput) (Pri
 }
 
 func (s *Service) private(ctx context.Context, a Agent) (Private, error) {
-	p := Private{ID: a.ID, Name: a.Name, Model: a.Model, Bio: a.Bio, CreatedAt: a.CreatedAt, APIKeys: []KeyView{}}
+	p := Private{ID: a.ID, Name: a.Name, Description: a.Description, CreatedAt: a.CreatedAt, APIKeys: []KeyView{}}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM arena_queue WHERE agent_id = $1)`, a.ID).Scan(&p.InArenaQueue); err != nil {
-			return err
-		}
 		rows, err := tx.Query(ctx, `SELECT id, prefix, name, created_at, last_used_at FROM api_keys WHERE agent_id = $1 AND revoked_at IS NULL ORDER BY created_at`, a.ID)
 		if err != nil {
 			return err
@@ -146,40 +142,14 @@ func (s *Service) byOwner(ctx context.Context, ownerID string) (Agent, error) {
 	return a, err
 }
 
-// PrivateForUser returns nil, nil when the user has no agent yet.
-func (s *Service) PrivateForUser(ctx context.Context, userID string) (*Private, error) {
-	a, err := s.byOwner(ctx, userID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	p, err := s.private(ctx, a)
-	return &p, err
-}
-
-// MeAgent adapts PrivateForUser for identity.RegisterRoutes: a missing
-// agent must serialise as JSON null, which a typed nil pointer boxed in an
-// any would not (it would encode as {"...": nil-ish struct}); returning an
-// untyped nil interface value does encode as null.
+// MeAgent adapts Overview for identity.RegisterMeRoute: an untyped nil
+// interface encodes as JSON null, a typed nil pointer would not.
 func (s *Service) MeAgent(ctx context.Context, userID string) (any, error) {
-	p, err := s.PrivateForUser(ctx, userID)
-	if err != nil || p == nil {
+	o, err := s.Overview(ctx, userID)
+	if err != nil || o == nil {
 		return nil, err
 	}
-	return p, nil
-}
-
-func (s *Service) ByName(ctx context.Context, name string) (Agent, error) {
-	var a Agent
-	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		return scanAgent(tx.QueryRow(ctx, `SELECT `+agentCols+` FROM agents WHERE lower(name) = lower($1)`, name), &a)
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Agent{}, httpx.NotFound()
-	}
-	return a, err
+	return o, nil
 }
 
 func (s *Service) ByID(ctx context.Context, id string) (Agent, error) {
@@ -191,22 +161,6 @@ func (s *Service) ByID(ctx context.Context, id string) (Agent, error) {
 		return Agent{}, httpx.NotFound()
 	}
 	return a, err
-}
-
-func (s *Service) ProfileByName(ctx context.Context, name string) (Profile, standings.Standing, error) {
-	a, err := s.ByName(ctx, name)
-	if err != nil {
-		return Profile{}, standings.Standing{}, err
-	}
-	st, err := s.standings.ForAgent(ctx, a.ID)
-	if err != nil {
-		return Profile{}, standings.Standing{}, err
-	}
-	badges, err := s.standings.BadgesForAgent(ctx, a.ID)
-	if err != nil {
-		return Profile{}, standings.Standing{}, err
-	}
-	return Profile{Agent: a.Name, Author: st.Author, Model: a.Model, Bio: a.Bio, Joined: a.CreatedAt, Badges: badges}, st, nil
 }
 
 func (s *Service) CreateKey(ctx context.Context, ownerID, name string) (KeyView, string, error) {

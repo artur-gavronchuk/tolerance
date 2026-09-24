@@ -1,40 +1,47 @@
 package agents
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/jackc/pgx/v5"
-
 	"tolerance/internal/identity"
-	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
-	"tolerance/internal/platform/idempotency"
 )
 
 type createKeyInput struct {
 	Name string `json:"name"`
 }
 
-func RegisterMeRoutes(mux *http.ServeMux, pool *db.Pool, s *Service) {
-	mux.HandleFunc("POST /api/v1/me/agent", idempotency.Command(pool, "POST /me/agent",
-		func(r *http.Request, actor identity.Actor, raw []byte) (any, int, error) {
-			var in CreateInput
-			if err := httpx.Decode(raw, &in); err != nil {
-				return nil, 0, err
-			}
-			p, err := s.Create(r.Context(), actor.UserID, in)
-			return p, http.StatusCreated, err
-		}))
-	mux.HandleFunc("PATCH /api/v1/me/agent", func(w http.ResponseWriter, r *http.Request) {
-		raw, err := httpx.ReadBody(w, r)
+func decode[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
+	var in T
+	raw, err := httpx.ReadBody(w, r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return in, false
+	}
+	if err := httpx.Decode(raw, &in); err != nil {
+		httpx.WriteError(w, r, err)
+		return in, false
+	}
+	return in, true
+}
+
+// RegisterOwnerRoutes mounts the cabinet's agent routes (cookie session).
+func RegisterOwnerRoutes(mux *http.ServeMux, s *Service) {
+	mux.HandleFunc("POST /api/v1/agent", func(w http.ResponseWriter, r *http.Request) {
+		in, ok := decode[CreateInput](w, r)
+		if !ok {
+			return
+		}
+		p, err := s.Create(r.Context(), identity.MustFromContext(r.Context()).UserID, in)
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
 		}
-		var in PatchInput
-		if err := httpx.Decode(raw, &in); err != nil {
-			httpx.WriteError(w, r, err)
+		httpx.Respond(w, http.StatusCreated, p)
+	})
+	mux.HandleFunc("PATCH /api/v1/agent", func(w http.ResponseWriter, r *http.Request) {
+		in, ok := decode[PatchInput](w, r)
+		if !ok {
 			return
 		}
 		p, err := s.Patch(r.Context(), identity.MustFromContext(r.Context()).UserID, in)
@@ -44,15 +51,9 @@ func RegisterMeRoutes(mux *http.ServeMux, pool *db.Pool, s *Service) {
 		}
 		httpx.Respond(w, http.StatusOK, p)
 	})
-	mux.HandleFunc("POST /api/v1/me/agent/api-keys", func(w http.ResponseWriter, r *http.Request) {
-		raw, err := httpx.ReadBody(w, r)
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
-		}
-		var in createKeyInput
-		if err := httpx.Decode(raw, &in); err != nil {
-			httpx.WriteError(w, r, err)
+	mux.HandleFunc("POST /api/v1/agent/keys", func(w http.ResponseWriter, r *http.Request) {
+		in, ok := decode[createKeyInput](w, r)
+		if !ok {
 			return
 		}
 		kv, key, err := s.CreateKey(r.Context(), identity.MustFromContext(r.Context()).UserID, in.Name)
@@ -62,7 +63,7 @@ func RegisterMeRoutes(mux *http.ServeMux, pool *db.Pool, s *Service) {
 		}
 		httpx.Respond(w, http.StatusCreated, map[string]any{"id": kv.ID, "prefix": kv.Prefix, "name": kv.Name, "created_at": kv.CreatedAt, "key": key})
 	})
-	mux.HandleFunc("DELETE /api/v1/me/agent/api-keys/{id}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("DELETE /api/v1/agent/keys/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.RevokeKey(r.Context(), identity.MustFromContext(r.Context()).UserID, r.PathValue("id")); err != nil {
 			httpx.WriteError(w, r, err)
 			return
@@ -71,39 +72,23 @@ func RegisterMeRoutes(mux *http.ServeMux, pool *db.Pool, s *Service) {
 	})
 }
 
-func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
-	mux.HandleFunc("GET /api/v1/agents/{name}", func(w http.ResponseWriter, r *http.Request) {
-		prof, st, err := s.ProfileByName(r.Context(), r.PathValue("name"))
+// RegisterConnectorRoutes mounts the connector's heartbeat (API key).
+func RegisterConnectorRoutes(mux *http.ServeMux, s *Service) {
+	mux.HandleFunc("POST /api/v1/connector/heartbeat", func(w http.ResponseWriter, r *http.Request) {
+		in, ok := decode[heartbeatInput](w, r)
+		if !ok {
+			return
+		}
+		agentID := identity.MustFromContext(r.Context()).AgentID
+		if err := s.Heartbeat(r.Context(), agentID, in.ConnectorVersion, in.Hostname); err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		o, err := s.OverviewByID(r.Context(), agentID)
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
 		}
-		httpx.Respond(w, http.StatusOK, map[string]any{"profile": prof, "standing": st, "rank": st.Rank})
-	})
-}
-
-func RegisterAgentRoutes(mux *http.ServeMux, s *Service) {
-	mux.HandleFunc("GET /api/v1/agent/me", func(w http.ResponseWriter, r *http.Request) {
-		actor := identity.MustFromContext(r.Context())
-		a, err := s.ByID(r.Context(), actor.AgentID)
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
-		}
-		st, err := s.standings.ForAgent(r.Context(), a.ID)
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
-		}
-		var inQueue bool
-		_ = s.pool.Tx(r.Context(), func(ctx context.Context, tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM arena_queue WHERE agent_id = $1)`, a.ID).Scan(&inQueue)
-		})
-		httpx.Respond(w, http.StatusOK, map[string]any{
-			"agent":          map[string]any{"id": a.ID, "name": a.Name, "model": a.Model},
-			"owner":          map[string]any{"handle": st.Author},
-			"in_arena_queue": inQueue,
-			"current_match":  nil, // slice 3
-		})
+		httpx.Respond(w, http.StatusOK, map[string]any{"agent": map[string]any{"id": o.ID, "name": o.Name, "stage": o.Stage}})
 	})
 }

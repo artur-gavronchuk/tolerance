@@ -8,38 +8,23 @@ import (
 )
 
 type config struct {
-	addr         string
-	webOrigin    string
-	databaseURL  string
-	oidcIssuer   string
-	oidcAudience string
-	oidcJWKSURL  string
-	adminEmails  []string
-
-	// publicWebURL is the frontend origin used to build result links.
-	publicWebURL string
-	// allowNonLoopback lets ARENA_ADDR bind a non-loopback address. Only
-	// for a container whose port is published to the host loopback or sits
-	// behind a reverse proxy; the container network is the boundary then.
+	addr             string
+	databaseURL      string
+	adminEmails      []string
+	secureCookies    bool
 	allowNonLoopback bool
-	// allowLoopbackPreview accepts http://127.0.0.1 and http://localhost as
-	// preview URLs. Local development only: it lets the checker open apps
-	// served from the developer's own machine.
-	allowLoopbackPreview bool
+	workDir          string
+	sandbox          string // "docker" | "fake"
 }
 
 func loadConfig() (config, error) {
 	cfg := config{
-		addr:         env("ARENA_ADDR", "127.0.0.1:8080"),
-		webOrigin:    os.Getenv("ARENA_WEB_ORIGIN"),
-		databaseURL:  os.Getenv("ARENA_APP_DATABASE_URL"),
-		oidcIssuer:   os.Getenv("ARENA_OIDC_ISSUER"),
-		oidcAudience: env("ARENA_OIDC_AUDIENCE", "arena-web"),
-		oidcJWKSURL:  os.Getenv("ARENA_OIDC_JWKS_URL"),
-
-		publicWebURL:         env("ARENA_PUBLIC_WEB_URL", "http://localhost:3000"),
-		allowLoopbackPreview: os.Getenv("ARENA_ALLOW_LOOPBACK_PREVIEW") == "true",
-		allowNonLoopback:     os.Getenv("ARENA_ALLOW_NON_LOOPBACK") == "true",
+		addr:             env("ARENA_ADDR", "127.0.0.1:8080"),
+		databaseURL:      os.Getenv("ARENA_APP_DATABASE_URL"),
+		secureCookies:    os.Getenv("ARENA_SECURE_COOKIES") == "true",
+		allowNonLoopback: os.Getenv("ARENA_ALLOW_NON_LOOPBACK") == "true",
+		workDir:          env("ARENA_WORK_DIR", os.TempDir()),
+		sandbox:          env("ARENA_SANDBOX", "docker"),
 	}
 	for _, e := range strings.Split(os.Getenv("ARENA_ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {
@@ -56,11 +41,8 @@ func loadConfig() (config, error) {
 	if cfg.databaseURL == "" {
 		return config{}, errors.New("ARENA_APP_DATABASE_URL is required")
 	}
-	if cfg.oidcIssuer == "" || cfg.oidcJWKSURL == "" {
-		return config{}, errors.New("ARENA_OIDC_ISSUER and ARENA_OIDC_JWKS_URL are required")
-	}
-	if cfg.webOrigin == "" {
-		return config{}, errors.New("ARENA_WEB_ORIGIN is required so CORS allows exactly one origin")
+	if cfg.sandbox != "docker" && cfg.sandbox != "fake" {
+		return config{}, errors.New("ARENA_SANDBOX must be docker or fake")
 	}
 	return cfg, nil
 }

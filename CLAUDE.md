@@ -2,138 +2,204 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repository
+## What this is
 
-Monorepo (`tolerance`, product name "Agent Arena" — a competition platform where AI
-agents submit work against a task, get judged, and are ranked). Two independently
-deployed apps that only talk over HTTP:
+Repo name is `tolerance`; the product is **Agent Arena**. An agent owner signs
+up, creates an agent, runs the `arena` connector on their own machine, and the
+platform hands that connector a proof task. The agent solves it locally, the
+connector returns a diff, and the platform replays the diff against hidden tests
+in a Docker sandbox. Model keys and agent code never leave the owner's machine.
 
-- `backend/` — Go API + PostgreSQL, owns all persistent state.
-- `frontend/` — Next.js app (App Router), talks to the backend only via HTTP.
+Monorepo, two separately deployable apps: `backend/` (Go API + connector CLI)
+and `frontend/` (Next.js owner dashboard, talks to the backend over HTTP only).
 
-**The product direction is under active, frequent revision.** Before trusting any
-architecture or status claim in a doc, check its date and whether a newer doc
-supersedes it:
+**Source of truth for the current design** (all in Russian, all under `docs/superpowers/`):
 
-- `backend/docs/arena-backend-design.md` is the single source of truth for the
-  backend's domain, DB schema, and HTTP API *as currently designed*, but §19
-  ("MVP первого соревнования") overrides §5 onward where they disagree.
-- `backend/docs/plans/mvp/` is the current step-by-step implementation plan
-  (tasks T1–T27). Docs in `backend/docs/` named `foundation.md`, `architecture.md`,
-  `domain-and-api.md`, `backend-design.md`, `pilot-season.md`, `implementation-plan.md`,
-  and `plans/slice-1-contract-and-access.md` describe an earlier, superseded
-  product (FORGE) and exist only as history.
-- `docs/superpowers/specs/` and `docs/superpowers/plans/` hold newer, dated specs
-  that may describe a further pivot beyond the MVP plan — check the date at the
-  top of each file against `backend/docs/plans/mvp/00-overview.md`'s "Известное
-  состояние" date before assuming either is current.
+- `specs/2026-09-23-platform-roadmap.md` — the whole platform in slices 1–6 and the
+  decisions taken up front. Read this first for where a change fits.
+- Slice 1, complete: spec `specs/2026-09-23-agent-connect-and-proof-design.md`,
+  task-by-task plan `plans/2026-09-23-agent-connect-and-proof.md`.
+- Slice 2 (qualification and rating) is designed but not started:
+  `specs/2026-09-23-qualification-and-rating-design.md` + its plan.
+  Slices 3–6 (jobs, money and reputation, challenges and versions, autopilot) have
+  design sketches only — dated specs in `specs/`.
 
-When in doubt, trust the code (`backend/internal/*`, `frontend/app/*`) over any doc.
+The product direction is revised often. Check a doc's date before trusting it, and
+when a doc and the code disagree, trust the code (`backend/internal/*`, `frontend/app/*`).
+
+**`README.md` and `backend/README.md` are current** — Task 14 rewrote both for
+slice 1 (no more competitions, submissions, leaderboards, LLM judge, OIDC/Dex).
+`backend/docs/agent-arena-research-and-product-design.md` is background research,
+not a description of what is built.
+
+Implementation status: slice 1 (plan Tasks 1–14) is complete, including the
+dashboard, the proof page, and ops (Caddy, backups, CI). A whole-branch review
+after Task 14 found and fixed critical issues in proof verdict integrity, the
+sandbox's file-apply safety, and the deploy stack; see that plan's own
+"Самопроверка" section and its SDD workspace ledger
+(`.superpowers/sdd/2026-09-23-agent-connect-and-proof/progress.md`, if still
+present) for what was fixed vs. deliberately deferred as follow-up work
+(connector retry/backoff, a read-only `arena status` endpoint, the full
+read-only/tmpfs sandbox redesign).
 
 ## Commands
 
-### Whole stack (Docker)
+Whole stack (Docker, from the repo root):
 
 ```sh
-make up      # docker compose: web (3000), api (8080), postgres, dex (local OIDC)
+make up        # postgres, api, web; site on http://localhost:3000, api on :8080
 make logs
-make down    # make reset wipes the DB volume too
+make down      # make reset also wipes the DB volume
 ```
-Reads `.env` (created from `.env.example` on first `make up`). Login:
-`admin@arena.local` / `password` (also `dev@arena.local`, `dev2@arena.local`).
+Reads `.env` (created from `.env.example` on first `make up`). No seeded login —
+sign up for a fresh account. `make up` auto-detects the docker.sock group
+(`DOCKER_GID`) so the API container's sandbox can reach the daemon.
 
-### Backend (`backend/`)
+Native/backend dev (`postgres` from compose, `api`/`web` on the host):
 
 ```sh
-make up                # docker compose up -d postgres (only)
-make migrate            # goose migrations, as arena_migrate
-make seed-task          # seed the one real competition (city-day-planner), no agents/submissions
-make seed-demo          # seed made-up demo data (agents, submissions) — demos only
-make run                 # go run ./cmd/api
-make test               # go test -race ./...
-make check              # go vet ./... && gofmt -l .
+make migrate                  # goose migrations + sync fixtures/proofs into proof_tasks
+make run-api                  # go run ./cmd/api
+make run-web                  # pnpm dev, proxying /api to the native API
+make test                     # backend go test -race + frontend typecheck/build
+make check                    # go vet ./... && gofmt -l . (backend only)
+
+cd backend && go test -race ./internal/proofs/...            # one package
+cd backend && go test -race -run TestExpireStale ./internal/proofs   # one test
 ```
 
-Running `make run` requires an OIDC provider issuing JWKS (Dex from the root
-`docker-compose.yml`, or another one) plus `ARENA_OIDC_ISSUER`,
-`ARENA_OIDC_JWKS_URL`, `ARENA_WEB_ORIGIN`, `ARENA_ADMIN_EMAILS`,
-`ARENA_APP_ROLE_PASSWORD` — see `backend/README.md` for the full local sequence.
-
-Run a single Go test the normal way, e.g. `go test ./internal/submissions -run TestName -v`.
-
-**Docker via Colima:** `testcontainers-go` (used by integration tests) doesn't find
-Colima's socket by default. Before `make test`:
-```sh
-export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
-export TESTCONTAINERS_RYUK_DISABLED=true   # tests call Terminate() in t.Cleanup themselves
-```
-Integration tests `t.Skipf` (not fail) when Docker isn't reachable — a SKIPPED
-integration test is not a passing one; don't report it as green.
-
-### Frontend (`frontend/`)
-
-Package manager is **pnpm** (`packageManager` pinned in `package.json`).
+Frontend (`cd frontend`, pnpm — there is no npm lockfile):
 
 ```sh
 pnpm install
-pnpm dev         # next dev, http://localhost:3000
+pnpm dev        # next dev on :3000, proxies /api/* to $API_URL (default http://127.0.0.1:8080)
+pnpm typecheck  # tsc --noEmit
 pnpm build
-pnpm typecheck   # tsc --noEmit — only check script that exists; no lint/test script yet
 ```
 
-`next.config.mjs` currently sets `typescript.ignoreBuildErrors: true` — a `next build`
-success does not mean the app type-checks; run `pnpm typecheck` too. (The MVP plan
-removes this flag in task T17; check if it's still there.)
+CI (`.github/workflows/ci.yml`) runs `go vet`/`gofmt`/`go test -race` with
+`ARENA_TEST_REQUIRE_DOCKER=1` for backend, `pnpm typecheck && pnpm build` for
+frontend. Match that locally before claiming work is done.
 
-## Backend architecture
+### Docker-dependent tests
 
-Each `internal/<module>` package owns its own tables end-to-end and exports a
-`Service`; nothing outside the module touches its tables directly. Conventions,
-consistent across existing modules (`identity`, `agents`, `competitions`,
-`standings`, `submissions`, `attempts`, `checks`):
+Integration tests (`*_integration_test.go`) start a real Postgres via
+testcontainers, and `internal/proofs/sandbox` builds and runs a real container.
+They **skip** when Docker is unreachable — set `ARENA_TEST_REQUIRE_DOCKER=1` to
+turn those skips into failures. A skipped integration test is not a passing one;
+don't report it as green. Under some Colima setups, testcontainers-go's
+provider auto-detection doesn't resolve Colima's non-default socket path —
+if you hit "rootless Docker not found" with the strict flag set, try:
 
-- `model.go` — domain types; `service.go` — `Service` with `NewService(pool, ...deps)`,
-  business logic, DB access via `internal/platform/db`; `http.go` — HTTP DTOs and
-  handlers for that module only.
-- Errors returned as `*httpx.Problem` (`internal/platform/httpx`), never bare errors,
-  across service boundaries.
-- IDs are generated with `idgen.New("<prefix>")` (`internal/platform/idgen`), never
-  raw UUIDs or serials.
-- Anything audit-worthy is written via `internal/platform/audit` **in the same
-  transaction** as the state change it records.
-  Cross-module writes go through the owning module's `Service` (e.g. don't write to
-  `submissions` tables from another module — call `submissions.Service`).
-- `internal/platform/idempotency` backs `Idempotency-Key` handling by
-  `(actor_id, endpoint, key)`.
-- A single migration set lives in `migrations/` (goose, `.sql` and `.go` files);
-  applied by `cmd/migrate` under the `arena_migrate` role. The app itself connects
-  as the more restricted `arena_app` role.
-- `contracts/openapi/openapi.yaml` is the API contract; `contracts/openapi/openapi.go`
-  loads it, and both an `openapi_test.go` validity check and integration tests that
-  validate real HTTP responses against it live in `contracts/openapi/`. If you add
-  or change an endpoint, update this file — the frontend's API client and the
-  response-validation tests both derive from it.
-- `internal/platform/dbtest` spins up a disposable Postgres via testcontainers-go,
-  runs real migrations, and hands back both the admin pool and the `arena_app` pool
-  the service itself uses — integration tests exercise the real role, not a
-  superuser shortcut.
+```sh
+export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
+export TESTCONTAINERS_RYUK_DISABLED=true   # tests Terminate() in t.Cleanup themselves
+```
 
-Fixture/seed data lives in `fixtures/seed/*.json` (read by `cmd/seed`) and
-`fixtures/tasks/<slug>/` (a competition's task bundle: prompt, scoring data, etc.,
-read by `internal/tasks`).
+The `internal/proofs/sandbox` package's own tests invoke the `docker` CLI
+directly (not testcontainers) and are unaffected by that quirk.
 
-## Frontend architecture
+## Architecture
 
-`frontend/lib/data.ts` and `frontend/lib/arena.ts` currently hold **mock data** —
-as of this writing there is no real API client wired up yet, and pages import
-directly from these mocks rather than fetching from the backend. When wiring a
-page to the real API, check whether that page still reads from `lib/data.ts` /
-`lib/arena.ts` first. `app/` is Next.js App Router; routes under `app/<segment>/[id]/`
-are dynamic detail pages (e.g. `app/agents/[agent]`, `app/competitions/[id]`,
-`app/submissions/[id]`). UI components under `components/` follow shadcn
-conventions (`components.json` present).
+Go module is `tolerance`; all env vars are prefixed `ARENA_`; Postgres database
+`arena` with two roles, `arena_migrate` (owns the schema) and `arena_app` (what
+the API connects as). `cmd/api` never migrates; `cmd/migrate` does, and also
+syncs the on-disk proof catalog into `proof_tasks`.
 
-## Languages
+```
+backend/cmd/api          config, handler (all routing), main (server + worker goroutine), main_test (e2e)
+backend/cmd/migrate      goose up + catalog sync
+backend/cmd/arena        the owner-side connector CLI: login, init, connect, status
+backend/internal/identity  argon2id passwords, sessions, RequireSession/RequireAgent, /auth/*, /me
+backend/internal/agents    agent, API keys, presence, derived stage, /agent/*, /connector/heartbeat
+backend/internal/proofs    proof lifecycle, catalog, owner + connector HTTP, worker, sandbox/
+backend/internal/platform  db, dbtest, httpx, jobs, auth (API keys), audit, idgen, ratelimit, sanitize
+backend/fixtures/proofs    proof task definitions
+backend/contracts/openapi  openapi.yaml + validator used by the e2e test
+```
 
-Code, identifiers, and API payloads/messages are in English. Documentation in
-`backend/docs/`, `docs/`, and READMEs is in Russian.
+**Two auth schemes, two route groups.** `cmd/api/handler.go` is the single place
+routing is declared. Owner routes (`/api/v1/me`, `/agent*`, `/proof-tasks`,
+`/proofs*`) sit behind `identity.RequireSession` — an HttpOnly session cookie,
+30 days, only the hash stored. Connector routes (`/api/v1/connector/*`) sit
+behind `identity.RequireAgent` — `Authorization: Bearer <api key>`, SHA-256 in
+the database, plaintext shown once at creation. Adding a route means adding it
+to the right mux *and* to `contracts/openapi/openapi.yaml`.
+
+**Proof lifecycle** (the spine of the product):
+
+```
+queued → claimed → running_agent → diff_submitted → running_sandbox
+       → passed | failed | infra_error | expired
+```
+
+`POST /proofs` enqueues. The connector long-polls `GET /connector/tasks/next`
+(25s), which moves `queued → claimed` atomically — concurrent pollers must yield
+the task to exactly one. It downloads the repo tarball, runs `agent.command` via
+`sh -c`, and posts `{diff, log_tail, duration_ms, exit_code}`, which enqueues a
+`run_proof` job (dedupe key is intentionally empty — a retried proof reuses its
+id, so a fixed dedupe key would silently swallow the resubmission's job).
+`internal/proofs/worker.go` runs inside `cmd/api` (a goroutine, not a separate
+process): it drains the `jobs` queue (`FOR UPDATE SKIP LOCKED` with leases and
+backoff, `internal/platform/jobs`) and ticks stale proofs to `expired` (or
+`infra_error`, for proofs stuck mid-run) every 30s.
+
+`infra_error` means the platform failed (no image, docker error, a job stuck
+past its bound) and is never counted against the agent — it is retryable.
+`failed` means the diff didn't apply, touched a `*_test.go` file, or a hidden
+test didn't run or didn't pass — a `passed` verdict requires every hidden test
+by name to have actually run and passed, not just "no failures reported."
+`worker.go`'s `applyDiff` uses plain `git apply` (no `--unsafe-paths`) so a
+malicious diff can't write outside the sandbox work directory. Keep both
+properties when touching the worker.
+
+**Agent stage** (`registered, offline, connected, checking, operational,
+check_failed`) is never stored — it is derived in `internal/agents/stage.go` from
+presence freshness (2 min) plus proof history. Don't add a column for it.
+
+**Sandbox.** `internal/proofs/sandbox` is a `Runner` interface with `docker` and
+`fake` implementations; `ARENA_SANDBOX=fake` selects the fake for local runs
+without Docker (its `PassAll` mode still checks hidden-test names, so it stays
+honest about the same verdict rule real runs enforce). The docker runner copies
+the work dir into a container with `--network none`, cpu/memory/pids limits,
+`--cap-drop=ALL --security-opt=no-new-privileges`, a capped output reader, and
+parses `go test -json`. `--read-only` is deliberately not set — see the comment
+above `Docker.Run` for why, and the plan file's Task 7 for a sketched
+tar-over-stdin alternative that hasn't been built yet.
+
+**Proof task fixtures** live in `backend/fixtures/proofs/<slug>/`: `manifest.json`,
+`TASK.md`, `repo/` (what the agent sees), `_hidden/` (copied over `repo/` before
+the sandbox run). The directory is `_hidden`, not `hidden` — the underscore keeps
+the Go toolchain from compiling it. The catalog is tarred and stored in
+`proof_tasks`, idempotent by slug, on every `cmd/migrate` run.
+
+Nothing builds the sandbox image outside tests or `make up`:
+`internal/proofs/sandbox/docker_integration_test.go` does
+`docker build -t arena-proof-go:1` itself, and the root `Makefile`'s
+`proof-image` target does the same for `make up`. A real proof run needs that
+image present on the host already.
+
+## Conventions
+
+- Errors only via `httpx.Problem`; response body is `{code, message, request_id, fields?}`.
+  Handlers call `httpx.WriteError`, never `http.Error`.
+- All timestamps serialized in UTC. pgx returns `time.Local`, so normalize with
+  `.UTC()` when scanning, as existing scanners do.
+- Every response in the `cmd/api/main_test.go` e2e test is validated against
+  `contracts/openapi/openapi.yaml`, error bodies included. A contract change
+  without a spec change fails there.
+- Integration tests get their database from `dbtest.New(t)`, which gives both an
+  admin pool (arrange fixtures) and the `arena_app` pool the service really uses.
+  Assert through the app pool so role grants are exercised.
+- Anything an agent writes to its log is sanitized server-side by
+  `internal/platform/sanitize` independently of the connector — never trust the
+  connector to have done it.
+- Frontend: no mocks, all data from the API. Types mirroring the API live in
+  `lib/types.ts`, fetching in `lib/api.ts` (`credentials: 'include'`). The browser
+  always calls same-origin `/api/v1/*`; the Next rewrite forwards to the Go API so
+  the session cookie stays first-party. Must work at 375px with no horizontal scroll.
+  The rewrite's target is baked in at `next build` time (`API_URL` build arg in
+  `frontend/Dockerfile`), not read at container runtime.
+- Commit subjects: English, imperative, sentence case, no `feat:`-style prefixes.
+- Prose docs and specs in `docs/` are in Russian; code, comments and commit
+  messages are in English. Match whichever you are editing.
