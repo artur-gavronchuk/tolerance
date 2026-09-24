@@ -19,3 +19,15 @@ garbage line that is not json
 		t.Fatalf("build failure yields no tests")
 	}
 }
+
+func TestCappedWriter_StopsGrowingAtLimit(t *testing.T) {
+	w := &cappedWriter{limit: 10}
+	for i := 0; i < 5; i++ {
+		if n, err := w.Write([]byte("abcdef")); n != 6 || err != nil {
+			t.Fatalf("write must report full length: %d %v", n, err)
+		}
+	}
+	if got := w.buf.String(); got != "abcdefabcd" {
+		t.Fatalf("got %q", got)
+	}
+}

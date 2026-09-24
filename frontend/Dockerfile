@@ -7,6 +7,10 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm config set store-dir /root/.local/share/pnpm/store && pnpm install --frozen-lockfile
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# next.config.mjs reads API_URL at build time: the /api rewrite target is
+# written into the routes manifest, so a runtime env var would not change it.
+ARG API_URL=http://api:8080
+ENV API_URL=$API_URL
 RUN pnpm build
 
 FROM node:24-alpine

@@ -6,11 +6,17 @@ WEB_PORT ?= 3000
 API_PORT ?= 8080
 ARENA_ENV ?= development
 PROFILE := $(if $(filter production,$(ARENA_ENV)),--profile prod,)
+# Group that owns docker.sock as containers see it: the api container runs
+# as a non-root user and needs that group to reach the daemon. Asked of the
+# daemon itself because on macOS (colima, Docker Desktop) the socket lives in
+# a VM and the host's groups say nothing about it. Only expanded by `up`;
+# set DOCKER_GID in .env to override. compose falls back to 999 when empty.
+DOCKER_GID ?= $(shell docker run --rm -v /var/run/docker.sock:/var/run/docker.sock alpine:3.22 stat -c %g /var/run/docker.sock 2>/dev/null)
 
 up: .env proof-image
 	@docker info >/dev/null 2>&1 || (command -v colima >/dev/null && colima start) || (echo "Docker is not running"; exit 1)
 	@if [ "$(ARENA_ENV)" = "production" ] && grep -q "dev_password" .env; then echo "refusing to start production with dev passwords in .env"; exit 1; fi
-	$(COMPOSE) $(PROFILE) up --build -d
+	DOCKER_GID=$(DOCKER_GID) $(COMPOSE) $(PROFILE) up --build -d
 	@echo
 	@echo "  site:  http://localhost:$(WEB_PORT)"
 	@echo "  api:   http://localhost:$(API_PORT)/healthz"

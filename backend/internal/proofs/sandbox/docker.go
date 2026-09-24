@@ -18,7 +18,28 @@ type Docker struct{}
 
 func NewDocker() *Docker { return &Docker{} }
 
-const maxOutput = 256 << 10
+const (
+	maxOutput         = 256 << 10
+	maxCapturedOutput = 8 << 20 // hard cap on what is buffered before tail() trims to maxOutput
+)
+
+// cappedWriter discards bytes past limit instead of growing forever; the
+// caller only cares about the tail of what was captured, via tail().
+type cappedWriter struct {
+	buf   bytes.Buffer
+	limit int
+}
+
+func (w *cappedWriter) Write(p []byte) (int, error) {
+	if room := w.limit - w.buf.Len(); room > 0 {
+		if len(p) > room {
+			w.buf.Write(p[:room])
+		} else {
+			w.buf.Write(p)
+		}
+	}
+	return len(p), nil
+}
 
 func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
 	// --read-only is deliberately omitted here, unlike the original design: it
@@ -30,6 +51,7 @@ func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
 	// a single ephemeral run is no longer prevented.
 	create := exec.CommandContext(ctx, "docker", "create",
 		"--network", "none", "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
+		"--cap-drop=ALL", "--security-opt=no-new-privileges",
 		"--tmpfs", "/tmp:rw,exec,size=512m",
 		"-e", "HOME=/tmp", "-e", "GOCACHE=/tmp/gocache", "-e", "GOPATH=/tmp/gopath", "-e", "GOTMPDIR=/tmp",
 		"-w", "/work", req.Image, "sh", "-c", req.RunCmd)
@@ -46,11 +68,11 @@ func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
 
 	runCtx, cancel := context.WithTimeout(ctx, req.Timeout)
 	defer cancel()
-	var buf bytes.Buffer
+	buf := &cappedWriter{limit: maxCapturedOutput}
 	start := exec.CommandContext(runCtx, "docker", "start", "-a", id)
-	start.Stdout, start.Stderr = &buf, &buf
+	start.Stdout, start.Stderr = buf, buf
 	err = start.Run()
-	res := Result{Output: tail(buf.String(), maxOutput)}
+	res := Result{Output: tail(buf.buf.String(), maxOutput)}
 	res.Tests = ParseGoTestJSON([]byte(res.Output))
 	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 		res.TimedOut, res.ExitCode = true, -1

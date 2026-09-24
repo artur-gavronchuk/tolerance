@@ -32,6 +32,9 @@ services:
       ARENA_SECURE_COOKIES: ${ARENA_SECURE_COOKIES:-false}
       ARENA_WORK_DIR: /var/lib/arena/work
       ARENA_SANDBOX: docker
+    # The api runs as a non-root user; this is the group that owns docker.sock
+    # (detected by `make up`, see DOCKER_GID in the Makefile).
+    group_add: ["${DOCKER_GID:-999}"]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - arena-work:/var/lib/arena/work
@@ -42,7 +45,12 @@ services:
         condition: service_healthy
 
   web:
-    build: ./frontend
+    # API_URL is baked into the Next build (rewrites land in the routes
+    # manifest), so it has to be a build arg; the runtime value is for parity.
+    build:
+      context: ./frontend
+      args:
+        API_URL: http://api:8080
     restart: unless-stopped
     environment:
       API_URL: http://api:8080

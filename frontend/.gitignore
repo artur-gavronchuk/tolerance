@@ -1,6 +1,5 @@
 node_modules/
 .next/
 .npmrc
-pnpm-lock.yaml
 next-env.d.ts
 tsconfig.tsbuildinfo

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,5 +53,62 @@ func TestRunTask_TimesOutAndRejectsBadTarball(t *testing.T) {
 	task.Task.RepoSHA256 = "deadbeef"
 	if _, err := runTask(context.Background(), task, repo, "true"); err == nil {
 		t.Fatalf("sha mismatch must be an error")
+	}
+}
+
+func TestRunTask_BinaryFilesAndLargeFiles(t *testing.T) {
+	task, repo := fixtureRepo(t)
+	// A small binary file travels as a git binary patch; a file over 1 MiB
+	// stays behind.
+	res, err := runTask(context.Background(), task, repo,
+		`printf 'a\000b\001c' > blob.bin && head -c 2000000 /dev/zero > big.dat && printf 'package retry\n' > extra.go`)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if strings.Contains(res.Diff, "Binary files") {
+		t.Fatalf("binary change must be a real patch, got placeholder:\n%s", res.Diff)
+	}
+	if !strings.Contains(res.Diff, "GIT binary patch") || !strings.Contains(res.Diff, "b/blob.bin") {
+		t.Fatalf("binary patch missing:\n%s", res.Diff)
+	}
+	if strings.Contains(res.Diff, "big.dat") {
+		t.Fatalf("files over 1 MiB must be left out of the diff")
+	}
+	if !strings.Contains(res.Diff, "+++ b/extra.go") {
+		t.Fatalf("ordinary changes must still be there:\n%s", res.Diff)
+	}
+
+	// The diff must apply to a clean copy, as the worker will do.
+	dir := t.TempDir()
+	if err := proofs.Untar(repo, dir); err != nil {
+		t.Fatal(err)
+	}
+	apply := exec.Command("git", "apply", "-")
+	apply.Dir, apply.Stdin = dir, strings.NewReader(res.Diff)
+	if out, err := apply.CombinedOutput(); err != nil {
+		t.Fatalf("diff does not apply: %v\n%s", err, out)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "blob.bin")); string(b) != "a\x00b\x01c" {
+		t.Fatalf("blob.bin = %q", b)
+	}
+}
+
+func TestRunTask_TimeoutKillsTheWholeProcessGroup(t *testing.T) {
+	task, repo := fixtureRepo(t)
+	task.Task.AgentTimeoutS = 1
+	marker := filepath.Join(t.TempDir(), "survived")
+	// The subshell forks a grandchild that outlives sh; only a group kill
+	// stops it before it writes the marker.
+	start := time.Now()
+	res, err := runTask(context.Background(), task, repo, `(sleep 2; touch `+marker+`) & sleep 100`)
+	if err != nil || !res.TimedOut {
+		t.Fatalf("expected timeout, got err=%v res=%+v", err, res)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Fatalf("timeout took %s", time.Since(start))
+	}
+	time.Sleep(2500 * time.Millisecond)
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatalf("a process the agent started survived the timeout")
 	}
 }

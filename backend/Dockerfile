@@ -16,6 +16,9 @@ COPY --from=build /out/api /out/migrate /usr/local/bin/
 COPY dev/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY fixtures/proofs /opt/arena/proofs
 ENV ARENA_PROOFS_DIR=/opt/arena/proofs
+# The arena-work volume is initialised from this directory, so it has to
+# exist and belong to arena before the volume is first created.
+RUN mkdir -p /var/lib/arena/work && chown arena:arena /var/lib/arena/work
 USER arena
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
