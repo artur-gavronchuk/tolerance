@@ -197,6 +197,22 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /connector/download:
+    get:
+      operationId: downloadConnector
+      description: The prebuilt connector binary. Pass what `uname -s` and `uname -m` print.
+      security: []
+      parameters:
+        - { name: os, in: query, required: true, schema: { type: string } }
+        - { name: arch, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The binary
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /connector/heartbeat:
     post:
       operationId: heartbeat

@@ -15,6 +15,7 @@ type config struct {
 	allowNonLoopback bool
 	workDir          string
 	sandbox          string // "docker" | "fake"
+	connectorDir     string // prebuilt connector binaries; "" = none
 }
 
 func loadConfig() (config, error) {
@@ -25,6 +26,7 @@ func loadConfig() (config, error) {
 		allowNonLoopback: os.Getenv("ARENA_ALLOW_NON_LOOPBACK") == "true",
 		workDir:          env("ARENA_WORK_DIR", os.TempDir()),
 		sandbox:          env("ARENA_SANDBOX", "docker"),
+		connectorDir:     os.Getenv("ARENA_CONNECTOR_DIR"),
 	}
 	for _, e := range strings.Split(os.Getenv("ARENA_ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {
