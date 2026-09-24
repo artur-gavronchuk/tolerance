@@ -75,7 +75,12 @@ func (c *client) do(ctx context.Context, method, path string, body any, out any)
 		return err
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		// The body was cut off (e.g. the connection dropped): as much a
+		// network failure as no answer at all, and just as retryable.
+		return err
+	}
 	if resp.StatusCode >= 400 {
 		var p struct {
 			Code    string `json:"code"`
@@ -118,9 +123,12 @@ func (c *client) NextTask(ctx context.Context, wait time.Duration) (*nextTask, e
 	return &t, nil
 }
 
+// Repo downloads the task's repository, retrying like Result.
 func (c *client) Repo(ctx context.Context, proofID string) ([]byte, error) {
 	var raw []byte
-	err := c.do(ctx, http.MethodGet, "/api/v1/connector/proofs/"+proofID+"/repo.tar.gz", nil, &raw)
+	err := withRetry(ctx, func() error {
+		return c.do(ctx, http.MethodGet, "/api/v1/connector/proofs/"+proofID+"/repo.tar.gz", nil, &raw)
+	})
 	return raw, err
 }
 
@@ -128,23 +136,71 @@ func (c *client) Started(ctx context.Context, proofID string) error {
 	return c.do(ctx, http.MethodPost, "/api/v1/connector/proofs/"+proofID+"/started", map[string]string{}, nil)
 }
 
-// Result retries on network errors; a 409 means the server already has it.
+// Result sends the agent's result. Network failures and server errors are
+// retried until ctx ends; a 409 means the server already has it; any other
+// 4xx is final (413 diff_too_large has already ended the proof).
 func (c *client) Result(ctx context.Context, proofID string, r result) error {
-	delay := 2 * time.Second
-	for attempt := 1; ; attempt++ {
+	return withRetry(ctx, func() error {
 		err := c.do(ctx, http.MethodPost, "/api/v1/connector/proofs/"+proofID+"/result", r, nil)
 		var ae *apiError
-		if err == nil || (errors.As(err, &ae) && ae.Status == http.StatusConflict) {
+		if errors.As(err, &ae) && ae.Status == http.StatusConflict {
 			return nil
 		}
-		if errors.As(err, &ae) || attempt >= 6 {
+		return err
+	})
+}
+
+type statusResp struct {
+	Agent struct {
+		Name  string `json:"name"`
+		Stage string `json:"stage"`
+	} `json:"agent"`
+	LastProof *struct {
+		TaskSlug      string    `json:"task_slug"`
+		Status        string    `json:"status"`
+		FailureReason string    `json:"failure_reason"`
+		CreatedAt     time.Time `json:"created_at"`
+	} `json:"last_proof"`
+}
+
+// Status asks for the agent's stage and latest proof. It is not a
+// heartbeat: running `arena status` never makes the agent look online.
+func (c *client) Status(ctx context.Context) (statusResp, error) {
+	var out statusResp
+	err := c.do(ctx, http.MethodGet, "/api/v1/connector/status", nil, &out)
+	return out, err
+}
+
+// retryBase is the first pause between attempts; tests shorten it.
+var retryBase = 2 * time.Second
+
+const retryCap = 30 * time.Second
+
+// retryable reports whether another attempt could succeed: no usable answer
+// came back, or the server had a temporary problem. Any other API error (a
+// 4xx) is final.
+func retryable(err error) bool {
+	var ae *apiError
+	if errors.As(err, &ae) {
+		return ae.Status >= 500 || ae.Status == http.StatusTooManyRequests
+	}
+	return true
+}
+
+// withRetry runs fn until it succeeds, fails for good, or ctx ends. The pause
+// doubles from retryBase up to retryCap.
+func withRetry(ctx context.Context, fn func() error) error {
+	delay := retryBase
+	for {
+		err := fn()
+		if err == nil || ctx.Err() != nil || !retryable(err) {
 			return err
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return err
 		case <-time.After(delay):
 		}
-		delay *= 2
+		delay = min(delay*2, retryCap)
 	}
 }
