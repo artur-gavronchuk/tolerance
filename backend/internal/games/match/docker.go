@@ -176,20 +176,24 @@ const dockerPSCreatedAtLayout = "2006-01-02 15:04:05 -0700 MST"
 // it hourly) for the containers that can't reach — most commonly one whose owning process was killed
 // before Close ran, or one orphaned by Launch's own ctx being cancelled during docker create.
 func RemoveStaleBotContainers(ctx context.Context) (int, error) {
-	return removeStaleBotContainers(ctx, staleBotContainerAge)
+	return removeStaleBotContainers(ctx, botContainerLabel, staleBotContainerAge)
 }
 
-// removeStaleBotContainers is RemoveStaleBotContainers with an injectable age, so tests can exercise it
-// against a container they just created without waiting out the real staleBotContainerAge.
-func removeStaleBotContainers(ctx context.Context, maxAge time.Duration) (int, error) {
+// removeStaleBotContainers is RemoveStaleBotContainers scoped to an arbitrary label filter (docker's
+// `--filter label=`) with an injectable max age. Tests pass their own unique "arena-bot-test=<value>"
+// label — never the shared botContainerLabel, which would also match, and force-remove, live containers
+// from other concurrently running tests or from a local `make up` stack — and maxAge 0, so they can assert
+// on exactly their own container without waiting out the real staleBotContainerAge or disturbing anyone
+// else's.
+func removeStaleBotContainers(ctx context.Context, label string, maxAge time.Duration) (int, error) {
 	out, err := exec.CommandContext(ctx, "docker", "ps", "-a",
-		"--filter", "label="+botContainerLabel,
+		"--filter", "label="+label,
 		"--format", "{{.ID}}\t{{.CreatedAt}}").CombinedOutput()
 	if err != nil {
 		return 0, fmt.Errorf("match: docker ps: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
-	cutoff := time.Now().Add(-maxAge)
+	now := time.Now()
 	removed := 0
 	for _, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
 		if line == "" {
@@ -201,7 +205,14 @@ func removeStaleBotContainers(ctx context.Context, maxAge time.Duration) (int, e
 		}
 		id, createdAt := fields[0], fields[1]
 		created, err := time.Parse(dockerPSCreatedAtLayout, createdAt)
-		if err != nil || created.After(cutoff) {
+		if err != nil {
+			continue
+		}
+		// docker's CreatedAt has only second granularity, so a container created moments ago can report
+		// an age that's a fraction of a second off; treating age >= maxAge (not strictly >) as stale keeps
+		// maxAge: 0 (tests) matching a container regardless of that rounding, rather than sometimes
+		// missing one created in the same second the sweep runs.
+		if now.Sub(created) < maxAge {
 			continue
 		}
 		if err := removeContainer(ctx, id); err == nil {

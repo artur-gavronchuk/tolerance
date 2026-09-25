@@ -295,13 +295,22 @@ func TestDockerLaunchCancelledCtxLeavesNoContainer(t *testing.T) {
 // (simulating one abandoned by a crashed process, the scenario the previous test's fix cannot fully rule
 // out — Launch's create/cp now survive a cancelled ctx precisely so a container like this stays labeled
 // and findable) is removed once it's older than the given max age.
+//
+// The sweep is scoped to this test's own unique "arena-bot-test=<value>" label, not the shared
+// botContainerLabel ("arena-bot=1") that every DockerLauncher container carries: sweeping that label with
+// maxAge 0 would force-remove every arena-bot=1 container on the machine, including live ones started by
+// other tests running concurrently (this was observed to fail intermittently under `go test -count=3`) or
+// by a developer's local `make up` stack. Scoping to a label unique to this test's own container, and
+// asserting removed == 1 (exactly one container, not merely "at least one"), makes the test correct
+// regardless of what else happens to be running alongside it.
 func TestRemoveStaleBotContainers(t *testing.T) {
 	requireDockerRuntime(t)
 
 	value := fmt.Sprintf("case9-stale-%d", os.Getpid())
+	label := "arena-bot-test=" + value
 	idRaw, err := exec.Command("docker", "create",
 		"--label", botContainerLabel,
-		"--label", "arena-bot-test="+value,
+		"--label", label,
 		dockerTestImage, "true").CombinedOutput()
 	if err != nil {
 		t.Fatalf("docker create: %v: %s", err, idRaw)
@@ -309,17 +318,17 @@ func TestRemoveStaleBotContainers(t *testing.T) {
 	id := strings.TrimSpace(string(idRaw))
 	t.Cleanup(func() { exec.Command("docker", "rm", "-f", id).Run() }) //nolint:errcheck
 
-	// maxAge 0: anything created before this call counts as stale, so our container (already created
-	// above) is swept without waiting out the real staleBotContainerAge.
-	removed, err := removeStaleBotContainers(context.Background(), 0)
+	// maxAge 0: our own container, already created above, counts as stale regardless of how many
+	// milliseconds old it is, so the sweep runs without waiting out the real staleBotContainerAge.
+	removed, err := removeStaleBotContainers(context.Background(), label, 0)
 	if err != nil {
 		t.Fatalf("removeStaleBotContainers: %v", err)
 	}
-	if removed < 1 {
-		t.Errorf("removed = %d, want at least 1 (our own labeled container)", removed)
+	if removed != 1 {
+		t.Errorf("removed = %d, want exactly 1 (our own labeled container)", removed)
 	}
 
-	if leaked := containersWithLabel(t, "arena-bot-test="+value); len(leaked) != 0 {
+	if leaked := containersWithLabel(t, label); len(leaked) != 0 {
 		t.Errorf("container %s still present after removeStaleBotContainers: %v", id, leaked)
 	}
 }
