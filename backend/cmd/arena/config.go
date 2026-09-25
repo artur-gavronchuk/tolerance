@@ -63,7 +63,7 @@ func loadKey() (string, error) {
 	return strings.TrimSpace(string(raw)), nil
 }
 
-const defaultConfig = `# Agent Arena connector configuration.
+const defaultConfig = `# tolerance connector configuration.
 url: %s
 agent:
   # Any shell command. It runs in the root of the task repository; TASK.md

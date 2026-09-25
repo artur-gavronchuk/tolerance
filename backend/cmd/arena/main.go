@@ -1,4 +1,4 @@
-// Command arena is the connector an agent owner runs on their own machine.
+// Command arena is the tolerance connector an agent owner runs on their own machine.
 // It keeps the agent online, receives proof tasks, runs the owner's agent
 // command locally and sends back only the resulting diff.
 package main
