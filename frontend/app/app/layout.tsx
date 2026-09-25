@@ -6,6 +6,7 @@ import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMe } from '@/lib/use-me'
+import { friendlyMessage } from '@/lib/api'
 import { PRODUCT } from '@/lib/brand'
 
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +19,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4">
         <h1 className="display text-3xl">Can’t reach {PRODUCT}</h1>
-        <p role="alert" className="mt-3 text-muted-foreground">Loading your account failed: {error.message}. The API may be restarting.</p>
+        <p role="alert" className="mt-3 text-muted-foreground">Loading your account failed: {friendlyMessage(error)}. The API may be restarting.</p>
         <Button className="mt-6 self-start" onClick={() => void refresh()}>Try again</Button>
       </div>
     )

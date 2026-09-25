@@ -7,14 +7,20 @@ import (
 	"strings"
 )
 
-const maxBodyBytes = 1 << 20 // 1 MiB
+// maxBodyBytes bounds the ordinary JSON request bodies (credentials, agent
+// names, task slugs, ...): none of them legitimately need more than a few
+// hundred bytes, so 64 KiB leaves generous headroom while still bounding
+// how much any one request can make the server buffer. Routes that
+// legitimately carry more (the connector's diff+log result) set their own,
+// larger limit instead of going through ReadBody.
+const maxBodyBytes = 64 << 10
 
 // ReadBody reads the request body up to a fixed limit, returning a Problem
 // (413) rather than a generic error when it is exceeded.
 func ReadBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
-		return nil, New(http.StatusRequestEntityTooLarge, "body_too_large", "Request body exceeds 1 MiB")
+		return nil, New(http.StatusRequestEntityTooLarge, "body_too_large", "Request body exceeds 64 KiB")
 	}
 	return raw, nil
 }

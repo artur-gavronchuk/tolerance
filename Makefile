@@ -1,12 +1,17 @@
-.PHONY: up down logs reset ps proof-image bot-image test check migrate run-api run-web connector
+.PHONY: up down logs reset ps proof-image bot-image test check migrate run-api run-web connector scale
 
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
 -include .env
 WEB_PORT ?= 3000
 API_PORT ?= 8080
 ARENA_ENV ?= development
-PROFILE := $(if $(filter production,$(ARENA_ENV)),--profile prod,)
-# Group that owns docker.sock as containers see it: the api container runs
+ARENA_MONITORING ?= false
+PROFILE := $(if $(filter production,$(ARENA_ENV)),--profile prod,) $(if $(filter true,$(ARENA_MONITORING)),--profile monitoring,)
+# Production runs api/web/worker as their own services plus the prod
+# override (host ports off api/web, replica counts from .env); see
+# deploy/compose.prod.yml.
+COMPOSE_FILES := -f docker-compose.yml $(if $(filter production,$(ARENA_ENV)),-f deploy/compose.prod.yml,)
+# Group that owns docker.sock as containers see it: the worker container runs
 # as a non-root user and needs that group to reach the daemon. Asked of the
 # daemon itself because on macOS (colima, Docker Desktop) the socket lives in
 # a VM and the host's groups say nothing about it. Only expanded by `up`;
@@ -19,16 +24,17 @@ CONNECTOR_DIR := $(CURDIR)/backend/.connector
 
 up: .env proof-image bot-image
 	@docker info >/dev/null 2>&1 || (command -v colima >/dev/null && colima start) || (echo "Docker is not running"; exit 1)
-	@if [ "$(ARENA_ENV)" = "production" ] && grep -q "dev_password" .env; then echo "refusing to start production with dev passwords in .env"; exit 1; fi
+	@if [ "$(ARENA_ENV)" = "production" ] && [ "$(ARENA_MONITORING)" = "true" ] && [ -z "$(GRAFANA_ADMIN_PASSWORD)" ]; then echo "refusing to start production with monitoring on and GRAFANA_ADMIN_PASSWORD empty in .env"; exit 1; fi
 	@if [ "$(ARENA_ENV)" = "production" ] && [ "$(ARENA_DEV_LOGIN)" = "true" ]; then echo "refusing to start production with ARENA_DEV_LOGIN=true"; exit 1; fi
-	DOCKER_GID=$(DOCKER_GID) $(COMPOSE) $(PROFILE) up --build -d
+	DOCKER_GID=$(DOCKER_GID) $(COMPOSE) $(COMPOSE_FILES) $(PROFILE) up --build -d
 	@echo
 	@echo "  site:  http://localhost:$(WEB_PORT)"
 	@echo "  api:   http://localhost:$(API_PORT)/healthz"
+	@if [ "$(ARENA_MONITORING)" = "true" ]; then echo "  grafana: http://localhost:$(WEB_PORT)/grafana (or https://$(ARENA_DOMAIN)/grafana in prod)"; fi
 	@echo "  logs:  make logs"
 
-# The sandbox image for the first proof task; the api container reaches the
-# host daemon through docker.sock, so the image has to exist on the host.
+# The sandbox image for the first proof task; the worker container reaches
+# the host daemon through docker.sock, so the image has to exist on the host.
 proof-image:
 	docker build -q -t arena-proof-go:1 backend/fixtures/proofs/go-fix-retry
 
@@ -38,16 +44,24 @@ bot-image:
 	docker build -q -t arena-bot-runtime:1 backend/internal/games/match/runtime
 
 down:
-	$(COMPOSE) $(PROFILE) down
+	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE) down
 
 reset:
-	@read -p "This deletes the database. Type yes: " a && [ "$$a" = "yes" ] && $(COMPOSE) down -v
+	@read -p "This deletes the database. Type yes: " a && [ "$$a" = "yes" ] && $(COMPOSE) $(COMPOSE_FILES) down -v
 
 logs:
-	$(COMPOSE) logs -f --tail=100
+	$(COMPOSE) $(COMPOSE_FILES) logs -f --tail=100
 
 ps:
-	$(COMPOSE) ps
+	$(COMPOSE) $(COMPOSE_FILES) ps
+
+# Change replica counts / worker concurrency without a rebuild, e.g.
+# `make scale ARGS="workers=3 concurrency=2"`. Thin wrapper around
+# deploy/scale.sh for a host reachable over ssh; see that script for what
+# it actually runs.
+scale:
+	@test -n "$(HOST)" || (echo "usage: make scale HOST=<ssh-host> ARGS=\"workers=N web=N api=N concurrency=N\""; exit 1)
+	./deploy/scale.sh $(HOST) $(ARGS)
 
 # Native development (postgres from compose, api and web on the host).
 migrate:

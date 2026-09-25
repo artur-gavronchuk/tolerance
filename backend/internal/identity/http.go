@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"maps"
-	"net"
 	"net/http"
 	"net/mail"
 	"slices"
@@ -15,20 +14,18 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"tolerance/internal/platform/clientip"
 	"tolerance/internal/platform/httpx"
+	"tolerance/internal/platform/metrics"
 	"tolerance/internal/platform/ratelimit"
 )
 
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[len(parts)-1])
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+// clientIP resolves the address to rate-limit on. See clientip.FromRequest
+// for what trustProxy means; behind Caddy every request otherwise arrives
+// from Caddy's own address, so without it the whole site would share one
+// rate-limit bucket.
+func clientIP(r *http.Request, trustProxy bool) string {
+	return clientip.FromRequest(r, trustProxy)
 }
 
 // AuthConfig is what the auth routes need from the server config.
@@ -37,6 +34,9 @@ type AuthConfig struct {
 	PublicURL string              // base of redirect_uri, e.g. https://tolerance.cc
 	DevLogin  bool                // mounts POST /auth/dev; never on in production
 	Secure    bool                // Secure flag on cookies
+	// TrustProxy must only be true when a reverse proxy in front sets
+	// X-Real-IP itself (never trust it otherwise) — see clientip.FromRequest.
+	TrustProxy bool
 }
 
 // OAuthCookie carries the state and PKCE verifier between start and callback.
@@ -54,7 +54,7 @@ func RegisterAuthRoutes(mux *http.ServeMux, s *Service, limiter *ratelimit.Limit
 		httpx.Respond(w, http.StatusOK, map[string]any{"providers": names, "dev_login": cfg.DevLogin})
 	})
 	if cfg.DevLogin {
-		mux.HandleFunc("POST /api/v1/auth/dev", devSignIn(s, limiter, cfg.Secure))
+		mux.HandleFunc("POST /api/v1/auth/dev", devSignIn(s, limiter, cfg.Secure, cfg.TrustProxy))
 	}
 	mux.HandleFunc("GET /api/v1/auth/{provider}/start", oauthStart(limiter, cfg))
 	mux.HandleFunc("GET /api/v1/auth/{provider}/callback", oauthCallback(s, limiter, cfg))
@@ -89,7 +89,8 @@ func oauthStart(limiter *ratelimit.Limiter, cfg AuthConfig) http.HandlerFunc {
 			httpx.WriteError(w, r, httpx.NotFound())
 			return
 		}
-		if !limiter.Allow("oauth:ip:"+clientIP(r), 20, time.Minute) {
+		if !limiter.Allow("oauth:ip:"+clientIP(r, cfg.TrustProxy), 20, time.Minute) {
+			metrics.RateLimited("oauth_start")
 			http.Redirect(w, r, "/login?error=rate_limited", http.StatusFound)
 			return
 		}
@@ -115,8 +116,12 @@ func oauthCallback(s *Service, limiter *ratelimit.Limiter, cfg AuthConfig) http.
 			return
 		}
 		setOAuthCookie(w, "", -1, cfg.Secure) // single use, whatever happens next
-		fail := func(code string) { http.Redirect(w, r, "/login?error="+code, http.StatusFound) }
-		if !limiter.Allow("oauth:ip:"+clientIP(r), 20, time.Minute) {
+		fail := func(code string) {
+			metrics.OAuthLogin(name, code)
+			http.Redirect(w, r, "/login?error="+code, http.StatusFound)
+		}
+		if !limiter.Allow("oauth:ip:"+clientIP(r, cfg.TrustProxy), 20, time.Minute) {
+			metrics.RateLimited("oauth_callback")
 			fail("rate_limited")
 			return
 		}
@@ -152,6 +157,7 @@ func oauthCallback(s *Service, limiter *ratelimit.Limiter, cfg AuthConfig) http.
 			fail("oauth_failed")
 			return
 		}
+		metrics.OAuthLogin(name, "ok")
 		SetSessionCookie(w, token, cfg.Secure)
 		// st.Next was already validated by safeNext when the cookie was set,
 		// but the cookie is not signed, so re-check before trusting it here.
@@ -160,7 +166,7 @@ func oauthCallback(s *Service, limiter *ratelimit.Limiter, cfg AuthConfig) http.
 }
 
 // devSignIn signs in as any email, no password: local runs and CI only.
-func devSignIn(s *Service, limiter *ratelimit.Limiter, secure bool) http.HandlerFunc {
+func devSignIn(s *Service, limiter *ratelimit.Limiter, secure, trustProxy bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		raw, err := httpx.ReadBody(w, r)
 		if err != nil {
@@ -183,7 +189,7 @@ func devSignIn(s *Service, limiter *ratelimit.Limiter, secure bool) http.Handler
 			httpx.WriteError(w, r, httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "email must be a valid address", "email", "invalid"))
 			return
 		}
-		if !limiter.Allow("ip:"+clientIP(r), 10, time.Minute) || !limiter.Allow("email:"+email, 10, time.Minute) {
+		if !limiter.Allow("ip:"+clientIP(r, trustProxy), 10, time.Minute) || !limiter.Allow("email:"+email, 10, time.Minute) {
 			httpx.WriteError(w, r, httpx.New(http.StatusTooManyRequests, "rate_limited", "Too many attempts, try again in a minute"))
 			return
 		}

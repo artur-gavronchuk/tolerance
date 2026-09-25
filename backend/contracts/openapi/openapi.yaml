@@ -28,6 +28,7 @@ paths:
                     type: array
                     items: { type: string, enum: [github, google] }
                   dev_login: { type: boolean }
+        "429": { $ref: "#/components/responses/Problem" }
   /auth/dev:
     post:
       operationId: devLogin
@@ -44,6 +45,8 @@ paths:
                 email: { type: string }
       responses:
         "200": { $ref: "#/components/responses/UserEnvelope" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
   /auth/{provider}/start:
@@ -56,6 +59,7 @@ paths:
       responses:
         "302": { description: "To the provider's consent screen, or to /login?error=rate_limited" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /auth/{provider}/callback:
     get:
       operationId: oauthCallback
@@ -71,6 +75,7 @@ paths:
             Signed in: to the start's next path with the session cookie. Failed: to
             /login?error= one of oauth_denied, oauth_state, oauth_failed, email_unverified, rate_limited.
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /auth/logout:
     post:
       operationId: logout
@@ -95,6 +100,7 @@ paths:
                     nullable: true
                     allOf: [{ $ref: "#/components/schemas/AgentOverview" }]
         "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /agent:
     post:
@@ -113,7 +119,9 @@ paths:
         "201": { $ref: "#/components/responses/AgentPrivate" }
         "401": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
     patch:
       operationId: patchAgent
       requestBody:
@@ -130,7 +138,9 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /agent/keys:
     post:
       operationId: createKey
@@ -159,6 +169,8 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /agent/keys/{id}:
     delete:
       operationId: revokeKey
@@ -167,6 +179,7 @@ paths:
         "204": { description: Revoked }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /proof-tasks:
     get:
@@ -184,6 +197,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/ProofTask" }
         "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /proofs:
     get:
       operationId: listProofs
@@ -201,6 +215,7 @@ paths:
                     items: { $ref: "#/components/schemas/Proof" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
     post:
       operationId: createProof
       requestBody:
@@ -217,6 +232,7 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
   /proofs/{id}:
@@ -227,6 +243,7 @@ paths:
         "200": { $ref: "#/components/responses/ProofEnvelope" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /proofs/{id}/retry:
     post:
       operationId: retryProof
@@ -236,6 +253,7 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /tanks/leaderboard:
     get:
@@ -256,6 +274,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/LeaderboardEntry" }
         "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /tanks/matches:
     get:
       operationId: tanksMatches
@@ -276,6 +295,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/MatchView" }
         "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /tanks/matches/{id}:
     get:
       operationId: tanksMatch
@@ -288,6 +308,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MatchView" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /tanks/matches/{id}/replay:
     get:
       operationId: tanksMatchReplay
@@ -300,6 +321,7 @@ paths:
             application/gzip:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /tanks/bots/{id}:
     get:
       operationId: tanksBot
@@ -312,6 +334,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/BotProfile" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /tanks/live:
     get:
       operationId: tanksLive
@@ -322,6 +345,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/LiveView" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /me/tanks:
     get:
@@ -333,6 +357,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MyTanks" }
         "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /me/tanks/bot:
     post:
       operationId: saveTanksBot
@@ -354,6 +379,7 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /me/tanks/versions:
     post:
       operationId: uploadTanksVersion
@@ -390,6 +416,7 @@ paths:
               schema: { $ref: "#/components/schemas/MatchLog" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /connector/download:
     get:
@@ -406,6 +433,7 @@ paths:
             application/octet-stream:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /connector/heartbeat:
     post:
@@ -437,6 +465,8 @@ paths:
                       name: { type: string }
                       stage: { type: string }
         "401": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/status:
     get:
       operationId: connectorStatus
@@ -462,6 +492,7 @@ paths:
                     nullable: true
                     allOf: [{ $ref: "#/components/schemas/Proof" }]
         "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/tasks/next:
     get:
       operationId: nextTask
@@ -481,6 +512,7 @@ paths:
                   task: { $ref: "#/components/schemas/ProofTask" }
         "204": { description: Nothing queued }
         "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/proofs/{id}/repo.tar.gz:
     get:
       operationId: proofRepo
@@ -494,6 +526,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/proofs/{id}/started:
     post:
       operationId: proofStarted
@@ -503,6 +536,7 @@ paths:
         "204": { description: Recorded }
         "401": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/proofs/{id}/result:
     post:
       operationId: proofResult
@@ -526,6 +560,7 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/tanks/versions:
     post:
       operationId: connectorUploadTanksVersion

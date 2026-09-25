@@ -16,12 +16,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/jobs"
+	"tolerance/internal/platform/metrics"
 	"tolerance/internal/proofs/sandbox"
 )
 
@@ -64,34 +66,111 @@ type GameBotJudge interface {
 // infra_error) rather than silently treating it like an ordinary proof.
 func (w *Worker) SetGameBotJudge(j GameBotJudge) { w.gameBotJudge = j }
 
-// Run processes run_proof jobs one at a time and, every 30 seconds, reclaims
-// dead leases and expires stale proofs. It returns when ctx is done.
-func (w *Worker) Run(ctx context.Context) {
-	tick := time.NewTicker(30 * time.Second)
-	defer tick.Stop()
+// Run starts concurrency claim/handle loops, each with its own lease owner
+// so jobs.Claim's FOR UPDATE SKIP LOCKED hands each a distinct job, and, in
+// exactly one of them, the 30-second maintenance sweep (Reclaim then
+// ExpireStale). The sweep itself is additionally guarded by a Postgres
+// advisory lock (see runMaintenance) so that across N worker PROCESSES —
+// separate replicas, not just goroutines in this one — only one of them
+// ever runs it on a given tick; running it from every process would
+// otherwise just be redundant work, never incorrect, since Reclaim and
+// ExpireStale are themselves idempotent. Run returns once every loop has
+// exited, which happens when ctx is done.
+func (w *Worker) Run(ctx context.Context, concurrency int) {
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	metrics.WorkerConcurrency.Set(float64(concurrency))
+	var wg sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			w.loop(ctx, fmt.Sprintf("%s-%d", w.owner, i), i == 0)
+		}(i)
+	}
+	wg.Wait()
+}
+
+// loop repeatedly claims and handles run_proof jobs under owner. When
+// maintain is true, it also runs the maintenance sweep on a 30s ticker
+// whenever it is otherwise idle.
+func (w *Worker) loop(ctx context.Context, owner string, maintain bool) {
+	var tick *time.Ticker
+	if maintain {
+		tick = time.NewTicker(30 * time.Second)
+		defer tick.Stop()
+	}
 	for {
-		job, err := w.queue.Claim(ctx, w.owner, []string{"run_proof"}, 15*time.Minute)
+		job, err := w.queue.Claim(ctx, owner, []string{"run_proof"}, 15*time.Minute)
 		if err != nil {
 			w.log.Error("jobs claim", "err", err)
 		}
 		if job != nil {
+			metrics.WorkersBusy.Inc()
 			w.handle(ctx, job)
+			metrics.WorkersBusy.Dec()
+			continue
+		}
+		if !maintain {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(2 * time.Second):
+			}
 			continue
 		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
-			if _, err := w.queue.Reclaim(ctx); err != nil {
-				w.log.Error("jobs reclaim", "err", err)
-			}
-			if n, err := w.svc.ExpireStale(ctx); err != nil {
-				w.log.Error("expire proofs", "err", err)
-			} else if n > 0 {
-				w.log.Info("swept stale proofs", "count", n)
-			}
+			w.runMaintenance(ctx)
 		case <-time.After(2 * time.Second):
 		}
+	}
+}
+
+// maintenanceLockID is an arbitrary, fixed Postgres advisory-lock id shared
+// by every worker process in this codebase, distinct from goose's own
+// migration lock id, so pg_try_advisory_lock below can never collide with
+// db.Migrate's session lock.
+const maintenanceLockID int64 = 7_282_109_355
+
+// runMaintenance reclaims dead job leases and expires stale proofs, but
+// only after winning a cluster-wide, non-blocking advisory lock: with
+// several worker processes (or several "all"-role replicas) each running
+// their own 30s ticker, this keeps exactly one of them doing the sweep on
+// any given tick instead of all of them racing the same UPDATEs.
+func (w *Worker) runMaintenance(ctx context.Context) {
+	conn, err := w.pool.Raw().Acquire(ctx)
+	if err != nil {
+		w.log.Error("maintenance: acquire connection", "err", err)
+		return
+	}
+	defer conn.Release()
+	var locked bool
+	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, maintenanceLockID).Scan(&locked); err != nil {
+		w.log.Error("maintenance: try lock", "err", err)
+		return
+	}
+	if !locked {
+		return // another worker process is already sweeping this tick
+	}
+	defer func() {
+		// Use a detached context: the tick's ctx may already be past its
+		// deadline (it never is here, but be defensive), and the unlock must
+		// still happen so the next process's try-lock is not stuck behind it.
+		if _, err := conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock($1)`, maintenanceLockID); err != nil {
+			w.log.Error("maintenance: unlock", "err", err)
+		}
+	}()
+	if _, err := w.queue.Reclaim(ctx); err != nil {
+		w.log.Error("jobs reclaim", "err", err)
+	}
+	if n, err := w.svc.ExpireStale(ctx); err != nil {
+		w.log.Error("expire proofs", "err", err)
+	} else if n > 0 {
+		w.log.Info("swept stale proofs", "count", n)
 	}
 }
 
@@ -101,21 +180,22 @@ func (w *Worker) handle(ctx context.Context, job *jobs.Job) {
 		_, _ = w.queue.Fail(ctx, job.ID, err)
 		return
 	}
+	log := w.log.With("proof_id", payload.ProofID, "job_id", job.ID)
 	err := w.RunProof(ctx, payload.ProofID)
 	if err == nil {
 		if err := w.queue.Complete(ctx, job.ID); err != nil {
-			w.log.Error("jobs complete", "err", err)
+			log.Error("jobs complete", "err", err)
 		}
 		return
 	}
-	w.log.Error("run_proof", "proof", payload.ProofID, "attempt", job.Attempts, "err", err)
+	log.Error("run_proof", "attempt", job.Attempts, "err", err)
 	final, ferr := w.queue.Fail(ctx, job.ID, err)
 	if ferr != nil {
-		w.log.Error("jobs fail", "err", ferr)
+		log.Error("jobs fail", "err", ferr)
 	}
 	if final {
 		if err := w.MarkInfraError(ctx, payload.ProofID, err.Error()); err != nil {
-			w.log.Error("mark infra_error", "err", err)
+			log.Error("mark infra_error", "err", err)
 		}
 	}
 }
@@ -192,8 +272,10 @@ func (w *Worker) RunProof(ctx context.Context, proofID string) error {
 		return err
 	}
 
+	runStart := time.Now()
 	res, err := w.runner.Run(ctx, sandbox.Request{WorkDir: dir, Image: in.task.Image, RunCmd: in.task.RunCmd,
 		Timeout: time.Duration(in.task.SandboxTimeoutS) * time.Second})
+	metrics.SandboxRunSeconds.Observe(time.Since(runStart).Seconds())
 	if err != nil {
 		return err
 	}
@@ -363,6 +445,7 @@ func hasSymlink(dir string) bool {
 }
 
 func (w *Worker) finish(ctx context.Context, proofID, status, reason string, sr *SandboxResult) error {
+	metrics.ProofVerdicts.WithLabelValues(status).Inc()
 	return w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		// Only a proof this run moved to running_sandbox gets a verdict: if the
 		// stuck-proof sweep or a retry got there first, this run is stale.
@@ -378,6 +461,7 @@ func (w *Worker) MarkInfraError(ctx context.Context, proofID, reason string) err
 	if len(reason) > 500 {
 		reason = reason[:500]
 	}
+	metrics.ProofVerdicts.WithLabelValues(StatusInfraError).Inc()
 	return w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `UPDATE proofs SET status = 'infra_error', failure_reason = $2, finished_at = now()
 			WHERE id = $1 AND status = 'running_sandbox'`, proofID, reason)

@@ -11,7 +11,17 @@ import (
 	"tolerance/internal/platform/httpx"
 )
 
-const maxLongPoll = 25 * time.Second
+const (
+	maxLongPoll = 25 * time.Second
+	// pollFallback bounds how long a long-poll waits between Claim attempts
+	// when it has not been woken by the in-process notifier: an enqueue on
+	// another api replica, or a signal this poller's select raced past,
+	// is still picked up within this interval. With thousands of connected
+	// connectors, polling the database only this often (rather than every
+	// second) is what keeps the query rate sane; the notifier is what keeps
+	// latency low in the common single-replica-got-the-signal case.
+	pollFallback = 5 * time.Second
+)
 
 type nextTaskResponse struct {
 	ProofID string `json:"proof_id"`
@@ -24,6 +34,11 @@ func RegisterConnectorRoutes(mux *http.ServeMux, s *Service) {
 		agentID := identity.MustFromContext(r.Context()).AgentID
 		wait, _ := strconv.Atoi(r.URL.Query().Get("wait"))
 		deadline := time.Now().Add(min(time.Duration(wait)*time.Second, maxLongPoll))
+		// Subscribe before the first Claim so an enqueue that lands right
+		// after it (and thus is not seen by that Claim) cannot be missed
+		// between here and the first wait below.
+		woken, cancel := s.WaitForProof(agentID)
+		defer cancel()
 		for {
 			p, t, err := s.Claim(r.Context(), agentID)
 			if err != nil {
@@ -38,10 +53,15 @@ func RegisterConnectorRoutes(mux *http.ServeMux, s *Service) {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
+			wait := pollFallback
+			if remaining := time.Until(deadline); remaining < wait {
+				wait = remaining
+			}
 			select {
 			case <-r.Context().Done():
 				return
-			case <-time.After(time.Second):
+			case <-woken:
+			case <-time.After(wait):
 			}
 		}
 	})

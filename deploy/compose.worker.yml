@@ -1,0 +1,86 @@
+# Standalone compose file for a worker-only host, written to /opt/tolerance
+# on the new machine by deploy/add-worker.sh alongside the rest of the repo
+# (so ../backend below is the shipped backend/ directory). Runs sandbox
+# workers that talk to the main host's Postgres over a private network; no
+# api/web/caddy/postgres here. Metrics are published on the host's private
+# IP only (WORKER_BIND) so the main host's Prometheus can scrape them via
+# deploy/monitoring/targets/*.json (see add-worker.sh) — never on a public
+# interface.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  worker:
+    build: ../backend
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      ARENA_ROLE: worker
+      ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@${MAIN_PG_HOST}:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
+      ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
+      ARENA_WORK_DIR: /var/lib/arena/work
+      ARENA_SANDBOX: docker
+      ARENA_WORKER_CONCURRENCY: ${ARENA_WORKER_CONCURRENCY:-1}
+      # Tanks bot matches: same knobs as the main host's docker-compose.yml
+      # worker service. This host needs arena-bot-runtime:1 built locally
+      # too (see deploy/add-worker.sh).
+      ARENA_BOT_IMAGE: ${ARENA_BOT_IMAGE:-}
+      ARENA_MATCH_INTERVAL: ${ARENA_MATCH_INTERVAL:-20s}
+      ARENA_MATCH_CONCURRENCY: ${ARENA_MATCH_CONCURRENCY:-1}
+      # 0.0.0.0 (not loopback) so the main host's Prometheus can scrape it
+      # over the private network; ARENA_ALLOW_NON_LOOPBACK is what makes
+      # that allowed.
+      ARENA_METRICS_ADDR: 0.0.0.0:9091
+      ARENA_ALLOW_NON_LOOPBACK: "true"
+    group_add: ["${DOCKER_GID:-999}"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "${WORKER_BIND:-127.0.0.1}:9091:9091"
+    # No `deploy.replicas` here: a fixed host port for metrics and >1
+    # replica don't mix. To add capacity on this host, raise
+    # ARENA_WORKER_CONCURRENCY (deploy/scale.sh does this); to add more
+    # hosts, run deploy/add-worker.sh again against a new machine.
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    restart: unless-stopped
+    logging: *default-logging
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    command:
+      - --path.rootfs=/host
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    ports:
+      - "${WORKER_BIND:-127.0.0.1}:9100:9100"
+
+  alloy:
+    image: grafana/alloy:v1.19.2
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: ${ALLOY_MEM_LIMIT:-256m}
+    environment:
+      # The main host's Loki, over the private network — same host as
+      # MAIN_PG_HOST, different port. Restrict :3100 there to this subnet
+      # alongside Postgres (deploy/cf-origin-lock.sh, PG_ALLOW_CIDR).
+      LOKI_URL: http://${MAIN_PG_HOST}:3100/loki/api/v1/push
+    command:
+      - run
+      - --stability.level=generally-available
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - arena-worker-alloy-data:/var/lib/alloy/data
+
+volumes:
+  arena-worker-alloy-data:

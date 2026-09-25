@@ -14,6 +14,7 @@ import (
 	"tolerance/internal/games/rating"
 	"tolerance/internal/games/tanks"
 	"tolerance/internal/platform/httpx"
+	"tolerance/internal/platform/metrics"
 	"tolerance/internal/platform/sanitize"
 )
 
@@ -132,7 +133,9 @@ func (s *Service) RunMatch(ctx context.Context, matchID string) error {
 	matchCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	runStart := time.Now()
 	result, err := match.Run(matchCtx, s.l, match.Config{Seed: seed, Map: mapName, Ticks: ticks}, players)
+	metrics.MatchRunSeconds.Observe(time.Since(runStart).Seconds())
 	if err != nil {
 		return err
 	}
@@ -152,6 +155,7 @@ func (s *Service) finishMatch(ctx context.Context, matchID string, participants 
 		if err != nil {
 			return err
 		}
+		metrics.MatchFinished("finished")
 
 		var before, after []rating.Rating
 		if kind == "ladder" {
@@ -519,11 +523,15 @@ func (s *Service) MatchLog(ctx context.Context, userID, matchID string) (MatchLo
 // bots, is at fault, so the match is marked infra_error (no rating change) rather than left stuck in
 // queued or running forever.
 func (s *Service) markMatchPlatformFailure(ctx context.Context, matchID string) error {
-	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE matches SET status = 'infra_error', failure_reason = 'platform', finished_at = now()
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE matches SET status = 'infra_error', failure_reason = 'platform', finished_at = now()
 			WHERE id = $1 AND status IN ('queued', 'running')`, matchID)
+		if err == nil && tag.RowsAffected() > 0 {
+			metrics.MatchFinished("infra_error")
+		}
 		return err
 	})
+	return err
 }
 
 // SweepStuck moves every match that has been queued or running for more than 10 minutes to infra_error
@@ -537,6 +545,9 @@ func (s *Service) SweepStuck(ctx context.Context) (int, error) {
 		n = tag.RowsAffected()
 		return err
 	})
+	if err == nil && n > 0 {
+		metrics.MatchesFinishedAdd("infra_error", int(n))
+	}
 	return int(n), err
 }
 

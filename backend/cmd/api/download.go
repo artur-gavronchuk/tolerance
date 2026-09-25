@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -47,6 +48,11 @@ func connectorDownload(dir string) http.HandlerFunc {
 			httpx.WriteError(w, r, err)
 			return
 		}
+		// The binary only changes on deploy; let Cloudflare and the browser
+		// cache it instead of re-fetching on every `arena connect`.
+		// http.ServeContent honors an ETag set on w for If-None-Match/If-Range.
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Header().Set("ETag", fmt.Sprintf(`"%x-%x"`, st.ModTime().UnixNano(), st.Size()))
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", `attachment; filename="arena"`)
 		http.ServeContent(w, r, "arena", st.ModTime(), f)

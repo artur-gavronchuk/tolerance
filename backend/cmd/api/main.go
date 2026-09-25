@@ -1,5 +1,11 @@
 // Command api is the tolerance backend: HTTP API plus background loops
 // (added in later tasks as the connector and sandbox pieces land).
+//
+// One binary, three roles (ARENA_ROLE): "all" (default, single-process
+// dev/small-deploy behaviour, unchanged), "api" (serves the public HTTP
+// mux and metrics only — no sandbox workers, so it never needs Docker) and
+// "worker" (runs only the proof workers and metrics — no public HTTP
+// listener, so it scales independently against a remote Postgres).
 package main
 
 import (
@@ -10,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -24,13 +31,20 @@ import (
 )
 
 func main() {
-	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(log)
+	baseLog := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg, err := loadConfig()
 	if err != nil {
-		log.Error("config", "err", err)
+		baseLog.Error("config", "err", err)
 		os.Exit(1)
 	}
+	scale, err := loadScaleConfig()
+	if err != nil {
+		baseLog.Error("config", "err", err)
+		os.Exit(1)
+	}
+	log := baseLog.With("role", scale.role)
+	slog.SetDefault(log)
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -47,45 +61,112 @@ func main() {
 	}
 
 	ps := proofs.NewService(pool)
-	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps,
-		limiter: ratelimit.New(nil), providers: providersFromConfig(cfg)}
 
-	var runner sandbox.Runner = sandbox.NewDocker()
+	// The launcher is a plain struct (match.DockerLauncher / match.WithHouse
+	// wrap it, they don't touch Docker) — constructing it does no I/O — so
+	// it is safe to build in every role, including "api", which needs
+	// games.NewService for its HTTP routes (bot upload, leaderboard, match
+	// views). Nothing on an HTTP path calls the launcher directly: bot
+	// uploads enqueue a check_bot job (games.Service.createVersion) instead
+	// of qualifying synchronously. Only games.NewWorker and the proof
+	// worker's GameBotJudge (both gated to non-"api" roles below) actually
+	// invoke it, which is where Docker is really touched.
 	var launcher match.Launcher = match.WithHouse(match.DockerLauncher{Image: cfg.botImage})
 	if cfg.sandbox == "fake" {
-		runner = sandbox.PassAll{}
 		launcher = match.WithHouse(match.ProcessLauncher{})
 	}
-	worker := proofs.NewWorker(pool, runner, cfg.workDir, log)
 	gamesSvc := games.NewService(pool, ps, launcher, log, games.Config{WorkDir: cfg.workDir})
-	worker.SetGameBotJudge(gamesSvc)
-	d.games = gamesSvc
-	go worker.Run(ctx)
-	go games.NewWorker(gamesSvc, pool, games.WorkerConfig{Interval: cfg.matchInterval, Concurrency: cfg.matchConcurrency}, log).Run(ctx)
 
-	server := &http.Server{
-		Addr:              cfg.addr,
-		Handler:           newHandler(cfg, d),
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      0, // long-lived responses arrive in a later task
-		IdleTimeout:       60 * time.Second,
-		MaxHeaderBytes:    16 << 10,
+	d := deps{
+		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps, games: gamesSvc,
+		limiter:    ratelimit.New(nil),
+		providers:  providersFromConfig(cfg),
+		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 1_000_000),
+		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 1_000_000),
+		longPoll:   ratelimit.NewConcurrencyLimiter(2),
 	}
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Error("shutdown", "err", err)
+
+	var wg sync.WaitGroup
+
+	// Sandbox + game-match workers: everything except a pure "api" role. The
+	// sandbox runner is not even constructed for "api" — it must not need
+	// Docker at all — and neither the proof worker's GameBotJudge nor the
+	// games match worker (both of which do reach Docker, via the launcher
+	// above) run there either.
+	if scale.role != "api" {
+		var runner sandbox.Runner = sandbox.NewDocker()
+		if cfg.sandbox == "fake" {
+			runner = sandbox.PassAll{}
 		}
-	}()
+		w := proofs.NewWorker(pool, runner, cfg.workDir, log)
+		w.SetGameBotJudge(gamesSvc)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w.Run(ctx, scale.workerConcurrency)
+		}()
 
-	log.Info("arena api listening", "addr", cfg.addr)
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error("serve", "err", err)
-		os.Exit(1)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			games.NewWorker(gamesSvc, pool, games.WorkerConfig{Interval: cfg.matchInterval, Concurrency: cfg.matchConcurrency}, log).Run(ctx)
+		}()
 	}
+
+	// Metrics: every role, on its own listener, never the public mux.
+	if metricsServer := newMetricsServer(scale, pool, log); metricsServer != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Info("arena metrics listening", "addr", scale.metricsAddr)
+			if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error("metrics serve", "err", err)
+			}
+		}()
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = metricsServer.Shutdown(shutdownCtx)
+		}()
+	}
+
+	// Public HTTP: everything except a pure "worker" role.
+	if scale.role != "worker" {
+		server := &http.Server{
+			Addr:    cfg.addr,
+			Handler: newHandler(cfg, scale, d),
+			// The connector's long-poll can legitimately take up to 25s;
+			// WriteTimeout must stay comfortably above that.
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      40 * time.Second,
+			IdleTimeout:       120 * time.Second,
+			MaxHeaderBytes:    64 << 10,
+		}
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := server.Shutdown(shutdownCtx); err != nil {
+				log.Error("shutdown", "err", err)
+			}
+		}()
+
+		log.Info("arena api listening", "addr", cfg.addr)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("serve", "err", err)
+			wg.Wait()
+			os.Exit(1)
+		}
+	} else {
+		<-ctx.Done()
+	}
+
+	// Wait for the worker loop(s) and metrics server to actually stop before
+	// the deferred pool.Close() above runs, so nothing is still using the
+	// pool when it closes.
+	wg.Wait()
 }
 
 // checkSchema fails fast, with a clear message, when the database predates
