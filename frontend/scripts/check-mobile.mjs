@@ -15,6 +15,8 @@ async function widthOf(context, path) {
   try {
     await page.goto(BASE + path)
     await page.locator('h1, h2').first().waitFor({ timeout: 15_000 })
+    const actual = new URL(page.url()).pathname
+    if (actual !== path) throw new Error(`${path} ended up on ${actual}`)
     await page.waitForTimeout(300) // late layout: fonts, polled data
     return await page.evaluate(() => document.documentElement.scrollWidth)
   } finally {
