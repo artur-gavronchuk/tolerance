@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -129,6 +131,22 @@ func TestClient_ResultTooLargeIsFinal(t *testing.T) {
 	var ae *apiError
 	if !errors.As(err, &ae) || ae.Code != "diff_too_large" || atomic.LoadInt32(&calls) != 1 {
 		t.Fatalf("a 413 must not be retried: err=%v calls=%d", err, calls)
+	}
+}
+
+func TestClient_DoDoesNotHTMLEscapeTheBody(t *testing.T) {
+	var body []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	c := &client{base: srv.URL, key: "ak_test", http: srv.Client()}
+	if err := c.do(context.Background(), http.MethodPost, "/api/v1/connector/proofs/p1/started", map[string]string{"diff": "if a < b && b > c {"}, nil); err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	if !bytes.Contains(body, []byte("if a < b && b > c {")) {
+		t.Fatalf("expected the body to reach the server unescaped, got %q", body)
 	}
 }
 

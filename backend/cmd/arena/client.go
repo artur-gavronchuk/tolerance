@@ -59,7 +59,13 @@ func (e *apiError) Error() string { return fmt.Sprintf("%d %s: %s", e.Status, e.
 func (c *client) do(ctx context.Context, method, path string, body any, out any) error {
 	var buf bytes.Buffer
 	if body != nil {
-		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+		enc := json.NewEncoder(&buf)
+		// A diff can contain <, > or & (Go source, shell scripts, HTML...);
+		// Go's default HTML-escaping of those in JSON strings inflates them
+		// to < etc, which can push an otherwise in-limit diff over the
+		// 1 MiB request body limit.
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(body); err != nil {
 			return err
 		}
 	}
