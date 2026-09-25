@@ -12,27 +12,50 @@
 #   easiest: user, key and port already resolved there).
 #
 # What it does:
-#   1. tars the repo (excluding local/dev-only paths) and extracts it into
-#      /opt/tolerance on the host;
+#   1. tars the repo (excluding local/dev-only paths), extracts it into a
+#      FRESH staging directory on the host, then rsync --delete's staging
+#      into /opt/tolerance — so a file deleted or renamed in git (a migration
+#      renumbered, a source file removed) actually disappears on the server
+#      too, instead of lingering next to its replacement forever. Server-only
+#      state (.env, .deployed/, deploy.log/.pid/.exit, the generated Caddy
+#      canary-upstream files, Prometheus file_sd targets from add-worker.sh)
+#      is excluded from the delete so it survives every redeploy;
 #   2. on first run only, writes /opt/tolerance/.env with random passwords
 #      and capacity settings sized from the host's nproc/RAM (never
 #      overwrites an existing .env — see size_hint below);
-#   3. runs `make up` under setsid/nohup on the host so an SSH drop can't
-#      kill a long build (this has happened before), and follows the log;
-#   4. waits for containers to report healthy, then curls the public URL;
-#   5. if CLOUDFLARE_API_TOKEN/CLOUDFLARE_ZONE_ID are set in the LOCAL shell
+#   3. seeds deploy/caddy/upstreams/{api,web}.caddy from their committed
+#      *.caddy.default if missing (first deploy, or after a clean rsync);
+#   4. runs the deploy (USE_GHCR=1, the default: pull backend/web images at
+#      this commit's sha from GHCR and `up -d --no-build`, falling back to a
+#      full local `make up` build if the pull fails or USE_GHCR=0) under
+#      setsid/nohup on the host so an SSH drop can't kill a long build (this
+#      has happened before), and follows the log;
+#   5. checks the backgrounded deploy's own exit code, then waits for
+#      containers to report healthy and curls the public URL + healthz —
+#      the script exits non-zero if the deploy failed OR either check does
+#      not return 200, it does not just print a warning and succeed anyway;
+#   6. if CLOUDFLARE_API_TOKEN/CLOUDFLARE_ZONE_ID are set in the LOCAL shell
 #      (never written to the server), purges the Cloudflare cache for the
 #      connector download URLs so new connector binaries go out.
+#
+# USE_GHCR=0 deploy/deploy.sh <ssh-host>   forces a full local build instead
+#   of pulling from GHCR (e.g. before the first CI-built images exist).
+# GHCR_TOKEN/GHCR_USER (local shell, optional) are forwarded to the server
+#   for this run only, for deploy/release.sh to use if an anonymous GHCR
+#   pull is denied; never written to .env.
 set -euo pipefail
 
 host="${1:?usage: deploy/deploy.sh <ssh-host>}"
 remote_dir=/opt/tolerance
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ssh_opts=(-o IPQoS=none -o ServerAliveInterval=15 -o ServerAliveCountMax=6)
+use_ghcr="${USE_GHCR:-1}"
+release_sha="$(git -C "$repo_root" rev-parse HEAD)"
+failed=0
 
 log() { echo "[deploy] $*"; }
 
-# --- 1. ship the repo ---------------------------------------------------------
+# --- 1. ship the repo, staged + rsync --delete --------------------------------
 log "packing repo (excluding .git, node_modules, .next, .env, .superset, backend/.connector)"
 tarball="$(mktemp -t tolerance-deploy.XXXXXX).tar.gz"
 trap 'rm -f "$tarball"' EXIT
@@ -62,16 +85,35 @@ COPYFILE_DISABLE=1 tar czf "$tarball" \
 	--exclude='.DS_Store' \
 	.
 
-log "uploading to $host:$remote_dir"
-ssh "${ssh_opts[@]}" "$host" "mkdir -p $remote_dir"
+log "uploading to $host:$remote_dir (staged, then synced with rsync --delete)"
+ssh "${ssh_opts[@]}" "$host" "mkdir -p $remote_dir $remote_dir/.deploy-staging"
 scp "${ssh_opts[@]}" "$tarball" "$host:/tmp/tolerance-deploy.tar.gz"
 ssh "${ssh_opts[@]}" "$host" bash -s <<REMOTE_EXTRACT
 set -euo pipefail
-tar xzf /tmp/tolerance-deploy.tar.gz -C "$remote_dir"
+rm -rf "$remote_dir/.deploy-staging"
+mkdir -p "$remote_dir/.deploy-staging"
+tar xzf /tmp/tolerance-deploy.tar.gz -C "$remote_dir/.deploy-staging"
 rm -f /tmp/tolerance-deploy.tar.gz
 # Belt-and-braces: delete any AppleDouble files that made it through anyway.
-find "$remote_dir" -name '._*' -type f -delete
-find "$remote_dir" -name '.DS_Store' -type f -delete
+find "$remote_dir/.deploy-staging" -name '._*' -type f -delete
+find "$remote_dir/.deploy-staging" -name '.DS_Store' -type f -delete
+# -c/--checksum: compare content, not size+mtime — a freshly extracted
+# staging tree's mtimes are unrelated to the previous deploy's, and a
+# same-size same-second coincidence would otherwise make rsync skip a
+# genuinely changed file.
+rsync -ac --delete \
+	--exclude='.env' \
+	--exclude='.deployed/' \
+	--exclude='deploy.log' \
+	--exclude='deploy.pid' \
+	--exclude='deploy.exit' \
+	--exclude='.deploy-run.sh' \
+	--exclude='.deploy-staging/' \
+	--exclude='backend/.connector/' \
+	--exclude='deploy/monitoring/targets/*.json' \
+	--exclude='deploy/caddy/upstreams/*.caddy' \
+	"$remote_dir/.deploy-staging/" "$remote_dir/"
+rm -rf "$remote_dir/.deploy-staging"
 REMOTE_EXTRACT
 
 # --- 2. .env: create once, size from the host, never overwrite ---------------
@@ -183,7 +225,22 @@ ENV
 fi
 REMOTE_ENV
 
-# --- 3. render Telegram alerting (no-op if the vars aren't set) --------------
+# --- 3. seed generated Caddy canary-upstream files if missing -----------------
+# Only the *.caddy.default files are tracked in git (see .gitignore); the
+# actual api.caddy/web.caddy are server state that deploy/release.sh rewrites
+# during a canary release and step 1's rsync deliberately never deletes.
+log "seeding deploy/caddy/upstreams/{api,web}.caddy from their .default if missing"
+ssh "${ssh_opts[@]}" "$host" bash -s <<REMOTE_UPSTREAMS
+set -euo pipefail
+cd $remote_dir
+mkdir -p .deployed
+for name in api web; do
+	f="deploy/caddy/upstreams/\$name.caddy"
+	[ -f "\$f" ] || cp "\$f.default" "\$f"
+done
+REMOTE_UPSTREAMS
+
+# --- 4. render Telegram alerting (no-op if the vars aren't set) --------------
 # Unquoted heredoc: $remote_dir is substituted locally before sending, the
 # rest of the script runs entirely on the remote end. This avoids ssh's
 # habit of rejoining/re-splitting separate command-line arguments, which
@@ -198,13 +255,53 @@ set +a
 ./deploy/render-telegram-alerting.sh ./deploy/monitoring/grafana/provisioning/alerting
 REMOTE_TELEGRAM
 
-# --- 4. bring the stack up, resilient to an SSH drop -------------------------
-log "starting make up on $host (backgrounded, logs to $remote_dir/deploy.log)"
+# --- 5. bring the stack up, resilient to an SSH drop -------------------------
+# Everything below is written to .deploy-run.sh with a QUOTED heredoc (no
+# local substitution at all) so it can use $-variables freely without the
+# nested-quoting trap noted at the top of this file; only USE_GHCR and
+# RELEASE_SHA (passed as plain env vars, not interpolated into the script
+# text) vary per invocation.
+log "writing $remote_dir/.deploy-run.sh"
+ssh "${ssh_opts[@]}" "$host" "cat > $remote_dir/.deploy-run.sh" <<'REMOTE_RUN_SCRIPT'
+#!/usr/bin/env bash
+# Generated by deploy/deploy.sh; safe to re-run by hand as `deploy/deploy.sh`
+# does, or as `./.deploy-run.sh` directly on the server if a run needs to be
+# retried without re-shipping the repo.
+set -euo pipefail
+cd "$(dirname "$0")"
+if [ "${USE_GHCR:-1}" = "1" ]; then
+	echo "[deploy] USE_GHCR=1: pulling backend/web at ${RELEASE_SHA:?RELEASE_SHA is required} from GHCR"
+	if deploy/release.sh pull backend "$RELEASE_SHA" && deploy/release.sh pull web "$RELEASE_SHA"; then
+		if grep -q '^API_TAG=' .env; then sed -i "s/^API_TAG=.*/API_TAG=$RELEASE_SHA/" .env; else echo "API_TAG=$RELEASE_SHA" >>.env; fi
+		if grep -q '^WEB_TAG=' .env; then sed -i "s/^WEB_TAG=.*/WEB_TAG=$RELEASE_SHA/" .env; else echo "WEB_TAG=$RELEASE_SHA" >>.env; fi
+		make proof-image bot-image
+		set -a
+		. ./.env
+		set +a
+		profiles="--profile prod"
+		[ "${ARENA_MONITORING:-false}" = "true" ] && profiles="$profiles --profile monitoring"
+		# shellcheck disable=SC2086
+		docker compose -f docker-compose.yml -f deploy/compose.prod.yml $profiles up -d --no-build
+	else
+		echo "[deploy] GHCR pull failed, falling back to a full local build (make up)"
+		ARENA_ENV=production make up
+	fi
+else
+	echo "[deploy] USE_GHCR=0: building locally (make up)"
+	ARENA_ENV=production make up
+fi
+REMOTE_RUN_SCRIPT
+ssh "${ssh_opts[@]}" "$host" "chmod +x $remote_dir/.deploy-run.sh"
+
+log "starting the deploy on $host (backgrounded, logs to $remote_dir/deploy.log)"
+ghcr_token_q=$(printf '%q' "${GHCR_TOKEN:-}")
+ghcr_user_q=$(printf '%q' "${GHCR_USER:-}")
 ssh "${ssh_opts[@]}" "$host" bash -s <<REMOTE_UP
 set -euo pipefail
 cd $remote_dir
-rm -f deploy.pid
-setsid nohup env ARENA_ENV=production make up \
+rm -f deploy.pid deploy.log deploy.exit
+setsid nohup env USE_GHCR=$use_ghcr RELEASE_SHA=$release_sha GHCR_TOKEN=$ghcr_token_q GHCR_USER=$ghcr_user_q \
+	bash -c './.deploy-run.sh; echo \$? >deploy.exit' \
 	>deploy.log 2>&1 </dev/null &
 disown
 echo \$! >deploy.pid
@@ -221,7 +318,13 @@ kill "\$tail_pid" 2>/dev/null || true
 wait "\$tail_pid" 2>/dev/null || true
 REMOTE_FOLLOW
 
-# --- 5. wait for containers to be healthy, then check the public URL --------
+deploy_exit=$(ssh "${ssh_opts[@]}" "$host" "cat $remote_dir/deploy.exit 2>/dev/null || echo 1")
+if [ "$deploy_exit" != "0" ]; then
+	echo "ERROR: the deploy itself failed (exit $deploy_exit) — see $remote_dir/deploy.log above." >&2
+	failed=1
+fi
+
+# --- 6. wait for containers to be healthy, then check the public URL --------
 log "waiting for containers to report healthy"
 for _ in $(seq 1 60); do
 	unhealthy=$(ssh "${ssh_opts[@]}" "$host" "cd $remote_dir && docker compose ps --format '{{.Health}}' 2>/dev/null | grep -vE '^(healthy|)$' || true")
@@ -240,6 +343,7 @@ grafana_pass=$(ssh "${ssh_opts[@]}" "$host" "grep -E '^GRAFANA_ADMIN_PASSWORD=' 
 
 echo
 echo "== deploy summary =="
+echo "  deploy exit code: $deploy_exit"
 echo "  site:            https://$domain/  (HTTP $site_code)"
 echo "  api healthz:      https://$domain/api/v1/healthz  (HTTP $api_code)"
 echo "  grafana:          https://$domain/grafana  (user: admin, password: $grafana_pass)"
@@ -249,10 +353,11 @@ ssh "${ssh_opts[@]}" "$host" "cd $remote_dir && docker compose ps" | sed 's/^/  
 
 if [ "$site_code" != "200" ] || [ "$api_code" != "200" ]; then
 	echo
-	echo "WARNING: site or api did not return 200 — check deploy.log and docker compose ps above." >&2
+	echo "ERROR: site or api did not return 200 — check deploy.log and docker compose ps above." >&2
+	failed=1
 fi
 
-# --- 6. optional: purge Cloudflare cache for the connector download URL -----
+# --- 7. optional: purge Cloudflare cache for the connector download URL -----
 if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "${CLOUDFLARE_ZONE_ID:-}" ]; then
 	log "purging Cloudflare cache for connector downloads"
 	files=()
@@ -273,4 +378,8 @@ else
 	log "CLOUDFLARE_API_TOKEN/CLOUDFLARE_ZONE_ID not set locally, skipping cache purge"
 fi
 
+if [ "$failed" -ne 0 ]; then
+	log "done, WITH ERRORS — see above"
+	exit 1
+fi
 log "done"

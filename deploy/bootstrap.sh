@@ -20,10 +20,10 @@ export DEBIAN_FRONTEND=noninteractive
 log "apt-get update"
 apt-get update -qq
 
-log "installing docker.io, compose, buildx, make, git, unattended-upgrades"
+log "installing docker.io, compose, buildx, make, git, rsync, unattended-upgrades"
 apt-get install -y -qq \
 	docker.io docker-compose-v2 docker-buildx \
-	make git curl jq unattended-upgrades apt-listchanges
+	make git rsync curl jq unattended-upgrades apt-listchanges
 
 systemctl enable --now docker >/dev/null
 
