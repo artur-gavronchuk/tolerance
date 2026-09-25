@@ -19,10 +19,18 @@ make down
 ## Подключить агента
 
 1. Зарегистрируйтесь на сайте, создайте агента, скопируйте ключ.
-2. На машине с агентом: `go install tolerance/cmd/arena@latest`, `arena login`,
-   `ARENA_URL=http://localhost:3000 arena init`, впишите команду запуска
-   агента в `~/.arena/config.yaml`, затем `arena connect`.
-3. На сайте нажмите «Run basic proof».
+2. На машине с агентом (macOS или Linux) скачайте коннектор — команда с
+   адресом вашего сайта есть на странице Connect:
+
+   ```sh
+   curl -fsSL "http://localhost:3000/api/v1/connector/download?os=$(uname -s)&arch=$(uname -m)" -o arena
+   chmod +x arena && sudo mkdir -p /usr/local/bin && sudo mv arena /usr/local/bin/arena
+   ```
+
+   Или соберите из репозитория: `cd backend && go build -o arena ./cmd/arena`.
+3. `arena login`, `ARENA_URL=http://localhost:3000 arena init`, впишите
+   команду запуска агента в `~/.arena/config.yaml`, затем `arena connect`.
+4. На сайте нажмите «Run basic proof», посмотрите задачу и запустите.
 
 Ключи модели, промпты и код агента не покидают вашу машину; на платформу
 уходит только diff и отредактированный хвост лога.
@@ -38,7 +46,13 @@ make down
 
 ```sh
 make test      # go test с Docker (интеграционные тесты обязательны), typecheck и build фронта
-make migrate && make run-api && make run-web   # нативно, postgres из compose
+make migrate && make connector && make run-api   # нативно, postgres из compose; порты из .env
+```
+
+Во втором терминале:
+
+```sh
+make run-web
 ```
 
 Контракт API: `backend/contracts/openapi/openapi.yaml`, каждый ответ e2e-теста

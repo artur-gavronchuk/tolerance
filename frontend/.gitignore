@@ -3,3 +3,7 @@ node_modules/
 .npmrc
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# Written by `next dev`; the repo keeps its own agent instructions at the root.
+/AGENTS.md
+/CLAUDE.md

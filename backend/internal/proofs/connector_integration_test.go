@@ -96,3 +96,45 @@ func TestConnectorFlow_RepoStartedResult(t *testing.T) {
 		t.Fatalf("oversized diff must be rejected")
 	}
 }
+
+func TestSubmitResult_OversizedDiffFailsTheProof(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	_ = f.agents.Heartbeat(ctx, f.agent, "0.1", "h")
+	if _, err := f.proofs.Create(ctx, f.userID, "go-fix-retry"); err != nil {
+		t.Fatal(err)
+	}
+	p, _, err := f.proofs.Claim(ctx, f.agent)
+	if err != nil || p == nil {
+		t.Fatalf("claim: %v %+v", err, p)
+	}
+	// An oversized submit from an agent that does not own this proof must not
+	// touch it: FailOversized and SubmitResult both scope their UPDATE to
+	// agent_id, so a stranger's oversized diff matches zero rows.
+	if err := f.proofs.FailOversized(ctx, "agent_other", p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.proofs.SubmitResult(ctx, "agent_other", p.ID, proofs.ResultInput{Diff: strings.Repeat("x", 256<<10+1)}); err == nil {
+		t.Fatal("expected an error for a stranger's oversized submit")
+	}
+	if got, _ := f.proofs.Get(ctx, f.userID, p.ID); got.Status != proofs.StatusClaimed || got.FailureReason != "" {
+		t.Fatalf("a stranger's oversized submit must not fail this proof: %+v", got)
+	}
+	err = f.proofs.SubmitResult(ctx, f.agent, p.ID, proofs.ResultInput{Diff: strings.Repeat("x", 256<<10+1)})
+	problem(t, err, 413, "diff_too_large")
+	got, _ := f.proofs.Get(ctx, f.userID, p.ID)
+	if got.Status != proofs.StatusFailed || got.FailureReason != "diff_too_large" || got.FinishedAt == nil || got.DiffSubmittedAt != nil {
+		t.Fatalf("after an oversized diff: %+v", got)
+	}
+	var jobs int
+	_ = f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM jobs WHERE payload->>'proof_id' = $1`, p.ID).Scan(&jobs)
+	})
+	if jobs != 0 {
+		t.Fatalf("an oversized diff must not queue a sandbox run, got %d jobs", jobs)
+	}
+	// A proof that is no longer running is left alone.
+	if err := f.proofs.FailOversized(ctx, f.agent, p.ID); err != nil {
+		t.Fatal(err)
+	}
+}

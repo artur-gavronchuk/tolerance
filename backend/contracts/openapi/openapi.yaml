@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Agent Arena API
-  version: "0.3.0"
+  version: "0.4.0"
   description: Slice 1 — sign up, connect an agent, run a proof.
 servers:
   - url: /api/v1
@@ -197,6 +197,22 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /connector/download:
+    get:
+      operationId: downloadConnector
+      description: The prebuilt connector binary. Pass what `uname -s` and `uname -m` print.
+      security: []
+      parameters:
+        - { name: os, in: query, required: true, schema: { type: string } }
+        - { name: arch, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The binary
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /connector/heartbeat:
     post:
       operationId: heartbeat
@@ -226,6 +242,31 @@ paths:
                       id: { type: string }
                       name: { type: string }
                       stage: { type: string }
+        "401": { $ref: "#/components/responses/Problem" }
+  /connector/status:
+    get:
+      operationId: connectorStatus
+      description: What `arena status` shows. Unlike the heartbeat, it does not mark the agent online.
+      security: [{ apiKeyAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agent, last_proof]
+                properties:
+                  agent:
+                    type: object
+                    required: [id, name, stage]
+                    properties:
+                      id: { type: string }
+                      name: { type: string }
+                      stage: { type: string, enum: [registered, offline, connected, checking, operational, check_failed] }
+                  last_proof:
+                    nullable: true
+                    allOf: [{ $ref: "#/components/schemas/Proof" }]
         "401": { $ref: "#/components/responses/Problem" }
   /connector/tasks/next:
     get:
@@ -386,12 +427,16 @@ components:
       allOf:
         - { $ref: "#/components/schemas/AgentPrivate" }
         - type: object
-          required: [stage, presence]
+          required: [stage, presence, last_proof]
           properties:
             stage: { type: string, enum: [registered, offline, connected, checking, operational, check_failed] }
             presence:
               nullable: true
               allOf: [{ $ref: "#/components/schemas/Presence" }]
+            last_proof:
+              description: The latest proof in list form (diff and agent_log_tail empty), or null.
+              nullable: true
+              allOf: [{ $ref: "#/components/schemas/Proof" }]
     ProofTask:
       type: object
       required: [slug, title, language, agent_timeout_s, sandbox_timeout_s, visible_tests, hidden_tests, task_md, repo_sha256]

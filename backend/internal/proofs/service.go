@@ -143,6 +143,23 @@ func (s *Service) List(ctx context.Context, userID string) ([]Proof, error) {
 	return out, err
 }
 
+// Latest returns the agent's most recent proof in list form (no diff, no
+// log), or nil when it has none. /me and `arena status` show it.
+func (s *Service) Latest(ctx context.Context, agentID string) (*Proof, error) {
+	var p Proof
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return scanProof(tx.QueryRow(ctx, `SELECT `+proofCols+` FROM proofs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT 1`, agentID), &p)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	p.Diff, p.AgentLogTail = "", ""
+	return &p, nil
+}
+
 func (s *Service) Get(ctx context.Context, userID, id string) (Proof, error) {
 	var p Proof
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
@@ -294,11 +311,27 @@ func (s *Service) ExpireStale(ctx context.Context) (int, error) {
 	return int(n), err
 }
 
+var errDiffTooLarge = httpx.New(http.StatusRequestEntityTooLarge, "diff_too_large", "Diff exceeds 256 KiB")
+
+// FailOversized ends a running proof whose result is too big to accept, so
+// the owner sees diff_too_large at once instead of an expiry after the agent
+// timeout. A proof that is not running is left as it is.
+func (s *Service) FailOversized(ctx context.Context, agentID, proofID string) error {
+	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE proofs SET status = 'failed', failure_reason = 'diff_too_large', finished_at = now()
+			WHERE id = $1 AND agent_id = $2 AND status IN ('claimed', 'running_agent')`, proofID, agentID)
+		return err
+	})
+}
+
 // SubmitResult stores the agent's diff and enqueues the sandbox run in the
 // same transaction, so a stored diff is always followed by a run.
 func (s *Service) SubmitResult(ctx context.Context, agentID, proofID string, in ResultInput) error {
 	if len(in.Diff) > maxDiffBytes {
-		return httpx.New(http.StatusRequestEntityTooLarge, "diff_too_large", "Diff exceeds 256 KiB")
+		if err := s.FailOversized(ctx, agentID, proofID); err != nil {
+			return err
+		}
+		return errDiffTooLarge
 	}
 	logTail := sanitize.CleanLog(in.LogTail, maxLogTailBytes)
 	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {

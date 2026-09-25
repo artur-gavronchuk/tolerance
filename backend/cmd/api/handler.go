@@ -29,17 +29,21 @@ type deps struct {
 
 func newHandler(cfg config, d deps) http.Handler {
 	owner := http.NewServeMux()
-	identity.RegisterMeRoute(owner, d.users, d.agents.MeAgent)
+	identity.RegisterMeRoute(owner, d.users, meAgent(d.agents, d.proofs))
 	agents.RegisterOwnerRoutes(owner, d.agents)
 	proofs.RegisterOwnerRoutes(owner, d.proofs)
 
 	connector := http.NewServeMux()
 	agents.RegisterConnectorRoutes(connector, d.agents)
 	proofs.RegisterConnectorRoutes(connector, d.proofs)
+	connector.HandleFunc("GET /api/v1/connector/status", connectorStatus(d.agents, d.proofs))
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
 	identity.RegisterAuthRoutes(api, d.users, d.limiter, cfg.secureCookies)
+	// Public: the owner downloads the connector before having it set up.
+	// The exact GET pattern wins over the key-protected /api/v1/connector/ prefix.
+	api.HandleFunc("GET /api/v1/connector/download", connectorDownload(cfg.connectorDir))
 	api.Handle("/api/v1/me", session(owner))
 	api.Handle("/api/v1/agent", session(owner))
 	api.Handle("/api/v1/agent/", session(owner))
