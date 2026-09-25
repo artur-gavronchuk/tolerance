@@ -20,6 +20,7 @@ import (
 	"tolerance/internal/agents"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/dbtest"
+	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/proofs"
 	"tolerance/internal/proofs/sandbox"
@@ -106,6 +107,16 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 	// anonymous
 	if code := e.call(t, plain, "GET", "/api/v1/me", "", nil, nil); code != 401 {
 		t.Fatalf("anonymous /me: %d", code)
+	}
+
+	// connector download is public (no API key), but newE2E leaves
+	// cfg.connectorDir empty, so this server has no prebuilt binaries: 404
+	// connector_unavailable, not 401.
+	var problem httpx.Problem
+	if code := e.call(t, plain, "GET", "/api/v1/connector/download?os=Darwin&arch=arm64", "", nil, &problem); code != 404 {
+		t.Fatalf("connector download without connectorDir: %d", code)
+	} else if problem.Code != "connector_unavailable" {
+		t.Fatalf("connector download problem code: %q", problem.Code)
 	}
 
 	// signup, me
