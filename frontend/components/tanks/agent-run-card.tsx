@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,17 @@ export function AgentRunCard({ agent, runs, onStarted }: {
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [justStarted, setJustStarted] = useState<Proof | null>(null)
+
+  // justStarted only bridges the gap between the POST resolving and the
+  // parent's next `runs` refresh landing it for real - once that refresh
+  // includes it (whatever its status ends up being), drop the fallback, or
+  // a run that finished before the next poll tick would show as "in
+  // progress" forever.
+  useEffect(() => {
+    if (justStarted && runs.some((p) => p.id === justStarted.id)) {
+      setJustStarted(null)
+    }
+  }, [runs, justStarted])
 
   const open = runs.find((p) => OPEN_STATUSES.includes(p.status)) ?? justStarted
   const canStart = agent != null && ONLINE_STAGES.includes(agent.stage)
