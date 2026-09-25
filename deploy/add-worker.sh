@@ -25,7 +25,7 @@ concurrency="${3:-1}"
 remote_dir=/opt/tolerance
 main_remote_dir=/opt/tolerance
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ssh_opts=(-o ServerAliveInterval=15 -o ServerAliveCountMax=6)
+ssh_opts=(-o IPQoS=none -o ServerAliveInterval=15 -o ServerAliveCountMax=6)
 # A short, filesystem/Prometheus-label-safe name for this worker, used for
 # the target files registered with the main host's Prometheus.
 worker_name="$(echo "$new_host" | tr -c 'A-Za-z0-9' '-' | sed 's/^-*//;s/-*$//')"

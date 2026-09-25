@@ -28,7 +28,7 @@ set -euo pipefail
 host="${1:?usage: deploy/deploy.sh <ssh-host>}"
 remote_dir=/opt/tolerance
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ssh_opts=(-o ServerAliveInterval=15 -o ServerAliveCountMax=6)
+ssh_opts=(-o IPQoS=none -o ServerAliveInterval=15 -o ServerAliveCountMax=6)
 
 log() { echo "[deploy] $*"; }
 

@@ -11,7 +11,7 @@ worker_host="${1:?usage: deploy/remove-worker.sh <worker-ssh-host> <main-ssh-hos
 main_host="${2:?usage: deploy/remove-worker.sh <worker-ssh-host> <main-ssh-host>}"
 remote_dir=/opt/tolerance
 main_remote_dir=/opt/tolerance
-ssh_opts=(-o ServerAliveInterval=15)
+ssh_opts=(-o IPQoS=none -o ServerAliveInterval=15)
 worker_name="$(echo "$worker_host" | tr -c 'A-Za-z0-9' '-' | sed 's/^-*//;s/-*$//')"
 
 log() { echo "[remove-worker] $*"; }

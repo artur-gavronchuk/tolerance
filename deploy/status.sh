@@ -6,7 +6,7 @@ set -euo pipefail
 
 host="${1:?usage: deploy/status.sh <ssh-host>}"
 remote_dir=/opt/tolerance
-ssh_opts=(-o ServerAliveInterval=15)
+ssh_opts=(-o IPQoS=none -o ServerAliveInterval=15)
 
 ssh "${ssh_opts[@]}" "$host" bash -s <<REMOTE
 set -euo pipefail

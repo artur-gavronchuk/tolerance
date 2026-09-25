@@ -15,7 +15,7 @@ set -euo pipefail
 host="${1:?usage: deploy/scale.sh <ssh-host> [workers=N] [web=N] [api=N] [concurrency=N]}"
 shift
 remote_dir=/opt/tolerance
-ssh_opts=(-o ServerAliveInterval=15)
+ssh_opts=(-o IPQoS=none -o ServerAliveInterval=15)
 
 declare -A KEY_FOR=([workers]=WORKER_REPLICAS [web]=WEB_REPLICAS [api]=API_REPLICAS [concurrency]=ARENA_WORKER_CONCURRENCY)
 declare -A SCALE_FOR=([workers]=worker [web]=web [api]=api)
