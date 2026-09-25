@@ -200,7 +200,20 @@ func (s *Service) SaveBot(ctx context.Context, userID, name string) (MyBot, erro
 // starter kit's own bot.json defaults to "my-tank" and a second owner uploading it unmodified would always
 // hit it. preferred (e.g. the archive's manifest name, then the caller's agent name) is tried in order;
 // each candidate only counts if it already matches agents.NameRe. Owners can rename with SaveBot afterwards.
+//
+// It takes a transaction-scoped advisory lock keyed by userID before looking for an existing bot: two
+// concurrent first-time uploads for the same user would otherwise both see "no bot yet", then race two
+// INSERTs with two different (both individually free) names - the name uniqueness check below can't catch
+// that, since neither name collides with the other; what collides is game_bots_owner_idx (UNIQUE (game,
+// owner_user_id)), and the loser would abort the whole transaction with a raw unique-violation. The lock
+// serializes bot creation per user, so the second caller's post-lock SELECT finds the first caller's bot
+// and reuses it instead of racing to create a second one. pg_advisory_xact_lock is released automatically
+// at the end of this transaction (commit or rollback), so there is nothing to unlock explicitly.
 func (s *Service) ensureBot(ctx context.Context, tx pgx.Tx, userID string, preferred ...string) (string, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('games:bot:' || $1))`, userID); err != nil {
+		return "", err
+	}
+
 	var id string
 	err := tx.QueryRow(ctx, `SELECT id FROM game_bots WHERE game = $1 AND owner_user_id = $2`, Game, userID).Scan(&id)
 	if err == nil {
@@ -222,8 +235,9 @@ func (s *Service) ensureBot(ctx context.Context, tx pgx.Tx, userID string, prefe
 // createBotWithName picks a free name for a new bot and inserts it: each of preferred that already matches
 // agents.NameRe, tried plain and then suffixed "-2".."-99" (base truncated to keep the result within
 // agents.NameRe's 32-character limit); if every one of those is taken, a random "tank-xxxxxx" name. Each
-// attempt is race-safe (INSERT ... ON CONFLICT DO NOTHING RETURNING id), so concurrent callers naming
-// different bots never see a raw unique-violation error.
+// attempt is race-safe against a concurrent caller picking a *different* name (INSERT ... ON CONFLICT
+// DO NOTHING RETURNING id on the name index) - but not against a concurrent caller for the *same* user,
+// which is what ensureBot's advisory lock is for; this function assumes that lock is already held.
 func (s *Service) createBotWithName(ctx context.Context, tx pgx.Tx, userID string, preferred []string) (string, error) {
 	var candidates []string
 	for _, n := range preferred {
@@ -256,7 +270,11 @@ func (s *Service) createBotWithName(ctx context.Context, tx pgx.Tx, userID strin
 			return id, nil
 		}
 	}
-	return "", fmt.Errorf("games: could not find a free bot name for user %s", userID)
+	// Astronomically unlikely (20 random 6-character draws from a 36-character alphabet all colliding),
+	// but report it as an ordinary internal error rather than a bare Go error leaking past the service
+	// boundary.
+	s.log.Error("games: could not find a free bot name", "user_id", userID)
+	return "", httpx.Internal()
 }
 
 // suffixedBotName appends "-n" to base, truncating base first if needed so the result stays within
@@ -285,8 +303,10 @@ func randomBotName() (string, error) {
 	return "tank-" + string(out), nil
 }
 
-// tryCreateBot attempts to create one game_bots row with the given name, racing safely against any other
-// transaction doing the same: ok is false (not an error) when the name is already taken.
+// tryCreateBot attempts to create one game_bots row with the given name, racing safely on the name index
+// against any other transaction doing the same (ok is false, not an error, when the name is already
+// taken). It does not by itself protect against two concurrent inserts for the same userID with two
+// different, individually-free names - see ensureBot's advisory lock for that.
 func tryCreateBot(ctx context.Context, tx pgx.Tx, userID, name string) (id string, ok bool, err error) {
 	id = idgen.New("bot")
 	err = tx.QueryRow(ctx, `INSERT INTO game_bots (id, game, owner_user_id, name) VALUES ($1, $2, $3, $4)
@@ -364,9 +384,10 @@ func (s *Service) uploadVersion(ctx context.Context, userID string, archive []by
 		}
 		return audit.Record(ctx, tx, audit.Event{ActorID: userID, Action: "bot_version.uploaded", AggregateKind: "bot_version", AggregateID: id, RequestID: httpx.RequestID(ctx)})
 	})
-	if isUniqueViolation(err, "bot_versions_bot_id_number_key") {
-		// Backstop: the FOR UPDATE lock above should make this unreachable, but a raw 500 from the
-		// database is still worse than telling the caller to just retry the upload.
+	if isUniqueViolation(err, "bot_versions_bot_id_number_key") || isUniqueViolation(err, "game_bots_owner_idx") {
+		// Backstop: the FOR UPDATE lock (version numbering) and the advisory lock in ensureBot (first bot
+		// creation) should make both of these unreachable, but a raw 500 from the database is still worse
+		// than telling the caller to just retry the upload.
 		return VersionView{}, httpx.New(http.StatusConflict, "upload_conflict", "Another upload is in progress; try again")
 	}
 	if err != nil {

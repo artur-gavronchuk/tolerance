@@ -364,6 +364,62 @@ func TestConcurrentUploadsGetDistinctVersionNumbers(t *testing.T) {
 	}
 }
 
+// TestConcurrentFirstUploadsForSameUserCreateOneBot is a regression test for a review finding: two
+// concurrent first-time UploadVersion calls for one user, with two different (individually free) manifest
+// names, used to abort one of the two transactions with a raw unique-violation on game_bots_owner_idx
+// (UNIQUE (game, owner_user_id)) - the name-uniqueness check alone can't catch that, since neither name
+// collides with the other. It ran with two different manifest names per user and looped over several fresh
+// users to make the race likely to hit.
+func TestConcurrentFirstUploadsForSameUserCreateOneBot(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	archiveA := archiveWithManifestName(t, "AAAAAAAAAA")
+	archiveB := archiveWithManifestName(t, "BBBBBBBBBB")
+
+	for i := 0; i < 10; i++ {
+		u, _, err := f.users.Signup(ctx, fmt.Sprintf("racer%d@example.com", i), "longenough1")
+		if err != nil {
+			t.Fatalf("iteration %d: signup: %v", i, err)
+		}
+
+		var wg sync.WaitGroup
+		versions := make([]games.VersionView, 2)
+		errs := make([]error, 2)
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			versions[0], errs[0] = f.svc.UploadVersion(ctx, u.ID, archiveA)
+		}()
+		go func() {
+			defer wg.Done()
+			versions[1], errs[1] = f.svc.UploadVersion(ctx, u.ID, archiveB)
+		}()
+		wg.Wait()
+
+		for j, err := range errs {
+			if err != nil {
+				t.Fatalf("iteration %d upload %d: %v", i, j, err)
+			}
+		}
+
+		var botCount int
+		err = f.d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT count(*) FROM game_bots WHERE owner_user_id = $1`, u.ID).Scan(&botCount)
+		})
+		if err != nil {
+			t.Fatalf("iteration %d: count bots: %v", i, err)
+		}
+		if botCount != 1 {
+			t.Fatalf("iteration %d: expected exactly one bot for the user, got %d", i, botCount)
+		}
+
+		numbers := map[int]bool{versions[0].Number: true, versions[1].Number: true}
+		if len(numbers) != 2 || !numbers[1] || !numbers[2] {
+			t.Fatalf("iteration %d: expected version numbers 1 and 2, got %d and %d", i, versions[0].Number, versions[1].Number)
+		}
+	}
+}
+
 func TestMyTanks(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
