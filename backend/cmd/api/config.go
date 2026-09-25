@@ -2,9 +2,12 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"strings"
+
+	"tolerance/internal/identity"
 )
 
 type config struct {
@@ -17,6 +20,11 @@ type config struct {
 	workDir          string
 	sandbox          string // "docker" | "fake"
 	connectorDir     string // prebuilt connector binaries; "" = none
+	publicURL        string
+	githubID         string
+	githubSecret     string
+	googleID         string
+	googleSecret     string
 }
 
 func loadConfig() (config, error) {
@@ -29,6 +37,11 @@ func loadConfig() (config, error) {
 		workDir:          env("ARENA_WORK_DIR", os.TempDir()),
 		sandbox:          env("ARENA_SANDBOX", "docker"),
 		connectorDir:     os.Getenv("ARENA_CONNECTOR_DIR"),
+		publicURL:        os.Getenv("ARENA_PUBLIC_URL"),
+		githubID:         os.Getenv("ARENA_GITHUB_CLIENT_ID"),
+		githubSecret:     os.Getenv("ARENA_GITHUB_CLIENT_SECRET"),
+		googleID:         os.Getenv("ARENA_GOOGLE_CLIENT_ID"),
+		googleSecret:     os.Getenv("ARENA_GOOGLE_CLIENT_SECRET"),
 	}
 	for _, e := range strings.Split(os.Getenv("ARENA_ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {
@@ -51,7 +64,27 @@ func loadConfig() (config, error) {
 	if cfg.devLogin && cfg.secureCookies {
 		return config{}, errors.New("ARENA_DEV_LOGIN is for local runs and CI; it cannot be on with ARENA_SECURE_COOKIES=true")
 	}
+	for _, p := range [][3]string{{"GITHUB", cfg.githubID, cfg.githubSecret}, {"GOOGLE", cfg.googleID, cfg.googleSecret}} {
+		if (p[1] == "") != (p[2] == "") {
+			return config{}, fmt.Errorf("set both ARENA_%s_CLIENT_ID and ARENA_%s_CLIENT_SECRET, or neither", p[0], p[0])
+		}
+	}
+	if (cfg.githubID != "" || cfg.googleID != "") && !strings.HasPrefix(cfg.publicURL, "http://") && !strings.HasPrefix(cfg.publicURL, "https://") {
+		return config{}, errors.New("ARENA_PUBLIC_URL (http:// or https://) is required when a sign-in provider is configured")
+	}
 	return cfg, nil
+}
+
+// providersFromConfig builds the sign-in providers that have both keys set.
+func providersFromConfig(cfg config) map[string]identity.Provider {
+	ps := map[string]identity.Provider{}
+	if cfg.githubID != "" {
+		ps["github"] = &identity.GitHub{ClientID: cfg.githubID, ClientSecret: cfg.githubSecret}
+	}
+	if cfg.googleID != "" {
+		ps["google"] = &identity.Google{ClientID: cfg.googleID, ClientSecret: cfg.googleSecret}
+	}
+	return ps
 }
 
 func env(name, fallback string) string {

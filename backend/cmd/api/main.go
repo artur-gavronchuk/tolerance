@@ -22,6 +22,7 @@ import (
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(log)
 	cfg, err := loadConfig()
 	if err != nil {
 		log.Error("config", "err", err)
@@ -38,7 +39,8 @@ func main() {
 	defer pool.Close()
 
 	ps := proofs.NewService(pool)
-	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps, limiter: ratelimit.New(nil)}
+	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps,
+		limiter: ratelimit.New(nil), providers: providersFromConfig(cfg)}
 
 	var runner sandbox.Runner = sandbox.NewDocker()
 	if cfg.sandbox == "fake" {

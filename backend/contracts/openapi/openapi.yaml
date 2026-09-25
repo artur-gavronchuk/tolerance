@@ -46,6 +46,31 @@ paths:
         "200": { $ref: "#/components/responses/UserEnvelope" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
+  /auth/{provider}/start:
+    get:
+      operationId: oauthStart
+      security: []
+      parameters:
+        - { name: provider, in: path, required: true, schema: { type: string } }
+        - { name: next, in: query, required: false, schema: { type: string } }
+      responses:
+        "302": { description: "To the provider's consent screen, or to /login?error=rate_limited" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /auth/{provider}/callback:
+    get:
+      operationId: oauthCallback
+      security: []
+      parameters:
+        - { name: provider, in: path, required: true, schema: { type: string } }
+        - { name: code, in: query, required: false, schema: { type: string } }
+        - { name: state, in: query, required: false, schema: { type: string } }
+        - { name: error, in: query, required: false, schema: { type: string } }
+      responses:
+        "302":
+          description: >-
+            Signed in: to the start's next path with the session cookie. Failed: to
+            /login?error= one of oauth_denied, oauth_state, oauth_failed, email_unverified, rate_limited.
+        "404": { $ref: "#/components/responses/Problem" }
   /auth/logout:
     post:
       operationId: logout

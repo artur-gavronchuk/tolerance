@@ -3,12 +3,15 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +36,7 @@ type e2e struct {
 	fake   *sandbox.Fake
 }
 
-func newE2E(t *testing.T) *e2e {
+func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	t.Helper()
 	d := dbtest.New(t)
 	ctx := context.Background()
@@ -49,6 +52,10 @@ func newE2E(t *testing.T) *e2e {
 	ps := proofs.NewService(d.AppPool)
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
 		agents: agents.NewService(d.AppPool, ps), proofs: ps}
+	if len(providers) > 0 {
+		dp.providers = providers[0]
+		cfg.publicURL = "http://arena.test"
+	}
 	srv := httptest.NewServer(newHandler(cfg, dp))
 	t.Cleanup(srv.Close)
 	router, err := openapi.Router()
@@ -68,7 +75,7 @@ func newE2E(t *testing.T) *e2e {
 func (e *e2e) browser(t *testing.T) *http.Client {
 	t.Helper()
 	jar, _ := cookiejar.New(nil)
-	return &http.Client{Jar: jar}
+	return &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
 // devLogin signs c in through POST /auth/dev.
@@ -332,5 +339,86 @@ func TestEndToEnd_OversizedResultFailsTheProof(t *testing.T) {
 	e.call(t, owner, "GET", "/api/v1/proofs/"+proof.ID, "", nil, &proof)
 	if proof.Status != proofs.StatusFailed || proof.FailureReason != "diff_too_large" || proof.FinishedAt == nil {
 		t.Fatalf("after an oversized result: %+v", proof)
+	}
+}
+
+func TestEndToEnd_GitHubSignIn(t *testing.T) {
+	var challenge string
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			_ = r.ParseForm()
+			sum := sha256.Sum256([]byte(r.Form.Get("code_verifier")))
+			if r.Form.Get("code") != "good-code" || base64.RawURLEncoding.EncodeToString(sum[:]) != challenge {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"access_token":"tok","token_type":"bearer"}`))
+		case "/user":
+			_, _ = w.Write([]byte(`{"id": 777, "login": "octo"}`))
+		case "/user/emails":
+			_, _ = w.Write([]byte(`[{"email":"Octo@Example.com","primary":true,"verified":true}]`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(gh.Close)
+	e := newE2E(t, map[string]identity.Provider{"github": &identity.GitHub{ClientID: "cid", ClientSecret: "sec",
+		AuthURL: gh.URL + "/authorize", TokenURL: gh.URL + "/token", APIURL: gh.URL}})
+	owner := e.browser(t)
+
+	var providers struct {
+		Providers []string `json:"providers"`
+	}
+	e.call(t, owner, "GET", "/api/v1/auth/providers", "", nil, &providers)
+	if len(providers.Providers) != 1 || providers.Providers[0] != "github" {
+		t.Fatalf("providers: %+v", providers)
+	}
+
+	// start → the provider, with state and a PKCE challenge
+	req, _ := http.NewRequest("GET", e.srv.URL+"/api/v1/auth/github/start?next=/app/agent/connect", nil)
+	resp, err := owner.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	openapi.ValidateResponse(t, e.router, req, resp, nil)
+	loc, _ := url.Parse(resp.Header.Get("Location"))
+	if resp.StatusCode != 302 || !strings.HasPrefix(loc.String(), gh.URL+"/authorize") {
+		t.Fatalf("start: %d %s", resp.StatusCode, loc)
+	}
+	if loc.Query().Get("redirect_uri") != "http://arena.test/api/v1/auth/github/callback" {
+		t.Fatalf("redirect_uri: %s", loc.Query().Get("redirect_uri"))
+	}
+	challenge = loc.Query().Get("code_challenge")
+
+	// the provider sends the browser back with a code
+	cb := "/api/v1/auth/github/callback?code=good-code&state=" + url.QueryEscape(loc.Query().Get("state"))
+	req, _ = http.NewRequest("GET", e.srv.URL+cb, nil)
+	resp, err = owner.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	openapi.ValidateResponse(t, e.router, req, resp, nil)
+	if resp.StatusCode != 302 || resp.Header.Get("Location") != "/app/agent/connect" {
+		t.Fatalf("callback: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	var me struct {
+		User identity.User `json:"user"`
+	}
+	if code := e.call(t, owner, "GET", "/api/v1/me", "", nil, &me); code != 200 || me.User.Email != "octo@example.com" {
+		t.Fatalf("me: %d %+v", code, me)
+	}
+
+	// replaying the same callback in the same browser: the state cookie was
+	// cleared, so it is single use
+	req, _ = http.NewRequest("GET", e.srv.URL+cb, nil)
+	resp, _ = owner.Do(req)
+	resp.Body.Close()
+	if resp.Header.Get("Location") != "/login?error=oauth_state" {
+		t.Fatalf("replay: %s", resp.Header.Get("Location"))
 	}
 }

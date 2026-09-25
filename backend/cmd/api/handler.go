@@ -19,12 +19,13 @@ import (
 )
 
 type deps struct {
-	pool    *db.Pool
-	log     *slog.Logger
-	users   *identity.Service
-	agents  *agents.Service
-	proofs  *proofs.Service
-	limiter *ratelimit.Limiter
+	pool      *db.Pool
+	log       *slog.Logger
+	users     *identity.Service
+	agents    *agents.Service
+	proofs    *proofs.Service
+	limiter   *ratelimit.Limiter
+	providers map[string]identity.Provider
 }
 
 func newHandler(cfg config, d deps) http.Handler {
@@ -40,7 +41,7 @@ func newHandler(cfg config, d deps) http.Handler {
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
-	identity.RegisterAuthRoutes(api, d.users, d.limiter, identity.AuthConfig{DevLogin: cfg.devLogin, Secure: cfg.secureCookies})
+	identity.RegisterAuthRoutes(api, d.users, d.limiter, identity.AuthConfig{Providers: d.providers, PublicURL: cfg.publicURL, DevLogin: cfg.devLogin, Secure: cfg.secureCookies})
 	// Public: the owner downloads the connector before having it set up.
 	// The exact GET pattern wins over the key-protected /api/v1/connector/ prefix.
 	api.HandleFunc("GET /api/v1/connector/download", connectorDownload(cfg.connectorDir))
