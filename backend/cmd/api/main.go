@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"tolerance/internal/agents"
+	"tolerance/internal/games"
+	"tolerance/internal/games/match"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/ratelimit"
@@ -41,10 +43,15 @@ func main() {
 	d := deps{pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps, limiter: ratelimit.New(nil)}
 
 	var runner sandbox.Runner = sandbox.NewDocker()
+	var launcher match.Launcher = match.WithHouse(match.DockerLauncher{Image: cfg.botImage})
 	if cfg.sandbox == "fake" {
 		runner = sandbox.PassAll{}
+		launcher = match.WithHouse(match.ProcessLauncher{})
 	}
 	go proofs.NewWorker(pool, runner, cfg.workDir, log).Run(ctx)
+
+	gamesSvc := games.NewService(pool, ps, launcher, log, games.Config{WorkDir: cfg.workDir})
+	go games.NewWorker(gamesSvc, pool, games.WorkerConfig{Interval: cfg.matchInterval, Concurrency: cfg.matchConcurrency}, log).Run(ctx)
 
 	server := &http.Server{
 		Addr:              cfg.addr,

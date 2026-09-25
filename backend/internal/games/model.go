@@ -91,6 +91,55 @@ type MatchView struct {
 	Players    []MatchPlayerView `json:"players"`
 }
 
+// LeaderboardEntry is one active bot's row on the public leaderboard.
+type LeaderboardEntry struct {
+	Rank    int     `json:"rank"`
+	BotID   string  `json:"bot_id"`
+	Name    string  `json:"name"`
+	Rating  int     `json:"rating"`
+	Mu      float64 `json:"mu"`
+	Sigma   float64 `json:"sigma"`
+	Matches int     `json:"matches"`
+	Wins    int     `json:"wins"`
+	House   bool    `json:"house"`
+	Source  string  `json:"source"`
+	Version int     `json:"version"`
+}
+
+// VersionPublic is one bot_versions row as shown on another owner's bot profile: no archive, no checks, no
+// check log - those stay private to the version's own owner (VersionView, in model.go above).
+type VersionPublic struct {
+	Number    int       `json:"number"`
+	Source    string    `json:"source"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// BotProfile is one bot's public page: its leaderboard row (Rank 0 when the bot isn't on the leaderboard -
+// no active version yet, or it's the idle house bot) plus its full version history.
+type BotProfile struct {
+	LeaderboardEntry
+	CreatedAt time.Time       `json:"created_at"`
+	Versions  []VersionPublic `json:"versions"`
+}
+
+// LiveView is what the arena's live page polls: the broadcast currently airing (or the most recently
+// scheduled one, until the next RefreshBroadcast decides what plays next), plus the server's own clock so
+// a client with a skewed clock can still time the countdown against starts_at correctly.
+type LiveView struct {
+	MatchID    *string    `json:"match_id"`
+	StartsAt   *time.Time `json:"starts_at"`
+	DurationMS int        `json:"duration_ms"`
+	Now        time.Time  `json:"now"`
+}
+
+// MatchLog is one match's stderr tail, scoped to the caller's own bot slot.
+type MatchLog struct {
+	MatchID string `json:"match_id"`
+	Slot    int    `json:"slot"`
+	Stderr  string `json:"stderr"`
+}
+
 // Config tunes the games service. A zero Config gets sane defaults (see NewService).
 type Config struct {
 	CheckTicks int    // ticks a check_bot match runs for; 0 -> 600

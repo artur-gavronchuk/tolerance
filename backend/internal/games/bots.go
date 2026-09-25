@@ -104,6 +104,11 @@ func (s *Service) MyTanks(ctx context.Context, userID string) (MyTanks, error) {
 		if err := rows.Err(); err != nil {
 			return err
 		}
+		matches, err := s.matchesTx(ctx, tx, botID, 20)
+		if err != nil {
+			return err
+		}
+		out.Matches = matches
 		return s.loadAgentRuns(ctx, tx, userID, &out)
 	})
 	if err != nil {
