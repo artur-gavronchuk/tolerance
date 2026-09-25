@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -14,35 +15,43 @@ import (
 // ---- test doubles ----
 
 // scriptBot implements Bot over a plain function run in a goroutine, so tests can script a bot's
-// behaviour (what it prints, how slow it is, when it crashes) without a real process.
+// behaviour (what it prints, how slow it is, when it crashes) without a real process. Every script in
+// this file drives its loop with `for line := range in`, so Close terminates it (and waits for it to
+// actually exit) by closing in exactly once — guarded by mu so a concurrent Send can never race a close.
 type scriptBot struct {
-	in   chan []byte
-	out  chan []byte
-	stop chan struct{}
-	once sync.Once
+	in  chan []byte
+	out chan []byte
 
-	mu     sync.Mutex
+	mu     sync.RWMutex // guards in: RLock to send, Lock to close
 	closed bool
+
+	done chan struct{} // closed once the script function has returned and out is closed
 }
 
 func newScriptBot(fn func(in <-chan []byte, out chan<- []byte)) *scriptBot {
 	b := &scriptBot{
 		in:   make(chan []byte, 4096),
 		out:  make(chan []byte, 4096),
-		stop: make(chan struct{}),
+		done: make(chan struct{}),
 	}
 	go func() {
 		fn(b.in, b.out)
 		close(b.out)
+		close(b.done)
 	}()
 	return b
 }
 
 func (b *scriptBot) Send(line []byte) error {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if b.closed {
+		return fmt.Errorf("scriptBot: closed")
+	}
 	select {
 	case b.in <- line:
 		return nil
-	case <-b.stop:
+	case <-b.done:
 		return fmt.Errorf("scriptBot: closed")
 	}
 }
@@ -50,19 +59,22 @@ func (b *scriptBot) Send(line []byte) error {
 func (b *scriptBot) Lines() <-chan []byte { return b.out }
 func (b *scriptBot) Stderr() string       { return "" }
 
+// Close stops the script goroutine (by closing in, which ends any `for line := range in` loop) and waits
+// for it to exit. It is safe to call more than once.
 func (b *scriptBot) Close() error {
-	b.once.Do(func() {
-		b.mu.Lock()
+	b.mu.Lock()
+	if !b.closed {
 		b.closed = true
-		b.mu.Unlock()
-		close(b.stop)
-	})
+		close(b.in)
+	}
+	b.mu.Unlock()
+	<-b.done
 	return nil
 }
 
 func (b *scriptBot) Closed() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.closed
 }
 
@@ -83,11 +95,8 @@ func (l *scriptLauncher) Launch(ctx context.Context, s Spec) (Bot, error) {
 // ---- small protocol helpers for scripts ----
 
 func lineType(line []byte) string {
-	var probe struct {
-		Type string `json:"type"`
-	}
-	_ = json.Unmarshal(line, &probe)
-	return probe.Type
+	typ, _ := messageType(line)
+	return typ
 }
 
 var readyLine = []byte(`{"type":"ready"}`)
@@ -502,5 +511,43 @@ func TestContextCancelled(t *testing.T) {
 		if !b.Closed() {
 			t.Errorf("bot %d was not closed", i)
 		}
+	}
+}
+
+// TestScriptBotCloseStopsGoroutine is a regression test: a scripted bot that never returns from its
+// `for line := range in` loop on its own (it's disabled by the ready timeout, so Run never sends it an
+// "end" and never gets a reason to return) must still have its goroutine actually terminate when Run
+// closes it, per the Bot contract ("Close kills the bot ... and waits").
+func TestScriptBotCloseStopsGoroutine(t *testing.T) {
+	before := runtime.NumGoroutine()
+
+	launcher := WithHouse(&scriptLauncher{scripts: map[string]func(in <-chan []byte, out chan<- []byte){
+		"silent": func(in <-chan []byte, out chan<- []byte) {
+			for range in {
+				// never responds to anything, including start
+			}
+		},
+	}})
+	players := []Player{
+		{Name: "silent", Spec: Spec{Dir: "silent"}},
+		{Name: "idle", Spec: Spec{House: "idle"}},
+	}
+	cfg := Config{Seed: 1, Ticks: 5, ReadyTimeout: 20 * time.Millisecond}
+
+	if _, err := Run(context.Background(), launcher, cfg, players); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Close() already waits for the script goroutine to exit before Run returns, but give the runtime a
+	// brief, bounded chance to actually reflect that in NumGoroutine (goroutine teardown is asynchronous
+	// from the scheduler's point of view) instead of asserting on a single racy snapshot.
+	deadline := time.Now().Add(2 * time.Second)
+	after := runtime.NumGoroutine()
+	for after > before && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+		after = runtime.NumGoroutine()
+	}
+	if after > before {
+		t.Errorf("goroutines leaked: before = %d, after = %d", before, after)
 	}
 }

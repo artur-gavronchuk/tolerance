@@ -75,13 +75,11 @@ func (b *houseBot) run(strat house.Strategy) {
 
 // handle processes one incoming line and reports whether the bot should stop (an "end" message).
 func (b *houseBot) handle(strat house.Strategy, line []byte) (stop bool) {
-	var probe struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(line, &probe); err != nil {
+	typ, ok := messageType(line)
+	if !ok {
 		return false
 	}
-	switch probe.Type {
+	switch typ {
 	case "start":
 		var msg tanks.StartMsg
 		if err := json.Unmarshal(line, &msg); err != nil {

@@ -225,13 +225,8 @@ func waitReady(ctx context.Context, b *botState, start tanks.StartMsg, timeout t
 }
 
 func isReadyLine(line []byte) bool {
-	var probe struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(line, &probe); err != nil {
-		return false
-	}
-	return probe.Type == "ready"
+	typ, ok := messageType(line)
+	return ok && typ == "ready"
 }
 
 // collectTick sends this tick's state to b and waits for its matching command, up to

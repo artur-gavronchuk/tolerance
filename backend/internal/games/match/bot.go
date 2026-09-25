@@ -6,6 +6,7 @@ package match
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -44,4 +45,17 @@ func Command(language, entry string) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("match: unknown bot language %q", language)
 	}
+}
+
+// messageType extracts the "type" field from one line of the tanks protocol. ok is false unless line is a
+// JSON object (a JSON array, string, number or invalid JSON is neither a start/tick/end/ready message nor
+// something worth trying to switch on by type).
+func messageType(line []byte) (typ string, ok bool) {
+	var probe struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(line, &probe); err != nil {
+		return "", false
+	}
+	return probe.Type, true
 }
