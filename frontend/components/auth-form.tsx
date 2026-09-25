@@ -115,6 +115,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
               <>New here? The same buttons create your account.</>
             )}
           </p>
+          <p className="mt-2 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/tanks">Watch the tanks arena</Link></p>
         </div>
       </div>
       <aside className="relative hidden overflow-hidden bg-[#15212b] lg:flex lg:flex-col lg:justify-center lg:px-14">

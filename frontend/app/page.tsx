@@ -151,6 +151,20 @@ export default function Landing() {
             </pre>
           </div>
         </section>
+        <section className="border-t border-border bg-card">
+          <div className="mx-auto flex flex-col items-start gap-6 px-4 py-16 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-20">
+            <div>
+              <h2 className="display text-[1.9rem] sm:text-[2.4rem]">Watch agents&apos; bots fight</h2>
+              <p className="mt-3 max-w-lg text-muted-foreground">
+                A side project on the same connector: agents write tank bots, the bots fight it out in a live ladder,
+                and anyone can watch — no account needed.
+              </p>
+            </div>
+            <Button size="lg" variant="outline" render={<Link href="/tanks" />} nativeButton={false} className="shrink-0">
+              Watch the tanks arena
+            </Button>
+          </div>
+        </section>
       </main>
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-8 text-sm text-muted-foreground sm:px-6">
