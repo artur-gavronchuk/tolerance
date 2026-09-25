@@ -14,6 +14,7 @@ import (
 	"tolerance/internal/games/tanks"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/dbtest"
+	"tolerance/internal/platform/idgen"
 	"tolerance/internal/platform/jobs"
 	"tolerance/internal/proofs"
 )
@@ -158,5 +159,83 @@ func TestWorkerFinalCheckBotFailureRejectsVersion(t *testing.T) {
 	}
 	if len(checks) != 1 || checks[0].Name != "platform" || checks[0].Passed {
 		t.Fatalf("expected a single failing platform check, got %+v", checks)
+	}
+}
+
+// TestFinishMatchStoresPlayedTicks covers I-1: a match that ends early by elimination (rather than by
+// reaching its configured tick limit) must have finishMatch record how many ticks it actually played, not
+// the tick count it was launched with - the live broadcast's duration is derived straight from this column,
+// and a stale "always 1200 ticks" value makes the viewer seek past the replay's end and loop.
+func TestFinishMatchStoresPlayedTicks(t *testing.T) {
+	d := dbtest.New(t)
+	ctx := context.Background()
+	if err := Sync(ctx, d.AdminPool); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewService(d.AppPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
+
+	matchID := idgen.New("match")
+	if err := d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO matches (id, game, kind, status, seed, map, ticks, started_at)
+			VALUES ($1, 'tanks', 'ladder', 'running', 1, 'arena', 1200, now())`, matchID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO match_players (match_id, slot, bot_id, version_id)
+			VALUES ($1, 0, 'bot_house_hunter', 'bv_house_hunter')`, matchID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO match_players (match_id, slot, bot_id, version_id)
+			VALUES ($1, 1, 'bot_house_sniper', 'bv_house_sniper')`, matchID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	participants := []playerInput{
+		{BotID: "bot_house_hunter", VersionID: "bv_house_hunter", Name: "Hunter", House: true},
+		{BotID: "bot_house_sniper", VersionID: "bv_house_sniper", Name: "Sniper", House: true},
+	}
+
+	rules := tanks.DefaultRules()
+	frames := make([]tanks.Frame, 51) // ticks 0..50 recorded: the match ended by elimination, not the 1200-tick limit
+	for i := range frames {
+		frames[i] = tanks.Frame{T: i, K: [][]float64{}, S: [][]float64{}, B: [][]float64{}}
+	}
+	result := match.Result{
+		Replay: tanks.Replay{
+			Version: 1, Engine: tanks.EngineVersion, Seed: 1, Map: "arena", TickRate: rules.TickRate,
+			Rules: rules, Walls: []tanks.Rect{}, Players: []tanks.ReplayPlayer{{Slot: 0}, {Slot: 1}},
+			Frames: frames, Events: []tanks.Event{},
+			Result: []tanks.PlayerResult{{Slot: 0, Place: 1, Status: match.StatusOK}, {Slot: 1, Place: 2, Status: match.StatusOK}},
+		},
+		Players: []match.PlayerOutcome{
+			{Slot: 0, Place: 1, Status: match.StatusOK},
+			{Slot: 1, Place: 2, Status: match.StatusOK},
+		},
+	}
+
+	if err := svc.finishMatch(ctx, matchID, participants, result); err != nil {
+		t.Fatalf("finishMatch: %v", err)
+	}
+
+	var ticks int
+	if err := d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT ticks FROM matches WHERE id = $1`, matchID).Scan(&ticks)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if ticks != 50 {
+		t.Fatalf("ticks = %d, want 50 (the match ended early)", ticks)
+	}
+
+	if err := svc.RefreshBroadcast(ctx); err != nil {
+		t.Fatalf("RefreshBroadcast: %v", err)
+	}
+	live, err := svc.Live(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live.DurationMS != 50*100 {
+		t.Fatalf("broadcast duration_ms = %d, want %d", live.DurationMS, 50*100)
 	}
 }

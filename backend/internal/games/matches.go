@@ -145,10 +145,11 @@ func (s *Service) RunMatch(ctx context.Context, matchID string) error {
 // finishMatch writes a played match's result in one transaction, guarded by the match still being
 // running: a race with a concurrent finish (or with SweepStuck marking it infra_error) leaves it alone.
 func (s *Service) finishMatch(ctx context.Context, matchID string, participants []playerInput, result match.Result) error {
+	playedTicks := len(result.Replay.Frames) - 1
 	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var kind string
-		err := tx.QueryRow(ctx, `UPDATE matches SET status = 'finished', finished_at = now()
-			WHERE id = $1 AND status = 'running' RETURNING kind`, matchID).Scan(&kind)
+		err := tx.QueryRow(ctx, `UPDATE matches SET status = 'finished', finished_at = now(), ticks = $2
+			WHERE id = $1 AND status = 'running' RETURNING kind`, matchID, playedTicks).Scan(&kind)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -430,11 +431,23 @@ func (s *Service) Match(ctx context.Context, id string) (MatchView, error) {
 	return mv, nil
 }
 
+// finishedLadderMatchIDs returns finished ladder matches, newest first, up to limit. With botID empty it
+// returns the latest ladder matches overall (the public "recent matches" feed), using matches_finished_idx
+// directly; with botID set it returns only that bot's matches, via match_players.
 func (s *Service) finishedLadderMatchIDs(ctx context.Context, tx pgx.Tx, botID string, limit int) ([]string, error) {
-	rows, err := tx.Query(ctx, `
-		SELECT m.id FROM matches m JOIN match_players mp ON mp.match_id = m.id
-		WHERE mp.bot_id = $1 AND m.kind = 'ladder' AND m.status = 'finished'
-		ORDER BY m.finished_at DESC LIMIT $2`, botID, limit)
+	var rows pgx.Rows
+	var err error
+	if botID == "" {
+		rows, err = tx.Query(ctx, `
+			SELECT m.id FROM matches m
+			WHERE m.game = $1 AND m.kind = 'ladder' AND m.status = 'finished'
+			ORDER BY m.finished_at DESC LIMIT $2`, Game, limit)
+	} else {
+		rows, err = tx.Query(ctx, `
+			SELECT m.id FROM matches m JOIN match_players mp ON mp.match_id = m.id
+			WHERE mp.bot_id = $1 AND m.kind = 'ladder' AND m.status = 'finished'
+			ORDER BY m.finished_at DESC LIMIT $2`, botID, limit)
+	}
 	if err != nil {
 		return nil, err
 	}

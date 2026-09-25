@@ -231,10 +231,11 @@ func checksPassed(checks []Check) bool {
 // returns its id.
 func (s *Service) storeCheckMatch(ctx context.Context, seed int64, mapName string, participants []playerInput, result match.Result) (string, error) {
 	matchID := idgen.New("match")
+	playedTicks := len(result.Replay.Frames) - 1
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `INSERT INTO matches (id, game, kind, status, seed, map, ticks, started_at, finished_at)
 			VALUES ($1, $2, 'check', 'finished', $3, $4, $5, now(), now())`,
-			matchID, Game, seed, mapName, s.cfg.CheckTicks); err != nil {
+			matchID, Game, seed, mapName, playedTicks); err != nil {
 			return err
 		}
 		for i, p := range participants {

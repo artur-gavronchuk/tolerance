@@ -661,6 +661,24 @@ func TestTanksLadderPublic(t *testing.T) {
 		t.Fatalf("expected match %s in %+v", matchID, matches.Items)
 	}
 
+	// I-2: the public "recent matches" feed (no bot_id) must also surface it - it's what /tanks shows to a
+	// visitor who isn't looking at any one bot.
+	var recent struct {
+		Items []games.MatchView `json:"items"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/tanks/matches", "", nil, &recent); code != 200 {
+		t.Fatalf("recent matches: %d", code)
+	}
+	found = false
+	for _, m := range recent.Items {
+		if m.ID == matchID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected match %s among recent matches (no bot_id): %+v", matchID, recent.Items)
+	}
+
 	req, _ := http.NewRequest("GET", e.srv.URL+"/api/v1/tanks/matches/"+matchID+"/replay", nil)
 	resp, err := plain.Do(req)
 	if err != nil || resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "application/gzip" {
