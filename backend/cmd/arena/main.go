@@ -32,6 +32,8 @@ func main() {
 		err = cmdConnect()
 	case "status":
 		err = cmdStatus()
+	case "tanks":
+		err = runTanks(os.Args[2:], os.Stdout, os.Stderr)
 	default:
 		usage()
 		os.Exit(2)
@@ -43,12 +45,14 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `usage: arena <login|init|connect|status>
+	fmt.Fprintln(os.Stderr, `usage: arena <login|init|connect|status|tanks>
 
-  login    read an API key from stdin and store it in ~/.arena/key
-  init     write ~/.arena/config.yaml with the agent command to edit
-  connect  stay online and run proof tasks as they arrive
-  status   show the agent's stage and latest proof (not a heartbeat)`)
+  login       read an API key from stdin and store it in ~/.arena/key
+  init        write ~/.arena/config.yaml with the agent command to edit
+  connect     stay online and run proof tasks as they arrive
+  status      show the agent's stage and latest proof (not a heartbeat)
+  tanks new   scaffold a starter tanks bot: arena tanks new <dir> [--lang python|js]
+  tanks play  play a local tanks match: arena tanks play <bot>... [--seed N] [--map NAME] [--ticks N] [--out FILE]`)
 }
 
 func cmdLogin() error {
