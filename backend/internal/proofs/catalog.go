@@ -25,6 +25,7 @@ type manifest struct {
 	Slug            string `json:"slug"`
 	Title           string `json:"title"`
 	Language        string `json:"language"`
+	Kind            string `json:"kind"`
 	Image           string `json:"image"`
 	RunCmd          string `json:"run_cmd"`
 	AgentTimeoutS   int    `json:"agent_timeout_s"`
@@ -80,8 +81,12 @@ func loadTask(dir string) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
+	kind := m.Kind
+	if kind == "" {
+		kind = KindProof
+	}
 	sum := sha256.Sum256(repoTar)
-	return Task{Slug: m.Slug, Title: m.Title, Language: m.Language, Image: m.Image, RunCmd: m.RunCmd,
+	return Task{Slug: m.Slug, Title: m.Title, Language: m.Language, Kind: kind, Image: m.Image, RunCmd: m.RunCmd,
 		AgentTimeoutS: m.AgentTimeoutS, SandboxTimeoutS: m.SandboxTimeoutS, VisibleTests: m.VisibleTests, HiddenTests: m.HiddenTests,
 		TaskMD: string(taskMD), RepoTar: repoTar, HiddenTar: hiddenTar, RepoSHA256: hex.EncodeToString(sum[:])}, nil
 }
@@ -90,30 +95,45 @@ func loadTask(dir string) (Task, error) {
 // dir. Deterministic (sorted, zero mtimes) so the sha256 is stable across
 // deploys and the connector can verify it.
 func TarDir(dir string) ([]byte, error) {
-	var files []string
+	var paths []string
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if !d.IsDir() {
-			files = append(files, p)
+			paths = append(paths, p)
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("proofs: walk %s: %w", dir, err)
 	}
-	sort.Strings(files)
-	var buf bytes.Buffer
-	gz := gzip.NewWriter(&buf)
-	tw := tar.NewWriter(gz)
-	for _, p := range files {
+	files := make(map[string][]byte, len(paths))
+	for _, p := range paths {
 		rel, _ := filepath.Rel(dir, p)
 		body, err := os.ReadFile(p)
 		if err != nil {
 			return nil, err
 		}
-		if err := tw.WriteHeader(&tar.Header{Name: filepath.ToSlash(rel), Mode: 0o644, Size: int64(len(body))}); err != nil {
+		files[filepath.ToSlash(rel)] = body
+	}
+	return TarFiles(files)
+}
+
+// TarFiles packs files (path relative to the tarball root, mapped to contents) into a deterministic gzip
+// tarball: sorted by path, zero mtimes, mode 0644. A nil or empty map produces a valid, empty tarball.
+func TarFiles(files map[string][]byte) ([]byte, error) {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for _, name := range names {
+		body := files[name]
+		if err := tw.WriteHeader(&tar.Header{Name: filepath.ToSlash(name), Mode: 0o644, Size: int64(len(body))}); err != nil {
 			return nil, err
 		}
 		if _, err := tw.Write(body); err != nil {
@@ -175,14 +195,18 @@ func Untar(data []byte, dst string) error {
 func SyncCatalog(ctx context.Context, pool *db.Pool, tasks []Task) error {
 	return pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		for _, t := range tasks {
+			kind := t.Kind
+			if kind == "" {
+				kind = KindProof
+			}
 			_, err := tx.Exec(ctx, `
-				INSERT INTO proof_tasks (slug, title, language, image, run_cmd, agent_timeout_s, sandbox_timeout_s,
+				INSERT INTO proof_tasks (slug, title, language, kind, image, run_cmd, agent_timeout_s, sandbox_timeout_s,
 				    visible_tests, hidden_tests, task_md, repo_tar, hidden_tar, repo_sha256, updated_at)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
-				ON CONFLICT (slug) DO UPDATE SET title = $2, language = $3, image = $4, run_cmd = $5, agent_timeout_s = $6,
-				    sandbox_timeout_s = $7, visible_tests = $8, hidden_tests = $9, task_md = $10, repo_tar = $11,
-				    hidden_tar = $12, repo_sha256 = $13, updated_at = now()`,
-				t.Slug, t.Title, t.Language, t.Image, t.RunCmd, t.AgentTimeoutS, t.SandboxTimeoutS,
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now())
+				ON CONFLICT (slug) DO UPDATE SET title = $2, language = $3, kind = $4, image = $5, run_cmd = $6, agent_timeout_s = $7,
+				    sandbox_timeout_s = $8, visible_tests = $9, hidden_tests = $10, task_md = $11, repo_tar = $12,
+				    hidden_tar = $13, repo_sha256 = $14, updated_at = now()`,
+				t.Slug, t.Title, t.Language, kind, t.Image, t.RunCmd, t.AgentTimeoutS, t.SandboxTimeoutS,
 				t.VisibleTests, t.HiddenTests, t.TaskMD, t.RepoTar, t.HiddenTar, t.RepoSHA256)
 			if err != nil {
 				return fmt.Errorf("proofs: sync %s: %w", t.Slug, err)

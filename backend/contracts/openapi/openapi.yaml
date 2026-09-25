@@ -280,9 +280,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [proof_id, task]
+                required: [proof_id, kind, task]
                 properties:
                   proof_id: { type: string }
+                  kind: { type: string, enum: [proof, game_bot] }
                   task: { $ref: "#/components/schemas/ProofTask" }
         "204": { description: Nothing queued }
         "401": { $ref: "#/components/responses/Problem" }
@@ -468,12 +469,13 @@ components:
         timed_out: { type: boolean }
     Proof:
       type: object
-      required: [id, agent_id, task_slug, status, created_at, claimed_at, diff_submitted_at, finished_at, diff, agent_log_tail, agent_duration_ms, agent_exit_code, sandbox_result, failure_reason]
+      required: [id, agent_id, task_slug, status, created_at, claimed_at, diff_submitted_at, finished_at, diff, agent_log_tail, agent_duration_ms, agent_exit_code, sandbox_result, failure_reason, kind]
       properties:
         id: { type: string }
         agent_id: { type: string }
         task_slug: { type: string }
         status: { type: string, enum: [queued, claimed, running_agent, diff_submitted, running_sandbox, passed, failed, infra_error, expired] }
+        kind: { type: string, enum: [proof, game_bot] }
         created_at: { type: string, format: date-time }
         claimed_at: { type: string, format: date-time, nullable: true }
         diff_submitted_at: { type: string, format: date-time, nullable: true }
