@@ -21,7 +21,8 @@
 - `Start` требует онлайн-коннектор (`agent_offline`), как `proofs.Create`, иначе офлайн-агент сжигает попытку дня на `not_claimed`;
 - версия агента и рейтинги попадают в `/me` через `agents.Overview`, а в `GET /connector/status` — через `cmd/api/compose.go`; `arena status` не шлёт heartbeat (так сделано в доделках среза 1) и печатает версию и рейтинги из `/connector/status`;
 - тестовые diff настоящие: `git apply` отвергает патч без изменений, поэтому тесты шлют `noteDiff`, который добавляет `NOTES.md`; fake-результаты берут имена скрытых тестов из каталога;
-- новые страницы добавляются в `frontend/scripts/check-mobile.mjs` (CI проверяет ширину 375px).
+- новые страницы добавляются в `frontend/scripts/check-mobile.mjs` (CI проверяет ширину 375px);
+- **репозиторий `artur-gavronchuk/tolerance` публичный**, поэтому скрытые тесты шести задач из этого плана (и `backend/fixtures/skills`) видны всем — это учебные задачи для тестов, CI и локальной разработки. Рейтинг в проде считается по приватному каталогу того же формата: он лежит в отдельном приватном репозитории и подключается в контейнер API томом на `ARENA_SKILLS_DIR`; в образ и в этот репозиторий он не попадает (шаг 8 задачи 3).
 
 ## Global Constraints
 
@@ -313,6 +314,7 @@ CREATE TABLE skill_tasks (
     repo_tar bytea NOT NULL,
     hidden_tar bytea NOT NULL,
     repo_sha256 text NOT NULL,
+    active boolean NOT NULL DEFAULT true,
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX skill_tasks_skill_idx ON skill_tasks (skill_slug);
@@ -2129,7 +2131,7 @@ Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/proofs/sandbox/ -run TestDo
 
 - [ ] **Step 8: Синхронизация, образы, коммит**
 
-`cmd/migrate/main.go`: после proofs-каталога, если `ARENA_SKILLS_DIR` задан, `skills.LoadCatalog` + `skills.SyncCatalog`. `backend/Dockerfile`: `COPY fixtures/skills /opt/arena/skills`, `ENV ARENA_SKILLS_DIR=/opt/arena/skills`. `Makefile`: цель `proof-image` дополняется `docker build -q -t arena-skill-go:1 backend/fixtures/skills/go && docker build -q -t arena-skill-python:1 backend/fixtures/skills/python`; `migrate` получает `ARENA_SKILLS_DIR=./fixtures/skills`. `.github/workflows/ci.yml`: те же две сборки образов перед тестами.
+`cmd/migrate/main.go`: после proofs-каталога, если `ARENA_SKILLS_DIR` задан, `skills.LoadCatalog` + `skills.SyncCatalog`. Каталог направлений **не** копируется в образ: репозиторий публичный, и скрытые тесты из `fixtures/skills` известны всем. `docker-compose.yml`, сервис `api`: том `${ARENA_SKILLS_SOURCE:-./backend/fixtures/skills}:/opt/arena/skills:ro` и `ARENA_SKILLS_DIR: /opt/arena/skills`; в `.env.example` — закомментированный `ARENA_SKILLS_SOURCE=../arena-tasks/skills` с пояснением: локально по умолчанию берутся учебные задачи, на сервере — путь к приватному каталогу. Задача, пропавшая из каталога, остаётся в `skill_tasks` (на неё ссылаются прошлые proof), но `Start` выбирает только из задач, обновлённых последней синхронизацией: `SyncCatalog` в той же транзакции ставит загруженным `active = true` (в `ON CONFLICT … DO UPDATE` тоже) и `active = false` тем, которых в каталоге нет (колонка `active boolean NOT NULL DEFAULT true` добавляется в миграцию `00004`), а запрос пула в `Start` и `pool_size` в `GET /skills` фильтруют `active`. Тест в `catalog_test.go`: синхронизировать каталог из двух задач, затем из одной → вторая `active = false`, первая `true`. `Makefile`: цель `proof-image` дополняется `docker build -q -t arena-skill-go:1 backend/fixtures/skills/go && docker build -q -t arena-skill-python:1 backend/fixtures/skills/python`; `migrate` получает `ARENA_SKILLS_DIR=./fixtures/skills`. `.github/workflows/ci.yml`: те же две сборки образов перед тестами.
 
 ```bash
 cd backend && gofmt -l . && go vet ./... && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...
@@ -2850,7 +2852,7 @@ func (s *Service) Start(ctx context.Context, userID, skill string) (Run, error) 
 		if today >= dailyLimit {
 			return httpx.New(http.StatusTooManyRequests, "daily_limit", "At most 3 qualification runs per skill per day")
 		}
-		rows, err := tx.Query(ctx, `SELECT slug FROM skill_tasks WHERE skill_slug = $1 ORDER BY slug`, skill)
+		rows, err := tx.Query(ctx, `SELECT slug FROM skill_tasks WHERE skill_slug = $1 AND active ORDER BY slug`, skill)
 		if err != nil {
 			return err
 		}
@@ -3328,7 +3330,7 @@ func RegisterOwnerRoutes(mux *http.ServeMux, pool *db.Pool, ratings RatingsSourc
 		}
 		var items []SkillView
 		err = pool.Tx(r.Context(), func(ctx context.Context, tx pgx.Tx) error {
-			rows, err := tx.Query(ctx, `SELECT s.slug, s.title, s.language, s.description, (SELECT count(*) FROM skill_tasks t WHERE t.skill_slug = s.slug),
+			rows, err := tx.Query(ctx, `SELECT s.slug, s.title, s.language, s.description, (SELECT count(*) FROM skill_tasks t WHERE t.skill_slug = s.slug AND t.active),
 				(SELECT count(*) FROM qualification_runs q WHERE q.skill_slug = s.slug AND q.agent_id = $1 AND q.created_at > now() - interval '24 hours')
 				FROM skills s ORDER BY s.slug`, agentID)
 			if err != nil {
