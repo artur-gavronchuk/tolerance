@@ -1,0 +1,447 @@
+name: deploy
+
+# Two ways in:
+#   - automatic, after `ci` succeeds on main (path-based: only the
+#     component(s) whose files actually changed since the last deployed
+#     commit are built and released, with a canary phase by default);
+#   - manual, via the Actions UI (workflow_dispatch), for a specific
+#     component, a specific ref/sha (redeploy an old tag for a rollback —
+#     the build step skips the build entirely if that tag's image already
+#     exists in GHCR), with canary on/off, and for promote/abort/rollback on
+#     an in-flight or previous release without building anything.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Component to act on
+        type: choice
+        options: [auto, backend, web, all]
+        default: auto
+      ref:
+        description: Git ref or sha to deploy (defaults to HEAD of main). Also the tag redeployed by rollback.
+        required: false
+        default: ""
+      canary:
+        description: Run a canary phase before promoting (deploy action only)
+        type: boolean
+        default: true
+      action:
+        description: deploy | promote | abort | rollback
+        type: choice
+        options: [deploy, promote, abort, rollback]
+        default: deploy
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  BACKEND_IMAGE: ghcr.io/artur-gavronchuk/tolerance-backend
+  WEB_IMAGE: ghcr.io/artur-gavronchuk/tolerance-web
+  PROOF_IMAGE: ghcr.io/artur-gavronchuk/tolerance-proof-go
+  BOT_IMAGE: ghcr.io/artur-gavronchuk/tolerance-bot-runtime
+  # CANARY_WINDOW/poll interval for the wait loop below; the thresholds
+  # canary-check itself evaluates against live on the server (CANARY_WEIGHT,
+  # CANARY_MAX_5XX_FLOOR, etc.) are read from deploy/release.sh's own
+  # defaults there, not duplicated here.
+  CANARY_WINDOW_SECONDS: 600
+  CANARY_POLL_SECONDS: 60
+
+jobs:
+  release:
+    # Skip entirely on a workflow_run that wasn't ci-on-main-succeeded; a
+    # workflow_dispatch always runs (it's an explicit human action).
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.event.inputs.ref || github.sha }}
+
+      # --- SSH: agent-held key, no IdentityFile on disk beyond the agent ----
+      - name: set up SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_deploy
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          # Built with `echo` rather than a heredoc: a heredoc's terminator
+          # line must be unindented, which doesn't survive being embedded in
+          # this YAML block scalar (a de-indented line ends the scalar early
+          # and the rest parses as broken top-level YAML).
+          # shellcheck disable=SC1003,SC2016
+          # (both about the single-quoted lines below deliberately holding
+          # literal $ and \ characters for remote.sh to interpret later, not
+          # for this script to expand now)
+          {
+            echo '#!/usr/bin/env bash'
+            echo '# Thin wrapper: every subsequent step calls the server through this'
+            echo '# instead of repeating ssh options everywhere. Relies on the agent set'
+            echo '# up above, not an on-disk IdentityFile. DEPLOY_USER/DEPLOY_HOST come'
+            echo '# from each calling steps own env (job secrets), read here at call'
+            echo '# time, not baked in when this file is written.'
+            echo 'exec ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \'
+            echo '  -o ServerAliveInterval=15 -o ServerAliveCountMax=6 \'
+            echo '  "${DEPLOY_USER}@${DEPLOY_HOST}" "$@"'
+          } > "$HOME/remote.sh"
+          chmod +x "$HOME/remote.sh"
+
+      # --- plan: which component(s), which sha, which action ---------------
+      - name: determine what to deploy
+        id: plan
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          EVENT_NAME: ${{ github.event_name }}
+          WR_SHA: ${{ github.event.workflow_run.head_sha }}
+          IN_COMPONENT: ${{ github.event.inputs.component }}
+          IN_REF: ${{ github.event.inputs.ref }}
+          IN_CANARY: ${{ github.event.inputs.canary }}
+          IN_ACTION: ${{ github.event.inputs.action }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            sha="$WR_SHA"
+            component="auto"
+            canary="true"
+            action="deploy"
+          else
+            sha="${IN_REF:-$(git rev-parse HEAD)}"
+            sha="$(git rev-parse "$sha")"
+            component="${IN_COMPONENT:-auto}"
+            canary="${IN_CANARY:-true}"
+            action="${IN_ACTION:-deploy}"
+          fi
+
+          do_backend=false
+          do_web=false
+          do_proof_bot=false
+          ship_config=false
+
+          if [ "$action" != "deploy" ]; then
+            # promote/abort/rollback act on whatever component was named
+            # explicitly; "auto" doesn't make sense for these and is
+            # rejected rather than guessed at.
+            case "$component" in
+            backend) do_backend=true ;;
+            web) do_web=true ;;
+            all) do_backend=true; do_web=true ;;
+            *) echo "component must be backend, web or all for action=$action" >&2; exit 1 ;;
+            esac
+          elif [ "$component" = "auto" ]; then
+            deployed_backend=$("$HOME/remote.sh" "cat /opt/tolerance/.deployed/backend 2>/dev/null" || true)
+            deployed_web=$("$HOME/remote.sh" "cat /opt/tolerance/.deployed/web 2>/dev/null" || true)
+            base="${deployed_backend:-${deployed_web:-}}"
+            if [ -z "$base" ]; then
+              echo "no .deployed/{backend,web} on the server yet — first release, deploying both"
+              do_backend=true; do_web=true; do_proof_bot=true; ship_config=true
+            elif ! git cat-file -e "$base" 2>/dev/null; then
+              echo "deployed sha $base isn't in this checkout's history (force-push?) — deploying both to be safe"
+              do_backend=true; do_web=true; do_proof_bot=true; ship_config=true
+            else
+              changed=$(git diff --name-only "$base" "$sha")
+              echo "changed since $base:"; echo "$changed"
+              echo "$changed" | grep -qE '^backend/' && do_backend=true || true
+              echo "$changed" | grep -qE '^frontend/' && do_web=true || true
+              if [ "$do_backend" = "true" ] && echo "$changed" | grep -qE '^(backend/fixtures/proofs/|backend/internal/games/match/runtime/)'; then
+                do_proof_bot=true
+              fi
+              echo "$changed" | grep -qE '^(docker-compose\.yml|Caddyfile|Makefile)$|^deploy/' && ship_config=true || true
+            fi
+          else
+            case "$component" in
+            backend) do_backend=true; do_proof_bot=true ;;
+            web) do_web=true ;;
+            all) do_backend=true; do_web=true; do_proof_bot=true ;;
+            *) echo "unknown component '$component'" >&2; exit 1 ;;
+            esac
+            ship_config=true
+          fi
+
+          {
+            echo "sha=$sha"
+            echo "action=$action"
+            echo "canary=$canary"
+            echo "do_backend=$do_backend"
+            echo "do_web=$do_web"
+            echo "do_proof_bot=$do_proof_bot"
+            echo "ship_config=$ship_config"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: log in to GHCR
+        if: steps.plan.outputs.action == 'deploy'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "check which images already exist at this sha (rollback/retry: skip build)"
+        if: steps.plan.outputs.action == 'deploy'
+        id: exists
+        run: |
+          backend_exists=false
+          web_exists=false
+          docker manifest inspect "$BACKEND_IMAGE:${{ steps.plan.outputs.sha }}" >/dev/null 2>&1 && backend_exists=true
+          docker manifest inspect "$WEB_IMAGE:${{ steps.plan.outputs.sha }}" >/dev/null 2>&1 && web_exists=true
+          echo "backend_exists=$backend_exists" >>"$GITHUB_OUTPUT"
+          echo "web_exists=$web_exists" >>"$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.plan.outputs.action == 'deploy'
+
+      # --- build: backend (+ proof-go/bot-runtime when their paths moved) --
+      - name: build & push backend image
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_backend == 'true' && steps.exists.outputs.backend_exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.BACKEND_IMAGE }}:${{ steps.plan.outputs.sha }}
+          # org.opencontainers.image.source is what makes a GHCR package
+          # created by the default GITHUB_TOKEN inherit this (public) repo's
+          # visibility instead of defaulting to private — see the workflow's
+          # own final report / README for the one manual check needed on the
+          # very first push.
+          labels: org.opencontainers.image.source=https://github.com/artur-gavronchuk/tolerance
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: build & push proof-go image
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_proof_bot == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend/fixtures/proofs/go-fix-retry
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.PROOF_IMAGE }}:${{ steps.plan.outputs.sha }}
+          labels: org.opencontainers.image.source=https://github.com/artur-gavronchuk/tolerance
+          cache-from: type=gha,scope=proof-go
+          cache-to: type=gha,mode=max,scope=proof-go
+
+      - name: build & push bot-runtime image
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_proof_bot == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend/internal/games/match/runtime
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.BOT_IMAGE }}:${{ steps.plan.outputs.sha }}
+          labels: org.opencontainers.image.source=https://github.com/artur-gavronchuk/tolerance
+          cache-from: type=gha,scope=bot-runtime
+          cache-to: type=gha,mode=max,scope=bot-runtime
+
+      # --- build: web (production build args baked in) ---------------------
+      - name: build & push web image
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_web == 'true' && steps.exists.outputs.web_exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.WEB_IMAGE }}:${{ steps.plan.outputs.sha }}
+          labels: org.opencontainers.image.source=https://github.com/artur-gavronchuk/tolerance
+          build-args: |
+            API_URL=http://api:8080
+            NEXT_PUBLIC_CONTACT_EMAIL=${{ vars.ARENA_CONTACT_EMAIL || 'hello@tolerance.cc' }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      # --- ship non-image config, always (cheap) ----------------------------
+      - name: ship config (docker-compose.yml, Caddyfile, deploy/**, backup.sh)
+        if: steps.plan.outputs.ship_config == 'true' || steps.plan.outputs.action != 'deploy'
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: deploy/ship-config.sh "${DEPLOY_USER}@${DEPLOY_HOST}"
+
+      - name: apply config (Caddy reload always; Prometheus/Grafana only if changed)
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: "\"$HOME/remote.sh\" 'cd /opt/tolerance && ./deploy/release.sh apply-config'"
+
+      # --- promote / abort / rollback: no build, act directly ---------------
+      - name: promote (manual)
+        if: steps.plan.outputs.action == 'promote'
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          [ "${{ steps.plan.outputs.do_backend }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh promote backend"
+          [ "${{ steps.plan.outputs.do_web }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh promote web"
+          true
+
+      - name: abort (manual)
+        if: steps.plan.outputs.action == 'abort'
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          [ "${{ steps.plan.outputs.do_backend }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh abort backend"
+          [ "${{ steps.plan.outputs.do_web }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh abort web"
+          true
+
+      - name: rollback (manual)
+        if: steps.plan.outputs.action == 'rollback'
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          [ "${{ steps.plan.outputs.do_backend }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh rollback backend"
+          [ "${{ steps.plan.outputs.do_web }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh rollback web"
+          true
+
+      # --- deploy: pull, migrate (backend only), then canary or direct -----
+      - name: pull images
+        if: steps.plan.outputs.action == 'deploy' && (steps.plan.outputs.do_backend == 'true' || steps.plan.outputs.do_web == 'true')
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          sha="${{ steps.plan.outputs.sha }}"
+          [ "${{ steps.plan.outputs.do_backend }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && GHCR_TOKEN='$GHCR_TOKEN' GHCR_USER='$GHCR_USER' ./deploy/release.sh pull backend $sha"
+          [ "${{ steps.plan.outputs.do_web }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && GHCR_TOKEN='$GHCR_TOKEN' GHCR_USER='$GHCR_USER' ./deploy/release.sh pull web $sha"
+          true
+
+      - name: migrate (backend only)
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_backend == 'true'
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: "\"$HOME/remote.sh\" \"cd /opt/tolerance && ./deploy/release.sh migrate ${{ steps.plan.outputs.sha }}\""
+
+      # canary=false: no traffic-shifted rollout, just a direct recreate —
+      # documented tradeoff (a few seconds of restart for that component),
+      # see deploy/release.sh's deploy-direct.
+      - name: deploy directly (canary disabled)
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.canary == 'false'
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          sha="${{ steps.plan.outputs.sha }}"
+          [ "${{ steps.plan.outputs.do_backend }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh deploy-direct backend $sha"
+          [ "${{ steps.plan.outputs.do_web }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh deploy-direct web $sha"
+          true
+
+      - name: canary-start (backend)
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.canary == 'true' && steps.plan.outputs.do_backend == 'true'
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: "\"$HOME/remote.sh\" \"cd /opt/tolerance && ./deploy/release.sh canary-start backend ${{ steps.plan.outputs.sha }}\""
+
+      - name: canary-start (web)
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.canary == 'true' && steps.plan.outputs.do_web == 'true'
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: "\"$HOME/remote.sh\" \"cd /opt/tolerance && ./deploy/release.sh canary-start web ${{ steps.plan.outputs.sha }}\""
+
+      # One combined window covering whichever component(s) are canarying:
+      # poll every CANARY_POLL_SECONDS, abort (that component only) and fail
+      # the job the moment either fails its own canary-check.
+      - name: canary window
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.canary == 'true' && (steps.plan.outputs.do_backend == 'true' || steps.plan.outputs.do_web == 'true')
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DO_BACKEND: ${{ steps.plan.outputs.do_backend }}
+          DO_WEB: ${{ steps.plan.outputs.do_web }}
+        run: |
+          set -euo pipefail
+          elapsed=0
+          while [ "$elapsed" -lt "$CANARY_WINDOW_SECONDS" ]; do
+            sleep "$CANARY_POLL_SECONDS"
+            elapsed=$((elapsed + CANARY_POLL_SECONDS))
+            if [ "$DO_BACKEND" = "true" ] && ! "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh canary-check backend"; then
+              echo "backend canary-check failed at ${elapsed}s — aborting backend canary" >&2
+              "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh abort backend" || true
+              exit 1
+            fi
+            if [ "$DO_WEB" = "true" ] && ! "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh canary-check web"; then
+              echo "web canary-check failed at ${elapsed}s — aborting web canary" >&2
+              "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh abort web" || true
+              exit 1
+            fi
+            echo "canary healthy at ${elapsed}s / ${CANARY_WINDOW_SECONDS}s"
+          done
+
+      - name: promote
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.canary == 'true' && (steps.plan.outputs.do_backend == 'true' || steps.plan.outputs.do_web == 'true')
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          [ "${{ steps.plan.outputs.do_backend }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh promote backend"
+          [ "${{ steps.plan.outputs.do_web }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && ./deploy/release.sh promote web"
+          true
+
+      # --- Cloudflare cache purge --------------------------------------------
+      # Connector download URLs (backend) always worth a purge — connector
+      # binaries are content-addressed by os/arch only, not by version, so a
+      # stale cached one silently ships an old build. Landing HTML purge is
+      # NOT just defensive: verified locally (a canary dry run through Caddy)
+      # that Next.js serves `/` with `Cache-Control: s-maxage=31536000` — if
+      # Cloudflare's cache rules for this zone cache HTML at all (check the
+      # zone's Cache Rules; default Cloudflare behaviour does not cache HTML
+      # by content-type without an explicit rule, but s-maxage on the origin
+      # response is exactly the signal a rule would key off), a stale landing
+      # page would otherwise sit there for up to a year.
+      - name: purge Cloudflare cache
+        if: steps.plan.outputs.action == 'deploy' && (steps.plan.outputs.do_backend == 'true' || steps.plan.outputs.do_web == 'true')
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          DOMAIN: ${{ vars.ARENA_DOMAIN }}
+          DO_BACKEND: ${{ steps.plan.outputs.do_backend }}
+          DO_WEB: ${{ steps.plan.outputs.do_web }}
+        run: |
+          set -euo pipefail
+          files=()
+          if [ "$DO_BACKEND" = "true" ]; then
+            for os in darwin linux; do
+              for arch in amd64 arm64; do
+                files+=("\"https://$DOMAIN/api/v1/connector/download?os=$os&arch=$arch\"")
+              done
+            done
+          fi
+          if [ "$DO_WEB" = "true" ]; then
+            files+=("\"https://$DOMAIN/\"")
+          fi
+          if [ "${#files[@]}" -eq 0 ]; then exit 0; fi
+          files_json=$(IFS=,; echo "[${files[*]}]")
+          curl -sS -X POST "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}/purge_cache" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "{\"files\": $files_json}" | jq -c '{success, errors}'
