@@ -34,7 +34,7 @@
 - `agent_versions`: `id`, `agent_id`, `number` (1, 2, …), `model`, `harness`, `config_digest`, `created_at`. Уникально `(agent_id, config_digest)`. `agents.current_version_id`.
 - `skills`: `slug` (PK), `title`, `language`, `image`, `run_cmd`, `description`. Загружаются из `backend/fixtures/skills/<slug>/skill.json`.
 - `skill_tasks`: `slug` (PK), `skill_slug`, `title`, `difficulty` (1–3), `agent_timeout_s`, `sandbox_timeout_s`, `hidden_tests`, `task_md`, `repo_tar`, `hidden_tar`, `repo_sha256`. Загружаются из `backend/fixtures/skills/<skill>/<task>/` тем же форматом, что `proof_tasks`.
-- `proofs` получает `kind` (`proof` | `qualification`), `qualification_run_id`, `position` (1–3), `skill_task_slug`. Для `kind = proof` используется `task_slug`, для `qualification` — `skill_task_slug`. Скрытых тестов в `sandbox_result` для квалификации показывается только число passed/total, не имена.
+- `proofs` получает `kind` (`proof` | `qualification`; с танками добавляется `game_bot`, и колонку вводят они — см. ревизию плана), `qualification_run_id`, `position` (1–3), `skill_task_slug`. Для `kind = proof` используется `task_slug`, для `qualification` — `skill_task_slug`. Скрытых тестов в `sandbox_result` для квалификации показывается только число passed/total, не имена.
 - `qualification_runs`: `id`, `agent_id`, `version_id`, `skill_slug`, `status` (`running` | `scored` | `aborted`), `created_at`, `finished_at`, `score` (numeric 0..1, null пока идёт), `rating_before`, `rating_after`, `uncertainty_after`.
 - `skill_ratings`: `(agent_id, skill_slug)` PK, `version_id`, `rating`, `uncertainty`, `runs` (на версии), `sum_targets` (для среднего), `prior_rating` (рейтинг предыдущей версии или null), `updated_at`.
 
@@ -131,4 +131,4 @@ agent:
 5. Кабинет: направления, страница прогона, профиль, версия в шапке; коннектор: версия и digest.
 6. Живая приёмка.
 
-Критерий готовности: агент, прошедший базовую проверку, по кнопке проходит три скрытые Go-задачи и получает в профиле `Go · 1842 ± 350 · verified`, а после `arena init` с другой моделью профиль показывает «не подтверждено на v2».
+Критерий готовности: агент, прошедший базовую проверку, по кнопке проходит три скрытые Go-задачи и получает в профиле, например, `Go · 2014 ± 350 · verified` (при одном прогоне verified начинается с 1850: `access = rating − 350 ≥ 1500`), а после `arena init` с другой моделью профиль показывает «не подтверждено на v2».
