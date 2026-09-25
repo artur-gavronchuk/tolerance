@@ -84,7 +84,10 @@
 
 ## Схема
 
-`migrations/00004_oauth_identities.sql` (номер 00003 занят `00003_games.sql` в ветке танков):
+Правка прямо в `migrations/00002_schema.sql`, без новой миграции: живых
+пользователей нет, совместимость не нужна, базы (локальные и продакшн)
+пересоздаются (`make reset`; на сервере — снести том Postgres). Из `users`
+уходит `password_hash`, рядом с `users` появляется:
 
 ```sql
 CREATE TABLE user_identities (
@@ -98,18 +101,10 @@ CREATE TABLE user_identities (
     PRIMARY KEY (provider, subject)
 );
 CREATE INDEX user_identities_user_idx ON user_identities (user_id);
-ALTER TABLE users DROP COLUMN password_hash;
-GRANT SELECT, INSERT, UPDATE, DELETE ON user_identities TO arena_app;
 ```
 
-Down возвращает `password_hash text NOT NULL DEFAULT ''` и удаляет таблицу.
-Живых пользователей нет (25 сентября), поэтому данные не переносятся; отдельная
-миграция нужна только затем, чтобы накатиться на развёрнутую базу без её сброса.
-
-`db.Migrate` вызывает `goose.Up` с `goose.WithAllowMissing()`: продакшн уже
-работает, и если `00004` попадёт туда раньше `00003` танков, следующий деплой не
-должен упасть на «пропущенной» миграции. Таблицы веток не пересекаются, порядок
-им не важен.
+Общий `GRANT … ON ALL TABLES` в конце файла покрывает таблицу; `Down` удаляет её.
+Номер `00003` остаётся за танками.
 
 ## API
 
