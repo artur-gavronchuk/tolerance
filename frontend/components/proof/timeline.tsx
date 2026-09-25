@@ -34,7 +34,9 @@ const STEPS: Step[] = [
   },
   {
     label: 'Hidden tests',
-    reached: (p) => p.diff_submitted_at != null && ['running_sandbox', 'passed', 'failed'].includes(p.status),
+    // A diff rejected before the sandbox (test file touched, didn't apply)
+    // never reached the tests, so a failed proof needs a sandbox result here.
+    reached: (p) => p.diff_submitted_at != null && (p.status === 'failed' ? p.sandbox_result != null : ['running_sandbox', 'passed'].includes(p.status)),
     note: (p, now) =>
       !p.diff_submitted_at ? null
         : p.finished_at ? `took ${between(p.diff_submitted_at, p.finished_at)}`
@@ -48,27 +50,30 @@ const STEPS: Step[] = [
   },
 ]
 
-export function Timeline({ proof }: { proof: Proof }) {
+export function Timeline({ proof, now = Date.now() }: { proof: Proof; now?: number }) {
   const terminal = proof.finished_at != null
   const dead = proof.status === 'expired' || proof.status === 'infra_error'
-  const now = Date.now()
   let activeShown = false
   return (
-    <ol className="flex flex-col gap-0">
+    <ol className="overflow-hidden rounded-[14px] border border-border bg-card">
       {STEPS.map((s) => {
         const done = s.reached(proof)
         const active = !done && !activeShown && !terminal
         if (active) activeShown = true
         const note = done || active ? s.note(proof, now) : null
+        // The verdict row carries the result: a failed proof ends on a cross.
+        const lost = done && s.label === 'Verdict' && proof.status === 'failed'
         return (
-          <li key={s.label} className="flex items-center gap-3 border-b border-border py-2.5 text-sm last:border-b-0">
-            <span className={cn('flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px]',
-              done && !dead && 'border-success bg-success text-white', active && 'border-primary', dead && done && 'border-destructive text-destructive')}>
-              {done && !dead && <Check className="size-3" strokeWidth={3} />}
-              {done && dead && <X className="size-3" />}
-              {active && <Loader2 className="size-3 animate-spin" />}
+          <li key={s.label} className={cn('flex items-center gap-3 border-b border-border px-4 py-3 text-sm last:border-b-0', active && 'bg-accent/50')}>
+            <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-full border border-input',
+              done && !dead && !lost && 'border-success bg-success text-success-foreground', lost && 'border-destructive bg-destructive text-white', active && 'border-primary text-primary',
+              dead && done && 'border-warning/40 bg-warning/12 text-warning')}>
+              {done && !dead && !lost && <Check className="size-3.5" strokeWidth={3} />}
+              {lost && <X className="size-3.5" strokeWidth={3} />}
+              {done && dead && <X className="size-3.5" strokeWidth={3} />}
+              {active && <Loader2 className="size-3.5 animate-spin" />}
             </span>
-            <span className={cn(done || active ? 'text-foreground' : 'text-muted-foreground')}>{s.label}</span>
+            <span className={cn('font-semibold', done || active ? 'text-foreground' : 'text-muted-foreground')}>{s.label}</span>
             {note && <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">{note}</span>}
           </li>
         )

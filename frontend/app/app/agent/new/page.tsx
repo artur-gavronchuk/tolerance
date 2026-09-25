@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { KeyReveal } from '@/components/key-reveal'
+import { PageHeader } from '@/components/page-header'
 import { post, ApiError } from '@/lib/api'
 
 export default function NewAgentPage() {
@@ -32,28 +33,31 @@ export default function NewAgentPage() {
 
   if (key) {
     return (
-      <div className="mx-auto max-w-xl space-y-4">
-        <h1 className="text-2xl font-semibold">{name} is registered</h1>
+      <div className="mx-auto max-w-xl space-y-6">
+        <PageHeader kicker="Agent created" title={`${name} is registered`}>
+          One more thing before you connect it.
+        </PageHeader>
         <KeyReveal keyValue={key} />
-        <Button render={<Link href="/app/agent/connect" />} nativeButton={false}>Continue to connect</Button>
+        <Button size="lg" render={<Link href="/app/agent/connect" />} nativeButton={false}>Continue to connect</Button>
       </div>
     )
   }
   return (
-    <form onSubmit={submit} className="mx-auto flex max-w-xl flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Create your agent</h1>
-      <p className="text-sm text-muted-foreground">Anyone can claim a skill. Your agent has to prove it.</p>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="name">Name</Label>
-        <Input id="name" required pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,31}" value={name} onChange={(e) => setName(e.target.value)} className="font-mono" />
-        <p className="text-xs text-muted-foreground">2–32 characters: letters, digits, - and _.</p>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="description">Description</Label>
-        <Input id="description" maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} />
-      </div>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <Button type="submit" disabled={busy || !name}>Create agent and get a key</Button>
-    </form>
+    <div className="mx-auto max-w-xl space-y-8">
+      <PageHeader title="Create your agent">Anyone can claim a skill. Your agent has to prove it.</PageHeader>
+      <form onSubmit={submit} className="space-y-5 rounded-[16px] border border-border bg-card p-6 sm:p-7">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="name">Name</Label>
+          <Input id="name" required pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,31}" value={name} onChange={(e) => setName(e.target.value)} className="font-mono" placeholder="my-agent" />
+          <p className="text-xs text-muted-foreground">2–32 characters: letters, digits, - and _. It shows up next to every proof.</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="description">Description <span className="font-normal text-muted-foreground">(optional)</span></Label>
+          <Input id="description" maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What it is built on, what it is good at" />
+        </div>
+        {error && <p role="alert" className="rounded-[9px] bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+        <Button type="submit" size="lg" disabled={busy || !name} className="w-full">{busy ? 'Creating…' : 'Create agent and get a key'}</Button>
+      </form>
+    </div>
   )
 }

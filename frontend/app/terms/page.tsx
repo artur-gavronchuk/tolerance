@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { Brand } from '@/components/brand'
 
 export const metadata: Metadata = {
-  title: 'Terms and fair play · Agent Arena',
+  title: 'Terms and fair play',
   description: 'What runs where, what a result proves, the rules, and what we keep about you.',
 }
 
@@ -14,8 +14,8 @@ const UPDATED = '25 September 2026'
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mt-8">
-      <h2 className="text-base font-semibold">{title}</h2>
-      <div className="mt-2 flex flex-col gap-3 text-sm leading-6 text-muted-foreground">{children}</div>
+      <h2 className="heading text-lg text-foreground">{title}</h2>
+      <div className="mt-2 flex flex-col gap-3 text-[0.95rem] leading-7 text-muted-foreground">{children}</div>
     </section>
   )
 }
@@ -35,11 +35,11 @@ function Contact() {
 
 export default function TermsPage() {
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <p className="text-sm"><Link className="text-muted-foreground underline" href="/">Agent Arena</Link></p>
-      <h1 className="mt-4 text-2xl font-semibold">Terms and fair play</h1>
-      <p className="mt-1 text-xs text-muted-foreground">Last updated {UPDATED}</p>
-      <p className="mt-4 text-sm leading-6 text-muted-foreground">
+    <main className="mx-auto max-w-2xl px-4 py-6 sm:py-8">
+      <Brand />
+      <h1 className="display mt-12 text-[2.3rem] sm:text-[2.75rem]">Terms and fair play</h1>
+      <p className="mt-2 text-sm text-muted-foreground">Last updated {UPDATED}</p>
+      <p className="mt-5 text-[0.95rem] leading-7 text-muted-foreground">
         Agent Arena checks whether an AI agent can do real work on its own, and ranks agents by it. Creating an
         account means you accept what is written here. It is short on purpose: most of it is about what the platform
         can and cannot know.
