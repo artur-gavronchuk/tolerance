@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -301,6 +302,25 @@ func TestValidateRejects(t *testing.T) {
 		{"entry escapes", buildArchive(t, []archiveEntry{
 			{name: "bot.json", typ: tar.TypeReg, data: []byte(`{"name":"n","language":"python","entry":"../x.py"}`)},
 		})},
+		{"duplicate bot.json", buildArchive(t, []archiveEntry{
+			{name: "bot.json", typ: tar.TypeReg, data: []byte(`{"name":"n","language":"python","entry":"bot.py"}`)},
+			{name: "bot.json", typ: tar.TypeReg, data: []byte(`{"name":"evil","language":"python","entry":"evil.py"}`)},
+			{name: "bot.py", typ: tar.TypeReg, data: []byte("x")},
+		})},
+		{"file and directory share a path", buildArchive(t, []archiveEntry{
+			{name: "stuff", typ: tar.TypeDir},
+			{name: "stuff", typ: tar.TypeReg, data: []byte("x")},
+		})},
+		{"file used as another entry's parent directory", buildArchive(t, []archiveEntry{
+			{name: "a", typ: tar.TypeReg, data: []byte("x")},
+			{name: "a/b", typ: tar.TypeReg, data: []byte("y")},
+		})},
+		{"backslash in archive path", buildArchive(t, []archiveEntry{
+			{name: `sub\evil.py`, typ: tar.TypeReg, data: []byte("x")},
+		})},
+		{"backslash in entry field", buildArchive(t, []archiveEntry{
+			{name: "bot.json", typ: tar.TypeReg, data: []byte(`{"name":"n","language":"python","entry":"..\\x.py"}`)},
+		})},
 	}
 
 	for _, c := range cases {
@@ -329,5 +349,46 @@ func TestValidateEntryNotFoundMessage(t *testing.T) {
 	want := `bot.json: "entry" file "bot.py" not found`
 	if pkgErr.Msg != want {
 		t.Fatalf("Msg = %q, want %q", pkgErr.Msg, want)
+	}
+}
+
+// TestDuplicateBotJSONRejectedEndToEnd is the reviewer's exact repro for the divergence bug: a raw archive
+// with a benign bot.json (entry bot.py) followed by a second, evil bot.json (entry evil.py). Before the
+// fix, Validate reported the benign manifest (findEntry returns the first match) while Unpack wrote both
+// files, and the second write won because sort.Slice is not stable - so what was checked and what landed
+// on disk could disagree. Now the duplicate path is rejected outright, by both Validate and Unpack, so
+// there is nothing left for the two to disagree about.
+func TestDuplicateBotJSONRejectedEndToEnd(t *testing.T) {
+	archive := buildArchive(t, []archiveEntry{
+		{name: "bot.json", typ: tar.TypeReg, data: []byte(`{"name":"benign","language":"python","entry":"bot.py"}`)},
+		{name: "bot.py", typ: tar.TypeReg, data: []byte("print('benign')\n")},
+		{name: "bot.json", typ: tar.TypeReg, data: []byte(`{"name":"evil","language":"python","entry":"evil.py"}`)},
+		{name: "evil.py", typ: tar.TypeReg, data: []byte("print('evil')\n")},
+	})
+
+	_, err := Validate(archive)
+	var validateErr *Error
+	if !errors.As(err, &validateErr) {
+		t.Fatalf("Validate error = %v (%T), want *Error", err, err)
+	}
+
+	err = Unpack(archive, t.TempDir())
+	var unpackErr *Error
+	if !errors.As(err, &unpackErr) {
+		t.Fatalf("Unpack error = %v (%T), want *Error", err, err)
+	}
+}
+
+func TestValidateNameTooLong(t *testing.T) {
+	longName := strings.Repeat("a", 65)
+	archive := buildArchive(t, []archiveEntry{
+		{name: "bot.json", typ: tar.TypeReg, data: []byte(fmt.Sprintf(`{"name":%q,"language":"python","entry":"bot.py"}`, longName))},
+		{name: "bot.py", typ: tar.TypeReg, data: []byte("x")},
+	})
+
+	_, err := Validate(archive)
+	var pkgErr *Error
+	if !errors.As(err, &pkgErr) {
+		t.Fatalf("error = %v (%T), want *Error", err, err)
 	}
 }

@@ -1,4 +1,4 @@
-.PHONY: up down logs reset ps proof-image test check migrate run-api run-web connector
+.PHONY: up down logs reset ps proof-image bot-image test check migrate run-api run-web connector
 
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
 -include .env
@@ -17,7 +17,7 @@ DOCKER_GID ?= $(shell docker run --rm -v /var/run/docker.sock:/var/run/docker.so
 # api image builds its own.
 CONNECTOR_DIR := $(CURDIR)/backend/.connector
 
-up: .env proof-image
+up: .env proof-image bot-image
 	@docker info >/dev/null 2>&1 || (command -v colima >/dev/null && colima start) || (echo "Docker is not running"; exit 1)
 	@if [ "$(ARENA_ENV)" = "production" ] && grep -q "dev_password" .env; then echo "refusing to start production with dev passwords in .env"; exit 1; fi
 	@if [ "$(ARENA_ENV)" = "production" ] && [ "$(ARENA_DEV_LOGIN)" = "true" ]; then echo "refusing to start production with ARENA_DEV_LOGIN=true"; exit 1; fi
@@ -31,6 +31,11 @@ up: .env proof-image
 # host daemon through docker.sock, so the image has to exist on the host.
 proof-image:
 	docker build -q -t arena-proof-go:1 backend/fixtures/proofs/go-fix-retry
+
+# The runtime image tanks bots run in via match.DockerLauncher; the api container reaches the host daemon
+# through docker.sock, so this image has to exist on the host too, same reasoning as proof-image above.
+bot-image:
+	docker build -q -t arena-bot-runtime:1 backend/internal/games/match/runtime
 
 down:
 	$(COMPOSE) $(PROFILE) down

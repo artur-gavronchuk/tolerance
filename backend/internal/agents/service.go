@@ -43,7 +43,7 @@ func scanAgent(row interface{ Scan(...any) error }, a *Agent) error {
 }
 
 func validateCreate(in CreateInput) error {
-	if !nameRe.MatchString(in.Name) {
+	if !NameRe.MatchString(in.Name) {
 		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "name must match ^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$", "name", "invalid")
 	}
 	if len(in.Description) > 500 {
@@ -82,7 +82,7 @@ func (s *Service) Create(ctx context.Context, ownerID string, in CreateInput) (P
 }
 
 func (s *Service) Patch(ctx context.Context, ownerID string, in PatchInput) (Private, error) {
-	if in.Name != nil && !nameRe.MatchString(*in.Name) {
+	if in.Name != nil && !NameRe.MatchString(*in.Name) {
 		return Private{}, httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "name must match ^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$", "name", "invalid")
 	}
 	if in.Description != nil && len(*in.Description) > 500 {

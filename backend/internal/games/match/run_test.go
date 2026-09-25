@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -438,10 +439,11 @@ func TestCrash(t *testing.T) {
 	}
 }
 
-// failingLauncher launches a scriptBot for every call except the given failAt call, which returns a
-// platform error instead.
+// failingLauncher launches a scriptBot running script (or respondsPromptly, if script is nil) for every
+// call except the given failAt call, which returns a platform error instead.
 type failingLauncher struct {
 	failAt int
+	script func(in <-chan []byte, out chan<- []byte)
 
 	mu    sync.Mutex
 	calls int
@@ -457,7 +459,11 @@ func (l *failingLauncher) Launch(ctx context.Context, s Spec) (Bot, error) {
 	if call == l.failAt {
 		return nil, fmt.Errorf("boom")
 	}
-	b := newScriptBot(respondsPromptly)
+	fn := l.script
+	if fn == nil {
+		fn = respondsPromptly
+	}
+	b := newScriptBot(fn)
 	l.mu.Lock()
 	l.bots = append(l.bots, b)
 	l.mu.Unlock()
@@ -486,16 +492,39 @@ func TestLaunchErrorIsPlatformError(t *testing.T) {
 }
 
 func TestContextCancelled(t *testing.T) {
-	l := &failingLauncher{failAt: -1} // never fails
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// A scripted bot answers near-instantly (no process/IO delay), so a wall-clock timer races the
+	// match itself: on a fast machine, hundreds of ticks can play out in well under a millisecond, and
+	// stationary tanks start dying to the shrinking zone around tick ~876 on this map — either of which
+	// can end the match before any timer fires, making a real-time race flaky. Cancel deterministically
+	// instead, from inside a bot's own tick handler once a few ticks have actually been answered.
+	const cancelAfterTicks = 5
+	var ticksSeen int32
+	countingScript := func(in <-chan []byte, out chan<- []byte) {
+		for line := range in {
+			switch lineType(line) {
+			case "start":
+				out <- readyLine
+			case "tick":
+				tick := tickOf(line)
+				if atomic.AddInt32(&ticksSeen, 1) >= cancelAfterTicks {
+					cancel()
+				}
+				out <- commandLine(tick, 0)
+			case "end":
+				return
+			}
+		}
+	}
+
+	l := &failingLauncher{failAt: -1, script: countingScript} // never fails
 	players := []Player{
 		{Name: "a", Spec: Spec{Dir: "a"}},
 		{Name: "b", Spec: Spec{Dir: "b"}},
 	}
-	// A huge tick count so cancellation, not the ticks limit, ends the match.
+	// Large enough that the ticks limit itself never ends the match first.
 	cfg := Config{Seed: 1, Ticks: 1_000_000}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	time.AfterFunc(100*time.Millisecond, cancel)
 
 	_, err := Run(ctx, l, cfg, players)
 	if err != context.Canceled {

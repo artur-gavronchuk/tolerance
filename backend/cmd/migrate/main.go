@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"tolerance/internal/games"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/proofs"
 )
@@ -26,19 +27,25 @@ func main() {
 	}
 	log.Printf("migrations applied in %s", time.Since(start))
 
+	pool, err := db.Open(context.Background(), dsn)
+	if err != nil {
+		log.Fatalf("open: %v", err)
+	}
+	defer pool.Close()
+
 	if dir := os.Getenv("ARENA_PROOFS_DIR"); dir != "" {
 		tasks, err := proofs.LoadCatalog(dir)
 		if err != nil {
 			log.Fatalf("catalog: %v", err)
 		}
-		pool, err := db.Open(context.Background(), dsn)
-		if err != nil {
-			log.Fatalf("open: %v", err)
-		}
-		defer pool.Close()
 		if err := proofs.SyncCatalog(context.Background(), pool, tasks); err != nil {
 			log.Fatalf("catalog: %v", err)
 		}
 		log.Printf("catalog: %d task(s) synced", len(tasks))
 	}
+
+	if err := games.Sync(context.Background(), pool); err != nil {
+		log.Fatalf("games: %v", err)
+	}
+	log.Printf("games: house bots and tanks-bot task synced")
 }

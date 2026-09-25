@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"tolerance/internal/identity"
 )
@@ -25,6 +27,9 @@ type config struct {
 	githubSecret     string
 	googleID         string
 	googleSecret     string
+	matchInterval    time.Duration
+	matchConcurrency int
+	botImage         string
 }
 
 func loadConfig() (config, error) {
@@ -42,6 +47,23 @@ func loadConfig() (config, error) {
 		githubSecret:     os.Getenv("ARENA_GITHUB_CLIENT_SECRET"),
 		googleID:         os.Getenv("ARENA_GOOGLE_CLIENT_ID"),
 		googleSecret:     os.Getenv("ARENA_GOOGLE_CLIENT_SECRET"),
+		matchInterval:    20 * time.Second,
+		matchConcurrency: 1,
+		botImage:         env("ARENA_BOT_IMAGE", "arena-bot-runtime:1"),
+	}
+	if v := os.Getenv("ARENA_MATCH_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return config{}, errors.New("ARENA_MATCH_INTERVAL must be a valid duration")
+		}
+		cfg.matchInterval = d
+	}
+	if v := os.Getenv("ARENA_MATCH_CONCURRENCY"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return config{}, errors.New("ARENA_MATCH_CONCURRENCY must be an integer >= 1")
+		}
+		cfg.matchConcurrency = n
 	}
 	for _, e := range strings.Split(os.Getenv("ARENA_ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {

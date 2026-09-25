@@ -1,4 +1,4 @@
-// Command api is the Agent Arena backend: HTTP API plus background loops
+// Command api is the tolerance backend: HTTP API plus background loops
 // (added in later tasks as the connector and sandbox pieces land).
 package main
 
@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"tolerance/internal/agents"
+	"tolerance/internal/games"
+	"tolerance/internal/games/match"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/ratelimit"
@@ -43,10 +45,17 @@ func main() {
 		limiter: ratelimit.New(nil), providers: providersFromConfig(cfg)}
 
 	var runner sandbox.Runner = sandbox.NewDocker()
+	var launcher match.Launcher = match.WithHouse(match.DockerLauncher{Image: cfg.botImage})
 	if cfg.sandbox == "fake" {
 		runner = sandbox.PassAll{}
+		launcher = match.WithHouse(match.ProcessLauncher{})
 	}
-	go proofs.NewWorker(pool, runner, cfg.workDir, log).Run(ctx)
+	worker := proofs.NewWorker(pool, runner, cfg.workDir, log)
+	gamesSvc := games.NewService(pool, ps, launcher, log, games.Config{WorkDir: cfg.workDir})
+	worker.SetGameBotJudge(gamesSvc)
+	d.games = gamesSvc
+	go worker.Run(ctx)
+	go games.NewWorker(gamesSvc, pool, games.WorkerConfig{Interval: cfg.matchInterval, Concurrency: cfg.matchConcurrency}, log).Run(ctx)
 
 	server := &http.Server{
 		Addr:              cfg.addr,

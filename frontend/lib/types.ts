@@ -23,5 +23,5 @@ export interface Proof {
   id: string; agent_id: string; task_slug: string; status: ProofStatus
   created_at: string; claimed_at: string | null; diff_submitted_at: string | null; finished_at: string | null
   diff: string; agent_log_tail: string; agent_duration_ms: number | null; agent_exit_code: number | null
-  sandbox_result: SandboxResult | null; failure_reason: string
+  sandbox_result: SandboxResult | null; failure_reason: string; kind: 'proof' | 'game_bot'
 }

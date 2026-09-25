@@ -26,13 +26,14 @@ import (
 )
 
 type Worker struct {
-	pool    *db.Pool
-	svc     *Service
-	queue   *jobs.Queue
-	runner  sandbox.Runner
-	workDir string
-	log     *slog.Logger
-	owner   string
+	pool         *db.Pool
+	svc          *Service
+	queue        *jobs.Queue
+	runner       sandbox.Runner
+	workDir      string
+	log          *slog.Logger
+	owner        string
+	gameBotJudge GameBotJudge
 }
 
 func NewWorker(pool *db.Pool, runner sandbox.Runner, workDir string, log *slog.Logger) *Worker {
@@ -40,6 +41,28 @@ func NewWorker(pool *db.Pool, runner sandbox.Runner, workDir string, log *slog.L
 	return &Worker{pool: pool, svc: NewService(pool), queue: jobs.New(pool), runner: runner, workDir: workDir, log: log,
 		owner: fmt.Sprintf("%s-%d", host, os.Getpid())}
 }
+
+// GameBotVerdict is a game_bot proof's verdict, as decided by a GameBotJudge: whether the agent's diff
+// produced a bot that passed its checks, one TestResult per check (Name = check name), and Output holding
+// each check's name/detail plus the bot's stderr, shown to the owner as "Sandbox output".
+type GameBotVerdict struct {
+	Passed bool
+	Reason string       // "" | "invalid_package" | "bot_rejected"
+	Tests  []TestResult // one per check, Name = check name
+	Output string       // check details and the bot's stderr, shown as "Sandbox output"
+}
+
+// GameBotJudge turns a game_bot proof's applied diff (the bot's tree, already unpacked and patched, at
+// dir) into a verdict: the games package implements this by packing dir, creating a pending bot version
+// from it and qualifying it. proofID and agentID identify the proof whose diff is being judged.
+type GameBotJudge interface {
+	JudgeProof(ctx context.Context, proofID, agentID, dir string) (GameBotVerdict, error)
+}
+
+// SetGameBotJudge wires in the judge used for kind = game_bot proofs. Until it is set, RunProof refuses
+// every game_bot proof with a platform error (the job retries, and the proof eventually becomes
+// infra_error) rather than silently treating it like an ordinary proof.
+func (w *Worker) SetGameBotJudge(j GameBotJudge) { w.gameBotJudge = j }
 
 // Run processes run_proof jobs one at a time and, every 30 seconds, reclaims
 // dead leases and expires stale proofs. It returns when ctx is done.
@@ -99,6 +122,8 @@ func (w *Worker) handle(ctx context.Context, job *jobs.Job) {
 
 type runInput struct {
 	diff     string
+	kind     string
+	agentID  string
 	task     Task
 	repoTar  []byte
 	hiddenTr []byte
@@ -107,14 +132,22 @@ type runInput struct {
 // RunProof executes one sandbox run. A returned error means the platform
 // could not run it (the job will retry); every verdict about the diff is
 // written to the proof and returns nil.
+//
+// For kind = game_bot, the repo comes from coalesce(p.repo_tar, t.repo_tar) - the games package hands the
+// agent its current bot code as a per-proof override (proofs.CreateWithRepo), which takes precedence over
+// the tanks-bot task's own starter-kit repo. diffTouchesTestFiles does not apply: a bot package has no
+// notion of a protected test file. Once the diff applies, the verdict comes from the wired GameBotJudge
+// rather than from the sandbox runner.
 func (w *Worker) RunProof(ctx context.Context, proofID string) error {
 	var in runInput
 	err := w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
 			UPDATE proofs p SET status = 'running_sandbox' FROM proof_tasks t
 			WHERE p.id = $1 AND p.status IN ('diff_submitted', 'running_sandbox') AND t.slug = p.task_slug
-			RETURNING p.diff, t.slug, t.image, t.run_cmd, t.sandbox_timeout_s, t.repo_tar, t.hidden_tar`, proofID).
-			Scan(&in.diff, &in.task.Slug, &in.task.Image, &in.task.RunCmd, &in.task.SandboxTimeoutS, &in.repoTar, &in.hiddenTr)
+			RETURNING p.diff, p.kind, p.agent_id, t.slug, t.image, t.run_cmd, t.sandbox_timeout_s,
+				coalesce(p.repo_tar, t.repo_tar), t.hidden_tar`, proofID).
+			Scan(&in.diff, &in.kind, &in.agentID, &in.task.Slug, &in.task.Image, &in.task.RunCmd, &in.task.SandboxTimeoutS,
+				&in.repoTar, &in.hiddenTr)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		w.log.Info("run_proof: nothing to do", "proof", proofID)
@@ -129,6 +162,19 @@ func (w *Worker) RunProof(ctx context.Context, proofID string) error {
 		return err
 	}
 	defer os.RemoveAll(dir)
+
+	if in.kind == KindGameBot {
+		// No diffTouchesTestFiles gate and no hidden-test bookkeeping here - a bot package has no notion
+		// of a protected test file, and its "hidden tarball" is empty (see games.syncTanksBotTask).
+		if err := Untar(in.repoTar, dir); err != nil {
+			return err
+		}
+		if reason := applyDiff(ctx, dir, in.diff); reason != "" {
+			return w.finish(ctx, proofID, StatusFailed, reason, nil)
+		}
+		return w.runGameBotProof(ctx, proofID, in.agentID, dir)
+	}
+
 	hidden, err := hiddenTestNames(in.hiddenTr)
 	if err != nil {
 		return err
@@ -166,6 +212,26 @@ func (w *Worker) RunProof(ctx context.Context, proofID string) error {
 		return w.finish(ctx, proofID, StatusFailed, "hidden_test_missing_or_failed", sr)
 	}
 	return w.finish(ctx, proofID, StatusPassed, "", sr)
+}
+
+// runGameBotProof is RunProof's game_bot branch, once the diff has applied cleanly: hand dir to the wired
+// judge and turn its verdict into a finished proof. A nil judge (SetGameBotJudge never called) is a
+// platform error, not a verdict - the job retries and the proof eventually becomes infra_error, rather
+// than being silently marked failed as if the bot itself were at fault.
+func (w *Worker) runGameBotProof(ctx context.Context, proofID, agentID, dir string) error {
+	if w.gameBotJudge == nil {
+		return fmt.Errorf("proofs: no game bot judge configured for proof %s", proofID)
+	}
+	v, err := w.gameBotJudge.JudgeProof(ctx, proofID, agentID, dir)
+	if err != nil {
+		return err
+	}
+	status := StatusFailed
+	if v.Passed {
+		status = StatusPassed
+	}
+	sr := &SandboxResult{Tests: v.Tests, ExitCode: 0, Output: v.Output, TimedOut: false}
+	return w.finish(ctx, proofID, status, v.Reason, sr)
 }
 
 // allPassed reports whether every named test appears in tests as passed.
