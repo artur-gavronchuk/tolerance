@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Timeline } from '@/components/proof/timeline'
 import { ProofLogs, TestResults, VerdictBand } from '@/components/proof/result'
 import { DiffView } from '@/components/proof/diff-view'
-import { api, post, ApiError } from '@/lib/api'
+import { api, post, ApiError, friendlyMessage } from '@/lib/api'
 import type { Proof } from '@/lib/types'
 import { STATUS_LABEL, between } from '@/lib/format'
 
@@ -58,7 +58,7 @@ export default function ProofPage({ params }: { params: Promise<{ id: string }> 
       setProof(p)
       setError(null)
     } catch (e) {
-      setError((e as ApiError).status === 404 ? 'There is no proof with this id, or it belongs to someone else.' : (e as ApiError).message)
+      setError((e as ApiError).status === 404 ? 'There is no proof with this id, or it belongs to someone else.' : friendlyMessage(e))
     }
   }, [id])
   useEffect(() => {
@@ -77,7 +77,7 @@ export default function ProofPage({ params }: { params: Promise<{ id: string }> 
       setProof(p)
       setError(null)
     } catch (e) {
-      setError((e as ApiError).message)
+      setError(friendlyMessage(e))
     } finally {
       setRetrying(false)
     }

@@ -1,9 +1,140 @@
+{
+	# Global metrics collection (served on the internal :2020 site below,
+	# never on the public site).
+	metrics
+
+	# Cloudflare's edge IP ranges (https://www.cloudflare.com/ips-v4,
+	# https://www.cloudflare.com/ips-v6) as of 2026-09-25. When the orange
+	# cloud is on, Cloudflare terminates in front of Caddy and sets
+	# CF-Connecting-IP; trusting only these ranges as proxies means a direct
+	# request that forges CF-Connecting-IP is ignored and the real socket
+	# peer is used instead. When the orange cloud is off, none of these
+	# ranges match the connecting peer, trusted_proxies has no effect, and
+	# Caddy falls back to the real client IP from the TCP connection either
+	# way — so this config works whether or not the proxy is enabled.
+	servers {
+		trusted_proxies static \
+ 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 \
+ 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 \
+ 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 \
+ 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 \
+ 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 \
+ 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+
+		# Guard against slow-client and header-flood abuse. write is long
+		# enough for the connector's 25s long-poll on /connector/tasks/next
+		# plus margin.
+		timeouts {
+			read_header 10s
+			read_body 30s
+			write 60s
+			idle 2m
+		}
+		max_header_size 64KB
+	}
+}
+
 {$ARENA_DOMAIN} {
-	encode gzip
+	encode zstd gzip
+
+	# JSON access logs to stdout for Alloy to pick up and ship to Loki.
+	# client_ip is populated because of the global trusted_proxies/
+	# client_ip_headers config above. Cookie/Authorization/Set-Cookie never
+	# make it into the log line.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>headers>Cookie delete
+				request>headers>Authorization delete
+				resp_headers>Set-Cookie delete
+			}
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+		-Server
+	}
+
+	# Metrics and any future internal-only paths are never public, even by
+	# accident: the real metrics listener isn't reachable through Caddy at
+	# all (see docker-compose.yml, ARENA_METRICS_ADDR), this is defense in
+	# depth.
+	handle /metrics* {
+		respond 404
+	}
+	handle /internal/* {
+		respond 404
+	}
+
 	handle /api/* {
-		reverse_proxy api:8080
+		# The connector posts a diff (capped at 256 KiB) plus log tail; the
+		# backend enforces a 1 MiB request body cap on that route
+		# (internal/proofs/model.go, maxResultBodyBytes) — 2 MiB here just
+		# keeps Caddy from being the stricter limit. Every other /api/*
+		# route (JSON bodies) gets a tight 256 KiB cap.
+		@connectorResult path /api/v1/connector/proofs/*/result
+		request_body @connectorResult {
+			max_size 2MB
+		}
+		# Bot version uploads (base64-encoded archive in a JSON body) are
+		# capped at 2 MiB by the backend (games.maxVersionUploadBytes); 4 MiB
+		# here just keeps Caddy from being the stricter limit, same reasoning
+		# as connectorResult above.
+		@tanksVersion path /api/v1/me/tanks/versions /api/v1/connector/tanks/versions
+		request_body @tanksVersion {
+			max_size 4MB
+		}
+		@rest not path /api/v1/connector/proofs/*/result /api/v1/me/tanks/versions /api/v1/connector/tanks/versions
+		request_body @rest {
+			max_size 256KB
+		}
+
+		reverse_proxy {
+			dynamic a api 8080 {
+				refresh 5s
+			}
+			lb_policy least_conn
+			fail_duration 10s
+			max_fails 2
+			header_up X-Real-IP {client_ip}
+		}
 	}
+
+	# Only reachable when the monitoring profile runs grafana; Caddy only
+	# resolves upstreams at request time, so this route is harmless (just
+	# 502s) when monitoring is off.
+	handle /grafana* {
+		reverse_proxy grafana:3000
+	}
+
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy {
+			dynamic a web 3000 {
+				refresh 5s
+			}
+			lb_policy least_conn
+			fail_duration 10s
+			max_fails 2
+		}
 	}
+}
+
+www.{$ARENA_DOMAIN} {
+	redir https://{$ARENA_DOMAIN}{uri} permanent
+}
+
+# Prometheus scrape target for Caddy's own metrics. Not published to the
+# host (no `ports:` entry for it in docker-compose.yml) and has no admin
+# API exposed, so it's reachable only from other containers on the compose
+# network, e.g. prometheus scraping caddy:2020.
+:2020 {
+	metrics
 }

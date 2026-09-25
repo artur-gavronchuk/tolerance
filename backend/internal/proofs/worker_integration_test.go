@@ -289,21 +289,62 @@ func TestExpireStale(t *testing.T) {
 	_ = time.Second
 }
 
+// setJobState is a test helper that forces the run_proof job for proofID
+// into state, simulating either a long backlog (queued/leased, however old)
+// or a worker having given up (failed).
+func setJobState(t *testing.T, f fixture, proofID, state string) {
+	t.Helper()
+	err := f.d.AdminPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE jobs SET state = $2 WHERE kind = 'run_proof' AND payload->>'proof_id' = $1`, proofID, state)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			t.Fatalf("no run_proof job found for proof %s", proofID)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A proof merely waiting its turn in a long job backlog — its run_proof job
+// still queued or leased, no matter how long ago the diff was submitted —
+// must never be swept as stuck; only a proof whose job has no active
+// (queued or leased) run left is genuinely dead.
 func TestExpireStale_StuckSandboxRunIsInfraError(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	id := submitted(t, f, goodDiff)
-	_ = f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE proofs SET diff_submitted_at = now() - interval '10 minutes' WHERE id = $1`, id)
-		return err
-	})
-	if n, _ := f.proofs.ExpireStale(ctx); n != 0 {
-		t.Fatalf("a run still inside its retry window must be left alone, swept %d", n)
+	old := func() {
+		_ = f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE proofs SET diff_submitted_at = now() - interval '2 hours' WHERE id = $1`, id)
+			return err
+		})
 	}
+
+	// Still queued behind a long backlog: not stuck, however old.
+	old()
+	if n, err := f.proofs.ExpireStale(ctx); err != nil || n != 0 {
+		t.Fatalf("a job still queued must not be swept, got n=%d err=%v", n, err)
+	}
+
+	// Picked up and being worked (leased): still not stuck.
+	setJobState(t, f, id, "leased")
 	_ = f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE proofs SET status = 'running_sandbox', diff_submitted_at = now() - interval '2 hours' WHERE id = $1`, id)
+		_, err := tx.Exec(ctx, `UPDATE proofs SET status = 'running_sandbox' WHERE id = $1`, id)
 		return err
 	})
+	old()
+	if n, err := f.proofs.ExpireStale(ctx); err != nil || n != 0 {
+		t.Fatalf("a leased (in-progress) job must not be swept, got n=%d err=%v", n, err)
+	}
+
+	// The job has exhausted its attempts (or the worker crashed before
+	// recording the verdict): genuinely dead, must be swept.
+	setJobState(t, f, id, "failed")
+	old()
 	if n, err := f.proofs.ExpireStale(ctx); err != nil || n != 1 {
 		t.Fatalf("sweep: %v %d", err, n)
 	}
@@ -313,6 +354,27 @@ func TestExpireStale_StuckSandboxRunIsInfraError(t *testing.T) {
 	}
 	if _, err := f.proofs.Retry(ctx, f.userID, id); err != nil {
 		t.Fatalf("a stuck proof must be retriable: %v", err)
+	}
+}
+
+// A proof whose run_proof job was never created at all (should not happen
+// given SubmitResult enqueues it in the same transaction, but is the same
+// "no active job" signal as an exhausted one) is swept the same way once
+// past the time floor.
+func TestExpireStale_NoJobAtAllIsAlsoStuck(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	id := submitted(t, f, goodDiff)
+	_ = f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM jobs WHERE kind = 'run_proof' AND payload->>'proof_id' = $1`, id)
+		return err
+	})
+	_ = f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE proofs SET diff_submitted_at = now() - interval '2 hours' WHERE id = $1`, id)
+		return err
+	})
+	if n, err := f.proofs.ExpireStale(ctx); err != nil || n != 1 {
+		t.Fatalf("a proof with no job at all must be swept once past the floor: n=%d err=%v", n, err)
 	}
 }
 

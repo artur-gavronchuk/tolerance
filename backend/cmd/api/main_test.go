@@ -58,6 +58,11 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake", devLogin: true}
+	// Effectively unlimited: the e2e test fires many requests back to back
+	// from one IP, and the global rate limiter is not what this test is
+	// exercising.
+	scale := scaleConfig{role: "all", workerConcurrency: 1,
+		rateIPRPS: 1e6, rateIPBurst: 1_000_000, rateKeyRPS: 1e6, rateKeyBurst: 1_000_000}
 	ps := proofs.NewService(d.AppPool)
 	// A real process launcher for house bots (in-process, no interpreter needed) and any uploaded bot
 	// (python/js, via python3/node) - short check matches so the qualify-driving tests stay fast. The games
@@ -65,12 +70,15 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	// their own fixtures deterministically.
 	gamesSvc := games.NewService(d.AppPool, ps, match.WithHouse(match.ProcessLauncher{}), log, games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
-		agents: agents.NewService(d.AppPool, ps), proofs: ps, games: gamesSvc}
+		agents: agents.NewService(d.AppPool, ps), proofs: ps, games: gamesSvc,
+		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 100),
+		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 100),
+		longPoll:   ratelimit.NewConcurrencyLimiter(2)}
 	if len(providers) > 0 {
 		dp.providers = providers[0]
 		cfg.publicURL = "http://arena.test"
 	}
-	srv := httptest.NewServer(newHandler(cfg, dp))
+	srv := httptest.NewServer(newHandler(cfg, scale, dp))
 	t.Cleanup(srv.Close)
 	router, err := openapi.Router()
 	if err != nil {

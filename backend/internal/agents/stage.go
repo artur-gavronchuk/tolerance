@@ -13,7 +13,11 @@ const (
 	StageOperational = "operational"
 	StageCheckFailed = "check_failed"
 
-	presenceTTL = 2 * time.Minute
+	// PresenceTTL is how fresh agent_presence.last_seen_at must be for an
+	// agent to count as connected/online. Exported so callers outside this
+	// package (the proofs metrics collector) use the same freshness bound
+	// instead of hardcoding their own "2 minutes".
+	PresenceTTL = 2 * time.Minute
 )
 
 // ProofFacts is what the stage needs to know about an agent's proofs. The
@@ -43,7 +47,7 @@ func ComputeStage(hasKey bool, lastSeen *time.Time, now time.Time, f ProofFacts)
 	if !hasKey || lastSeen == nil {
 		return StageRegistered
 	}
-	if now.Sub(*lastSeen) > presenceTTL {
+	if now.Sub(*lastSeen) > PresenceTTL {
 		return StageOffline
 	}
 	if f.HasPassed {

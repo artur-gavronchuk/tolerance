@@ -8,7 +8,7 @@ import { ProofList } from '@/components/proof-list'
 import { StageCard } from '@/components/stage-card'
 import { PRESENCE_LABEL, StatusDot } from '@/components/status-dot'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, ApiError } from '@/lib/api'
+import { api, friendlyMessage } from '@/lib/api'
 import { ago } from '@/lib/format'
 import { useMe } from '@/lib/use-me'
 import type { AgentOverview, Proof } from '@/lib/types'
@@ -73,7 +73,7 @@ export default function HomePage() {
       setProofs((await api<{ items: Proof[] }>('/proofs')).items)
       setError(null)
     } catch (e) {
-      setError((e as ApiError).message)
+      setError(friendlyMessage(e))
     }
   }, [hasAgent])
   useEffect(() => { void load() }, [load, lastKey])

@@ -4,12 +4,17 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"tolerance/internal/identity"
 	"tolerance/internal/proofs"
 )
 
@@ -94,6 +99,71 @@ func TestConnectorFlow_RepoStartedResult(t *testing.T) {
 	big := proofs.ResultInput{Diff: strings.Repeat("x", 256<<10+1)}
 	if err := f.proofs.SubmitResult(ctx, f.agent, p.ID, big); err == nil {
 		t.Fatalf("oversized diff must be rejected")
+	}
+}
+
+// TestNextTask_WakesPromptlyOnEnqueue proves the in-process notifier, not
+// just the 5s fallback poll: a poller already waiting on GET
+// /connector/tasks/next must see a proof created concurrently well under
+// the fallback interval.
+func TestNextTask_WakesPromptlyOnEnqueue(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	_ = f.agents.Heartbeat(ctx, f.agent, "0.1", "h")
+	_, key, err := f.agents.CreateKey(ctx, f.userID, "poller")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	proofs.RegisterConnectorRoutes(mux, f.proofs)
+	handler := identity.RequireAgent(f.agents)(mux)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	type result struct {
+		status int
+		body   struct {
+			ProofID string `json:"proof_id"`
+		}
+		elapsed time.Duration
+	}
+	done := make(chan result, 1)
+	start := time.Now()
+	go func() {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/connector/tasks/next?wait=20", nil)
+		req.Header.Set("Authorization", "Bearer "+key)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Error(err)
+			done <- result{}
+			return
+		}
+		defer resp.Body.Close()
+		var r result
+		r.status = resp.StatusCode
+		r.elapsed = time.Since(start)
+		_ = json.NewDecoder(resp.Body).Decode(&r.body)
+		done <- r
+	}()
+
+	// Give the poller time to start waiting before the proof exists.
+	time.Sleep(200 * time.Millisecond)
+	p, err := f.proofs.Create(ctx, f.userID, "go-fix-retry")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case r := <-done:
+		if r.status != http.StatusOK || r.body.ProofID != p.ID {
+			t.Fatalf("expected the newly created proof, got status=%d body=%+v", r.status, r.body)
+		}
+		if r.elapsed > 3*time.Second {
+			t.Fatalf("expected the poller to wake well under the 5s fallback, took %s", r.elapsed)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("poller did not wake up promptly after the proof was created")
 	}
 }
 

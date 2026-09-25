@@ -21,9 +21,12 @@ import (
 	"tolerance/internal/platform/sanitize"
 )
 
-type Service struct{ pool *db.Pool }
+type Service struct {
+	pool   *db.Pool
+	notify *notifier
+}
 
-func NewService(pool *db.Pool) *Service { return &Service{pool: pool} }
+func NewService(pool *db.Pool) *Service { return &Service{pool: pool, notify: newNotifier()} }
 
 const proofCols = `id, agent_id, task_slug, status, created_at, claimed_at, diff_submitted_at, finished_at,
 	diff, agent_log_tail, agent_duration_ms, agent_exit_code, sandbox_result, failure_reason, kind`
@@ -143,6 +146,11 @@ func (s *Service) create(ctx context.Context, userID, slug, wantKind string, rep
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, "proofs_one_open_idx") {
 		return Proof{}, httpx.New(http.StatusConflict, "proof_in_progress", "A proof is already in progress")
 	}
+	if err == nil {
+		// Only after the transaction commits is the proof visible to a
+		// connector's Claim; wake anyone already long-polling for it.
+		s.notify.notify(p.AgentID)
+	}
 	return p, err
 }
 
@@ -241,6 +249,9 @@ func (s *Service) Retry(ctx context.Context, userID, id string) (Proof, error) {
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, "proofs_one_open_idx") {
 		return Proof{}, httpx.New(http.StatusConflict, "proof_in_progress", "A proof is already in progress")
 	}
+	if err == nil {
+		s.notify.notify(p.AgentID)
+	}
 	return p, err
 }
 
@@ -274,6 +285,15 @@ func (s *Service) task(ctx context.Context, tx pgx.Tx, slug string) (*Task, erro
 	err := tx.QueryRow(ctx, `SELECT slug, title, language, image, run_cmd, agent_timeout_s, sandbox_timeout_s, visible_tests, hidden_tests, task_md, repo_sha256 FROM proof_tasks WHERE slug = $1`, slug).
 		Scan(&t.Slug, &t.Title, &t.Language, &t.Image, &t.RunCmd, &t.AgentTimeoutS, &t.SandboxTimeoutS, &t.VisibleTests, &t.HiddenTests, &t.TaskMD, &t.RepoSHA256)
 	return &t, err
+}
+
+// WaitForProof returns a channel that fires (at most once, non-blocking)
+// whenever Create or Retry enqueues a new proof for agentID, and a cancel
+// func the caller must call exactly once to unsubscribe. The connector's
+// long-poll uses this to wake immediately instead of waiting for its next
+// fallback database poll.
+func (s *Service) WaitForProof(agentID string) (<-chan struct{}, func()) {
+	return s.notify.wait(agentID)
 }
 
 // Claim hands the agent's oldest queued proof to the connector. SKIP LOCKED
@@ -343,7 +363,21 @@ func (s *Service) Started(ctx context.Context, agentID, proofID string) error {
 // claimed within 5 minutes, and claimed/running ones whose agent timeout
 // (plus a minute of slack) has passed without a result. It also sweeps
 // proofs whose diff arrived but whose sandbox run never concluded into
-// infra_error (reason "stuck"): the agent did its part, the platform did not.
+// infra_error (reason "stuck"): the agent did its part, the platform did
+// not.
+//
+// "Never concluded" is judged by the run_proof job's own state, not by how
+// long ago the diff was submitted: under launch load the job queue can be
+// tens of minutes deep, and a proof merely waiting its turn (its job still
+// queued, or leased and being worked) must not be swept out from under it.
+// A proof only counts as stuck once no run_proof job for it is queued or
+// leased any more: normally that only happens because the worker itself
+// already moved the proof to a terminal status when its job's last attempt
+// failed (see Worker.handle), so reaching this sweep with no active job
+// left means that never happened — the worker crashed between failing the
+// job and recording the verdict, or the job's row is missing entirely. The
+// small time floor is just slack against the enqueue and the status update
+// landing in the same transaction (they always do), not the real signal.
 func (s *Service) ExpireStale(ctx context.Context) (int, error) {
 	var n int64
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
@@ -357,14 +391,13 @@ func (s *Service) ExpireStale(ctx context.Context) (int, error) {
 			return err
 		}
 		n = tag.RowsAffected()
-		// The run_proof job gets 3 attempts, each up to sandbox_timeout_s, with
-		// backoff between them, and a crashed worker's 15-minute lease must run
-		// out before the job is reclaimed. Past all of that plus slack, nothing
-		// is coming.
 		tag, err = tx.Exec(ctx, `
 			UPDATE proofs p SET status = 'infra_error', finished_at = now(), failure_reason = 'stuck'
 			FROM proof_tasks t WHERE t.slug = p.task_slug AND p.status IN ('diff_submitted', 'running_sandbox')
-			  AND coalesce(p.diff_submitted_at, p.claimed_at, p.created_at) < now() - make_interval(secs => 3 * t.sandbox_timeout_s + 1200)`)
+			  AND coalesce(p.diff_submitted_at, p.claimed_at, p.created_at) < now() - interval '5 minutes'
+			  AND NOT EXISTS (
+			    SELECT 1 FROM jobs j WHERE j.kind = 'run_proof' AND j.payload->>'proof_id' = p.id
+			      AND j.state IN ('queued', 'leased'))`)
 		n += tag.RowsAffected()
 		return err
 	})

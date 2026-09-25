@@ -1,0 +1,25 @@
+# Production override, applied on top of ../docker-compose.yml when
+# ARENA_ENV=production (see Makefile: PROD_FILES / COMPOSE_FILES).
+#
+# api and web stop publishing host ports once they can have more than one
+# replica — Caddy (dynamic-DNS load balancing, see ../Caddyfile) is the only
+# public entrypoint in production. `!reset []` (Compose Spec) replaces the
+# base file's `ports:` list instead of merging into it.
+#
+# Replica counts default to 1 (identical to dev) and are changed without a
+# rebuild by deploy/scale.sh, which edits API_REPLICAS/WEB_REPLICAS/
+# WORKER_REPLICAS in .env and re-runs `up -d --scale`.
+services:
+  api:
+    ports: !reset []
+    deploy:
+      replicas: ${API_REPLICAS:-1}
+
+  web:
+    ports: !reset []
+    deploy:
+      replicas: ${WEB_REPLICAS:-1}
+
+  worker:
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}

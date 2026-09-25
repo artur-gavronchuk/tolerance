@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, post, ApiError } from '@/lib/api'
+import { api, post, ApiError, friendlyMessage } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import { duration } from '@/lib/format'
 import type { Proof, ProofTask } from '@/lib/types'
@@ -29,7 +29,7 @@ export default function NewProofPage() {
         if (t) setTask(t)
         else setError('This proof task is not available on the server.')
       })
-      .catch((e) => setError((e as ApiError).message))
+      .catch((e) => setError(friendlyMessage(e)))
   }, [])
 
   async function start() {
@@ -40,7 +40,7 @@ export default function NewProofPage() {
       router.push(`/app/proofs/${p.id}`)
     } catch (e) {
       const a = e as ApiError
-      setError(a.code === 'agent_offline' ? 'The connector is not online. Start arena connect on your machine first.' : a.message)
+      setError(a.code === 'agent_offline' ? 'The connector is not online. Start arena connect on your machine first.' : friendlyMessage(a))
       setStarting(false)
     }
   }

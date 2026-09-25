@@ -1,0 +1,65 @@
+# Prometheus config for the `monitoring` compose profile. Mounted read-only
+# into the prometheus container (see docker-compose.yml). Reloaded
+# automatically on file_sd_configs target changes; needs `docker compose
+# restart prometheus` (or a `kill -HUP`) after editing scrape_configs.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # api and worker are Compose services that can have several replicas
+  # (deploy/compose.prod.yml + deploy/scale.sh); dns_sd resolves the
+  # service name to every replica's IP and scrapes each one as its own
+  # target/instance, unlike static_configs which would only ever hit one.
+  # DB-derived gauges (arena_proofs, arena_jobs_*, arena_agents_*,
+  # arena_users_total) are identical across every api instance — use max()
+  # over instances in dashboards/alerts. Worker-only metrics
+  # (arena_sandbox_run_seconds, arena_proof_verdicts_total,
+  # arena_workers_busy, arena_worker_concurrency) are per-instance — sum()
+  # them.
+  - job_name: arena-api
+    dns_sd_configs:
+      - names: ["api"]
+        type: A
+        port: 9091
+        refresh_interval: 15s
+
+  - job_name: arena-worker
+    dns_sd_configs:
+      - names: ["worker"]
+        type: A
+        port: 9091
+        refresh_interval: 15s
+
+  # Remote sandbox workers on other hosts (deploy/add-worker.sh), reached
+  # over the private network. add-worker.sh/remove-worker.sh manage these
+  # files; an empty glob match is not an error.
+  - job_name: arena-worker-remote
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/worker-*.json"]
+        refresh_interval: 30s
+
+  - job_name: node-remote
+    file_sd_configs:
+      - files: ["/etc/prometheus/targets/node-*.json"]
+        refresh_interval: 30s
+
+  - job_name: caddy
+    static_configs:
+      - targets: ["caddy:2020"]
+
+  - job_name: node-exporter
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: postgres-exporter
+    static_configs:
+      - targets: ["postgres-exporter:9187"]

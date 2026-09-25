@@ -1,0 +1,89 @@
+// Grafana Alloy: discovers containers via the Docker socket (read-only) and
+// ships their stdout/stderr to Loki. Mounted read-only into the alloy
+// container (docker-compose.yml, monitoring profile). LOKI_URL is passed in
+// as an env var (http://loki:3100/loki/api/v1/push locally, or the main
+// host's private IP for a remote worker — see compose.worker.yml).
+
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		target_label  = "compose_project"
+	}
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+}
+
+loki.source.docker "containers" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.docker.containers.targets
+	relabel_rules = discovery.relabel.containers.rules
+	labels        = {host = sys.env("HOSTNAME")}
+	forward_to    = [loki.process.containers.receiver]
+}
+
+loki.process "containers" {
+	forward_to = [loki.write.default.receiver]
+
+	// Healthchecks are noise, not signal — drop them even if a service logs
+	// them despite the api-level filtering.
+	stage.drop {
+		expression = ".*\"route\":\"/healthz\".*|.* /healthz .*"
+	}
+
+	// Services log structured JSON (log/slog with a JSON handler). level and
+	// role are low-cardinality and useful to filter/group by, so they
+	// become labels; everything else that identifies a single request or
+	// entity goes to structured metadata instead, to keep label
+	// cardinality flat regardless of traffic volume.
+	stage.json {
+		expressions = {
+			level      = "level",
+			role       = "role",
+			request_id = "request_id",
+			route      = "route",
+			status     = "status",
+			client_ip  = "client_ip",
+			user_id    = "user_id",
+			agent_id   = "agent_id",
+			proof_id   = "proof_id",
+		}
+	}
+
+	stage.labels {
+		values = {
+			level = "",
+			role  = "",
+		}
+	}
+
+	stage.structured_metadata {
+		values = {
+			request_id = "",
+			route      = "",
+			status     = "",
+			client_ip  = "",
+			user_id    = "",
+			agent_id   = "",
+			proof_id   = "",
+		}
+	}
+}
+
+loki.write "default" {
+	endpoint {
+		url = sys.env("LOKI_URL")
+	}
+}
