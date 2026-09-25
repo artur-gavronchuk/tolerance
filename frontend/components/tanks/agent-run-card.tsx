@@ -42,7 +42,7 @@ export function AgentRunCard({ agent, runs, onStarted }: {
       onStarted()
     } catch (e) {
       const a = e as ApiError
-      setError(a.code === 'agent_offline' ? 'The connector is not online. Run `arena connect` first.' : friendlyMessage(a))
+      setError(a.code === 'agent_offline' ? `The connector is not online. Run \`${CLI} connect\` first.` : friendlyMessage(a))
     } finally {
       setStarting(false)
     }

@@ -63,13 +63,13 @@ export function MyMatches({ matches, botId }: { matches: MatchView[]; botId: str
                 vs {opponents(m, botId)}
               </Link>
               <span className="shrink-0 text-xs text-muted-foreground">{m.finished_at ? ago(m.finished_at) : m.status}</span>
-              <button type="button" onClick={() => void toggle(m.id)}
+              <button type="button" onClick={() => void toggle(m.id)} aria-expanded={isOpen} aria-controls={`match-log-${m.id}`}
                 className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline">
                 My bot&apos;s log<ChevronDown className={cn('size-3.5 transition-transform', isOpen && 'rotate-180')} />
               </button>
             </div>
             {isOpen && (
-              <pre className="mt-3 max-h-64 overflow-auto rounded-[10px] border border-border bg-muted/40 p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words">
+              <pre id={`match-log-${m.id}`} className="mt-3 max-h-64 overflow-auto rounded-[10px] border border-border bg-muted/40 p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words">
                 {log === 'loading' ? 'Loading…' : log === 'error' ? 'Could not load the log.' : log?.text || 'No output.'}
               </pre>
             )}
