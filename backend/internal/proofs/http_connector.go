@@ -15,6 +15,7 @@ const maxLongPoll = 25 * time.Second
 
 type nextTaskResponse struct {
 	ProofID string `json:"proof_id"`
+	Kind    string `json:"kind"`
 	Task    *Task  `json:"task"`
 }
 
@@ -30,7 +31,7 @@ func RegisterConnectorRoutes(mux *http.ServeMux, s *Service) {
 				return
 			}
 			if p != nil {
-				httpx.Respond(w, http.StatusOK, nextTaskResponse{ProofID: p.ID, Task: t})
+				httpx.Respond(w, http.StatusOK, nextTaskResponse{ProofID: p.ID, Kind: p.Kind, Task: t})
 				return
 			}
 			if time.Now().After(deadline) {

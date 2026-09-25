@@ -93,8 +93,9 @@ func isMacJunk(clean string) bool {
 }
 
 // readArchive decompresses and parses a tar.gz, dropping macOS junk, enforcing MaxArchive, MaxUnpacked and
-// MaxFiles, and refusing illegal paths and non-file/non-directory entries. It does not look at bot.json at
-// all - that is validate's job, once wrapper stripping has run.
+// MaxFiles, and refusing illegal paths (absolute, "..", a backslash anywhere in the raw name), duplicate
+// paths, path collisions (a file used as another entry's parent directory), and non-file/non-directory
+// entries. It does not look at bot.json at all - that is validate's job, once wrapper stripping has run.
 func readArchive(archive []byte) ([]entry, error) {
 	if len(archive) > MaxArchive {
 		return nil, errf("bot archive: compressed size exceeds %d bytes", MaxArchive)
@@ -109,6 +110,7 @@ func readArchive(archive []byte) ([]entry, error) {
 	tr := tar.NewReader(cr)
 
 	var entries []entry
+	seen := make(map[string]struct{})
 	fileCount := 0
 	for {
 		h, err := tr.Next()
@@ -129,9 +131,13 @@ func readArchive(archive []byte) ([]entry, error) {
 		if isMacJunk(clean) {
 			continue
 		}
-		if path.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, "../") {
+		if path.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, "../") || strings.Contains(h.Name, `\`) {
 			return nil, errf("bot archive: illegal path %q", h.Name)
 		}
+		if _, dup := seen[clean]; dup {
+			return nil, errf("bot archive: duplicate path %q in archive", clean)
+		}
+		seen[clean] = struct{}{}
 
 		var isDir bool
 		switch h.Typeflag {
@@ -161,8 +167,33 @@ func readArchive(archive []byte) ([]entry, error) {
 		entries = append(entries, entry{name: clean, isDir: isDir, data: data})
 	}
 
+	if err := checkPathCollisions(entries); err != nil {
+		return nil, err
+	}
+
 	sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
 	return entries, nil
+}
+
+// checkPathCollisions rejects an entry list where a regular file's path is also used as an ancestor
+// directory of another entry (e.g. a file "a" alongside a file "a/b") - readArchive's own duplicate check
+// already catches the same clean path appearing twice (a file "stuff" and a directory "stuff" both clean
+// to the same name), but that check can't see a file being used as someone else's parent directory.
+func checkPathCollisions(entries []entry) error {
+	isDir := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		isDir[e.name] = e.isDir
+	}
+	for _, e := range entries {
+		parts := strings.Split(e.name, "/")
+		for i := 1; i < len(parts); i++ {
+			prefix := strings.Join(parts[:i], "/")
+			if dir, ok := isDir[prefix]; ok && !dir {
+				return errf("bot archive: %q is used as both a file and a directory", prefix)
+			}
+		}
+	}
+	return nil
 }
 
 // stripWrapper removes a single shared top-level directory (the "mybot/" an archive tool wraps everything
@@ -258,7 +289,7 @@ func manifestFrom(entries []entry) (Manifest, error) {
 		return Manifest{}, errf(`bot.json: "entry" must not be empty`)
 	}
 	entryPath := path.Clean(raw.Entry)
-	if path.IsAbs(entryPath) || entryPath == ".." || strings.HasPrefix(entryPath, "../") {
+	if path.IsAbs(entryPath) || entryPath == ".." || strings.HasPrefix(entryPath, "../") || strings.Contains(raw.Entry, `\`) {
 		return Manifest{}, errf(`bot.json: "entry" has an illegal path %q`, raw.Entry)
 	}
 	if _, ok := findEntry(entries, entryPath); !ok {

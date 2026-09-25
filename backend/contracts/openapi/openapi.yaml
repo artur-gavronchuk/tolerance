@@ -197,6 +197,160 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /tanks/leaderboard:
+    get:
+      operationId: tanksLeaderboard
+      security: []
+      parameters:
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/LeaderboardEntry" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /tanks/matches:
+    get:
+      operationId: tanksMatches
+      security: []
+      parameters:
+        - { name: bot_id, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/MatchView" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /tanks/matches/{id}:
+    get:
+      operationId: tanksMatch
+      security: []
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatchView" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /tanks/matches/{id}/replay:
+    get:
+      operationId: tanksMatchReplay
+      security: []
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: gzip replay
+          content:
+            application/gzip:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Problem" }
+  /tanks/bots/{id}:
+    get:
+      operationId: tanksBot
+      security: []
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BotProfile" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /tanks/live:
+    get:
+      operationId: tanksLive
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LiveView" }
+
+  /me/tanks:
+    get:
+      operationId: myTanks
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyTanks" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /me/tanks/bot:
+    post:
+      operationId: saveTanksBot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyBot" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /me/tanks/versions:
+    post:
+      operationId: uploadTanksVersion
+      requestBody: { $ref: "#/components/requestBodies/ArchiveUpload" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionView" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /me/tanks/agent-runs:
+    post:
+      operationId: startTanksAgentRun
+      responses:
+        "201": { $ref: "#/components/responses/ProofEnvelope" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /me/tanks/matches/{id}/log:
+    get:
+      operationId: tanksMatchLog
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatchLog" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /connector/download:
     get:
       operationId: downloadConnector
@@ -280,9 +434,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [proof_id, task]
+                required: [proof_id, kind, task]
                 properties:
                   proof_id: { type: string }
+                  kind: { type: string, enum: [proof, game_bot] }
                   task: { $ref: "#/components/schemas/ProofTask" }
         "204": { description: Nothing queued }
         "401": { $ref: "#/components/responses/Problem" }
@@ -331,6 +486,22 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /connector/tanks/versions:
+    post:
+      operationId: connectorUploadTanksVersion
+      security: [{ apiKeyAuth: [] }]
+      requestBody: { $ref: "#/components/requestBodies/ArchiveUpload" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionView" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
 components:
   securitySchemes:
@@ -347,6 +518,15 @@ components:
             properties:
               email: { type: string }
               password: { type: string }
+    ArchiveUpload:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [archive_base64]
+            properties:
+              archive_base64: { type: string }
   responses:
     Problem:
       description: Error
@@ -468,12 +648,13 @@ components:
         timed_out: { type: boolean }
     Proof:
       type: object
-      required: [id, agent_id, task_slug, status, created_at, claimed_at, diff_submitted_at, finished_at, diff, agent_log_tail, agent_duration_ms, agent_exit_code, sandbox_result, failure_reason]
+      required: [id, agent_id, task_slug, status, created_at, claimed_at, diff_submitted_at, finished_at, diff, agent_log_tail, agent_duration_ms, agent_exit_code, sandbox_result, failure_reason, kind]
       properties:
         id: { type: string }
         agent_id: { type: string }
         task_slug: { type: string }
         status: { type: string, enum: [queued, claimed, running_agent, diff_submitted, running_sandbox, passed, failed, infra_error, expired] }
+        kind: { type: string, enum: [proof, game_bot] }
         created_at: { type: string, format: date-time }
         claimed_at: { type: string, format: date-time, nullable: true }
         diff_submitted_at: { type: string, format: date-time, nullable: true }
@@ -486,3 +667,137 @@ components:
           nullable: true
           allOf: [{ $ref: "#/components/schemas/SandboxResult" }]
         failure_reason: { type: string }
+    Check:
+      type: object
+      required: [name, passed, detail]
+      properties:
+        name: { type: string }
+        passed: { type: boolean }
+        detail: { type: string }
+    VersionView:
+      type: object
+      required: [id, number, source, status, language, checks, check_log, check_match_id, proof_id, created_at]
+      properties:
+        id: { type: string }
+        number: { type: integer }
+        source: { type: string, enum: [agent, upload, house] }
+        status: { type: string, enum: [pending, active, rejected] }
+        language: { type: string }
+        checks:
+          type: array
+          items: { $ref: "#/components/schemas/Check" }
+        check_log: { type: string }
+        check_match_id: { type: string, nullable: true }
+        proof_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    MyBot:
+      type: object
+      required: [id, name, rating, mu, sigma, matches, wins, active_version]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        rating: { type: integer }
+        mu: { type: number }
+        sigma: { type: number }
+        matches: { type: integer }
+        wins: { type: integer }
+        active_version: { type: integer, nullable: true }
+    MyTanks:
+      type: object
+      required: [bot, versions, agent_runs, matches]
+      properties:
+        bot:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/MyBot" }]
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/VersionView" }
+        agent_runs:
+          type: array
+          items: { $ref: "#/components/schemas/Proof" }
+        matches:
+          type: array
+          items: { $ref: "#/components/schemas/MatchView" }
+    MatchPlayerView:
+      type: object
+      required: [slot, bot_id, name, house, source, version, place, kills, damage, death_tick, status, rating_before, rating_after]
+      properties:
+        slot: { type: integer }
+        bot_id: { type: string }
+        name: { type: string }
+        house: { type: boolean }
+        source: { type: string, enum: [agent, upload, house] }
+        version: { type: integer }
+        place: { type: integer, nullable: true }
+        kills: { type: integer }
+        damage: { type: integer }
+        death_tick: { type: integer, nullable: true }
+        status: { type: string }
+        rating_before: { type: integer, nullable: true }
+        rating_after: { type: integer, nullable: true }
+    MatchView:
+      type: object
+      required: [id, kind, status, map, seed, ticks, featured, has_replay, created_at, started_at, finished_at, players]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [ladder, check] }
+        status: { type: string, enum: [queued, running, finished, infra_error] }
+        map: { type: string }
+        seed: { type: integer, format: int64 }
+        ticks: { type: integer }
+        featured: { type: boolean }
+        has_replay: { type: boolean }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        players:
+          type: array
+          items: { $ref: "#/components/schemas/MatchPlayerView" }
+    LeaderboardEntry:
+      type: object
+      required: [rank, bot_id, name, rating, mu, sigma, matches, wins, house, source, version]
+      properties:
+        rank: { type: integer }
+        bot_id: { type: string }
+        name: { type: string }
+        rating: { type: integer }
+        mu: { type: number }
+        sigma: { type: number }
+        matches: { type: integer }
+        wins: { type: integer }
+        house: { type: boolean }
+        source: { type: string, enum: [agent, upload, house] }
+        version: { type: integer }
+    VersionPublic:
+      type: object
+      required: [number, source, status, created_at]
+      properties:
+        number: { type: integer }
+        source: { type: string, enum: [agent, upload, house] }
+        status: { type: string, enum: [pending, active, rejected] }
+        created_at: { type: string, format: date-time }
+    BotProfile:
+      allOf:
+        - { $ref: "#/components/schemas/LeaderboardEntry" }
+        - type: object
+          required: [created_at, versions]
+          properties:
+            created_at: { type: string, format: date-time }
+            versions:
+              type: array
+              items: { $ref: "#/components/schemas/VersionPublic" }
+    LiveView:
+      type: object
+      required: [match_id, starts_at, duration_ms, now]
+      properties:
+        match_id: { type: string, nullable: true }
+        starts_at: { type: string, format: date-time, nullable: true }
+        duration_ms: { type: integer }
+        now: { type: string, format: date-time }
+    MatchLog:
+      type: object
+      required: [match_id, slot, stderr]
+      properties:
+        match_id: { type: string }
+        slot: { type: integer }
+        stderr: { type: string }

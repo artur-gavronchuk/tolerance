@@ -5,7 +5,9 @@ import (
 	"time"
 )
 
-var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$`)
+// NameRe is the shared agent/bot name pattern: alphanumeric, hyphen and underscore, 2-32 characters,
+// starting with a letter or digit. The games package reuses it for game_bots.name.
+var NameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{1,31}$`)
 
 type Agent struct {
 	ID          string
