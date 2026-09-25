@@ -20,6 +20,7 @@ CONNECTOR_DIR := $(CURDIR)/backend/.connector
 up: .env proof-image
 	@docker info >/dev/null 2>&1 || (command -v colima >/dev/null && colima start) || (echo "Docker is not running"; exit 1)
 	@if [ "$(ARENA_ENV)" = "production" ] && grep -q "dev_password" .env; then echo "refusing to start production with dev passwords in .env"; exit 1; fi
+	@if [ "$(ARENA_ENV)" = "production" ] && [ "$(ARENA_DEV_LOGIN)" = "true" ]; then echo "refusing to start production with ARENA_DEV_LOGIN=true"; exit 1; fi
 	DOCKER_GID=$(DOCKER_GID) $(COMPOSE) $(PROFILE) up --build -d
 	@echo
 	@echo "  site:  http://localhost:$(WEB_PORT)"
@@ -50,7 +51,8 @@ migrate:
 
 run-api:
 	cd backend && ARENA_ADDR=127.0.0.1:$(API_PORT) ARENA_CONNECTOR_DIR=$(CONNECTOR_DIR) \
-		ARENA_APP_DATABASE_URL="postgres://arena_app:$(ARENA_APP_ROLE_PASSWORD)@127.0.0.1:5432/arena?sslmode=disable" go run ./cmd/api
+		ARENA_APP_DATABASE_URL="postgres://arena_app:$(ARENA_APP_ROLE_PASSWORD)@127.0.0.1:5432/arena?sslmode=disable" \
+		ARENA_DEV_LOGIN=$(or $(ARENA_DEV_LOGIN),true) go run ./cmd/api
 
 run-web:
 	cd frontend && API_URL=http://127.0.0.1:$(API_PORT) pnpm dev -p $(WEB_PORT)

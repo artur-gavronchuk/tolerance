@@ -12,6 +12,7 @@ type config struct {
 	databaseURL      string
 	adminEmails      []string
 	secureCookies    bool
+	devLogin         bool
 	allowNonLoopback bool
 	workDir          string
 	sandbox          string // "docker" | "fake"
@@ -23,6 +24,7 @@ func loadConfig() (config, error) {
 		addr:             env("ARENA_ADDR", "127.0.0.1:8080"),
 		databaseURL:      os.Getenv("ARENA_APP_DATABASE_URL"),
 		secureCookies:    os.Getenv("ARENA_SECURE_COOKIES") == "true",
+		devLogin:         os.Getenv("ARENA_DEV_LOGIN") == "true",
 		allowNonLoopback: os.Getenv("ARENA_ALLOW_NON_LOOPBACK") == "true",
 		workDir:          env("ARENA_WORK_DIR", os.TempDir()),
 		sandbox:          env("ARENA_SANDBOX", "docker"),
@@ -45,6 +47,9 @@ func loadConfig() (config, error) {
 	}
 	if cfg.sandbox != "docker" && cfg.sandbox != "fake" {
 		return config{}, errors.New("ARENA_SANDBOX must be docker or fake")
+	}
+	if cfg.devLogin && cfg.secureCookies {
+		return config{}, errors.New("ARENA_DEV_LOGIN is for local runs and CI; it cannot be on with ARENA_SECURE_COOKIES=true")
 	}
 	return cfg, nil
 }

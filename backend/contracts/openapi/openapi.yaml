@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Agent Arena API
   version: "0.4.0"
-  description: Slice 1 — sign up, connect an agent, run a proof.
+  description: Slice 1 — sign in with GitHub or Google, connect an agent, run a proof.
 servers:
   - url: /api/v1
 security:
@@ -11,24 +11,39 @@ security:
   - {}
 
 paths:
-  /auth/signup:
-    post:
-      operationId: signup
+  /auth/providers:
+    get:
+      operationId: listAuthProviders
       security: []
-      requestBody: { $ref: "#/components/requestBodies/Credentials" }
       responses:
-        "201": { $ref: "#/components/responses/UserEnvelope" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-        "429": { $ref: "#/components/responses/Problem" }
-  /auth/login:
+        "200":
+          description: Sign-in options this server offers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [providers, dev_login]
+                properties:
+                  providers:
+                    type: array
+                    items: { type: string, enum: [github, google] }
+                  dev_login: { type: boolean }
+  /auth/dev:
     post:
-      operationId: login
+      operationId: devLogin
+      description: Development sign-in by email; exists only when ARENA_DEV_LOGIN=true.
       security: []
-      requestBody: { $ref: "#/components/requestBodies/Credentials" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
       responses:
         "200": { $ref: "#/components/responses/UserEnvelope" }
-        "401": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
   /auth/logout:
@@ -336,17 +351,6 @@ components:
   securitySchemes:
     cookieAuth: { type: apiKey, in: cookie, name: arena_session }
     apiKeyAuth: { type: http, scheme: bearer }
-  requestBodies:
-    Credentials:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            required: [email, password]
-            properties:
-              email: { type: string }
-              password: { type: string }
   responses:
     Problem:
       description: Error

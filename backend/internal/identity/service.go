@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/mail"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"tolerance/internal/platform/audit"
 	"tolerance/internal/platform/db"
@@ -63,18 +61,6 @@ func (s *Service) Get(ctx context.Context, id string) (User, error) {
 	return u, err
 }
 
-const minPasswordLen = 10
-
-func validateCredentials(email, password string) error {
-	if _, err := mail.ParseAddress(email); err != nil || len(email) > 254 {
-		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "email must be a valid address", "email", "invalid")
-	}
-	if len(password) < minPasswordLen || len(password) > 1024 {
-		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "password must be at least 10 characters", "password", "too_short")
-	}
-	return nil
-}
-
 func (s *Service) roleFor(email string) string {
 	if s.adminEmails[email] {
 		return "admin"
@@ -82,16 +68,27 @@ func (s *Service) roleFor(email string) string {
 	return "user"
 }
 
-// Signup creates the user and a first session. The token goes into the
-// cookie; only its hash is stored.
-func (s *Service) Signup(ctx context.Context, email, password string) (User, string, error) {
-	email = NormalizeEmail(email)
-	if err := validateCredentials(email, password); err != nil {
-		return User{}, "", err
-	}
-	hash, err := HashPassword(password)
-	if err != nil {
-		return User{}, "", err
+// Identity is who a sign-in provider says the person is.
+type Identity struct {
+	Provider      string // "github" | "google" | "dev"
+	Subject       string // the provider's stable account id
+	Email         string
+	EmailVerified bool
+	Login         string // GitHub login; empty for other providers
+}
+
+var ErrEmailUnverified = httpx.New(http.StatusForbidden, "email_unverified", "Your account has no verified email address")
+
+// SignIn finds or creates the user behind an external identity and opens a
+// session. A known (provider, subject) is that user. A new one is linked to
+// the user with the same verified email, or creates one; without a verified
+// email it is refused, or anyone could claim an account by typing its email
+// at the provider. Concurrent first sign-ins of the same identity converge
+// on one user through the ON CONFLICT clauses.
+func (s *Service) SignIn(ctx context.Context, id Identity) (User, string, error) {
+	email := NormalizeEmail(id.Email)
+	if id.Provider == "" || id.Subject == "" {
+		return User{}, "", errors.New("identity: provider and subject are required")
 	}
 	token, sid, err := newSessionToken()
 	if err != nil {
@@ -99,65 +96,66 @@ func (s *Service) Signup(ctx context.Context, email, password string) (User, str
 	}
 	var u User
 	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		if err := scanUser(tx.QueryRow(ctx, `INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING `+userColumns,
-			idgen.New("user"), email, hash, s.roleFor(email)), &u); err != nil {
+		var userID string
+		err := tx.QueryRow(ctx, `UPDATE user_identities SET email = $3, login = $4, last_login_at = now()
+			WHERE provider = $1 AND subject = $2 RETURNING user_id`, id.Provider, id.Subject, email, id.Login).Scan(&userID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			userID, err = s.attachIdentity(ctx, tx, id, email)
+		}
+		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, now() + $3::interval)`, sid, u.ID, sessionTTL.String()); err != nil {
+		if err := scanUser(tx.QueryRow(ctx, `UPDATE users SET role = CASE WHEN email = ANY($2) THEN 'admin' ELSE 'user' END
+			WHERE id = $1 RETURNING `+userColumns, userID, s.adminList()), &u); err != nil {
 			return err
 		}
-		return audit.Record(ctx, tx, audit.Event{ActorID: u.ID, ActorKind: KindUser, Action: "user.signed_up",
-			AggregateKind: "user", AggregateID: u.ID, RequestID: httpx.RequestID(ctx)})
+		_, err = tx.Exec(ctx, `INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, now() + $3::interval)`, sid, u.ID, sessionTTL.String())
+		return err
 	})
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return User{}, "", httpx.New(http.StatusConflict, "email_taken", "An account with this email already exists")
-	}
 	if err != nil {
 		return User{}, "", err
 	}
 	return u, token, nil
 }
 
-var errInvalidCredentials = httpx.New(http.StatusUnauthorized, "invalid_credentials", "Email or password is incorrect")
+// attachIdentity records a first sign-in of id: to the user with its email,
+// or to a new user.
+func (s *Service) attachIdentity(ctx context.Context, tx pgx.Tx, id Identity, email string) (string, error) {
+	if !id.EmailVerified || email == "" {
+		return "", ErrEmailUnverified
+	}
+	created, err := tx.Exec(ctx, `INSERT INTO users (id, email, role) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`,
+		idgen.New("user"), email, s.roleFor(email))
+	if err != nil {
+		return "", err
+	}
+	var userID string
+	if err := tx.QueryRow(ctx, `SELECT id FROM users WHERE email = $1`, email).Scan(&userID); err != nil {
+		return "", err
+	}
+	linked, err := tx.Exec(ctx, `INSERT INTO user_identities (provider, subject, user_id, email, login) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (provider, subject) DO NOTHING`, id.Provider, id.Subject, userID, email, id.Login)
+	if err != nil {
+		return "", err
+	}
+	if linked.RowsAffected() == 0 {
+		return userID, nil // a concurrent first sign-in of the same identity got there first
+	}
+	action := "user.identity_linked"
+	if created.RowsAffected() == 1 {
+		action = "user.signed_up"
+	}
+	return userID, audit.Record(ctx, tx, audit.Event{ActorID: userID, ActorKind: KindUser, Action: action,
+		AggregateKind: "user", AggregateID: userID, RequestID: httpx.RequestID(ctx),
+		Payload: map[string]string{"provider": id.Provider}})
+}
 
-func (s *Service) Login(ctx context.Context, email, password string) (User, string, error) {
-	email = NormalizeEmail(email)
-	var u User
-	var hash string
-	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT `+userColumns+`, password_hash FROM users WHERE email = $1`, email).
-			Scan(&u.ID, &u.Email, &u.Role, &u.CreatedAt, &hash)
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		// Burn the same time as a real verification so timing does not reveal
-		// whether the email exists.
-		VerifyPassword("$argon2id$v=19$m=65536,t=1,p=4$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", password)
-		return User{}, "", errInvalidCredentials
+func (s *Service) adminList() []string {
+	out := make([]string, 0, len(s.adminEmails))
+	for e := range s.adminEmails {
+		out = append(out, e)
 	}
-	if err != nil {
-		return User{}, "", err
-	}
-	if !VerifyPassword(hash, password) {
-		return User{}, "", errInvalidCredentials
-	}
-	u.CreatedAt = u.CreatedAt.UTC()
-	token, sid, err := newSessionToken()
-	if err != nil {
-		return User{}, "", err
-	}
-	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE users SET role = $2 WHERE id = $1`, u.ID, s.roleFor(email)); err != nil {
-			return err
-		}
-		_, err := tx.Exec(ctx, `INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, now() + $3::interval)`, sid, u.ID, sessionTTL.String())
-		return err
-	})
-	if err != nil {
-		return User{}, "", err
-	}
-	u.Role = s.roleFor(email)
-	return u, token, nil
+	return out
 }
 
 func (s *Service) Logout(ctx context.Context, token string) error {

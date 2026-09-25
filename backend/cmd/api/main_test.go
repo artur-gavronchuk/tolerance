@@ -45,7 +45,7 @@ func newE2E(t *testing.T) *e2e {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake"}
+	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake", devLogin: true}
 	ps := proofs.NewService(d.AppPool)
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
 		agents: agents.NewService(d.AppPool, ps), proofs: ps}
@@ -69,6 +69,14 @@ func (e *e2e) browser(t *testing.T) *http.Client {
 	t.Helper()
 	jar, _ := cookiejar.New(nil)
 	return &http.Client{Jar: jar}
+}
+
+// devLogin signs c in through POST /auth/dev.
+func (e *e2e) devLogin(t *testing.T, c *http.Client, email string) {
+	t.Helper()
+	if code := e.call(t, c, "POST", "/api/v1/auth/dev", "", map[string]string{"email": email}, nil); code != 200 {
+		t.Fatalf("dev login %s: %d", email, code)
+	}
 }
 
 // call performs a request (cookie jar on the client, optional bearer key),
@@ -99,7 +107,7 @@ func (e *e2e) call(t *testing.T, c *http.Client, method, path, key string, body 
 	return resp.StatusCode
 }
 
-func TestEndToEnd_SignupConnectProve(t *testing.T) {
+func TestEndToEnd_SignInConnectProve(t *testing.T) {
 	e := newE2E(t)
 	owner := e.browser(t)
 	plain := &http.Client{}
@@ -119,7 +127,7 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 		t.Fatalf("connector download problem code: %q", problem.Code)
 	}
 
-	// signup, me
+	// sign in, me
 	var me struct {
 		User  identity.User `json:"user"`
 		Agent *struct {
@@ -127,15 +135,10 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 			LastProof *proofs.Proof `json:"last_proof"`
 		} `json:"agent"`
 	}
-	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "Owner@Example.com", "password": "longenough1"}, nil); code != 201 {
-		t.Fatalf("signup: %d", code)
-	}
-	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "owner@example.com", "password": "longenough1"}, nil); code != 409 {
-		t.Fatalf("duplicate signup: %d", code)
-	}
+	e.devLogin(t, owner, "Owner@Example.com")
 	e.call(t, owner, "GET", "/api/v1/me", "", nil, &me)
 	if me.User.Email != "owner@example.com" || me.Agent != nil {
-		t.Fatalf("me after signup: %+v", me)
+		t.Fatalf("me after sign in: %+v", me)
 	}
 
 	// agent + key
@@ -277,14 +280,28 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 	}
 }
 
-func TestLogin_RateLimited(t *testing.T) {
+func TestDevLogin_RateLimited(t *testing.T) {
 	e := newE2E(t)
 	c := e.browser(t)
 	for i := 0; i < 10; i++ {
-		e.call(t, c, "POST", "/api/v1/auth/login", "", map[string]string{"email": "x@example.com", "password": "wrongwrongwrong"}, nil)
+		e.call(t, c, "POST", "/api/v1/auth/dev", "", map[string]string{"email": "x@example.com"}, nil)
 	}
-	if code := e.call(t, c, "POST", "/api/v1/auth/login", "", map[string]string{"email": "x@example.com", "password": "wrongwrongwrong"}, nil); code != 429 {
+	if code := e.call(t, c, "POST", "/api/v1/auth/dev", "", map[string]string{"email": "x@example.com"}, nil); code != 429 {
 		t.Fatalf("11th attempt: %d", code)
+	}
+}
+
+func TestAuthProviders_ListsNothingWithoutKeysButDevLogin(t *testing.T) {
+	e := newE2E(t)
+	var out struct {
+		Providers []string `json:"providers"`
+		DevLogin  bool     `json:"dev_login"`
+	}
+	if code := e.call(t, &http.Client{}, "GET", "/api/v1/auth/providers", "", nil, &out); code != 200 {
+		t.Fatalf("providers: %d", code)
+	}
+	if len(out.Providers) != 0 || !out.DevLogin {
+		t.Fatalf("providers: %+v", out)
 	}
 }
 
@@ -292,7 +309,7 @@ func TestEndToEnd_OversizedResultFailsTheProof(t *testing.T) {
 	e := newE2E(t)
 	owner := e.browser(t)
 	plain := &http.Client{}
-	e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "big@example.com", "password": "longenough1"}, nil)
+	e.devLogin(t, owner, "big@example.com")
 	e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "big-diff"}, nil)
 	var key struct {
 		Key string `json:"key"`

@@ -38,7 +38,7 @@ func setup(t *testing.T) fixture {
 	ps := proofs.NewService(d.AppPool)
 	as := agents.NewService(d.AppPool, ps)
 	us := identity.NewService(d.AppPool, nil)
-	u, _, err := us.Signup(ctx, "o@example.com", "longenough1")
+	u, _, err := us.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "o@example.com", Email: "o@example.com", EmailVerified: true})
 	if err != nil {
 		t.Fatal(err)
 	}
