@@ -5,6 +5,71 @@ on:
   pull_request:
 
 jobs:
+  # Fails a PR that modifies, deletes or renames an EXISTING migration file
+  # under backend/migrations — goose migrations are append-only once they
+  # might have shipped; editing one in place (rather than adding a new
+  # migration) desyncs any database that already ran it, which has forced a
+  # production DB wipe before. migrations.go (the registration list) is
+  # expected to change on every new migration, so it's excluded here.
+  # Escape hatch for a genuine rewrite of a migration that has never shipped
+  # to production: add `[migration-rewrite]` to the commit message.
+  migration-guard:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: no existing migration file changed, deleted or renamed
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}" --quiet
+          base=$(git merge-base "origin/${{ github.event.pull_request.base.ref }}" HEAD)
+          changed=$(git diff --name-status --diff-filter=MDR "$base" HEAD -- backend/migrations | grep -v 'migrations\.go$' || true)
+          if [ -z "$changed" ]; then
+            echo "ok: no existing migration file was modified, deleted or renamed"
+            exit 0
+          fi
+          echo "Existing migration file(s) changed, deleted or renamed:"
+          echo "$changed"
+          if git log --format=%B "$base"..HEAD | grep -qF '[migration-rewrite]'; then
+            echo "override: a commit in this PR has [migration-rewrite] in its message, allowing it"
+            exit 0
+          fi
+          echo
+          echo "Migrations are append-only: add a NEW migration instead of editing this one." >&2
+          echo "If this migration genuinely never shipped anywhere yet, add '[migration-rewrite]' to a commit message in this PR and re-push." >&2
+          exit 1
+
+  # Dedicated and cheap: goose migrations + the proof catalog sync apply
+  # cleanly to a brand-new database. (internal/proofs and cmd/api's e2e test
+  # also exercise this indirectly via dbtest.New, and the mobile job below
+  # re-migrates before booting the api — this job exists so a broken
+  # migration fails fast, on its own, without waiting on the heavier jobs.)
+  migrations-apply-cleanly:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: arena_migrate
+          POSTGRES_PASSWORD: ci_migrate_password
+          POSTGRES_DB: arena
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U arena_migrate -d arena"
+          --health-interval 2s --health-timeout 2s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+      - name: migrate against an empty database
+        run: |
+          cd backend
+          ARENA_MIGRATE_DATABASE_URL="postgres://arena_migrate:ci_migrate_password@127.0.0.1:5432/arena?sslmode=disable" \
+            ARENA_APP_ROLE_PASSWORD=ci_app_password \
+            ARENA_PROOFS_DIR=./fixtures/proofs go run ./cmd/migrate
+
   backend:
     runs-on: ubuntu-latest
     steps:

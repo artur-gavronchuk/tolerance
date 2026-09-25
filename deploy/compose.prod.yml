@@ -9,6 +9,26 @@
 # Replica counts default to 1 (identical to dev) and are changed without a
 # rebuild by deploy/scale.sh, which edits API_REPLICAS/WEB_REPLICAS/
 # WORKER_REPLICAS in .env and re-runs `up -d --scale`.
+#
+# --- canary profile (deploy/release.sh, `--profile canary`) -----------------
+# One canary sibling per stable service, on the new tag, 1 replica each.
+# These are full copies of api/web/worker above rather than `extends:` —
+# `extends` referencing a file that is ALSO passed via `-f` in the same
+# invocation (as ../docker-compose.yml always is here) hits a path
+# resolution bug in Docker Compose (reproduced against Compose 5.5.1: the
+# extended file is looked up one directory too high and the command fails
+# outright), so duplication is the robust choice here, not a shortcut.
+# Keep these in sync with api/web/worker in ../docker-compose.yml by hand.
+#
+# release.sh brings these up with `--profile canary up -d api-canary` etc.,
+# then rewrites deploy/caddy/upstreams/*.caddy (see the Caddyfile) to send a
+# slice of traffic to them, then removes them again on promote/abort.
+# Caddy's dynamic-DNS upstreams can't express a weight, so the split is done
+# with a static two-upstream list + lb_policy weighted_round_robin instead
+# (see the Caddyfile comment) — that means api-canary/web-canary must stay
+# at exactly 1 replica, matching their `deploy.replicas` below; a second
+# replica would silently get zero traffic (the static upstream list only
+# ever names one canary address).
 services:
   api:
     ports: !reset []
@@ -23,3 +43,93 @@ services:
   worker:
     deploy:
       replicas: ${WORKER_REPLICAS:-1}
+
+  api-canary:
+    image: ghcr.io/artur-gavronchuk/tolerance-backend:${API_CANARY_TAG:-local}
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    environment:
+      ARENA_ROLE: api
+      ARENA_TRACK: canary
+      ARENA_VERSION: ${API_CANARY_TAG:-local}
+      ARENA_ADDR: 0.0.0.0:8080
+      ARENA_ALLOW_NON_LOOPBACK: "true"
+      ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
+      ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
+      ARENA_ADMIN_EMAILS: ${ARENA_ADMIN_EMAILS:-}
+      ARENA_SECURE_COOKIES: ${ARENA_SECURE_COOKIES:-false}
+      ARENA_TRUST_PROXY: "true"
+      ARENA_METRICS_ADDR: 0.0.0.0:9091
+      ARENA_RATE_IP_RPS: ${ARENA_RATE_IP_RPS:-20}
+      ARENA_RATE_IP_BURST: ${ARENA_RATE_IP_BURST:-60}
+      ARENA_RATE_KEY_RPS: ${ARENA_RATE_KEY_RPS:-5}
+      ARENA_RATE_KEY_BURST: ${ARENA_RATE_KEY_BURST:-20}
+      ARENA_DEV_LOGIN: ${ARENA_DEV_LOGIN:-false}
+      ARENA_PUBLIC_URL: ${ARENA_PUBLIC_URL:-http://localhost:3000}
+      ARENA_GITHUB_CLIENT_ID: ${ARENA_GITHUB_CLIENT_ID:-}
+      ARENA_GITHUB_CLIENT_SECRET: ${ARENA_GITHUB_CLIENT_SECRET:-}
+      ARENA_GOOGLE_CLIENT_ID: ${ARENA_GOOGLE_CLIENT_ID:-}
+      ARENA_GOOGLE_CLIENT_SECRET: ${ARENA_GOOGLE_CLIENT_SECRET:-}
+    profiles: [canary]
+    deploy:
+      replicas: 1
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  worker-canary:
+    image: ghcr.io/artur-gavronchuk/tolerance-backend:${API_CANARY_TAG:-local}
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    environment:
+      ARENA_ROLE: worker
+      ARENA_TRACK: canary
+      ARENA_VERSION: ${API_CANARY_TAG:-local}
+      ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
+      ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
+      # Same queue as stable's worker — a canary proof/match run is a real
+      # run against real hidden tests, just on the new binary; verdicts are
+      # what canary-check's infra_error-rate comparison is watching for.
+      ARENA_WORKER_CONCURRENCY: 1
+      ARENA_BOT_IMAGE: ${ARENA_BOT_IMAGE:-}
+      ARENA_MATCH_INTERVAL: ${ARENA_MATCH_INTERVAL:-20s}
+      ARENA_MATCH_CONCURRENCY: ${ARENA_MATCH_CONCURRENCY:-1}
+      ARENA_METRICS_ADDR: 0.0.0.0:9091
+      ARENA_ALLOW_NON_LOOPBACK: "true"
+    group_add: ["${DOCKER_GID:-999}"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    profiles: [canary]
+    deploy:
+      replicas: 1
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  web-canary:
+    image: ghcr.io/artur-gavronchuk/tolerance-web:${WEB_CANARY_TAG:-local}
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    environment:
+      API_URL: http://api:8080
+    profiles: [canary]
+    deploy:
+      replicas: 1
+    depends_on:
+      - api

@@ -21,12 +21,19 @@ scrape_configs:
   # (arena_sandbox_run_seconds, arena_proof_verdicts_total,
   # arena_workers_busy, arena_worker_concurrency) are per-instance — sum()
   # them.
+  # track: stable is added here (not read from the scraped metrics) so a
+  # per-request/per-instance join against arena_build_info isn't needed just
+  # to tell canary and stable apart — see arena-api-canary/arena-worker-canary
+  # below for the canary side of the same trick.
   - job_name: arena-api
     dns_sd_configs:
       - names: ["api"]
         type: A
         port: 9091
         refresh_interval: 15s
+    relabel_configs:
+      - target_label: track
+        replacement: stable
 
   - job_name: arena-worker
     dns_sd_configs:
@@ -34,6 +41,31 @@ scrape_configs:
         type: A
         port: 9091
         refresh_interval: 15s
+    relabel_configs:
+      - target_label: track
+        replacement: stable
+
+  # Canary siblings (deploy/compose.prod.yml, `--profile canary`), always
+  # scraped even when not running: a static target that isn't up just scrapes
+  # as up==0 while canary is absent, which is expected (see
+  # tolerance-target-down in provisioning/alerting/rules.yaml, which
+  # excludes these two job names for exactly this reason) — deploy/
+  # release.sh's canary-check reads these through
+  # arena_http_requests_total{track="canary"} / arena_proof_verdicts_total
+  # for its go/no-go decision during a canary window.
+  - job_name: arena-api-canary
+    static_configs:
+      - targets: ["api-canary:9091"]
+    relabel_configs:
+      - target_label: track
+        replacement: canary
+
+  - job_name: arena-worker-canary
+    static_configs:
+      - targets: ["worker-canary:9091"]
+    relabel_configs:
+      - target_label: track
+        replacement: canary
 
   # Remote sandbox workers on other hosts (deploy/add-worker.sh), reached
   # over the private network. add-worker.sh/remove-worker.sh manage these

@@ -178,11 +178,15 @@ func OAuthLogin(provider, result string) { oauthLogins.WithLabelValues(provider,
 
 var buildInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name: "arena_build_info",
-	Help: "Always 1; the role label identifies what this process runs.",
-}, []string{"role"})
+	Help: "Always 1; role identifies what this process runs, track distinguishes a canary release from stable, version is the deployed image tag.",
+}, []string{"role", "track", "version"})
 
-// SetBuildInfo records this process's role. Call once at startup.
-func SetBuildInfo(role string) { buildInfo.WithLabelValues(role).Set(1) }
+// SetBuildInfo records this process's role, release track ("stable" or
+// "canary", from ARENA_TRACK) and version (the deployed image tag, from
+// ARENA_VERSION). Call once at startup.
+func SetBuildInfo(role, track, version string) {
+	buildInfo.WithLabelValues(role, track, version).Set(1)
+}
 
 // ---- pgxpool stats ----
 

@@ -216,7 +216,11 @@ groups:
               refId: A
               range: true
               instant: false
-              expr: min(up) by (job, instance)
+              # arena-api-canary/arena-worker-canary are scraped as static
+              # targets even when no canary release is running (see
+              # deploy/monitoring/prometheus.yml) — up==0 there is normal,
+              # not an outage, so this alert must never fire on them.
+              expr: min(up{job!~"arena-api-canary|arena-worker-canary"}) by (job, instance)
           - refId: C
             datasourceUid: __expr__
             relativeTimeRange: { from: 120, to: 0 }

@@ -11,6 +11,16 @@
 # prometheus/grafana/node-exporter/cadvisor/postgres-exporter/loki/alloy,
 # reachable only through Caddy (Grafana) or from other containers on the
 # compose network.
+# `--profile canary` (deploy/compose.prod.yml) adds api-canary/web-canary/
+# worker-canary, driven by deploy/release.sh; see that file and CLAUDE.md.
+#
+# Images: migrate/api/worker share one backend image
+# (ghcr.io/artur-gavronchuk/tolerance-backend:${API_TAG}), web has its own
+# (ghcr.io/artur-gavronchuk/tolerance-web:${WEB_TAG}). Every service keeps
+# its `build:` so local `make up` (API_TAG/WEB_TAG unset -> `local`) always
+# builds from source; production sets API_TAG/WEB_TAG in .env and runs
+# `docker compose ... up -d --no-build` after `docker compose ... pull`
+# (deploy/release.sh), so the image is pulled from GHCR, never rebuilt.
 
 x-logging: &default-logging
   driver: json-file
@@ -62,6 +72,11 @@ services:
   # and worker both wait for it to complete successfully before starting.
   migrate:
     build: ./backend
+    # image: tag is shared with api/worker (one backend image, three roles;
+    # see cmd/api's own module comment). API_TAG is set by deploy/release.sh
+    # on the server (ghcr.io/.../tolerance-backend:<sha>); local `make up`
+    # leaves it at `local` and always builds from source instead of pulling.
+    image: ghcr.io/artur-gavronchuk/tolerance-backend:${API_TAG:-local}
     command: ["migrate"]
     restart: "no"
     logging: *default-logging
@@ -76,10 +91,16 @@ services:
   # access needed — sandbox runs happen in the worker service.
   api:
     build: ./backend
+    image: ghcr.io/artur-gavronchuk/tolerance-backend:${API_TAG:-local}
     restart: unless-stopped
     logging: *default-logging
     environment:
       ARENA_ROLE: api
+      # Reported on arena_build_info{role,track,version} so Grafana and
+      # canary-check can tell a canary release apart from stable; see
+      # deploy/compose.prod.yml's api-canary for the canary values.
+      ARENA_TRACK: ${ARENA_TRACK:-stable}
+      ARENA_VERSION: ${API_TAG:-local}
       ARENA_ADDR: 0.0.0.0:8080
       ARENA_ALLOW_NON_LOOPBACK: "true"
       ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
@@ -123,10 +144,13 @@ services:
   # it can run on a separate host from api/web — see deploy/add-worker.sh.
   worker:
     build: ./backend
+    image: ghcr.io/artur-gavronchuk/tolerance-backend:${API_TAG:-local}
     restart: unless-stopped
     logging: *default-logging
     environment:
       ARENA_ROLE: worker
+      ARENA_TRACK: ${ARENA_TRACK:-stable}
+      ARENA_VERSION: ${API_TAG:-local}
       ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
       ARENA_WORKER_CONCURRENCY: ${ARENA_WORKER_CONCURRENCY:-1}
@@ -165,6 +189,9 @@ services:
       args:
         API_URL: http://api:8080
         NEXT_PUBLIC_CONTACT_EMAIL: ${ARENA_CONTACT_EMAIL:-}
+    # See migrate's image: comment above; WEB_TAG is web's equivalent of
+    # API_TAG, set by deploy/release.sh on the server.
+    image: ghcr.io/artur-gavronchuk/tolerance-web:${WEB_TAG:-local}
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -188,6 +215,12 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Canary traffic-split state, rewritten by deploy/release.sh (see the
+      # Caddyfile's own comment above api_upstream/web_upstream). Mounted
+      # read-write so `deploy.sh`/`release.sh` can seed/update the files
+      # directly from the host without shelling into the container; Caddy
+      # itself only ever reads them.
+      - ./deploy/caddy/upstreams:/etc/caddy/upstreams
       - arena-caddy-data:/data
     depends_on:
       - web
@@ -218,6 +251,10 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=${PROM_RETENTION:-30d}
+      # Lets deploy/release.sh's apply-config reload scrape config changes
+      # (POST /-/reload) without a container restart; only reachable from
+      # other containers on the compose network, never proxied by Caddy.
+      - --web.enable-lifecycle
     volumes:
       - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       # File-based service discovery for remote worker hosts, written by
