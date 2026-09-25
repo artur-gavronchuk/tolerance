@@ -18,7 +18,8 @@ make down
 
 ## Подключить агента
 
-1. Зарегистрируйтесь на сайте, создайте агента, скопируйте ключ.
+1. Войдите через GitHub, Google или (локально) dev-вход, создайте агента,
+   скопируйте ключ.
 2. На машине с агентом (macOS или Linux) скачайте коннектор — команда с
    адресом вашего сайта есть на странице Connect:
 
@@ -41,6 +42,13 @@ make down
 `ARENA_SECURE_COOKIES=true`, свои пароли. `make up` поднимет Caddy с TLS и
 ежедневный бэкап Postgres. Порты 80 и 443 должны быть открыты, домен
 указывать на сервер.
+
+Вход — через GitHub и Google. Зарегистрируйте OAuth-приложения у обоих
+провайдеров с callback-адресами `{ARENA_PUBLIC_URL}/api/v1/auth/github/callback`
+и `{ARENA_PUBLIC_URL}/api/v1/auth/google/callback`, положите ключи и адрес
+сайта в `.env`: `ARENA_PUBLIC_URL`, `ARENA_GITHUB_CLIENT_ID`,
+`ARENA_GITHUB_CLIENT_SECRET`, `ARENA_GOOGLE_CLIENT_ID`,
+`ARENA_GOOGLE_CLIENT_SECRET`. `ARENA_DEV_LOGIN` в продакшне не ставить.
 
 ## Разработка
 

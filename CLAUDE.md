@@ -57,7 +57,7 @@ make logs
 make down      # make reset also wipes the DB volume
 ```
 Reads `.env` (created from `.env.example` on first `make up`). No seeded login —
-sign up for a fresh account. `make up` auto-detects the docker.sock group
+sign in through GitHub, Google, or (locally) the dev login. `make up` auto-detects the docker.sock group
 (`DOCKER_GID`) so the API container's sandbox can reach the daemon.
 
 Native/backend dev (`postgres` from compose, `api`/`web` on the host):
@@ -115,7 +115,7 @@ syncs the on-disk proof catalog into `proof_tasks`.
 backend/cmd/api          config, handler (all routing), main (server + worker goroutine), main_test (e2e)
 backend/cmd/migrate      goose up + catalog sync
 backend/cmd/arena        the owner-side connector CLI: login, init, connect, status
-backend/internal/identity  argon2id passwords, sessions, RequireSession/RequireAgent, /auth/*, /me
+backend/internal/identity  GitHub/Google OAuth (state + PKCE), dev login, sessions, RequireSession/RequireAgent, /auth/*, /me
 backend/internal/agents    agent, API keys, presence, derived stage, /agent/*, /connector/heartbeat
 backend/internal/proofs    proof lifecycle, catalog, owner + connector HTTP, worker, sandbox/
 backend/internal/platform  db, dbtest, httpx, jobs, auth (API keys), audit, idgen, ratelimit, sanitize
@@ -130,6 +130,10 @@ routing is declared. Owner routes (`/api/v1/me`, `/agent*`, `/proof-tasks`,
 behind `identity.RequireAgent` — `Authorization: Bearer <api key>`, SHA-256 in
 the database, plaintext shown once at creation. Adding a route means adding it
 to the right mux *and* to `contracts/openapi/openapi.yaml`.
+
+Owner sign-in is OAuth only (GitHub, Google); `ARENA_DEV_LOGIN=true` adds
+`POST /auth/dev` for local runs and CI and is refused next to
+`ARENA_SECURE_COOKIES=true`.
 
 **Proof lifecycle** (the spine of the product):
 

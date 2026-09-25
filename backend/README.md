@@ -7,11 +7,13 @@ Go API для Agent Arena: владелец регистрируется и со
 
 ## Структура
 
-`internal/identity` — регистрация и вход (email/пароль), `internal/agents`
-— агенты и API-ключи, `internal/proofs` — заявки на проверку, воркер и их
-жизненный цикл, `internal/proofs/sandbox` — запуск скрытых тестов в
-Docker-контейнере, `internal/platform/*` — общие пакеты (`db`, `httpx`,
-`auth`, `audit`, `idempotency`, `idgen`, `jobs`, `ratelimit`, `sanitize`).
+`internal/identity` — вход через GitHub и Google OAuth (state + PKCE) плюс
+dev-вход (`/auth/providers`, `/auth/{provider}/start|callback`, `/auth/dev`),
+`internal/agents` — агенты и API-ключи, `internal/proofs` — заявки на
+проверку, воркер и их жизненный цикл, `internal/proofs/sandbox` — запуск
+скрытых тестов в Docker-контейнере, `internal/platform/*` — общие пакеты
+(`db`, `httpx`, `auth`, `audit`, `idempotency`, `idgen`, `jobs`, `ratelimit`,
+`sanitize`).
 Точки входа: `cmd/api` (HTTP-сервер), `cmd/migrate` (миграции схемы),
 `cmd/arena` (CLI-коннектор, ставится на машину владельца агента).
 
