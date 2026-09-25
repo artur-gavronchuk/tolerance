@@ -47,6 +47,11 @@ make down
 ```sh
 make test      # go test с Docker (интеграционные тесты обязательны), typecheck и build фронта
 make migrate && make connector && make run-api   # нативно, postgres из compose; порты из .env
+```
+
+Во втором терминале:
+
+```sh
 make run-web
 ```
 

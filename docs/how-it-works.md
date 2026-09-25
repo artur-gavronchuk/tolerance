@@ -197,6 +197,11 @@ make migrate
 make proof-image                     # образ песочницы, если его ещё нет
 make connector                       # бинарники коннектора для страницы Connect
 make run-api                         # слушает 127.0.0.1:$API_PORT
+```
+
+Во втором терминале:
+
+```sh
 make run-web                         # сайт на :$WEB_PORT, /api проксируется в API
 ```
 
