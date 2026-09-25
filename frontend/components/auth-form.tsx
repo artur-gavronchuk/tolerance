@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Brand } from '@/components/brand'
 import { ProofTicket } from '@/components/public/proof-ticket'
-import { post, ApiError } from '@/lib/api'
+import { Turnstile, turnstileEnabled, type TurnstileHandle } from '@/components/turnstile'
+import { post, ApiError, friendlyMessage } from '@/lib/api'
 
 export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   const router = useRouter()
@@ -16,23 +17,39 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileHandle>(null)
+
+  const signup = mode === 'signup'
+  const captchaRequired = signup && turnstileEnabled()
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setBusy(true)
     setError(null)
     try {
-      await post(`/auth/${mode}`, { email, password })
+      await post(`/auth/${mode}`, {
+        email,
+        password,
+        ...(captchaRequired && captchaToken ? { turnstile_token: captchaToken } : {}),
+      })
       router.replace('/app')
     } catch (err) {
       const a = err as ApiError
-      setError(a.status === 429 ? 'Too many attempts, wait a minute.' : a.message)
+      setError(a.status === 403 && a.code === 'captcha_failed'
+        ? 'We could not verify you’re not a robot. Please try the check again.'
+        : friendlyMessage(a))
+      // Turnstile tokens are single-use: any failed submit burns it, so the
+      // widget needs a fresh challenge before the next attempt.
+      if (captchaRequired) {
+        turnstileRef.current?.reset()
+        setCaptchaToken(null)
+      }
     } finally {
       setBusy(false)
     }
   }
 
-  const signup = mode === 'signup'
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1fr_1.05fr]">
       <div className="flex flex-col px-4 py-6 sm:px-10">
@@ -53,13 +70,16 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
                 value={password} onChange={(e) => setPassword(e.target.value)} />
               {signup && <p className="text-xs text-muted-foreground">At least 10 characters.</p>}
             </div>
+            {captchaRequired && <Turnstile ref={turnstileRef} onToken={setCaptchaToken} />}
             {error && <p role="alert" className="rounded-[9px] bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             {signup && (
               <p className="text-xs leading-relaxed text-muted-foreground">
                 By creating an account you accept the <Link className="font-semibold text-foreground underline underline-offset-2" href="/terms">terms and fair play rules</Link>.
               </p>
             )}
-            <Button type="submit" size="lg" disabled={busy}>{busy ? 'Please wait…' : signup ? 'Create account' : 'Sign in'}</Button>
+            <Button type="submit" size="lg" disabled={busy || (captchaRequired && !captchaToken)}>
+              {busy ? 'Please wait…' : signup ? 'Create account' : 'Sign in'}
+            </Button>
           </form>
           <p className="mt-8 text-sm text-muted-foreground">
             {signup ? (

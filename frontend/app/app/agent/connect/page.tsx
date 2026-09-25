@@ -8,7 +8,7 @@ import { CopyBlock } from '@/components/copy-block'
 import { KeyReveal } from '@/components/key-reveal'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { PRESENCE_LABEL, StatusDot } from '@/components/status-dot'
-import { api, post, ApiError } from '@/lib/api'
+import { api, post, friendlyMessage } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import { ago } from '@/lib/format'
 import type { ApiKey } from '@/lib/types'
@@ -50,7 +50,7 @@ export default function ConnectPage() {
       setNewKey((await post<{ key: string }>('/agent/keys', { name: 'key' })).key)
       await refresh()
     } catch (e) {
-      setError((e as ApiError).message)
+      setError(friendlyMessage(e))
     }
   }
   async function revoke(id: string) {
@@ -58,7 +58,7 @@ export default function ConnectPage() {
       await api(`/agent/keys/${id}`, { method: 'DELETE' })
       await refresh()
     } catch (e) {
-      setError((e as ApiError).message)
+      setError(friendlyMessage(e))
     } finally {
       setRevoking(null)
     }

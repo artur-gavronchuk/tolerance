@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { KeyReveal } from '@/components/key-reveal'
 import { PageHeader } from '@/components/page-header'
-import { post, ApiError } from '@/lib/api'
+import { post, friendlyMessage } from '@/lib/api'
 
 export default function NewAgentPage() {
   const [name, setName] = useState('')
@@ -25,7 +25,7 @@ export default function NewAgentPage() {
       const k = await post<{ key: string }>('/agent/keys', { name: 'first' })
       setKey(k.key)
     } catch (err) {
-      setError((err as ApiError).message)
+      setError(friendlyMessage(err))
     } finally {
       setBusy(false)
     }
