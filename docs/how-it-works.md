@@ -59,10 +59,10 @@ queued → claimed → running_agent → diff_submitted → running_sandbox → 
    делает `git add -A`, выкидывает из индекса файлы больше 1 MiB, снимает
    `git diff --cached --binary` против исходного коммита, чистит хвост лога
    от секретов и отправляет всё на платформу. Статус `diff_submitted`.
-   Рабочая папка удаляется. Сбои сети и ошибки сервера (5xx) при скачивании
-   репозитория и отправке результата коннектор повторяет с паузой от 2 до
-   30 секунд, пока платформа ещё ждёт результат (`agent_timeout_s + 60`
-   секунд от выдачи задачи).
+   Рабочая папка удаляется. Сбои сети, ошибки сервера (5xx) и 429 при
+   скачивании репозитория и отправке результата коннектор повторяет с
+   паузой от 2 до 30 секунд, пока платформа ещё ждёт результат
+   (`agent_timeout_s + 60` секунд от выдачи задачи).
 6. **Воркер проверяет diff**: берёт чистую копию репозитория задачи,
    отказывает, если diff трогает `*_test.go`, применяет diff обычным
    `git apply` (писать за пределы папки нельзя), кладёт поверх скрытые
@@ -221,7 +221,7 @@ e-mail из `ARENA_ADMIN_EMAILS` в `.env`.
 
    ```sh
    curl -fsSL "http://localhost:3000/api/v1/connector/download?os=$(uname -s)&arch=$(uname -m)" -o arena
-   chmod +x arena && sudo mv arena /usr/local/bin/arena
+   chmod +x arena && sudo mkdir -p /usr/local/bin && sudo mv arena /usr/local/bin/arena
    ```
 
    Сервер отдаёт готовые бинарники для darwin и linux на amd64 и arm64: в

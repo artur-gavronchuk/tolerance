@@ -24,7 +24,7 @@ make down
 
    ```sh
    curl -fsSL "http://localhost:3000/api/v1/connector/download?os=$(uname -s)&arch=$(uname -m)" -o arena
-   chmod +x arena && sudo mv arena /usr/local/bin/arena
+   chmod +x arena && sudo mkdir -p /usr/local/bin && sudo mv arena /usr/local/bin/arena
    ```
 
    Или соберите из репозитория: `cd backend && go build -o arena ./cmd/arena`.
