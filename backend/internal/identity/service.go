@@ -3,7 +3,6 @@ package identity
 import (
 	"context"
 	"errors"
-	"net/http"
 	"strings"
 	"time"
 
@@ -77,7 +76,12 @@ type Identity struct {
 	Login         string // GitHub login; empty for other providers
 }
 
-var ErrEmailUnverified = httpx.New(http.StatusForbidden, "email_unverified", "Your account has no verified email address")
+// ErrEmailUnverified is a plain sentinel, not a *httpx.Problem: WriteError
+// mutates a matched Problem's RequestID field in place, and this value is
+// shared across every request, so a *Problem here would race under
+// concurrent requests and leak one request's id into another's response.
+// Callers map it to a fresh httpx.Problem at the HTTP boundary.
+var ErrEmailUnverified = errors.New("identity: no verified email for a new sign-in")
 
 // SignIn finds or creates the user behind an external identity and opens a
 // session. A known (provider, subject) is that user. A new one is linked to
@@ -139,7 +143,16 @@ func (s *Service) attachIdentity(ctx context.Context, tx pgx.Tx, id Identity, em
 		return "", err
 	}
 	if linked.RowsAffected() == 0 {
-		return userID, nil // a concurrent first sign-in of the same identity got there first
+		// A concurrent first sign-in of the same identity got there first;
+		// report its real owner, not the user we found or created by email
+		// (which can differ, e.g. two racing sign-ins that saw different
+		// emails for the same provider account).
+		var owner string
+		if err := tx.QueryRow(ctx, `SELECT user_id FROM user_identities WHERE provider = $1 AND subject = $2`,
+			id.Provider, id.Subject).Scan(&owner); err != nil {
+			return "", err
+		}
+		return owner, nil
 	}
 	action := "user.identity_linked"
 	if created.RowsAffected() == 1 {

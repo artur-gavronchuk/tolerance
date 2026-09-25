@@ -175,7 +175,11 @@ func devSignIn(s *Service, limiter *ratelimit.Limiter, secure bool) http.Handler
 			return
 		}
 		email := NormalizeEmail(in.Email)
-		if _, err := mail.ParseAddress(email); err != nil || len(email) > 254 {
+		// mail.ParseAddress also accepts "Name <a@b.c>"; require the whole
+		// field to be a bare address, or a display name would sign in as a
+		// mangled email that never matches what the person typed.
+		addr, err := mail.ParseAddress(email)
+		if err != nil || addr.Address != email || len(email) > 254 {
 			httpx.WriteError(w, r, httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "email must be a valid address", "email", "invalid"))
 			return
 		}
@@ -184,6 +188,10 @@ func devSignIn(s *Service, limiter *ratelimit.Limiter, secure bool) http.Handler
 			return
 		}
 		u, token, err := s.SignIn(r.Context(), Identity{Provider: "dev", Subject: email, Email: email, EmailVerified: true})
+		if errors.Is(err, ErrEmailUnverified) {
+			httpx.WriteError(w, r, httpx.New(http.StatusForbidden, "email_unverified", "Your account has no verified email address"))
+			return
+		}
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return

@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
+	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/ratelimit"
 )
 
@@ -193,6 +195,34 @@ func TestOAuthCallback_Failures(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ErrEmailUnverified used to be a shared *httpx.Problem; httpx.WriteError
+// mutates a matched Problem's RequestID field in place, so every caller
+// across every request would race on and clobber the same package-level
+// value. It must be a plain sentinel that errors.As does not match.
+func TestErrEmailUnverified_IsNotAnHTTPXProblem(t *testing.T) {
+	var p *httpx.Problem
+	if errors.As(ErrEmailUnverified, &p) {
+		t.Fatal("ErrEmailUnverified must not be a *httpx.Problem: httpx.WriteError would mutate this shared value's RequestID on every request that reaches it")
+	}
+	if !errors.Is(ErrEmailUnverified, ErrEmailUnverified) {
+		t.Fatal("errors.Is(ErrEmailUnverified, ErrEmailUnverified) must still hold")
+	}
+}
+
+func TestDevSignIn_RejectsADisplayNameAddress(t *testing.T) {
+	// mail.ParseAddress happily accepts "Name <a@b.c>"; without an exact
+	// match against addr.Address this would sign in as a mangled email
+	// ("name <a@b.c>", after NormalizeEmail) instead of being rejected.
+	mux := http.NewServeMux()
+	RegisterAuthRoutes(mux, NewService(nil, nil), ratelimit.New(nil), AuthConfig{DevLogin: true})
+	body := strings.NewReader(`{"email":"Name <a@b.c>"}`)
+	req := httptest.NewRequest("POST", "/api/v1/auth/dev", body)
+	rec := serve(mux, req)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status %d, body %s", rec.Code, rec.Body.String())
 	}
 }
 

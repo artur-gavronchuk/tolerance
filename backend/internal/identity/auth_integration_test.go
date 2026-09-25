@@ -3,6 +3,7 @@ package identity_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -130,5 +131,48 @@ func TestSignIn_ConcurrentFirstSignInsMakeOneUser(t *testing.T) {
 	})
 	if users != 1 || idents != 1 {
 		t.Fatalf("want 1 user and 1 identity, got %d and %d", users, idents)
+	}
+}
+
+// TestSignIn_ConcurrentFirstSignInsWithDifferentEmailsAllReturnTheRealOwner
+// covers a narrower race than the same-email test above: two first sign-ins
+// of the very same (provider, subject) racing with different emails (the
+// provider's own account is the source of truth, not whatever email each
+// attempt happened to see). The loser's INSERT into user_identities hits
+// the (provider, subject) conflict; it must report the identity's real
+// owner — the user the winner attached it to — not the separate user it
+// created for its own email along the way.
+func TestSignIn_ConcurrentFirstSignInsWithDifferentEmailsAllReturnTheRealOwner(t *testing.T) {
+	d := dbtest.New(t)
+	s := identity.NewService(d.AppPool, nil)
+	ctx := context.Background()
+	const n = 4
+	ids := make([]string, n)
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := range ids {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			email := fmt.Sprintf("racer-%d@example.com", i)
+			u, _, err := s.SignIn(ctx, identity.Identity{Provider: "github", Subject: "race-subject", Email: email, EmailVerified: true})
+			ids[i], errs[i] = u.ID, err
+		}(i)
+	}
+	wg.Wait()
+
+	var owner string
+	if err := d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT user_id FROM user_identities WHERE provider = 'github' AND subject = 'race-subject'`).Scan(&owner)
+	}); err != nil {
+		t.Fatalf("read identity owner: %v", err)
+	}
+	for i := range ids {
+		if errs[i] != nil {
+			t.Fatalf("attempt %d: %v", i, errs[i])
+		}
+		if ids[i] != owner {
+			t.Errorf("attempt %d returned user %s, want the identity's real owner %s", i, ids[i], owner)
+		}
 	}
 }

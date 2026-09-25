@@ -20,6 +20,15 @@ func TestLoadConfig_RefusesProviderIDWithoutSecret(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_RefusesProviderSecretWithoutID(t *testing.T) {
+	t.Setenv("ARENA_APP_DATABASE_URL", "postgres://x")
+	t.Setenv("ARENA_GITHUB_CLIENT_SECRET", "sec")
+	t.Setenv("ARENA_PUBLIC_URL", "https://tolerance.cc")
+	if _, err := loadConfig(); err == nil {
+		t.Fatal("github secret without id must be refused")
+	}
+}
+
 func TestLoadConfig_RefusesProviderKeysWithoutPublicURL(t *testing.T) {
 	t.Setenv("ARENA_APP_DATABASE_URL", "postgres://x")
 	t.Setenv("ARENA_GITHUB_CLIENT_ID", "cid")
