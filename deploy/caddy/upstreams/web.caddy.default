@@ -1,0 +1,8 @@
+# Committed starting point for /etc/caddy/upstreams/web.caddy: 100% stable,
+# no canary. deploy.sh copies this to web.caddy the first time it's missing;
+# deploy/release.sh's canary-start/promote/abort rewrite web.caddy directly
+# afterwards (never this file). See the Caddyfile for how it's imported.
+dynamic a web 3000 {
+	refresh 5s
+}
+lb_policy least_conn

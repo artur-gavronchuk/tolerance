@@ -35,6 +35,35 @@
 	}
 }
 
+# Canary upstream snippets. deploy/release.sh rewrites the two files these
+# import (never this Caddyfile) to move traffic between stable and canary,
+# then runs `docker compose exec caddy caddy reload`. Each file lives at
+# deploy/caddy/upstreams/{api,web}.caddy, mounted read-only into the caddy
+# container at /etc/caddy/upstreams/ (see docker-compose.yml); they are
+# gitignored (server-generated state) with a committed *.caddy.default next
+# to each as the checked-in starting point (100% stable, no canary) that
+# deploy.sh/release.sh copy into place the first time.
+#
+# Why a static two-name upstream list instead of `dynamic a` for canary:
+# `lb_policy weighted_round_robin <weights>` assigns one weight per
+# upstream, in list order, and needs that list to be stable — it cannot
+# combine with `dynamic a`, whose upstream count/order can change any time
+# (e.g. api's replica count via deploy/scale.sh). So instead of resolving
+# `api` to every replica, the canary-enabled file lists exactly two
+# addresses, `api:8080` and `api-canary:8080`; Docker's embedded DNS already
+# round-robins `api:8080` across however many stable replicas are running
+# (least_conn behaviour is lost for the stable slice while canary is
+# active — traded off deliberately, only for the ~10 minutes a canary
+# window runs), while api-canary is always exactly 1 replica (enforced in
+# deploy/compose.prod.yml) so its slice of the weight goes to one place.
+(api_upstream) {
+	import /etc/caddy/upstreams/api.caddy
+}
+
+(web_upstream) {
+	import /etc/caddy/upstreams/web.caddy
+}
+
 {$ARENA_DOMAIN} {
 	encode zstd gzip
 
@@ -74,6 +103,21 @@
 		respond 404
 	}
 
+	# The backend only serves health on plain /healthz (cmd/api/handler.go
+	# mounts it outside "/api/", exempt from rate limiting) — but the
+	# catch-all `handle {}` below sends unprefixed paths to web, and the
+	# public/documented health URL is /api/v1/healthz (README.md, deploy.sh,
+	# deploy/release.sh). Rewrite before proxying so that documented URL
+	# actually reaches something instead of 404ing. Must come before
+	# `handle /api/*`, which would otherwise swallow this more specific path
+	# first (Caddy `handle` blocks match in the order they're written).
+	handle /api/v1/healthz {
+		rewrite * /healthz
+		reverse_proxy {
+			import api_upstream
+		}
+	}
+
 	handle /api/* {
 		# The connector posts a diff (capped at 256 KiB) plus log tail; the
 		# backend enforces a 1 MiB request body cap on that route
@@ -98,10 +142,7 @@
 		}
 
 		reverse_proxy {
-			dynamic a api 8080 {
-				refresh 5s
-			}
-			lb_policy least_conn
+			import api_upstream
 			fail_duration 10s
 			max_fails 2
 			header_up X-Real-IP {client_ip}
@@ -117,10 +158,7 @@
 
 	handle {
 		reverse_proxy {
-			dynamic a web 3000 {
-				refresh 5s
-			}
-			lb_policy least_conn
+			import web_upstream
 			fail_duration 10s
 			max_fails 2
 		}
