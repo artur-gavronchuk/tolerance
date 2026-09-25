@@ -46,10 +46,18 @@ func newE2E(t *testing.T) *e2e {
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake"}
+	// Effectively unlimited: the e2e test fires many requests back to back
+	// from one IP, and the global rate limiter is not what this test is
+	// exercising.
+	scale := scaleConfig{role: "all", hashConcurrency: 4, workerConcurrency: 1,
+		rateIPRPS: 1e6, rateIPBurst: 1_000_000, rateKeyRPS: 1e6, rateKeyBurst: 1_000_000}
 	ps := proofs.NewService(d.AppPool)
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
-		agents: agents.NewService(d.AppPool, ps), proofs: ps}
-	srv := httptest.NewServer(newHandler(cfg, dp))
+		agents: agents.NewService(d.AppPool, ps), proofs: ps,
+		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 100),
+		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 100),
+		longPoll:   ratelimit.NewConcurrencyLimiter(2)}
+	srv := httptest.NewServer(newHandler(cfg, scale, dp))
 	t.Cleanup(srv.Close)
 	router, err := openapi.Router()
 	if err != nil {

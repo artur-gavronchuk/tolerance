@@ -44,3 +44,32 @@ func MustFromContext(ctx context.Context) Actor {
 	}
 	return a
 }
+
+// ActorLog is a small mutable holder an outer HTTP middleware (the request
+// logger) places into the context before calling into the auth middleware
+// chain. RequireSession/RequireAgent fill in the id they resolve as the
+// request passes through. This exists because r.WithContext returns a new
+// *http.Request; the outer middleware's own r value never sees a context
+// value attached deeper in the chain, so FromContext there would always
+// miss. A pointer stored in the context is the one thing both sides share:
+// mutating *ActorLog through it is visible to whoever holds the pointer,
+// context copies notwithstanding.
+type ActorLog struct {
+	UserID  string
+	AgentID string
+}
+
+type actorLogKey struct{}
+
+// WithActorLog attaches h for a downstream Require* middleware to fill in.
+func WithActorLog(ctx context.Context, h *ActorLog) context.Context {
+	return context.WithValue(ctx, actorLogKey{}, h)
+}
+
+// actorLogFromContext returns the holder placed by WithActorLog, or nil on
+// a route with no request logger wired in front (e.g. a test that calls a
+// handler directly).
+func actorLogFromContext(ctx context.Context) *ActorLog {
+	h, _ := ctx.Value(actorLogKey{}).(*ActorLog)
+	return h
+}

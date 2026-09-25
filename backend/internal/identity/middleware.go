@@ -54,6 +54,9 @@ func RequireAgent(l AgentLookup) func(http.Handler) http.Handler {
 				httpx.WriteError(w, r, err)
 				return
 			}
+			if h := actorLogFromContext(r.Context()); h != nil {
+				h.AgentID = id
+			}
 			next.ServeHTTP(w, r.WithContext(WithActor(r.Context(), Actor{Kind: KindAgent, ID: id, AgentID: id})))
 		})
 	}
@@ -76,6 +79,9 @@ func RequireSession(s *Service) func(http.Handler) http.Handler {
 			if err != nil {
 				httpx.WriteError(w, r, err)
 				return
+			}
+			if h := actorLogFromContext(r.Context()); h != nil {
+				h.UserID = u.ID
 			}
 			next.ServeHTTP(w, r.WithContext(WithActor(r.Context(),
 				Actor{Kind: KindUser, ID: u.ID, UserID: u.ID, Role: u.Role})))

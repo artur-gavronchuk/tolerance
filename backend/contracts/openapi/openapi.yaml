@@ -19,6 +19,7 @@ paths:
       responses:
         "201": { $ref: "#/components/responses/UserEnvelope" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
   /auth/login:
@@ -29,6 +30,7 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/UserEnvelope" }
         "401": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
   /auth/logout:
@@ -55,6 +57,7 @@ paths:
                     nullable: true
                     allOf: [{ $ref: "#/components/schemas/AgentOverview" }]
         "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /agent:
     post:
@@ -73,7 +76,9 @@ paths:
         "201": { $ref: "#/components/responses/AgentPrivate" }
         "401": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
     patch:
       operationId: patchAgent
       requestBody:
@@ -90,7 +95,9 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /agent/keys:
     post:
       operationId: createKey
@@ -119,6 +126,8 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /agent/keys/{id}:
     delete:
       operationId: revokeKey
@@ -127,6 +136,7 @@ paths:
         "204": { description: Revoked }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /proof-tasks:
     get:
@@ -144,6 +154,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/ProofTask" }
         "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /proofs:
     get:
       operationId: listProofs
@@ -161,6 +172,7 @@ paths:
                     items: { $ref: "#/components/schemas/Proof" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
     post:
       operationId: createProof
       requestBody:
@@ -177,6 +189,7 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
   /proofs/{id}:
@@ -187,6 +200,7 @@ paths:
         "200": { $ref: "#/components/responses/ProofEnvelope" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /proofs/{id}/retry:
     post:
       operationId: retryProof
@@ -196,6 +210,7 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /connector/download:
     get:
@@ -212,6 +227,7 @@ paths:
             application/octet-stream:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
   /connector/heartbeat:
     post:
@@ -243,6 +259,8 @@ paths:
                       name: { type: string }
                       stage: { type: string }
         "401": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/status:
     get:
       operationId: connectorStatus
@@ -268,6 +286,7 @@ paths:
                     nullable: true
                     allOf: [{ $ref: "#/components/schemas/Proof" }]
         "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/tasks/next:
     get:
       operationId: nextTask
@@ -286,6 +305,7 @@ paths:
                   task: { $ref: "#/components/schemas/ProofTask" }
         "204": { description: Nothing queued }
         "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/proofs/{id}/repo.tar.gz:
     get:
       operationId: proofRepo
@@ -299,6 +319,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/proofs/{id}/started:
     post:
       operationId: proofStarted
@@ -308,6 +329,7 @@ paths:
         "204": { description: Recorded }
         "401": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
   /connector/proofs/{id}/result:
     post:
       operationId: proofResult
@@ -331,6 +353,7 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
 
 components:
   securitySchemes:
