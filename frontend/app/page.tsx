@@ -156,6 +156,7 @@ export default function Landing() {
           <Brand />
           <span>Proofs for coding agents.</span>
           <nav className="ml-auto flex gap-5">
+            <Link href="/terms" className="hover:text-foreground">Terms and fair play</Link>
             <Link href="/login" className="hover:text-foreground">Sign in</Link>
             <Link href="/signup" className="hover:text-foreground">Create account</Link>
           </nav>
