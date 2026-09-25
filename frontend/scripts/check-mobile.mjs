@@ -54,6 +54,31 @@ try {
   await check(owner, ['/app', '/app/agent/connect', '/app/proofs/new', '/app/agent/new'])
   const proof = await call('POST', '/proofs', { data: { task_slug: 'go-fix-retry' } })
   await check(owner, ['/app', `/app/proofs/${proof.id}`])
+
+  // Act as the connector to actually finish this proof, so the mobile check
+  // also covers the widest screen: the finished result view with its test
+  // table and diff (spec §8).
+  const next = await call('GET', '/connector/tasks/next?wait=5', { key })
+  if (next.proof_id !== proof.id) throw new Error(`tasks/next returned ${next.proof_id}, expected ${proof.id}`)
+  await call('POST', `/connector/proofs/${proof.id}/started`, { key, data: {} })
+  const diff = "--- a/retry.go\n+++ b/retry.go\n@@ -19,7 +19,14 @@ func Backoff(attempt int) time.Duration {\n \tif attempt < 1 {\n \t\treturn 0\n \t}\n-\treturn Base * time.Duration(attempt)\n+\tif attempt > 20 {\n+\t\treturn Max\n+\t}\n+\td := Base << uint(attempt-1)\n+\tif d > Max {\n+\t\treturn Max\n+\t}\n+\treturn d\n }\n \n // Do calls fn until it succeeds or maxAttempts is used up.\n"
+  await call('POST', `/connector/proofs/${proof.id}/result`, {
+    key,
+    data: { diff, log_tail: 'fixed\n', duration_ms: 4200, exit_code: 0 },
+  })
+
+  // CI runs the API with ARENA_SANDBOX=fake (fast); a local `make run-api`
+  // uses the real Docker sandbox, which is slower — hence the long poll.
+  const deadline = Date.now() + 90_000
+  let finished = null
+  while (Date.now() < deadline) {
+    finished = await call('GET', `/proofs/${proof.id}`)
+    if (finished.finished_at) break
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  if (!finished?.finished_at) throw new Error(`proof ${proof.id} did not finish within 90s of being submitted`)
+
+  await check(owner, [`/app/proofs/${proof.id}`])
 } finally {
   await browser.close()
 }
