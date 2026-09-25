@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -196,9 +199,90 @@ while True:
 		t.Errorf("Close took %s, want < 2s", elapsed)
 	}
 
-	if err := syscall.Kill(-pid, 0); !errors.Is(err, syscall.ESRCH) {
-		t.Errorf("process group %d still alive after Close: %v", pid, err)
+	if !waitProcessGroupDead(t, pid, 3*time.Second) {
+		t.Errorf("process group %d still alive after Close", pid)
 	}
+}
+
+// waitProcessGroupDead polls up to timeout for every process in the group led by pid to be gone, and
+// reports whether it ever observed that. It exists because kill(-pgid, 0) == ESRCH is too strict a check
+// right after a SIGKILL: on Linux, a process that has exited but not yet been reaped by its parent — a
+// zombie — still "exists" for kill's purposes. The runaway bot's own child (sleep 60) gets reparented to
+// whatever subreaper owns the test process (the CI runner's init, typically) once the bot itself is
+// killed, and can sit there as a zombie for a little while before that reaper collects it. A zombie holds
+// no CPU, memory or open files — it is dead in every way that matters here — so once the plain kill(0)
+// check stops passing, we fall back to inspecting /proc on Linux and accept the group as dead when every
+// process sharing its pgid is in zombie state.
+func waitProcessGroupDead(t *testing.T, pid int, timeout time.Duration) bool {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		if processGroupDead(pid) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func processGroupDead(pid int) bool {
+	if err := syscall.Kill(-pid, 0); errors.Is(err, syscall.ESRCH) {
+		return true
+	}
+	if runtime.GOOS != "linux" {
+		return false // macOS (and anything else): the plain ESRCH check above is authoritative.
+	}
+	return allProcGroupMembersAreZombies(pid)
+}
+
+// allProcGroupMembersAreZombies reads /proc/<pid>/stat for every numeric entry under /proc and treats a
+// process as still alive only if it belongs to pid's group (field 5, pgrp) and isn't in state 'Z' (field
+// 3). A process that disappears between listing /proc and reading its stat file simply isn't counted —
+// it's gone, which is what we're checking for in the first place.
+func allProcGroupMembersAreZombies(pid int) bool {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		p, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", p))
+		if err != nil {
+			continue
+		}
+		state, pgrp, ok := parseProcStat(string(data))
+		if !ok || pgrp != pid {
+			continue
+		}
+		if state != "Z" {
+			return false
+		}
+	}
+	return true
+}
+
+// parseProcStat pulls the state (field 3) and pgrp (field 5) out of a /proc/<pid>/stat line. The comm
+// field (2) is parenthesized and can itself contain spaces or parens, so fields are counted from the last
+// ')' rather than by naively splitting on whitespace.
+func parseProcStat(line string) (state string, pgrp int, ok bool) {
+	i := strings.LastIndexByte(line, ')')
+	if i < 0 || i+2 > len(line) {
+		return "", 0, false
+	}
+	fields := strings.Fields(line[i+2:])
+	if len(fields) < 3 {
+		return "", 0, false
+	}
+	pgrp, err := strconv.Atoi(fields[2])
+	if err != nil {
+		return "", 0, false
+	}
+	return fields[0], pgrp, true
 }
 
 // TestStderrCapped checks that Stderr() keeps only the last 16 KiB written, not the first.
