@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,7 +42,7 @@ type e2e struct {
 	games  *games.Service
 }
 
-func newE2E(t *testing.T) *e2e {
+func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	t.Helper()
 	d := dbtest.New(t)
 	ctx := context.Background()
@@ -56,7 +57,7 @@ func newE2E(t *testing.T) *e2e {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake"}
+	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake", devLogin: true}
 	ps := proofs.NewService(d.AppPool)
 	// A real process launcher for house bots (in-process, no interpreter needed) and any uploaded bot
 	// (python/js, via python3/node) - short check matches so the qualify-driving tests stay fast. The games
@@ -65,6 +66,10 @@ func newE2E(t *testing.T) *e2e {
 	gamesSvc := games.NewService(d.AppPool, ps, match.WithHouse(match.ProcessLauncher{}), log, games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
 		agents: agents.NewService(d.AppPool, ps), proofs: ps, games: gamesSvc}
+	if len(providers) > 0 {
+		dp.providers = providers[0]
+		cfg.publicURL = "http://arena.test"
+	}
 	srv := httptest.NewServer(newHandler(cfg, dp))
 	t.Cleanup(srv.Close)
 	router, err := openapi.Router()
@@ -123,7 +128,15 @@ func tanksStarterArchive(t *testing.T) []byte {
 func (e *e2e) browser(t *testing.T) *http.Client {
 	t.Helper()
 	jar, _ := cookiejar.New(nil)
-	return &http.Client{Jar: jar}
+	return &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+// devLogin signs c in through POST /auth/dev.
+func (e *e2e) devLogin(t *testing.T, c *http.Client, email string) {
+	t.Helper()
+	if code := e.call(t, c, "POST", "/api/v1/auth/dev", "", map[string]string{"email": email}, nil); code != 200 {
+		t.Fatalf("dev login %s: %d", email, code)
+	}
 }
 
 // call performs a request (cookie jar on the client, optional bearer key),
@@ -154,7 +167,7 @@ func (e *e2e) call(t *testing.T, c *http.Client, method, path, key string, body 
 	return resp.StatusCode
 }
 
-func TestEndToEnd_SignupConnectProve(t *testing.T) {
+func TestEndToEnd_SignInConnectProve(t *testing.T) {
 	e := newE2E(t)
 	owner := e.browser(t)
 	plain := &http.Client{}
@@ -174,7 +187,7 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 		t.Fatalf("connector download problem code: %q", problem.Code)
 	}
 
-	// signup, me
+	// sign in, me
 	var me struct {
 		User  identity.User `json:"user"`
 		Agent *struct {
@@ -182,15 +195,10 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 			LastProof *proofs.Proof `json:"last_proof"`
 		} `json:"agent"`
 	}
-	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "Owner@Example.com", "password": "longenough1"}, nil); code != 201 {
-		t.Fatalf("signup: %d", code)
-	}
-	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "owner@example.com", "password": "longenough1"}, nil); code != 409 {
-		t.Fatalf("duplicate signup: %d", code)
-	}
+	e.devLogin(t, owner, "Owner@Example.com")
 	e.call(t, owner, "GET", "/api/v1/me", "", nil, &me)
 	if me.User.Email != "owner@example.com" || me.Agent != nil {
-		t.Fatalf("me after signup: %+v", me)
+		t.Fatalf("me after sign in: %+v", me)
 	}
 
 	// agent + key
@@ -332,14 +340,28 @@ func TestEndToEnd_SignupConnectProve(t *testing.T) {
 	}
 }
 
-func TestLogin_RateLimited(t *testing.T) {
+func TestDevLogin_RateLimited(t *testing.T) {
 	e := newE2E(t)
 	c := e.browser(t)
 	for i := 0; i < 10; i++ {
-		e.call(t, c, "POST", "/api/v1/auth/login", "", map[string]string{"email": "x@example.com", "password": "wrongwrongwrong"}, nil)
+		e.call(t, c, "POST", "/api/v1/auth/dev", "", map[string]string{"email": "x@example.com"}, nil)
 	}
-	if code := e.call(t, c, "POST", "/api/v1/auth/login", "", map[string]string{"email": "x@example.com", "password": "wrongwrongwrong"}, nil); code != 429 {
+	if code := e.call(t, c, "POST", "/api/v1/auth/dev", "", map[string]string{"email": "x@example.com"}, nil); code != 429 {
 		t.Fatalf("11th attempt: %d", code)
+	}
+}
+
+func TestAuthProviders_ListsNothingWithoutKeysButDevLogin(t *testing.T) {
+	e := newE2E(t)
+	var out struct {
+		Providers []string `json:"providers"`
+		DevLogin  bool     `json:"dev_login"`
+	}
+	if code := e.call(t, &http.Client{}, "GET", "/api/v1/auth/providers", "", nil, &out); code != 200 {
+		t.Fatalf("providers: %d", code)
+	}
+	if len(out.Providers) != 0 || !out.DevLogin {
+		t.Fatalf("providers: %+v", out)
 	}
 }
 
@@ -347,7 +369,7 @@ func TestEndToEnd_OversizedResultFailsTheProof(t *testing.T) {
 	e := newE2E(t)
 	owner := e.browser(t)
 	plain := &http.Client{}
-	e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "big@example.com", "password": "longenough1"}, nil)
+	e.devLogin(t, owner, "big@example.com")
 	e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "big-diff"}, nil)
 	var key struct {
 		Key string `json:"key"`
@@ -370,6 +392,87 @@ func TestEndToEnd_OversizedResultFailsTheProof(t *testing.T) {
 	e.call(t, owner, "GET", "/api/v1/proofs/"+proof.ID, "", nil, &proof)
 	if proof.Status != proofs.StatusFailed || proof.FailureReason != "diff_too_large" || proof.FinishedAt == nil {
 		t.Fatalf("after an oversized result: %+v", proof)
+	}
+}
+
+func TestEndToEnd_GitHubSignIn(t *testing.T) {
+	var challenge string
+	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/token":
+			_ = r.ParseForm()
+			sum := sha256.Sum256([]byte(r.Form.Get("code_verifier")))
+			if r.Form.Get("code") != "good-code" || base64.RawURLEncoding.EncodeToString(sum[:]) != challenge {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"access_token":"tok","token_type":"bearer"}`))
+		case "/user":
+			_, _ = w.Write([]byte(`{"id": 777, "login": "octo"}`))
+		case "/user/emails":
+			_, _ = w.Write([]byte(`[{"email":"Octo@Example.com","primary":true,"verified":true}]`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(gh.Close)
+	e := newE2E(t, map[string]identity.Provider{"github": &identity.GitHub{ClientID: "cid", ClientSecret: "sec",
+		AuthURL: gh.URL + "/authorize", TokenURL: gh.URL + "/token", APIURL: gh.URL}})
+	owner := e.browser(t)
+
+	var providers struct {
+		Providers []string `json:"providers"`
+	}
+	e.call(t, owner, "GET", "/api/v1/auth/providers", "", nil, &providers)
+	if len(providers.Providers) != 1 || providers.Providers[0] != "github" {
+		t.Fatalf("providers: %+v", providers)
+	}
+
+	// start → the provider, with state and a PKCE challenge
+	req, _ := http.NewRequest("GET", e.srv.URL+"/api/v1/auth/github/start?next=/app/agent/connect", nil)
+	resp, err := owner.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	openapi.ValidateResponse(t, e.router, req, resp, nil)
+	loc, _ := url.Parse(resp.Header.Get("Location"))
+	if resp.StatusCode != 302 || !strings.HasPrefix(loc.String(), gh.URL+"/authorize") {
+		t.Fatalf("start: %d %s", resp.StatusCode, loc)
+	}
+	if loc.Query().Get("redirect_uri") != "http://arena.test/api/v1/auth/github/callback" {
+		t.Fatalf("redirect_uri: %s", loc.Query().Get("redirect_uri"))
+	}
+	challenge = loc.Query().Get("code_challenge")
+
+	// the provider sends the browser back with a code
+	cb := "/api/v1/auth/github/callback?code=good-code&state=" + url.QueryEscape(loc.Query().Get("state"))
+	req, _ = http.NewRequest("GET", e.srv.URL+cb, nil)
+	resp, err = owner.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	openapi.ValidateResponse(t, e.router, req, resp, nil)
+	if resp.StatusCode != 302 || resp.Header.Get("Location") != "/app/agent/connect" {
+		t.Fatalf("callback: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	var me struct {
+		User identity.User `json:"user"`
+	}
+	if code := e.call(t, owner, "GET", "/api/v1/me", "", nil, &me); code != 200 || me.User.Email != "octo@example.com" {
+		t.Fatalf("me: %d %+v", code, me)
+	}
+
+	// replaying the same callback in the same browser: the state cookie was
+	// cleared, so it is single use
+	req, _ = http.NewRequest("GET", e.srv.URL+cb, nil)
+	resp, _ = owner.Do(req)
+	resp.Body.Close()
+	if resp.Header.Get("Location") != "/login?error=oauth_state" {
+		t.Fatalf("replay: %s", resp.Header.Get("Location"))
 	}
 }
 
@@ -443,9 +546,7 @@ func TestTanksUploadAndQualify(t *testing.T) {
 	e := newE2E(t)
 	owner := e.browser(t)
 
-	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "rookie@example.com", "password": "longenough1"}, nil); code != 201 {
-		t.Fatalf("signup: %d", code)
-	}
+	e.devLogin(t, owner, "rookie@example.com")
 
 	var bot games.MyBot
 	if code := e.call(t, owner, "POST", "/api/v1/me/tanks/bot", "", map[string]string{"name": "rookie"}, &bot); code != 200 {
@@ -509,12 +610,8 @@ func TestTanksLadderPublic(t *testing.T) {
 	other := e.browser(t)
 	plain := &http.Client{}
 
-	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "ladder-owner@example.com", "password": "longenough1"}, nil); code != 201 {
-		t.Fatalf("signup owner: %d", code)
-	}
-	if code := e.call(t, other, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "ladder-other@example.com", "password": "longenough1"}, nil); code != 201 {
-		t.Fatalf("signup other: %d", code)
-	}
+	e.devLogin(t, owner, "ladder-owner@example.com")
+	e.devLogin(t, other, "ladder-other@example.com")
 
 	var bot games.MyBot
 	if code := e.call(t, owner, "POST", "/api/v1/me/tanks/bot", "", map[string]string{"name": "lead"}, &bot); code != 200 {
@@ -582,9 +679,7 @@ func TestTanksAgentRun(t *testing.T) {
 	owner := e.browser(t)
 	plain := &http.Client{}
 
-	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "agent-owner@example.com", "password": "longenough1"}, nil); code != 201 {
-		t.Fatalf("signup: %d", code)
-	}
+	e.devLogin(t, owner, "agent-owner@example.com")
 	if code := e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "runner"}, nil); code != 201 {
 		t.Fatalf("create agent: %d", code)
 	}
@@ -632,9 +727,7 @@ func TestTanksConnectorUpload(t *testing.T) {
 	owner := e.browser(t)
 	plain := &http.Client{}
 
-	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "connector-upload@example.com", "password": "longenough1"}, nil); code != 201 {
-		t.Fatalf("signup: %d", code)
-	}
+	e.devLogin(t, owner, "connector-upload@example.com")
 	if code := e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "uploader"}, nil); code != 201 {
 		t.Fatalf("create agent: %d", code)
 	}

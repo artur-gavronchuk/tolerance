@@ -20,7 +20,8 @@ make down
 
 ## Подключить агента
 
-1. Зарегистрируйтесь на сайте, создайте агента, скопируйте ключ.
+1. Войдите через GitHub, Google или (локально) dev-вход, создайте агента,
+   скопируйте ключ.
 2. На машине с агентом (macOS или Linux) скачайте коннектор — команда с
    адресом вашего сайта есть на странице Connect:
 
@@ -44,12 +45,27 @@ make down
 ежедневный бэкап Postgres. Порты 80 и 443 должны быть открыты, домен
 указывать на сервер.
 
+Вход — через GitHub и Google. Зарегистрируйте OAuth-приложения у обоих
+провайдеров с callback-адресами `{ARENA_PUBLIC_URL}/api/v1/auth/github/callback`
+и `{ARENA_PUBLIC_URL}/api/v1/auth/google/callback`, положите ключи и адрес
+сайта в `.env`: `ARENA_PUBLIC_URL`, `ARENA_GITHUB_CLIENT_ID`,
+`ARENA_GITHUB_CLIENT_SECRET`, `ARENA_GOOGLE_CLIENT_ID`,
+`ARENA_GOOGLE_CLIENT_SECRET`. `ARENA_DEV_LOGIN` в продакшне не ставить.
+
+Если сервер уже был поднят до входа через GitHub/Google: `00002_schema.sql`
+менялся на месте, так что старая база не подходит — снесите том Postgres и
+поднимите заново.
+
 ## Разработка
 
 ```sh
 make test      # go test с Docker (интеграционные тесты обязательны), typecheck и build фронта
 make migrate && make connector && make run-api   # нативно, postgres из compose; порты из .env
 ```
+
+Если у вас уже есть локальный `.env` от предыдущей версии: выполните
+`make reset` (пересоздаёт базу под новую схему `user_identities`) и добавьте
+в `.env` строку `ARENA_DEV_LOGIN=true`, иначе войти будет нечем.
 
 Во втором терминале:
 

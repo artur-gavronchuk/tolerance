@@ -48,7 +48,7 @@ func setupMatch(t *testing.T) fixture {
 	us := identity.NewService(d.AppPool, nil)
 	svc := games.NewService(d.AppPool, ps, match.WithHouse(match.ProcessLauncher{}), slog.Default(),
 		games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
-	u, _, err := us.Signup(ctx, "o@example.com", "longenough1")
+	u, _, err := us.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "o@example.com", Email: "o@example.com", EmailVerified: true})
 	if err != nil {
 		t.Fatal(err)
 	}

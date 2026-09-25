@@ -33,7 +33,7 @@ export function SiteHeader() {
   )
 
   return (
-    <header className="border-b border-border bg-card/80 backdrop-blur-sm">
+    <header className="sticky top-0 z-40 border-b border-border bg-card/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6">
         <Brand />
         {inTanks ? (

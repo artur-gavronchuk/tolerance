@@ -25,14 +25,12 @@ func problem(t *testing.T, err error) *httpx.Problem {
 	return p
 }
 
-// createUser inserts a user row directly: identity.Service in this slice
-// only reads users (login/session creation lands in a later task), so
-// tests that need one arrange it themselves.
+// createUser inserts a user row directly, bypassing SignIn.
 func createUser(t *testing.T, d *dbtest.DB, email string) string {
 	t.Helper()
 	id := idgen.New("user")
 	err := d.AdminPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)`, id, email, "test_hash")
+		_, err := tx.Exec(ctx, `INSERT INTO users (id, email) VALUES ($1, $2)`, id, email)
 		return err
 	})
 	if err != nil {

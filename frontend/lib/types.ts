@@ -4,6 +4,7 @@ export type ProofStatus =
   | 'queued' | 'claimed' | 'running_agent' | 'diff_submitted' | 'running_sandbox'
   | 'passed' | 'failed' | 'infra_error' | 'expired'
 
+export interface AuthProviders { providers: ('github' | 'google')[]; dev_login: boolean }
 export interface User { id: string; email: string; role: 'user' | 'admin'; created_at: string }
 export interface ApiKey { id: string; prefix: string; name: string; created_at: string; last_used_at: string | null }
 export interface Presence { last_seen_at: string; connector_version: string; hostname: string }
