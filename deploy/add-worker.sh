@@ -112,6 +112,7 @@ ENV
 fi
 
 docker build -q -t arena-proof-go:1 backend/fixtures/proofs/go-fix-retry
+docker build -q -t arena-bot-runtime:1 backend/internal/games/match/runtime
 docker compose -f deploy/compose.worker.yml --env-file .env up -d --build
 docker compose -f deploy/compose.worker.yml --env-file .env ps
 REMOTE_UP

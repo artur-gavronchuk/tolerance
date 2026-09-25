@@ -24,6 +24,12 @@ services:
       ARENA_WORK_DIR: /var/lib/arena/work
       ARENA_SANDBOX: docker
       ARENA_WORKER_CONCURRENCY: ${ARENA_WORKER_CONCURRENCY:-1}
+      # Tanks bot matches: same knobs as the main host's docker-compose.yml
+      # worker service. This host needs arena-bot-runtime:1 built locally
+      # too (see deploy/add-worker.sh).
+      ARENA_BOT_IMAGE: ${ARENA_BOT_IMAGE:-}
+      ARENA_MATCH_INTERVAL: ${ARENA_MATCH_INTERVAL:-20s}
+      ARENA_MATCH_CONCURRENCY: ${ARENA_MATCH_CONCURRENCY:-1}
       # 0.0.0.0 (not loopback) so the main host's Prometheus can scrape it
       # over the private network; ARENA_ALLOW_NON_LOOPBACK is what makes
       # that allowed.

@@ -129,6 +129,13 @@ services:
       # Parallel sandbox runs; keep at 1 on small boxes, raise once there's
       # spare CPU/RAM (each sandbox run can use up to ~1 vCPU/1 GB).
       ARENA_WORKER_CONCURRENCY: ${ARENA_WORKER_CONCURRENCY:-1}
+      # Tanks bot matches: the runtime image `make up`/`bot-image` builds
+      # (see Makefile), how often the games worker schedules a tick, and how
+      # many matches it runs concurrently. Empty ARENA_BOT_IMAGE lets the
+      # backend default to arena-bot-runtime:1.
+      ARENA_BOT_IMAGE: ${ARENA_BOT_IMAGE:-}
+      ARENA_MATCH_INTERVAL: ${ARENA_MATCH_INTERVAL:-20s}
+      ARENA_MATCH_CONCURRENCY: ${ARENA_MATCH_CONCURRENCY:-1}
       # 0.0.0.0 (not loopback) so prometheus can scrape it from another
       # container; ARENA_ALLOW_NON_LOOPBACK is what makes that allowed.
       ARENA_METRICS_ADDR: 0.0.0.0:9091
