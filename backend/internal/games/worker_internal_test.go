@@ -28,6 +28,24 @@ func (alwaysFailLauncher) Launch(context.Context, match.Spec) (match.Bot, error)
 	return nil, fmt.Errorf("games: alwaysFailLauncher always fails")
 }
 
+// blockingLauncher stands in for a real docker/process launch that ignores context cancellation until it
+// is done (like Worker.handle's own finishCtx grace period assumes of Complete/Fail): its Launch call
+// signals launched once, then blocks on release regardless of ctx, so a test can hold a job "mid-handle"
+// for as long as it likes and control exactly when the platform call finishes.
+type blockingLauncher struct {
+	launched chan struct{}
+	release  chan struct{}
+}
+
+func (l *blockingLauncher) Launch(context.Context, match.Spec) (match.Bot, error) {
+	select {
+	case l.launched <- struct{}{}:
+	default:
+	}
+	<-l.release
+	return nil, fmt.Errorf("games: blockingLauncher released")
+}
+
 func starterArchiveForWorkerTest(t *testing.T) []byte {
 	t.Helper()
 	files, err := tanks.Starter("python")
@@ -303,5 +321,82 @@ func TestFinishMatchStoresPlayedTicks(t *testing.T) {
 	}
 	if live.DurationMS != 50*100 {
 		t.Fatalf("broadcast duration_ms = %d, want %d", live.DurationMS, 50*100)
+	}
+}
+
+// TestWorkerRunWaitsForInFlightJob covers the shutdown race this package's Worker.Run used to have: it
+// started claimLoop goroutines with a bare `go` and returned as soon as scheduleLoop saw ctx done, without
+// waiting for those goroutines. cmd/api/main.go's wg.Wait() (which gates the deferred pool.Close()) treats
+// Run's return as "the games worker is done" - so a job still mid-handle when ctx is cancelled (e.g. a
+// docker/process launch that, like blockingLauncher here, does not itself respect ctx) could still be
+// writing its Complete/Fail outcome via handle()'s detached finishCtx after the pool was already closed.
+// Run must not return until every claimLoop goroutine - and so every in-flight handle() - has finished.
+func TestWorkerRunWaitsForInFlightJob(t *testing.T) {
+	d := dbtest.New(t)
+	ctx := context.Background()
+	if err := Sync(ctx, d.AdminPool); err != nil {
+		t.Fatal(err)
+	}
+
+	launcher := &blockingLauncher{launched: make(chan struct{}, 1), release: make(chan struct{})}
+	svc := NewService(d.AppPool, proofs.NewService(d.AppPool), launcher, slog.Default(), Config{WorkDir: t.TempDir()})
+	w := NewWorker(svc, d.AppPool, WorkerConfig{Concurrency: 1}, slog.Default())
+
+	matchID, err := svc.ScheduleTick(ctx, 5, 0)
+	if err != nil {
+		t.Fatalf("schedule: %v", err)
+	}
+	if matchID == "" {
+		t.Fatal("expected a scheduled match")
+	}
+
+	runCtx, cancel := context.WithCancel(context.Background())
+	runDone := make(chan struct{})
+	go func() {
+		w.Run(runCtx)
+		close(runDone)
+	}()
+
+	// Wait for the run_match job to be claimed and the (fake) platform call to actually start -
+	// i.e. the job is mid-handle - before simulating shutdown.
+	select {
+	case <-launcher.launched:
+	case <-time.After(5 * time.Second):
+		t.Fatal("launcher was never invoked - the job was never claimed")
+	}
+
+	cancel() // simulate SIGTERM: the caller now considers the worker shutting down
+
+	// Run must not return while the job is still mid-handle, even though ctx is already cancelled -
+	// scheduleLoop exits immediately on cancel, but claimLoop's in-flight handle() does not.
+	select {
+	case <-runDone:
+		t.Fatal("Run returned while a job was still mid-handle")
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	close(launcher.release) // let the blocked platform call finish, as if the sandbox/process just exited
+
+	select {
+	case <-runDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return soon after the in-flight job finished")
+	}
+
+	// By the time Run returned, handle() must already have written the job's outcome (queue.Fail here,
+	// since blockingLauncher errors out) - not left it leased for cmd/api's pool.Close() to race against.
+	var state string
+	var leaseOwner *string
+	if err := d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT state, lease_owner FROM jobs WHERE kind = 'run_match' AND payload ->> 'match_id' = $1`, matchID).
+			Scan(&state, &leaseOwner)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if state != "queued" {
+		t.Fatalf("job state = %q, want queued (Fail should have run before Run returned)", state)
+	}
+	if leaseOwner != nil {
+		t.Fatalf("lease_owner = %q, want nil (Fail clears it)", *leaseOwner)
 	}
 }

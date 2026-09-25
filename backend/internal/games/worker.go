@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"tolerance/internal/games/match"
@@ -47,13 +48,23 @@ func NewWorker(svc *Service, pool *db.Pool, cfg WorkerConfig, log *slog.Logger) 
 	}
 }
 
-// Run starts cfg.Concurrency job-claiming goroutines and blocks running the scheduler loop until ctx is
-// done. It never crashes the process on an error - every failure is logged and retried on the next tick.
+// Run starts cfg.Concurrency job-claiming goroutines and runs the scheduler loop until ctx is done. It
+// never crashes the process on an error - every failure is logged and retried on the next tick. Run does
+// not return until every claimLoop goroutine has also returned, so a caller that waits on Run (e.g. via a
+// sync.WaitGroup, as cmd/api/main.go does) knows no job is still mid-handle - and its deferred pool.Close()
+// - before Complete/Fail has written the job's outcome, given handle()'s own bounded grace period on top.
 func (w *Worker) Run(ctx context.Context) {
+	var wg sync.WaitGroup
 	for i := 0; i < w.cfg.Concurrency; i++ {
-		go w.claimLoop(ctx, fmt.Sprintf("%s-%d", w.owner, i))
+		wg.Add(1)
+		owner := fmt.Sprintf("%s-%d", w.owner, i)
+		go func() {
+			defer wg.Done()
+			w.claimLoop(ctx, owner)
+		}()
 	}
 	w.scheduleLoop(ctx)
+	wg.Wait()
 }
 
 // claimLoop repeatedly claims and runs one run_match or check_bot job at a time, polling every 2s when
