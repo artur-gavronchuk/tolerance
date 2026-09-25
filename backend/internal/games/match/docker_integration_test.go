@@ -215,3 +215,111 @@ while True:
 		t.Errorf("container %s still present after Close: %s", id, out)
 	}
 }
+
+// containersWithLabel lists container ids currently matching label=value (docker ps -a, so stopped
+// containers count too).
+func containersWithLabel(t *testing.T, label string) []string {
+	t.Helper()
+	out, err := exec.Command("docker", "ps", "-a", "--filter", "label="+label, "-q").CombinedOutput()
+	if err != nil {
+		t.Fatalf("docker ps: %v: %s", err, out)
+	}
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "\n")
+}
+
+// TestDockerLaunchCancelledCtxLeavesNoContainer covers the fix for review round 1's Important finding:
+// docker create/cp used to run under Launch's own ctx, so a cancellation landing between the daemon
+// creating the container and the local CLI process reporting its id back to Go code (cmd.Cancel kills that
+// CLI process, but does not undo the daemon-side container it already asked for) left an orphaned,
+// unfindable container. create/cp now run on context.WithoutCancel(ctx) (bounded by dockerSetupTimeout
+// instead), and Launch checks ctx.Err() once the container exists and is labeled, removing it itself if
+// the caller already gave up.
+//
+// A cancel() fired the instant Launch is called almost always lands before create's CLI subprocess is even
+// spawned (os/exec never starts a process at all against an already-cancelled context), which exercises
+// the easy, always-safe case but not the narrow bug this is meant to catch. So each iteration instead
+// cancels after a delay spread across the plausible duration of create+cp (0..~90ms, docker create+cp for
+// this image typically completing within that range per the timings logged elsewhere in this file),
+// giving a good chance that at least some iterations land mid-create or mid-cp — genuinely exercising the
+// window the fix addresses — while the rest cover the before/after edges.
+//
+// Checking is deliberately deferred to the end, after every iteration has run, rather than done right
+// after each Launch: when cancel() kills the local `docker create` CLI process before it can report the
+// container's id, the daemon can still be in the middle of finishing that create server-side, so the
+// container can take a little longer than Launch itself to become visible in `docker ps -a` — checking
+// immediately was observed (while developing this test against a deliberately reintroduced version of the
+// bug) to sometimes miss a real leak that showed up moments later.
+func TestDockerLaunchCancelledCtxLeavesNoContainer(t *testing.T) {
+	requireDockerRuntime(t)
+	dir, entry := writeStarterKit(t, "python")
+
+	const iterations = 10
+	values := make([]string, iterations)
+	for i := 0; i < iterations; i++ {
+		value := fmt.Sprintf("case9-cancel-%d-%d", os.Getpid(), i)
+		values[i] = value
+		launcher := DockerLauncher{Image: dockerTestImage, Labels: map[string]string{"arena-bot-test": value}}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		delay := time.Duration(i) * 10 * time.Millisecond
+		go func() {
+			time.Sleep(delay)
+			cancel()
+		}()
+
+		bot, err := launcher.Launch(ctx, Spec{Dir: dir, Language: "python", Entry: entry})
+		if err == nil {
+			bot.Close()
+		}
+	}
+
+	// Give the daemon a moment to finish settling any create it was still processing when its CLI client
+	// got killed by a cancellation that landed mid-request.
+	time.Sleep(2 * time.Second)
+
+	for i, value := range values {
+		if leaked := containersWithLabel(t, "arena-bot-test="+value); len(leaked) != 0 {
+			t.Errorf("iteration %d: container(s) leaked for label arena-bot-test=%s: %v", i, value, leaked)
+			for _, id := range leaked {
+				exec.Command("docker", "rm", "-f", id).Run() //nolint:errcheck
+			}
+		}
+	}
+}
+
+// TestRemoveStaleBotContainers checks the periodic safety-net sweep: a container it did not create itself
+// (simulating one abandoned by a crashed process, the scenario the previous test's fix cannot fully rule
+// out — Launch's create/cp now survive a cancelled ctx precisely so a container like this stays labeled
+// and findable) is removed once it's older than the given max age.
+func TestRemoveStaleBotContainers(t *testing.T) {
+	requireDockerRuntime(t)
+
+	value := fmt.Sprintf("case9-stale-%d", os.Getpid())
+	idRaw, err := exec.Command("docker", "create",
+		"--label", botContainerLabel,
+		"--label", "arena-bot-test="+value,
+		dockerTestImage, "true").CombinedOutput()
+	if err != nil {
+		t.Fatalf("docker create: %v: %s", err, idRaw)
+	}
+	id := strings.TrimSpace(string(idRaw))
+	t.Cleanup(func() { exec.Command("docker", "rm", "-f", id).Run() }) //nolint:errcheck
+
+	// maxAge 0: anything created before this call counts as stale, so our container (already created
+	// above) is swept without waiting out the real staleBotContainerAge.
+	removed, err := removeStaleBotContainers(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("removeStaleBotContainers: %v", err)
+	}
+	if removed < 1 {
+		t.Errorf("removed = %d, want at least 1 (our own labeled container)", removed)
+	}
+
+	if leaked := containersWithLabel(t, "arena-bot-test="+value); len(leaked) != 0 {
+		t.Errorf("container %s still present after removeStaleBotContainers: %v", id, leaked)
+	}
+}
