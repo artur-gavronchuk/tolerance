@@ -289,3 +289,7 @@ on it the same way it depends on `proof-image`.
 - Commit subjects: English, imperative, sentence case, no `feat:`-style prefixes.
 - Prose docs and specs in `docs/` are in Russian; code, comments and commit
   messages are in English. Match whichever you are editing.
+- Migrations must be backward compatible (expand/contract): canary releases run
+  old and new backend code against the same schema side by side. Never edit or
+  rename a migration file once it exists on `main` — add a new one instead;
+  CI's `migration-guard` job enforces this (see README.md's "Релизы").

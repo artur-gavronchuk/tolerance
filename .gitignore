@@ -4,3 +4,18 @@
 frontend/.DS_Store
 *.zip
 backend/.connector/
+# Server-generated canary traffic-split state (deploy/release.sh); see the
+# committed *.caddy.default next to these for the starting point.
+deploy/caddy/upstreams/*.caddy
+# Prometheus file_sd targets for remote worker hosts (deploy/add-worker.sh),
+# a per-server runtime artifact, not checked in.
+deploy/monitoring/targets/*.json
+# deploy/release.sh + deploy/deploy.sh runtime state, only ever meant to
+# live on the server (/opt/tolerance), never in a repo working tree.
+.deployed/
+deploy.log
+deploy.pid
+deploy.exit
+.deploy-run.sh
+.deploy-staging/
+.config-staging/

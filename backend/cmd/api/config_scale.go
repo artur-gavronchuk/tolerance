@@ -21,6 +21,8 @@ type scaleConfig struct {
 	workerConcurrency int
 	metricsAddr       string // "" disables the metrics listener
 	trustProxy        bool
+	track             string // "stable" | "canary", ARENA_TRACK; reported on arena_build_info
+	version           string // ARENA_VERSION, the deployed image tag; reported on arena_build_info
 
 	rateIPRPS    float64
 	rateIPBurst  int
@@ -38,9 +40,14 @@ func loadScaleConfig() (scaleConfig, error) {
 		rateIPBurst:       envInt("ARENA_RATE_IP_BURST", 60),
 		rateKeyRPS:        envFloat("ARENA_RATE_KEY_RPS", 5),
 		rateKeyBurst:      envInt("ARENA_RATE_KEY_BURST", 20),
+		track:             env("ARENA_TRACK", "stable"),
+		version:           env("ARENA_VERSION", "dev"),
 	}
 	if sc.role != "all" && sc.role != "api" && sc.role != "worker" {
 		return scaleConfig{}, errors.New("ARENA_ROLE must be all, api or worker")
+	}
+	if sc.track != "stable" && sc.track != "canary" {
+		return scaleConfig{}, errors.New("ARENA_TRACK must be stable or canary")
 	}
 	if sc.workerConcurrency < 1 {
 		return scaleConfig{}, errors.New("ARENA_WORKER_CONCURRENCY must be at least 1")
