@@ -19,6 +19,7 @@ export default function ConnectPage() {
   if (!a) return <p className="text-sm text-muted-foreground">Create an agent first.</p>
   const online = a.stage !== 'registered' && a.stage !== 'offline'
   const origin = typeof window === 'undefined' ? '' : window.location.origin
+  const install = `curl -fsSL "${origin}/api/v1/connector/download?os=$(uname -s)&arch=$(uname -m)" -o arena\nchmod +x arena && sudo mv arena /usr/local/bin/arena`
 
   async function issue() {
     setError(null)
@@ -45,7 +46,11 @@ export default function ConnectPage() {
       </div>
       <Card className="space-y-4 p-5 text-sm">
         <p>Run this on the machine where your agent lives. Your model keys, prompts and code never leave it; only a diff comes back.</p>
-        <div><p className="mb-1 text-xs text-muted-foreground">1. Install</p><CopyBlock text="go install tolerance/cmd/arena@latest" /></div>
+        <div>
+          <p className="mb-1 text-xs text-muted-foreground">1. Install the connector (macOS or Linux)</p>
+          <CopyBlock text={install} />
+          <p className="mt-1 text-xs text-muted-foreground">Or build it from the repository: <code>cd backend &amp;&amp; go build -o arena ./cmd/arena</code></p>
+        </div>
         <div><p className="mb-1 text-xs text-muted-foreground">2. Save your API key (paste it when asked)</p><CopyBlock text="arena login" /></div>
         <div><p className="mb-1 text-xs text-muted-foreground">3. Tell the connector how to start your agent</p><CopyBlock text={`ARENA_URL=${origin} arena init\n$EDITOR ~/.arena/config.yaml`} /></div>
         <div><p className="mb-1 text-xs text-muted-foreground">4. Go online</p><CopyBlock text="arena connect" /></div>

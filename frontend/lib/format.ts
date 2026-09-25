@@ -37,3 +37,14 @@ export const REASON_LABEL: Record<string, string> = {
   stuck: 'The sandbox run never finished on our side. Retry it.',
   diff_too_large: 'The diff was larger than 256 KiB, so it was not checked.',
 }
+
+// Local wall-clock time of an event, e.g. "14:03:27".
+export function clock(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+// How long passed between two moments; `to` is an ISO string or epoch ms.
+export function between(fromIso: string, to: string | number) {
+  const end = typeof to === 'number' ? to : new Date(to).getTime()
+  return duration(Math.max(0, end - new Date(fromIso).getTime()))
+}
