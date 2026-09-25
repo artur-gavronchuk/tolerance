@@ -270,7 +270,29 @@ reload_caddy() {
 # checksum in .deployed/monitoring.sha256 so an unrelated release doesn't
 # pay for a Grafana restart every time.
 cmd_apply_config() {
-	log "validating and reloading Caddy"
+	# The upstream snippets are server state (never shipped); the Caddyfile
+	# imports them, so they must exist before Caddy loads a new config.
+	local f
+	for f in deploy/caddy/upstreams/api.caddy deploy/caddy/upstreams/web.caddy; do
+		[ -f "$f" ] || cp "$f.default" "$f"
+	done
+	# Validate the shipped Caddyfile with the NEW compose mounts in a
+	# throwaway container first: the running caddy may predate a mount the
+	# new file relies on, and a bad config must fail here, not take the site
+	# down.
+	log "validating the shipped Caddyfile"
+	dc run --rm --no-deps --entrypoint caddy caddy \
+		validate --config /etc/caddy/Caddyfile --adapter caddyfile
+	# Converge infra containers to the shipped compose file: `up` recreates
+	# only services whose definition (image, env, mounts) changed, which is
+	# what a plain reload/restart cannot do.
+	local infra=(caddy backup)
+	[ "$(env_get ARENA_MONITORING)" = "true" ] &&
+		infra+=(prometheus grafana loki alloy node-exporter cadvisor postgres-exporter)
+	log "converging infra services: ${infra[*]}"
+	dc up -d --no-build --no-deps "${infra[@]}"
+	wait_running caddy
+	log "reloading Caddy"
 	reload_caddy
 	if [ "$(env_get ARENA_MONITORING)" = "true" ]; then
 		mkdir -p .deployed
@@ -317,13 +339,13 @@ cmd_canary_start() {
 	case "$component" in
 	backend)
 		env_set API_CANARY_TAG "$tag"
-		API_CANARY_TAG="$tag" dc up -d --no-build api-canary worker-canary
+		API_CANARY_TAG="$tag" dc up -d --no-build --no-deps api-canary worker-canary
 		wait_running api-canary worker-canary
 		render_upstream backend "$weight"
 		;;
 	web)
 		env_set WEB_CANARY_TAG "$tag"
-		WEB_CANARY_TAG="$tag" dc up -d --no-build web-canary
+		WEB_CANARY_TAG="$tag" dc up -d --no-build --no-deps web-canary
 		wait_running web-canary
 		render_upstream web "$weight"
 		;;
@@ -471,12 +493,12 @@ cmd_deploy_direct() {
 	case "$component" in
 	backend)
 		env_set API_TAG "$tag"
-		dc up -d --no-build api worker
+		dc up -d --no-build --no-deps api worker
 		wait_running api worker
 		;;
 	web)
 		env_set WEB_TAG "$tag"
-		dc up -d --no-build web
+		dc up -d --no-build --no-deps web
 		wait_running web
 		;;
 	esac
@@ -496,7 +518,7 @@ cmd_promote() {
 		render_upstream backend 100
 		reload_caddy
 		env_set API_TAG "$tag"
-		dc up -d --no-build api worker
+		dc up -d --no-build --no-deps api worker
 		wait_running api worker
 		log "promote backend: stable recreated at $tag, sending 100% back to stable"
 		render_upstream backend 0
@@ -513,7 +535,7 @@ cmd_promote() {
 		render_upstream web 100
 		reload_caddy
 		env_set WEB_TAG "$tag"
-		dc up -d --no-build web
+		dc up -d --no-build --no-deps web
 		wait_running web
 		log "promote web: stable recreated at $tag, sending 100% back to stable"
 		render_upstream web 0
@@ -555,12 +577,12 @@ cmd_rollback() {
 	case "$component" in
 	backend)
 		env_set API_TAG "$prev"
-		dc up -d --no-build api worker
+		dc up -d --no-build --no-deps api worker
 		wait_running api worker
 		;;
 	web)
 		env_set WEB_TAG "$prev"
-		dc up -d --no-build web
+		dc up -d --no-build --no-deps web
 		wait_running web
 		;;
 	esac

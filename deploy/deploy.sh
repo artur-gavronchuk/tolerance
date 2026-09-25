@@ -101,7 +101,7 @@ find "$remote_dir/.deploy-staging" -name '.DS_Store' -type f -delete
 # staging tree's mtimes are unrelated to the previous deploy's, and a
 # same-size same-second coincidence would otherwise make rsync skip a
 # genuinely changed file.
-rsync -ac --delete \
+rsync -ac --inplace --delete \
 	--exclude='.env' \
 	--exclude='.deployed/' \
 	--exclude='deploy.log' \

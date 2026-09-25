@@ -58,7 +58,7 @@ find "$remote_dir/.config-staging" -name '.DS_Store' -type f -delete
 # generated state INSIDE deploy/ must come before the broad
 # --include='/deploy/***' that would otherwise shadow them. -c/--checksum:
 # see deploy.sh's own rsync call for why size+mtime isn't reliable here.
-rsync -ac --delete \
+rsync -ac --inplace --delete \
 	--exclude='/deploy/monitoring/targets/*.json' \
 	--exclude='/deploy/caddy/upstreams/*.caddy' \
 	--include='/docker-compose.yml' \
