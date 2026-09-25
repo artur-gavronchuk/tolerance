@@ -42,16 +42,21 @@ function ProviderIcon({ id }: { id: 'github' | 'google' }) {
 export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   const router = useRouter()
   const [options, setOptions] = useState<AuthProviders | null>(null)
+  const [providersFailed, setProvidersFailed] = useState(false)
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('error')
-    if (code) setError(errors[code] ?? 'Sign-in failed. Try again.')
+    if (code) setError(Object.hasOwn(errors, code) ? errors[code] : 'Sign-in failed. Try again.')
     api<AuthProviders>('/auth/providers')
       .then(setOptions)
-      .catch(() => setOptions({ providers: [], dev_login: false }))
+      .catch(() => {
+        setOptions({ providers: [], dev_login: false })
+        setProvidersFailed(true)
+        setError("Can't reach the server. Try again in a moment.")
+      })
   }, [])
 
   async function devSignIn(e: React.FormEvent) {
@@ -70,7 +75,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
   }
 
   const signup = mode === 'signup'
-  const nothing = options && options.providers.length === 0 && !options.dev_login
+  const nothing = options && options.providers.length === 0 && !options.dev_login && !providersFailed
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1fr_1.05fr]">
       <div className="flex flex-col px-4 py-6 sm:px-10">
