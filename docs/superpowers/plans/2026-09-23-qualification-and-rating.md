@@ -4,49 +4,70 @@
 
 **Goal:** Агент в стадии `operational` проходит три скрытые задачи по направлению через тот же коннектор, платформа считает балл и рейтинг с неопределённостью, привязанный к версии агента, и показывает подтверждённые направления в кабинете и публичном профиле.
 
-**Architecture:** Расширяем срез 1, не переписываем: `proofs` получает `kind` и ссылку на прогон квалификации; воркер после каждого завершённого `proof` продвигает прогон; рейтинг — чистая функция в `internal/rating`, вызываемая из сервиса квалификаций; версии агента создаются на heartbeat по digest конфигурации коннектора; каталог направлений грузится тем же механизмом, что `proof_tasks`.
+**Architecture:** Расширяем срез 1 и танки, не переписываем: `proofs.kind` (его вводит задача 8 танков) получает значение `qualification`, а proof — ссылку на прогон квалификации; воркер после каждого завершённого `proof` продвигает прогон; рейтинг — чистая функция в `internal/rating`, вызываемая из сервиса квалификаций; версии агента создаются на heartbeat по digest конфигурации коннектора; каталог направлений грузится тем же механизмом, что `proof_tasks`.
 
 **Tech Stack:** как в срезе 1 (Go 1.26+, pgx, goose, Docker CLI, Next.js 16). Новое: образ `python:3.12-alpine` с pytest.
 
-**Spec:** `docs/superpowers/specs/2026-09-23-qualification-and-rating-design.md`. Базовый срез: `docs/superpowers/specs/2026-09-23-agent-connect-and-proof-design.md` и его план `2026-09-23-agent-connect-and-proof.md` (интерфейсы среза 1 считаются существующими: `agents.Service`, `agents.ComputeStage`, `proofs.Service`, `proofs.Worker`, `proofs.LoadCatalog/TarDir/Untar/SyncCatalog`, `sandbox.Runner`, `sandbox.ParseGoTestJSON`, `identity.RequireSession/RequireAgent`, e2e-хелпер `newE2E` и `call` в `cmd/api/main_test.go`).
+**Spec:** `docs/superpowers/specs/2026-09-23-qualification-and-rating-design.md`. База — main со срезом 1, его доделками (`plans/2026-09-25-slice-1-finish.md`) и задачами 8 и 11 танков (`plans/2026-09-25-tanks-arena.md`). Считаются существующими: `agents.Service` (`NewService(pool, ProofFactsSource)`, `Heartbeat(ctx, agentID, connectorVersion, hostname)`, `Overview`, `OverviewByID`, `ByID`), `agents.ComputeStage`, `agents.NoProofFacts`, `proofs.Service` (`Tasks`, `Create`, `CreateWithRepo`, `List`, `Latest`, `Get`, `Retry`, `Claim`, `RepoTar`, `Started`, `ExpireStale`, `FailOversized`, `SubmitResult`, `ProofFacts` только по `kind = 'proof'`), `proofs.Worker` (`RunProof` с веткой `game_bot`, `SetGameBotJudge`, `MarkInfraError`), `proofs.KindProof/KindGameBot`, `Proof.Kind`, `proofs.LoadCatalog/TarDir/TarFiles/Untar/SyncCatalog`, `sandbox.Runner`, `sandbox.Fake{Result, Err, Calls}`, `sandbox.PassAll`, `sandbox.ParseGoTestJSON`, `identity.NewService(pool, adminEmails)`, `identity.RequireSession/RequireAgent`, `cmd/api/compose.go` (`ownerAgent`, `meAgent`, `connectorStatus` — это `GET /me` и `GET /connector/status`), e2e-хелперы `newE2E`, `browser`, `call` и поля `e.worker`, `e.fake` в `cmd/api/main_test.go`, в коннекторе `client.Heartbeat`, `client.Status`, `formatStatus`, `withRetry`.
+
+**Ревизия 25 сентября 2026.** План написан 23 сентября против среза 1 до его доделок и до танков; сверен с кодом main (`5c988761`) и с планом танков. **Предусловие:** не начинать, пока в main нет задач 8 и 11 танков (`migrations/00003_games.sql`, `proofs.kind` со значениями `proof | game_bot`, `proofs.TarFiles`, `GameBotJudge`). Что изменилось против версии 23 сентября:
+
+- миграция `00004`, и она расширяет существующий `proofs.kind` и его CHECK, а не добавляет колонку;
+- скрытые тесты определяются по именам для обоих языков (`proofs.HiddenTestNames`), и балл задачи считает только их: тест, которого нет в скрытом наборе, балла не прибавляет; каталог сверяет число имён с `hidden_tests`. Прежний вариант считал любой пройденный тест, а воркер среза 1 разбирал имена только для Go — для Python правило «прошёл каждый скрытый тест по имени» ничего бы не проверяло;
+- правка тестовых файлов запрещена и для Python (`proofs.TestFileTouched`): `test_*.py`, `*_test.py`, `conftest.py`, конфиги pytest, `sitecustomize.py`, `*.pth`; парсер pytest читает только итоговую сводку, и провал теста в ней перевешивает строку `PASSED` с тем же именем;
+- `ExpireStale` видит задачи направлений (у квалификационного proof `task_slug` пуст, а старый запрос соединял только с `proof_tasks`) и возвращает id; прогон без открытого proof дольше минуты продвигает `SweepStalled` — так закрываются `FailOversized` и падение API между завершением proof и продвижением прогона; `OnProofFinished` идемпотентен;
+- пока прогон идёт, `proofs.Create`, `CreateWithRepo` и `Retry` отвечают 409 `qualification_in_progress`: иначе базовая проверка или прогон танков займут единственный открытый слот между задачами, и прогон зависнет;
+- квалификационные proof не попадают в `List`, `Latest` (`last_proof` в `/me` и `/connector/status`), дневной лимит проверок и `Retry`;
+- `Start` требует онлайн-коннектор (`agent_offline`), как `proofs.Create`, иначе офлайн-агент сжигает попытку дня на `not_claimed`;
+- версия агента и рейтинги попадают в `/me` через `agents.Overview`, а в `GET /connector/status` — через `cmd/api/compose.go`; `arena status` не шлёт heartbeat (так сделано в доделках среза 1) и печатает версию и рейтинги из `/connector/status`;
+- тестовые diff настоящие: `git apply` отвергает патч без изменений, поэтому тесты шлют `noteDiff`, который добавляет `NOTES.md`; fake-результаты берут имена скрытых тестов из каталога;
+- новые страницы добавляются в `frontend/scripts/check-mobile.mjs` (CI проверяет ширину 375px).
 
 ## Global Constraints
 
 - Все правила среза 1: `ARENA_` префикс, UTC в JSON, ошибки только `httpx.Problem`, ответы e2e валидируются по `openapi.yaml`, `ARENA_TEST_REQUIRE_DOCKER=1` в CI, никаких моков во фронте, 375px без горизонтального скролла.
 - Шкала рейтинга 1000–2400; `target = 1000 + 1400·score`; `uncertainty = max(60, round(350/√n))`; уровни по `access = rating − uncertainty`: `verified ≥ 1500`, `strong ≥ 1800`, `elite ≥ 2100`.
 - Прогон = ровно 3 задачи, последовательно; один открытый `proof` на агента (индекс среза 1 не меняется); 3 прогона на направление в сутки; квалификация только в стадии `operational`.
-- Балл задачи = `passed_hidden / hidden_tests` из манифеста (не из числа найденных тестов: провал сборки = 0); `expired` = 0; `infra_error` переставляется один раз, второй раз — исключается из среднего.
+- Балл задачи = `passed_hidden / hidden_tests` из манифеста (не из числа найденных тестов: провал сборки = 0); `passed_hidden` — сколько имён из `proofs.HiddenTestNames` прошло в `sandbox_result`, посторонние тесты не считаются; `expired` = 0; `infra_error` переставляется один раз, второй раз — исключается из среднего.
+- Вердикт среза 1 действует для всех видов proof: `passed` — только если прошёл каждый скрытый тест по имени; diff, который трогает тестовые файлы языка задачи, — `failed/test_file_modified`.
+- `proofs.kind`: `proof | game_bot | qualification`. Стадия агента, `last_proof`, `GET /proofs`, дневной лимит проверок и `Retry` квалификационных proof не видят; их показывает `/qualifications/{id}`.
+- Пока у агента прогон в `running`, proof другого вида не создаётся: 409 `qualification_in_progress`.
 - Скрытые тесты квалификации никогда не покидают сервер; в API для `kind = qualification` `sandbox_result.tests` отдаётся без имён (`name` заменяется на `hidden-1..N`), `output` не отдаётся.
 - Статусы `qualification_runs`: `running | scored | aborted`. Статусы `proofs` не меняются.
-- Коммиты завершаются строкой `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+- Коммиты завершаются строкой `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 ## Review Focus
 
-1. **Heartbeat с тем же digest, но другим текстом модели** (владелец поправил только `model:` в конфиге): digest включает весь `agent`-блок, значит версия новая. Тест в задаче 2.
-2. **Задача вернула `infra_error` дважды подряд**: прогон продолжается с 2 задачами в среднем, а не зависает и не считает 0. Тест в задаче 4.
-3. **Прогон в `running`, владелец отозвал все ключи**: воркер переводит прогон в `aborted` при истечении `proof`, рейтинг не меняется, `runs_today` не растёт для лимита. Тест в задаче 4.
-4. **Пул из 3 задач при третьем прогоне подряд**: ротация не может исключить все виденные, выбирает случайно из всех, а не падает. Тест в задаче 3.
-5. **Публичный профиль по имени в другом регистре** (`/agents/Fixer-7`): находится (индекс `lower(name)`), e-mail не утекает. Тест в задаче 6.
+1. **Python-агент добавляет свой тест или `conftest.py`** (свой `test_mine.py` проходит, `conftest.py` помечает все тесты пройденными): diff с таким файлом — `failed/test_file_modified`; посторонний пройденный тест никогда не прибавляет балл. Тесты в задачах 3 и 4.
+2. **Владелец жмёт «Run a proof» или запускает агента танков между задачами прогона**: 409 `qualification_in_progress`, прогон переходит к следующей задаче, а не зависает без открытого proof. Тест в задаче 4.
+3. **API упал между завершением proof и продвижением прогона** (или результат больше 256 KiB, и proof закрыл `FailOversized` в обход воркера): через минуту `SweepStalled` создаёт следующую задачу; повторный вызов вторую не создаёт. Тест в задаче 4.
+4. **Задача вернула `infra_error` дважды подряд**: прогон продолжается с 2 задачами в среднем, а не зависает и не считает 0. Тест в задаче 4.
+5. **Публичный профиль по имени в другом регистре** (`/agents/Fixer-7`): находится (индекс `agents_name_ci_idx` на `lower(name)` есть со среза 1), e-mail не утекает. Тест в задаче 5.
+
+Тесты прежних пунктов (heartbeat с другим digest — задача 2, ротация пула при третьем прогоне — задача 3) остаются в своих задачах.
 
 ## Структура файлов
 
 ```
 backend/
-  migrations/00003_qualification.sql        версии, направления, задачи, прогоны, рейтинги, колонки proofs
+  migrations/00004_qualification.sql        версии, направления, задачи, прогоны, рейтинги, колонки proofs
   internal/rating/rating.go, rating_test.go  чистая формула
   internal/agents/version.go                 версии агента: EnsureVersion, текущая версия в Overview
   internal/skills/catalog.go                 skills + skill_tasks из fixtures/skills
   internal/skills/service.go, http.go        GET /skills, публичный профиль-часть
   internal/qualifications/model.go, service.go, http.go, advance.go   прогоны
-  internal/proofs/*                          kind, skill_task_slug, маскирование, хук OnProofFinished
+  internal/proofs/*                          kind qualification, skill_task_slug, маскирование, хук OnProofFinished, запрет на время прогона
+  internal/proofs/hidden.go                  HiddenTestNames, TestFileTouched по языку задачи
   internal/proofs/sandbox/pytest.go          парсер pytest
+  internal/proofs/sandbox/fake.go            PassAll понимает Python
   fixtures/skills/go/{skill.json,Dockerfile,lru-cache-eviction,worker-pool-shutdown,cursor-pagination}
   fixtures/skills/python/{skill.json,Dockerfile,sliding-rate-limiter,interval-merge,toposort-deps}
   cmd/arena/version.go                       digest конфигурации
-  cmd/api/handler.go, main_test.go           маршруты, e2e
+  cmd/api/handler.go, compose.go, main.go, main_test.go   маршруты, версия и рейтинги в /me и /connector/status, SweepStalled, e2e
   contracts/openapi/openapi.yaml
 frontend/app/app/skills/page.tsx, app/app/qualifications/[id]/page.tsx, app/agents/[name]/page.tsx,
   components/skill-card.tsx, components/rating-pill.tsx, lib/access.ts, lib/types.ts
+frontend/scripts/check-mobile.mjs          новые страницы в проверке 375px
 ```
 
 ---
@@ -236,7 +257,7 @@ Run: `go test ./internal/rating/ -v` → PASS.
 cd backend && gofmt -l . && go vet ./internal/rating/
 git add internal/rating && git commit -m "Add rating: pure target/uncertainty/tier formula
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -244,15 +265,15 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 2: Миграция среза 2 и версии агента
 
 **Files:**
-- Create: `backend/migrations/00003_qualification.sql`, `backend/internal/agents/version.go`, `backend/internal/agents/version_integration_test.go`
-- Modify: `backend/internal/agents/model.go`, `backend/internal/agents/presence.go`, `backend/internal/agents/http.go`, `backend/internal/platform/db/db_integration_test.go`
+- Create: `backend/migrations/00004_qualification.sql`, `backend/internal/agents/version.go`, `backend/internal/agents/version_integration_test.go`
+- Modify: `backend/internal/agents/model.go`, `backend/internal/agents/presence.go`, `backend/internal/agents/http.go`, `backend/internal/agents/service.go`, `backend/cmd/api/compose.go`, `backend/internal/platform/db/db_integration_test.go`
 
 **Interfaces:**
 - Produces: `agents.Version{ID string; Number int; Model, Harness, ConfigDigest string; CreatedAt time.Time}`; `agents.VersionInput{Model, Harness, ConfigDigest string}`; `(*Service).EnsureVersion(ctx, agentID string, in VersionInput) (Version, bool /*created*/, error)`; `(*Service).CurrentVersion(ctx, agentID) (*Version, error)`; `Overview.Version *Version`; хук `agents.VersionListener interface{ OnNewVersion(ctx, tx pgx.Tx, agentID, versionID string) error }` и `(*Service).SetVersionListener(l VersionListener)` (реализует сервис рейтингов в задаче 4); heartbeat принимает `version`.
 
 - [ ] **Step 1: Миграция**
 
-`backend/migrations/00003_qualification.sql`:
+`backend/migrations/00004_qualification.sql`:
 
 ```sql
 -- +goose Up
@@ -313,15 +334,17 @@ CREATE TABLE qualification_runs (
 CREATE UNIQUE INDEX qualification_runs_one_open_idx ON qualification_runs (agent_id) WHERE status = 'running';
 CREATE INDEX qualification_runs_agent_idx ON qualification_runs (agent_id, created_at DESC);
 
+-- proofs.kind comes from 00003_games (proof | game_bot); its inline CHECK is proofs_kind_check.
+ALTER TABLE proofs DROP CONSTRAINT proofs_kind_check;
+ALTER TABLE proofs ADD CONSTRAINT proofs_kind_check CHECK (kind IN ('proof', 'game_bot', 'qualification'));
 ALTER TABLE proofs
-    ADD COLUMN kind text NOT NULL DEFAULT 'proof' CHECK (kind IN ('proof', 'qualification')),
     ADD COLUMN qualification_run_id text REFERENCES qualification_runs (id),
     ADD COLUMN position int,
     ADD COLUMN skill_task_slug text REFERENCES skill_tasks (slug),
     ADD COLUMN retried_infra boolean NOT NULL DEFAULT false;
 ALTER TABLE proofs ALTER COLUMN task_slug DROP NOT NULL;
 ALTER TABLE proofs ADD CONSTRAINT proofs_task_ref CHECK (
-    (kind = 'proof' AND task_slug IS NOT NULL) OR (kind = 'qualification' AND skill_task_slug IS NOT NULL AND qualification_run_id IS NOT NULL AND position BETWEEN 1 AND 3));
+    (kind IN ('proof', 'game_bot') AND task_slug IS NOT NULL) OR (kind = 'qualification' AND skill_task_slug IS NOT NULL AND qualification_run_id IS NOT NULL AND position BETWEEN 1 AND 3));
 CREATE INDEX proofs_run_idx ON proofs (qualification_run_id, position);
 
 CREATE TABLE skill_ratings (
@@ -341,9 +364,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO arena_app
 
 -- +goose Down
 DROP TABLE skill_ratings;
+DELETE FROM proofs WHERE kind = 'qualification';
 ALTER TABLE proofs DROP CONSTRAINT proofs_task_ref;
-ALTER TABLE proofs DROP COLUMN kind, DROP COLUMN qualification_run_id, DROP COLUMN position, DROP COLUMN skill_task_slug, DROP COLUMN retried_infra;
+ALTER TABLE proofs DROP COLUMN qualification_run_id, DROP COLUMN position, DROP COLUMN skill_task_slug, DROP COLUMN retried_infra;
 ALTER TABLE proofs ALTER COLUMN task_slug SET NOT NULL;
+ALTER TABLE proofs DROP CONSTRAINT proofs_kind_check;
+ALTER TABLE proofs ADD CONSTRAINT proofs_kind_check CHECK (kind IN ('proof', 'game_bot'));
 DROP TABLE qualification_runs;
 DROP TABLE skill_tasks;
 DROP TABLE skills;
@@ -351,7 +377,9 @@ ALTER TABLE agents DROP COLUMN current_version_id;
 DROP TABLE agent_versions;
 ```
 
-В `db_integration_test.go` добавить в список таблиц `agent_versions, skills, skill_tasks, qualification_runs, skill_ratings`.
+Имя `proofs_kind_check` — то, что Postgres даёт inline CHECK в `ADD COLUMN` миграции танков; проверить `\d proofs` в тестовой базе и поправить, если отличается. `DELETE` в Down нужен, чтобы вернуть прежний CHECK на базе с прогонами.
+
+В `db_integration_test.go` добавить в список таблиц (после таблиц танков) `agent_versions, skills, skill_tasks, qualification_runs, skill_ratings`.
 
 - [ ] **Step 2: Интеграционный тест версий**
 
@@ -522,7 +550,7 @@ func (s *Service) CurrentVersion(ctx context.Context, agentID string) (*Version,
 }
 ```
 
-В `service.go`: поле `versions VersionListener` в `Service`. В `model.go`: `Overview` получает `Version *Version \`json:"version"\``; `heartbeatInput` получает `Version *VersionInput \`json:"version"\``. В `presence.go` `overview`: после presence `o.Version, err = s.CurrentVersion(ctx, a.ID)`. В `http.go` heartbeat: если `in.Version != nil && in.Version.ConfigDigest != ""`, вызвать `s.EnsureVersion` перед `Heartbeat`; ответ дополнить `"version": o.Version`.
+В `service.go`: поле `versions VersionListener` в `Service`. В `model.go`: `Overview` получает `Version *Version \`json:"version"\``; `heartbeatInput` получает `Version *VersionInput \`json:"version"\``. В `presence.go` `overview`: после presence `o.Version, err = s.CurrentVersion(ctx, a.ID)`. В `http.go` heartbeat (сейчас он вызывает `s.Heartbeat(ctx, agentID, in.ConnectorVersion, in.Hostname)` и отвечает `{"agent": {id, name, stage}}`): если `in.Version != nil && in.Version.ConfigDigest != ""`, вызвать `s.EnsureVersion` перед `Heartbeat`; в блок `agent` ответа добавить `"version": o.Version`. `cmd/api/compose.go` `connectorStatus`: в блок `agent` добавить `"version": o.Version` — `arena status` берёт версию отсюда, heartbeat он не шлёт. `/me` получает `version` без правок: `ownerAgent` встраивает `*agents.Overview`. В `openapi.yaml` лишние поля не запрещены (`additionalProperties` нигде не задан), поэтому схемы дополняются в задаче 5, а e2e не падает раньше.
 
 Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/agents/ ./internal/platform/db/ -v` → PASS.
 
@@ -532,7 +560,7 @@ Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/agents/ ./internal/platform
 cd backend && gofmt -l . && go vet ./... && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...
 git add -A && git commit -m "Add slice 2 schema and agent versions from connector config digest
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -541,10 +569,11 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `backend/internal/skills/catalog.go`, `backend/internal/skills/catalog_test.go`, `backend/internal/skills/pick.go`, `backend/internal/skills/pick_test.go`, `backend/internal/proofs/sandbox/pytest.go`, `backend/internal/proofs/sandbox/pytest_test.go`, `backend/fixtures/skills/go/skill.json`, `backend/fixtures/skills/go/Dockerfile`, `backend/fixtures/skills/python/skill.json`, `backend/fixtures/skills/python/Dockerfile`, шесть каталогов задач
-- Modify: `backend/cmd/migrate/main.go`, `backend/Dockerfile`, `Makefile`, `.github/workflows/ci.yml`, `backend/internal/proofs/sandbox/docker.go` (выбор парсера)
+- Create (дополнительно): `backend/internal/proofs/hidden.go`, `backend/internal/proofs/hidden_test.go`, `backend/internal/skills/hidden_count_test.go`
+- Modify: `backend/cmd/migrate/main.go`, `backend/Dockerfile`, `Makefile`, `.github/workflows/ci.yml`, `backend/internal/proofs/sandbox/docker.go` (выбор парсера), `backend/internal/proofs/sandbox/runner.go`, `backend/internal/proofs/sandbox/fake.go`, `backend/internal/proofs/sandbox/fake_test.go`, `backend/internal/proofs/worker.go`
 
 **Interfaces:**
-- Produces: `skills.Skill{Slug, Title, Language, Image, RunCmd, Description string}`; `skills.Task{Slug, SkillSlug, Title string; Difficulty, AgentTimeoutS, SandboxTimeoutS, HiddenTests int; TaskMD string; RepoTar, HiddenTar []byte; RepoSHA256 string}`; `skills.LoadCatalog(dir) ([]Skill, []Task, error)`; `skills.SyncCatalog(ctx, pool, skills, tasks) error`; `skills.Pick(pool []string, recent []string, n int, rnd *rand.Rand) []string`; `sandbox.ParsePytest([]byte) []TestResult`; `sandbox.Request.Language string` и выбор парсера по нему в `Docker.Run`.
+- Produces: `skills.Skill{Slug, Title, Language, Image, RunCmd, Description string}`; `skills.Task{Slug, SkillSlug, Title string; Difficulty, AgentTimeoutS, SandboxTimeoutS, HiddenTests int; TaskMD string; RepoTar, HiddenTar []byte; RepoSHA256 string}`; `skills.LoadCatalog(dir) ([]Skill, []Task, error)`; `skills.SyncCatalog(ctx, pool, skills, tasks) error`; `skills.Pick(pool []string, recent []string, n int, rnd *rand.Rand) []string`; `sandbox.ParsePytest([]byte) []TestResult`; `sandbox.Request.Language string` и выбор парсера по нему в `Docker.Run`; `proofs.HiddenTestNames(language string, hiddenTar []byte) ([]string, error)` (Go — имена `Test…`, Python — `path::test_name`); `proofs.TestFileTouched(language, diff string) bool`; `sandbox.PassAll` учитывает `Request.Language`; `skills.LoadCatalog` отвергает задачу, у которой число скрытых имён ≠ `hidden_tests`.
 
 - [ ] **Step 1: Направления и образы**
 
@@ -1551,7 +1580,7 @@ func LoadCatalog(dir string) ([]Skill, []Task, error) {
 			if _, err := os.Stat(filepath.Join(tdir, "manifest.json")); err != nil {
 				continue
 			}
-			t, err := loadTask(tdir, s.Slug)
+			t, err := loadTask(tdir, s.Slug, s.Language)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1563,7 +1592,7 @@ func LoadCatalog(dir string) ([]Skill, []Task, error) {
 	return skills, tasks, nil
 }
 
-func loadTask(dir, skill string) (Task, error) {
+func loadTask(dir, skill, language string) (Task, error) {
 	raw, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
 		return Task{}, err
@@ -1586,6 +1615,15 @@ func loadTask(dir, skill string) (Task, error) {
 	hiddenTar, err := proofs.TarDir(filepath.Join(dir, "_hidden"))
 	if err != nil {
 		return Task{}, err
+	}
+	// The score divides by hidden_tests and counts hidden tests by name, so
+	// the manifest and the files must agree on how many there are.
+	names, err := proofs.HiddenTestNames(language, hiddenTar)
+	if err != nil {
+		return Task{}, err
+	}
+	if len(names) != m.HiddenTests {
+		return Task{}, fmt.Errorf("skills: %s: manifest says %d hidden tests, _hidden has %d: %v", dir, m.HiddenTests, len(names), names)
 	}
 	sum := sha256.Sum256(repoTar)
 	return Task{Slug: m.Slug, SkillSlug: skill, Title: m.Title, Difficulty: m.Difficulty, AgentTimeoutS: m.AgentTimeoutS,
@@ -1660,27 +1698,46 @@ Run: `go test ./internal/skills/ -v` → PASS.
 ```go
 package sandbox
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestParsePytest(t *testing.T) {
+	// The captured stdout of a failing test and whatever an atexit hook
+	// prints after the summary both try to pose as results.
 	out := []byte(`............F
 =================================== FAILURES ===================================
 ____________________________ test_hidden_boundary ____________________________
+----------------------------- Captured stdout call -----------------------------
+PASSED test_hidden_limiter.py::test_hidden_boundary_is_exclusive
 assert False
 =========================== short test summary info ============================
 PASSED test_limiter.py::test_allows_up_to_limit
 PASSED test_limiter.py::test_window_slides
 FAILED test_hidden_limiter.py::test_hidden_boundary_is_exclusive - assert False
 ERROR test_other.py::test_broken - ImportError
-1 failed, 2 passed in 0.03s
+ERROR test_hidden_more.py - ImportError while importing test module
+1 failed, 2 passed, 2 errors in 0.03s
+PASSED test_hidden_limiter.py::test_hidden_boundary_is_exclusive
+PASSED test_hidden_more.py::test_hidden_x
 `)
 	got := ParsePytest(out)
-	if len(got) != 4 || got[0].Name != "test_limiter.py::test_allows_up_to_limit" || !got[0].Passed ||
-		got[2].Name != "test_hidden_limiter.py::test_hidden_boundary_is_exclusive" || got[2].Passed || got[3].Passed {
+	want := []TestResult{
+		{Name: "test_limiter.py::test_allows_up_to_limit", Passed: true},
+		{Name: "test_limiter.py::test_window_slides", Passed: true},
+		{Name: "test_hidden_limiter.py::test_hidden_boundary_is_exclusive", Passed: false},
+		{Name: "test_other.py::test_broken", Passed: false},
+		{Name: "test_hidden_more.py::test_hidden_x", Passed: false},
+	}
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%+v", got)
 	}
 	if len(ParsePytest([]byte("ImportError while importing test module"))) != 0 {
 		t.Fatalf("collection failure yields no tests")
+	}
+	if len(ParsePytest([]byte("PASSED test_x.py::test_a\n"))) != 0 {
+		t.Fatalf("a result line without the summary header is not a result")
 	}
 }
 ```
@@ -1696,16 +1753,28 @@ import (
 	"strings"
 )
 
-// ParsePytest reads the `-rA` short summary lines pytest prints at the end
-// of a run: "PASSED path::name", "FAILED path::name - reason",
-// "ERROR path::name - reason". Everything else is ignored.
+// ParsePytest reads the `-rA` short summary pytest prints at the end of a
+// run: "PASSED path::name", "FAILED path::name - reason", "ERROR path::name
+// - reason", and "ERROR path - reason" for a module that failed to import.
+// Only lines after the first summary header count, so what a test prints
+// into its captured output cannot pose as a result, and a test reported as
+// failed anywhere after that header stays failed whatever else claims it
+// passed. A module-level ERROR fails every test of that module the summary
+// names. Code under test runs in the same process and could still forge
+// output (the same holds for go test); this only closes the cheap tricks.
 func ParsePytest(out []byte) []TestResult {
 	var res []TestResult
-	seen := map[string]bool{}
+	index := map[string]int{}
+	var broken []string
+	inSummary := false
 	sc := bufio.NewScanner(bytes.NewReader(out))
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
 	for sc.Scan() {
 		line := sc.Text()
+		if !inSummary {
+			inSummary = strings.HasPrefix(line, "=") && strings.Contains(line, " short test summary info ")
+			continue
+		}
 		var passed bool
 		var rest string
 		switch {
@@ -1723,11 +1792,28 @@ func ParsePytest(out []byte) []TestResult {
 			name = rest[:i]
 		}
 		name = strings.TrimSpace(name)
-		if name == "" || !strings.Contains(name, "::") || seen[name] {
+		if name == "" {
 			continue
 		}
-		seen[name] = true
+		if !strings.Contains(name, "::") {
+			if !passed {
+				broken = append(broken, name+"::")
+			}
+			continue
+		}
+		if i, ok := index[name]; ok {
+			res[i].Passed = res[i].Passed && passed
+			continue
+		}
+		index[name] = len(res)
 		res = append(res, TestResult{Name: name, Passed: passed})
+	}
+	for i := range res {
+		for _, prefix := range broken {
+			if strings.HasPrefix(res[i].Name, prefix) {
+				res[i].Passed = false
+			}
+		}
 	}
 	return res
 }
@@ -1750,9 +1836,231 @@ func ParseOutput(language string, out []byte) []TestResult {
 }
 ```
 
-`proofs/worker.go`: в `RunProof` передавать `Language` в `sandbox.Request` (в задаче 4 запрос к БД расширяется полем языка).
+`proofs/worker.go`: `Language` в `sandbox.Request` передаётся в шаге 6.
 
-- [ ] **Step 6: Docker-тест одной go- и одной python-задачи**
+- [ ] **Step 6: Скрытые тесты по именам и запрет правки тестов для обоих языков**
+
+Воркер среза 1 знает имена скрытых тестов только для Go (`hiddenTestNames` ищет `func Test…` в `.go`) и узнаёт тестовые файлы только по `_test.go`. Для Python-задачи список имён был бы пуст — правило «прошёл каждый скрытый тест по имени» ничего бы не проверяло, — а `conftest.py` из diff агента переписал бы результаты pytest. Обе проверки переезжают в `proofs/hidden.go` и получают язык задачи.
+
+`backend/internal/proofs/hidden_test.go`:
+
+```go
+package proofs
+
+import "testing"
+
+func TestHiddenTestNames(t *testing.T) {
+	goTar, err := TarFiles(map[string][]byte{
+		"hidden_test.go": []byte("package x\n\nfunc TestMain(m *testing.M) {}\nfunc TestHidden_A(t *testing.T) {}\nfunc helper() {}\n"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := HiddenTestNames("go", goTar)
+	if err != nil || len(got) != 1 || got[0] != "TestHidden_A" {
+		t.Fatalf("go: %v %v", got, err)
+	}
+	pyTar, err := TarFiles(map[string][]byte{
+		"test_hidden_limiter.py":    []byte("import limiter\n\ndef test_hidden_a():\n    pass\n\ndef helper():\n    pass\n\nclass TestX:\n    def test_method(self):\n        pass\n"),
+		"tests/test_hidden_more.py": []byte("def test_hidden_b():\n    pass\n"),
+		"limiter_fixture.py":        []byte("def test_not_collected():\n    pass\n"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = HiddenTestNames("python", pyTar)
+	if err != nil || len(got) != 2 || got[0] != "test_hidden_limiter.py::test_hidden_a" || got[1] != "tests/test_hidden_more.py::test_hidden_b" {
+		t.Fatalf("python: %v %v", got, err)
+	}
+	if _, err := HiddenTestNames("rust", pyTar); err == nil {
+		t.Fatalf("unknown language must be an error")
+	}
+}
+
+func TestTestFileTouched(t *testing.T) {
+	cases := []struct {
+		lang, diff string
+		want       bool
+	}{
+		{"go", "diff --git a/retry_test.go b/retry_test.go\n--- a/retry_test.go\n+++ b/retry_test.go\n", true},
+		{"go", "diff --git a/retry.go b/retry.go\n--- a/retry.go\n+++ b/retry.go\n", false},
+		{"python", "diff --git a/test_mine.py b/test_mine.py\nnew file mode 100644\n--- /dev/null\n+++ b/test_mine.py\n", true},
+		{"python", "diff --git a/pkg/limiter_test.py b/pkg/limiter_test.py\n", true},
+		{"python", "diff --git a/conftest.py b/conftest.py\n--- /dev/null\n+++ b/conftest.py\n", true},
+		{"python", "diff --git a/pyproject.toml b/pyproject.toml\n", true},
+		{"python", "diff --git a/sitecustomize.py b/sitecustomize.py\n", true},
+		{"python", "diff --git a/evil.pth b/evil.pth\n", true},
+		{"python", "rename from limiter.py\nrename to test_limiter.py\n", true},
+		{"python", "diff --git \"a/my dir/test_x.py\" \"b/my dir/test_x.py\"\n", true},
+		{"python", "diff --git a/limiter.py b/limiter.py\n--- a/limiter.py\n+++ b/limiter.py\n@@ -1 +1 @@\n-# see test_old.py\n+# conftest.py is mentioned in a comment\n", false},
+		{"python", "diff --git a/latest.py b/latest.py\n", false},
+	}
+	for _, c := range cases {
+		if got := TestFileTouched(c.lang, c.diff); got != c.want {
+			t.Errorf("%s %q: got %v", c.lang, c.diff, got)
+		}
+	}
+}
+```
+
+`backend/internal/proofs/hidden.go` (из `worker.go` удалить `hiddenTestNames`, `goTestFunc`, `testFileHeaders` и `diffTouchesTestFiles` — они переезжают сюда):
+
+```go
+package proofs
+
+import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"fmt"
+	"io"
+	"path"
+	"regexp"
+	"strings"
+)
+
+var (
+	goTestFunc = regexp.MustCompile(`(?m)^func (Test\w+)\(`)
+	pyTestFunc = regexp.MustCompile(`(?m)^def (test_\w+)\(`)
+)
+
+func isPyTestFile(base string) bool {
+	return strings.HasSuffix(base, ".py") && (strings.HasPrefix(base, "test_") || strings.HasSuffix(base, "_test.py"))
+}
+
+// HiddenTestNames lists the tests in a hidden-tests tarball the way the
+// sandbox reports them: top-level Test functions for Go, "path::test_name"
+// for pytest (top-level functions of test_*.py and *_test.py only; hidden
+// Python tests are written that way). The tarball comes from the server's
+// catalog and is never touched by the participant, so these names are what
+// a verdict and a score may count.
+func HiddenTestNames(language string, hiddenTar []byte) ([]string, error) {
+	if language != "go" && language != "python" {
+		return nil, fmt.Errorf("proofs: hidden tests: unsupported language %q", language)
+	}
+	gz, err := gzip.NewReader(bytes.NewReader(hiddenTar))
+	if err != nil {
+		return nil, fmt.Errorf("proofs: hidden tests: %w", err)
+	}
+	tr := tar.NewReader(gz)
+	var names []string
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("proofs: hidden tests: %w", err)
+		}
+		name := strings.TrimPrefix(h.Name, "./")
+		base := path.Base(name)
+		if h.Typeflag != tar.TypeReg {
+			continue
+		}
+		if language == "go" && !strings.HasSuffix(base, ".go") || language == "python" && !isPyTestFile(base) {
+			continue
+		}
+		body, err := io.ReadAll(io.LimitReader(tr, 16<<20))
+		if err != nil {
+			return nil, fmt.Errorf("proofs: hidden tests: %w", err)
+		}
+		if language == "go" {
+			for _, m := range goTestFunc.FindAllStringSubmatch(string(body), -1) {
+				if m[1] != "TestMain" {
+					names = append(names, m[1])
+				}
+			}
+			continue
+		}
+		for _, m := range pyTestFunc.FindAllStringSubmatch(string(body), -1) {
+			names = append(names, name+"::"+m[1])
+		}
+	}
+	return names, nil
+}
+
+// testFileHeaders are the patch lines that name a file the patch touches.
+var testFileHeaders = []string{"diff --git ", "--- ", "+++ ", "rename from ", "rename to ", "copy from ", "copy to "}
+
+// pyGuarded are files that change how pytest collects or reports tests, or
+// run code before pytest does.
+var pyGuarded = map[string]bool{"conftest.py": true, "pytest.ini": true, "tox.ini": true, "setup.cfg": true,
+	"pyproject.toml": true, "sitecustomize.py": true, "usercustomize.py": true}
+
+// TestFileTouched reports whether the patch adds, edits, deletes or renames
+// a test file of the task's language. Participants fix the code, not the
+// tests: for Go a *_test.go file (a TestMain could narrow what runs); for
+// Python a test module, conftest.py or pytest's config (each can rewrite
+// results), or a startup hook (sitecustomize.py, *.pth).
+func TestFileTouched(language, diff string) bool {
+	for _, line := range strings.Split(diff, "\n") {
+		for _, prefix := range testFileHeaders {
+			if !strings.HasPrefix(line, prefix) {
+				continue
+			}
+			if language == "go" {
+				if strings.Contains(line, "_test.go") {
+					return true
+				}
+				continue
+			}
+			for _, f := range strings.Fields(line[len(prefix):]) {
+				base := path.Base(strings.Trim(f, `"`))
+				if pyGuarded[base] || strings.HasSuffix(base, ".pth") || isPyTestFile(base) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+```
+
+`proofs/worker.go` `RunProof`: в `RETURNING` добавить `t.language` (колонка есть в `proof_tasks` со среза 1) и сканировать в `in.task.Language`; `hiddenTestNames(in.hiddenTr)` → `HiddenTestNames(in.task.Language, in.hiddenTr)`; `diffTouchesTestFiles(in.diff)` → `TestFileTouched(in.task.Language, in.diff)`; в `sandbox.Request` передать `Language: in.task.Language`. В ветке проверок (не `game_bot`: у бота танков скрытых тестов нет) пустой список имён — ошибка платформы: `return fmt.Errorf("proofs: task %s has no hidden tests", in.task.Slug)` (job повторится, затем `infra_error`), а не молчаливый `passed`. Существующие тесты воркера на `test_file_modified` и `hidden_test_missing_or_failed` должны остаться зелёными без правок.
+
+`sandbox/fake.go` `PassAll`: для `req.Language == "python"` сообщать пройденными top-level `def test_…` из `test_*.py` и `*_test.py` под именем `<путь от WorkDir через "/">::<функция>`; иначе — как сейчас (`func Test…` из `*_test.go`). Так `ARENA_SANDBOX=fake` доводит до `passed` и Python-задачи, а правило имён остаётся честным. В `fake_test.go` добавить `TestPassAllPython`: в `t.TempDir()` файлы `test_a.py` (`def test_one():` и `def helper():`) и `pkg/test_b.py` (`def test_two():`) → `Tests` ровно `test_a.py::test_one` и `pkg/test_b.py::test_two`, оба `Passed`.
+
+`backend/internal/skills/hidden_count_test.go`:
+
+```go
+package skills_test
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"tolerance/internal/skills"
+)
+
+func TestLoadCatalog_HiddenCountMustMatchManifest(t *testing.T) {
+	root := t.TempDir()
+	write := func(p, body string) {
+		t.Helper()
+		full := filepath.Join(root, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("python/skill.json", `{"slug": "python", "title": "Python", "language": "python", "image": "arena-skill-python:1", "run_cmd": "python -m pytest -q -rA -p no:cacheprovider"}`)
+	write("python/Dockerfile", "FROM python:3.12-alpine\n")
+	write("python/t1/manifest.json", `{"slug": "py-t1", "title": "T1", "difficulty": 1, "agent_timeout_s": 60, "sandbox_timeout_s": 60, "hidden_tests": 3}`)
+	write("python/t1/TASK.md", "Fix it.\n")
+	write("python/t1/repo/m.py", "x = 1\n")
+	write("python/t1/_hidden/test_hidden_m.py", "def test_hidden_a():\n    pass\n\ndef test_hidden_b():\n    pass\n")
+	if _, _, err := skills.LoadCatalog(root); err == nil || !strings.Contains(err.Error(), "hidden") {
+		t.Fatalf("manifest says 3, files have 2: want an error, got %v", err)
+	}
+}
+```
+
+Run: `go test ./internal/proofs/ ./internal/proofs/sandbox/ ./internal/skills/ -v` → PASS; `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/proofs/ -run Worker -v` → PASS (срез 1 не сломан). Реальный каталог (`fixtures/skills`) грузится без ошибок: у всех шести задач число скрытых имён равно `hidden_tests`.
+
+- [ ] **Step 7: Docker-тест одной go- и одной python-задачи**
 
 Добавить в `backend/internal/proofs/sandbox/docker_integration_test.go`:
 
@@ -1792,9 +2100,19 @@ func TestDocker_SkillTasks(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", c.dir, err)
 		}
-		hiddenPassed := 0
+		names, err := proofs.HiddenTestNames(c.language, task.HiddenTar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		passedByName := map[string]bool{}
 		for _, tr := range res.Tests {
-			if strings.Contains(strings.ToLower(tr.Name), "hidden") && tr.Passed {
+			if tr.Passed {
+				passedByName[tr.Name] = true
+			}
+		}
+		hiddenPassed := 0
+		for _, n := range names {
+			if passedByName[n] {
 				hiddenPassed++
 			}
 		}
@@ -1809,7 +2127,7 @@ func TestDocker_SkillTasks(t *testing.T) {
 
 Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/proofs/sandbox/ -run TestDocker_SkillTasks -v` → PASS.
 
-- [ ] **Step 7: Синхронизация, образы, коммит**
+- [ ] **Step 8: Синхронизация, образы, коммит**
 
 `cmd/migrate/main.go`: после proofs-каталога, если `ARENA_SKILLS_DIR` задан, `skills.LoadCatalog` + `skills.SyncCatalog`. `backend/Dockerfile`: `COPY fixtures/skills /opt/arena/skills`, `ENV ARENA_SKILLS_DIR=/opt/arena/skills`. `Makefile`: цель `proof-image` дополняется `docker build -q -t arena-skill-go:1 backend/fixtures/skills/go && docker build -q -t arena-skill-python:1 backend/fixtures/skills/python`; `migrate` получает `ARENA_SKILLS_DIR=./fixtures/skills`. `.github/workflows/ci.yml`: те же две сборки образов перед тестами.
 
@@ -1817,7 +2135,7 @@ Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/proofs/sandbox/ -run TestDo
 cd backend && gofmt -l . && go vet ./... && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...
 git add -A && git commit -m "Add skills catalog with six hidden tasks, pytest parser and skill images
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1826,16 +2144,16 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `backend/internal/qualifications/model.go`, `backend/internal/qualifications/service.go`, `backend/internal/qualifications/advance.go`, `backend/internal/qualifications/ratings.go`, `backend/internal/qualifications/service_integration_test.go`
-- Modify: `backend/internal/proofs/model.go`, `backend/internal/proofs/service.go`, `backend/internal/proofs/worker.go`, `backend/internal/proofs/http_connector.go`, `backend/cmd/api/main.go`
+- Modify: `backend/internal/proofs/model.go`, `backend/internal/proofs/service.go`, `backend/internal/proofs/worker.go`, `backend/internal/proofs/service_integration_test.go`, `backend/cmd/api/main.go`
 
 **Interfaces:**
 - Consumes: `rating.*`, `skills.Pick`, `agents.ComputeStage`, `agents.VersionListener`, `proofs.Worker`.
-- Produces в `proofs`: поля `Proof.Kind, QualificationRunID *string, Position *int, SkillTaskSlug *string`; `proofs.FinishListener interface{ OnProofFinished(ctx, proofID string) error }`, `(*Worker).SetFinishListener(l)` — вызывается воркером после каждого терминального перехода (`finish`, `MarkInfraError`, `ExpireStale` для квалификационных); `(*Service).CreateQualificationProof(ctx, tx pgx.Tx, agentID, runID, taskSlug string, position int) (Proof, error)`; `(*Service).MaskHidden(p Proof) Proof`; выдача коннектору и воркер читают задачу из `skill_tasks`, когда `kind = qualification`.
-- Produces в `qualifications`: `Run{ID, AgentID, VersionID, SkillSlug, Status string; CreatedAt time.Time; FinishedAt *time.Time; Score *float64; RatingBefore, RatingAfter, UncertaintyAfter *int; TaskSlugs []string; Tasks []proofs.Proof}`; `SkillRating{SkillSlug string; Rating, Uncertainty, Access int; Tier string; Verified bool; Runs int; VersionID string; VersionNumber int; OnCurrentVersion bool; PriorRating *int}`; `NewService(pool, proofsSvc *proofs.Service) *Service`; `(*Service).Start(ctx, userID, skill string) (Run, error)`; `List(ctx, userID) ([]Run, error)`; `Get(ctx, userID, id) (Run, error)`; `RatingsFor(ctx, agentID) ([]SkillRating, error)`; `OnProofFinished` (реализует `proofs.FinishListener`); `OnNewVersion` (реализует `agents.VersionListener`); `Abort(ctx, runID, reason)`; ошибки `agent_not_operational` (409), `qualification_in_progress` (409), `daily_limit` (429), `no_version` (409), `unknown_skill` (404).
+- Produces в `proofs`: константа `KindQualification = "qualification"`; поля `Proof.QualificationRunID *string, Position *int, SkillTaskSlug *string` (`Proof.Kind` уже есть); `proofs.FinishListener interface{ OnProofFinished(ctx, proofID string) error }`, `(*Worker).SetFinishListener(l)` — воркер вызывает его после каждого своего терминального перехода (`finish`, `MarkInfraError`, id из `ExpireStale`); `(*Service).ExpireStale(ctx) ([]string, error)`; `(*Service).CreateQualificationProof(ctx, tx pgx.Tx, agentID, runID, taskSlug string, position int) (Proof, error)`; `(*Service).MaskHidden(p Proof) Proof`; `(*Service).GetByIDTx(ctx, tx, id) (Proof, error)`; 409 `qualification_in_progress` из `Create`, `CreateWithRepo`, `Retry`; выдача коннектору и воркер читают задачу из `skill_tasks`, когда `kind = qualification`.
+- Produces в `qualifications`: `Run{ID, AgentID, VersionID, SkillSlug, Status string; CreatedAt time.Time; FinishedAt *time.Time; Score *float64; RatingBefore, RatingAfter, UncertaintyAfter *int; TaskSlugs []string; Tasks []proofs.Proof}`; `SkillRating{SkillSlug string; Rating, Uncertainty, Access int; Tier string; Verified bool; Runs int; VersionID string; VersionNumber int; OnCurrentVersion bool; PriorRating *int}`; `NewService(pool, proofsSvc *proofs.Service) *Service`; `(*Service).Start(ctx, userID, skill string) (Run, error)`; `List(ctx, userID) ([]Run, error)`; `Get(ctx, userID, id) (Run, error)`; `RatingsFor(ctx, agentID) ([]SkillRating, error)`; `OnProofFinished` (реализует `proofs.FinishListener`, идемпотентен); `SweepStalled(ctx) (int, error)`; `OnNewVersion` (реализует `agents.VersionListener`); `Abort(ctx, runID, reason)`; ошибки `agent_not_operational` (409), `agent_offline` (409), `qualification_in_progress` (409), `daily_limit` (429), `no_version` (409), `unknown_skill` (404).
 
 - [ ] **Step 1: Расширить proofs**
 
-`proofs/model.go`: добавить в `Proof` поля `Kind string \`json:"kind"\``, `QualificationRunID *string \`json:"qualification_run_id"\``, `Position *int \`json:"position"\``, `SkillTaskSlug *string \`json:"skill_task_slug"\``; константы `KindProof = "proof"`, `KindQualification = "qualification"`. `proofCols` дополнить `kind, qualification_run_id, position, skill_task_slug`; `scanProof` сканирует их. `Task` получает `Language string \`json:"language"\`` (для proof_tasks берётся из колонки `language`, для skill_tasks — из `skills.language`).
+`proofs/model.go`: константа `KindQualification = "qualification"` рядом с `KindProof` и `KindGameBot` (танки); в `Proof` добавить `QualificationRunID *string \`json:"qualification_run_id"\``, `Position *int \`json:"position"\``, `SkillTaskSlug *string \`json:"skill_task_slug"\`` (`Proof.Kind` уже есть). `proofCols`: `task_slug` заменить на `coalesce(task_slug, skill_task_slug) AS task_slug` — у квалификационного proof `task_slug` NULL, а `Proof.TaskSlug` остаётся `string` и показывает slug задачи направления; в конец добавить `qualification_run_id, position, skill_task_slug`; `scanProof` сканирует их. `Task.Language` уже есть со среза 1.
 
 `proofs/service.go`:
 
@@ -1866,9 +2184,103 @@ func (s *Service) CreateQualificationProof(ctx context.Context, tx pgx.Tx, agent
 }
 ```
 
-`task(ctx, tx, slug)` в `service.go` заменить на `taskFor(ctx, tx, p Proof) (*Task, error)`: для `KindProof` читает `proof_tasks` (плюс `language`), для `KindQualification` — `SELECT t.slug, t.title, s.language, s.image, s.run_cmd, t.agent_timeout_s, t.sandbox_timeout_s, 0, t.hidden_tests, t.task_md, t.repo_sha256 FROM skill_tasks t JOIN skills s ON s.slug = t.skill_slug WHERE t.slug = $1`. `Claim` и `RepoTar` используют `taskFor` (RepoTar: `repo_tar` из соответствующей таблицы по `kind`). `Get`/`List` применяют `MaskHidden`. `http_connector.go`: в `nextTaskResponse` добавить `Kind string \`json:"kind"\``.
+Запрет на время прогона (Review Focus 2). Между задачами прогона открытого proof нет, и без запрета базовая проверка или прогон танков заняли бы единственный слот, а следующая задача упёрлась бы в `proofs_one_open_idx`:
 
-`proofs/worker.go`: `RunProof` читает задачу через `taskFor` (нужны `image, run_cmd, sandbox_timeout_s, repo_tar, hidden_tar, language`); в `sandbox.Request` передаётся `Language`. Добавить:
+```go
+// qualificationOpen refuses a new proof while the agent's qualification run
+// is in progress: its tasks come one after another through the single
+// open-proof slot, and nothing else may take the slot between them. proofs
+// reads the table directly; importing qualifications would be a cycle.
+func qualificationOpen(ctx context.Context, tx pgx.Tx, agentID string) error {
+	var open bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM qualification_runs WHERE agent_id = $1 AND status = 'running')`, agentID).Scan(&open); err != nil {
+		return err
+	}
+	if open {
+		return httpx.New(http.StatusConflict, "qualification_in_progress", "A qualification run is in progress; wait for it to finish")
+	}
+	return nil
+}
+```
+
+`Create` и `CreateWithRepo` вызывают его сразу после определения `agentID`. `Retry`: выборку дополнить `kind` и `agent_id`; квалификационный proof → `httpx.StateConflict("Qualification tasks are retried by the platform")`; для остальных — `qualificationOpen`. `List` и `Latest`: `AND kind <> 'qualification'` (квалификационные proof показывает `/qualifications/{id}`, а `last_proof` в `/me` и `/connector/status` остаётся про проверки). Дневной лимит в `Create` (и в `CreateWithRepo`, если он считает тем же запросом): `AND kind <> 'qualification'` — у прогонов свой лимит. `Get` возвращает `s.MaskHidden(p)`.
+
+`task(ctx, tx, slug)` заменить на `taskFor(ctx, tx, p Proof) (*Task, error)`:
+
+- `p.Kind == KindQualification`: `SELECT t.slug, t.title, s.language, s.image, s.run_cmd, t.agent_timeout_s, t.sandbox_timeout_s, 0, t.hidden_tests, t.task_md, t.repo_sha256 FROM skill_tasks t JOIN skills s ON s.slug = t.skill_slug WHERE t.slug = $1` по `*p.SkillTaskSlug`;
+- иначе (`proof`, `game_bot`) — прежний запрос к `proof_tasks` по `p.TaskSlug` вместе с подменой репозитория, которую ввели танки (`RepoSHA256 = coalesce(p.repo_sha256, t.repo_sha256)`); её не терять.
+
+`Claim` использует `taskFor`. `RepoTar`: `SELECT coalesce(p.repo_tar, t.repo_tar, st.repo_tar) FROM proofs p LEFT JOIN proof_tasks t ON t.slug = p.task_slug LEFT JOIN skill_tasks st ON st.slug = p.skill_task_slug WHERE p.id = $1 AND p.agent_id = $2 AND p.status IN ('claimed', 'running_agent')`. `http_connector.go`: `nextTaskResponse.Kind` уже есть (танки), для квалификации там `qualification`.
+
+`ExpireStale` сейчас соединяет proof только с `proof_tasks` по `task_slug`, и квалификационный proof (у него `task_slug` NULL) не истёк бы никогда. Новая версия берёт таймауты из любой из двух таблиц и возвращает id:
+
+```go
+// ExpireStale ends proofs nobody will finish: queued ones no connector
+// claimed within 5 minutes, and claimed/running ones whose agent timeout
+// (plus a minute of slack) has passed without a result. It also sweeps
+// proofs whose diff arrived but whose sandbox run never concluded into
+// infra_error (reason "stuck"): the agent did its part, the platform did not.
+// It returns the ids it ended so the worker can tell its listener.
+func (s *Service) ExpireStale(ctx context.Context) ([]string, error) {
+	var ids []string
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		collect := func(rows pgx.Rows, err error) error {
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var id string
+				if err := rows.Scan(&id); err != nil {
+					return err
+				}
+				ids = append(ids, id)
+			}
+			return rows.Err()
+		}
+		// Timeouts come from the proof's task, whichever catalog it is in.
+		const limits = `SELECT o.id, coalesce(t.agent_timeout_s, st.agent_timeout_s) AS agent_timeout_s,
+			coalesce(t.sandbox_timeout_s, st.sandbox_timeout_s) AS sandbox_timeout_s
+			FROM proofs o LEFT JOIN proof_tasks t ON t.slug = o.task_slug LEFT JOIN skill_tasks st ON st.slug = o.skill_task_slug
+			WHERE o.status IN ('queued', 'claimed', 'running_agent', 'diff_submitted', 'running_sandbox')`
+		if err := collect(tx.Query(ctx, `
+			UPDATE proofs p SET status = 'expired', finished_at = now(),
+			  failure_reason = CASE WHEN p.status = 'queued' THEN 'not_claimed' ELSE 'agent_timeout' END
+			FROM (`+limits+`) x WHERE x.id = p.id AND (
+			  (p.status = 'queued' AND p.created_at < now() - interval '5 minutes') OR
+			  (p.status IN ('claimed', 'running_agent') AND p.claimed_at < now() - make_interval(secs => x.agent_timeout_s + 60)))
+			RETURNING p.id`)); err != nil {
+			return err
+		}
+		// The run_proof job gets 3 attempts, each up to sandbox_timeout_s, with
+		// backoff between them, and a crashed worker's 15-minute lease must run
+		// out before the job is reclaimed. Past all of that plus slack, nothing
+		// is coming.
+		return collect(tx.Query(ctx, `
+			UPDATE proofs p SET status = 'infra_error', finished_at = now(), failure_reason = 'stuck'
+			FROM (`+limits+`) x WHERE x.id = p.id AND p.status IN ('diff_submitted', 'running_sandbox')
+			  AND coalesce(p.diff_submitted_at, p.claimed_at, p.created_at) < now() - make_interval(secs => 3 * x.sandbox_timeout_s + 1200)
+			RETURNING p.id`))
+	})
+	return ids, err
+}
+```
+
+Существующие тесты `ExpireStale` в `service_integration_test.go` переходят на `len(ids)`. Добавить `TestExpireStale_QualificationProof`: вставить через `AdminPool` направление, задачу направления (`agent_timeout_s = 60`), прогон и proof `kind = 'qualification'` в `claimed` с `claimed_at = now() - interval '5 minutes'` → id в результате, статус `expired`, `agent_timeout`.
+
+`proofs/worker.go` `RunProof`: запрос, который оставили танки (с `p.kind` и `coalesce(p.repo_tar, t.repo_tar)`), читает задачу из того каталога, где она лежит:
+
+```sql
+UPDATE proofs p SET status = 'running_sandbox'
+FROM proofs x LEFT JOIN proof_tasks t ON t.slug = x.task_slug
+  LEFT JOIN skill_tasks st ON st.slug = x.skill_task_slug LEFT JOIN skills s ON s.slug = st.skill_slug
+WHERE p.id = $1 AND x.id = p.id AND p.status IN ('diff_submitted', 'running_sandbox')
+RETURNING p.diff, p.kind, coalesce(t.slug, st.slug), coalesce(t.language, s.language), coalesce(t.image, s.image),
+  coalesce(t.run_cmd, s.run_cmd), coalesce(t.sandbox_timeout_s, st.sandbox_timeout_s),
+  coalesce(p.repo_tar, t.repo_tar, st.repo_tar), coalesce(t.hidden_tar, st.hidden_tar)
+```
+
+Дальше путь квалификационного proof тот же, что у проверки: `TestFileTouched`, `applyDiff`, скрытые тесты, `HiddenTestNames`, тот же вердикт (задача 3). Добавить:
 
 ```go
 type FinishListener interface {
@@ -1887,7 +2299,7 @@ func (w *Worker) notify(ctx context.Context, proofID string) {
 }
 ```
 
-`finish` и `MarkInfraError` вызывают `w.notify(ctx, proofID)` после успешного коммита. `ExpireStale` возвращает также список id (`(ids []string, err error)`) и `Worker.Run` вызывает `notify` для каждого.
+`finish` и `MarkInfraError` вызывают `w.notify(ctx, proofID)` после успешного коммита. `Worker.Run` на тике: `ids, err := w.svc.ExpireStale(ctx)`, лог по `len(ids)`, `notify` для каждого id. `FailOversized` закрывает proof в обход воркера и хука не вызывает — такой прогон продвигает `SweepStalled` (шаг 4).
 
 - [ ] **Step 2: Интеграционный тест квалификаций**
 
@@ -1900,8 +2312,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -1923,8 +2337,21 @@ type fx struct {
 	quals   *qualifications.Service
 	worker  *proofs.Worker
 	fake    *sandbox.Fake
+	hidden  map[string][]string // skill task slug → hidden test names
 	userID  string
 	agentID string
+}
+
+// noteDiff applies to any task repository: it adds a file no test reads.
+// git apply refuses a patch without changes, so tests cannot send "--- a/x".
+const noteDiff = "diff --git a/NOTES.md b/NOTES.md\nnew file mode 100644\n--- /dev/null\n+++ b/NOTES.md\n@@ -0,0 +1 @@\n+agent notes\n"
+
+func passing(names []string) []sandbox.TestResult {
+	out := make([]sandbox.TestResult, len(names))
+	for i, n := range names {
+		out[i] = sandbox.TestResult{Name: n, Passed: true}
+	}
+	return out
 }
 
 func setup(t *testing.T) *fx {
@@ -1937,6 +2364,18 @@ func setup(t *testing.T) *fx {
 	}
 	if err := skills.SyncCatalog(ctx, d.AdminPool, sk, tasks); err != nil {
 		t.Fatal(err)
+	}
+	langOf := map[string]string{}
+	for _, s := range sk {
+		langOf[s.Slug] = s.Language
+	}
+	hidden := map[string][]string{}
+	for _, tk := range tasks {
+		names, err := proofs.HiddenTestNames(langOf[tk.SkillSlug], tk.HiddenTar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hidden[tk.Slug] = names
 	}
 	ptasks, _ := proofs.LoadCatalog(filepath.Join("..", "..", "fixtures", "proofs"))
 	_ = proofs.SyncCatalog(ctx, d.AdminPool, ptasks)
@@ -1954,7 +2393,7 @@ func setup(t *testing.T) *fx {
 	a, _ := as.Create(ctx, u.ID, agents.CreateInput{Name: "fixer"})
 	_, _, _ = as.CreateKey(ctx, u.ID, "k")
 	_ = as.Heartbeat(ctx, a.ID, "0.2", "h")
-	return &fx{d: d, agents: as, proofs: ps, quals: qs, worker: w, fake: fake, userID: u.ID, agentID: a.ID}
+	return &fx{d: d, agents: as, proofs: ps, quals: qs, worker: w, fake: fake, hidden: hidden, userID: u.ID, agentID: a.ID}
 }
 
 func (f *fx) operational(t *testing.T) {
@@ -1986,8 +2425,23 @@ func problem(t *testing.T, err error, status int, code string) {
 	}
 }
 
-// drive plays the connector and the sandbox for the run's current task.
-func (f *fx) drive(t *testing.T, passed, total int) {
+// age moves the run's finished proofs two minutes into the past.
+func (f *fx) age(t *testing.T, runID string) {
+	t.Helper()
+	err := f.d.AdminPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE proofs SET finished_at = finished_at - interval '2 minutes' WHERE qualification_run_id = $1 AND finished_at IS NOT NULL`, runID)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// drive plays the connector and the sandbox for the run's current task: the
+// given share of its hidden tests pass, and so do two tests outside the
+// hidden set (a visible one and one the agent might have added), which must
+// never add to the score.
+func (f *fx) drive(t *testing.T, share float64) {
 	t.Helper()
 	ctx := context.Background()
 	p, task, err := f.proofs.Claim(ctx, f.agentID)
@@ -1997,17 +2451,19 @@ func (f *fx) drive(t *testing.T, passed, total int) {
 	if p.Kind != proofs.KindQualification || task.TaskMD == "" {
 		t.Fatalf("expected a qualification task, got %+v", p)
 	}
-	tests := make([]sandbox.TestResult, total)
-	for i := range tests {
-		tests[i] = sandbox.TestResult{Name: "TestHidden_X", Passed: i < passed}
+	names := f.hidden[task.Slug]
+	pass := int(math.Round(share * float64(len(names))))
+	tests := []sandbox.TestResult{{Name: "visible_passes", Passed: true}, {Name: "test_agent_added.py::test_extra", Passed: true}}
+	for i, n := range names {
+		tests = append(tests, sandbox.TestResult{Name: n, Passed: i < pass})
 	}
 	exit := 0
-	if passed < total {
+	if pass < len(names) {
 		exit = 1
 	}
 	f.fake.Result = sandbox.Result{ExitCode: exit, Tests: tests}
 	f.fake.Err = nil
-	if err := f.proofs.SubmitResult(ctx, f.agentID, p.ID, proofs.ResultInput{Diff: "--- a/x\n+++ b/x\n"}); err != nil {
+	if err := f.proofs.SubmitResult(ctx, f.agentID, p.ID, proofs.ResultInput{Diff: noteDiff}); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.worker.RunProof(ctx, p.ID); err != nil {
@@ -2040,9 +2496,9 @@ func TestRun_ThreeTasksScoreAndRating(t *testing.T) {
 	f.operational(t)
 	f.version(t, "d1")
 	run, _ := f.quals.Start(ctx, f.userID, "go")
-	f.drive(t, 5, 5) // task 1: 1.0
-	f.drive(t, 2, 4) // task 2: 0.5
-	f.drive(t, 0, 5) // task 3: 0.0
+	f.drive(t, 1)   // task 1: 1.0
+	f.drive(t, 0.5) // task 2: about 0.5
+	f.drive(t, 0)   // task 3: 0.0
 	got, err := f.quals.Get(ctx, f.userID, run.ID)
 	if err != nil || got.Status != "scored" || got.Score == nil || len(got.Tasks) != 3 {
 		t.Fatalf("%v %+v", err, got)
@@ -2074,13 +2530,13 @@ func TestRun_InfraErrorRequeuesOnceThenExcludes(t *testing.T) {
 	// task 1: infra error twice → excluded
 	for i := 0; i < 2; i++ {
 		p, _, _ := f.proofs.Claim(ctx, f.agentID)
-		_ = f.proofs.SubmitResult(ctx, f.agentID, p.ID, proofs.ResultInput{Diff: "--- a/x\n+++ b/x\n"})
+		_ = f.proofs.SubmitResult(ctx, f.agentID, p.ID, proofs.ResultInput{Diff: noteDiff})
 		f.fake.Err = errors.New("no docker")
 		_ = f.worker.RunProof(ctx, p.ID)
 		_ = f.worker.MarkInfraError(ctx, p.ID, "no docker")
 	}
-	f.drive(t, 4, 4)
-	f.drive(t, 4, 4)
+	f.drive(t, 1)
+	f.drive(t, 1)
 	got, _ := f.quals.Get(ctx, f.userID, run.ID)
 	if got.Status != "scored" || got.Score == nil || *got.Score != 1 || len(got.Tasks) != 4 {
 		t.Fatalf("two clean tasks must average to 1.0 with the infra-errored one excluded: %+v", got)
@@ -2097,7 +2553,10 @@ func TestRun_AbortWhenTaskExpiresAndDailyLimit(t *testing.T) {
 		_, err := tx.Exec(ctx, `UPDATE proofs SET created_at = now() - interval '6 minutes' WHERE qualification_run_id = $1`, run.ID)
 		return err
 	})
-	ids, _ := f.proofs.ExpireStale(ctx)
+	ids, err := f.proofs.ExpireStale(ctx)
+	if err != nil || len(ids) != 1 {
+		t.Fatalf("expire: %v %v", ids, err)
+	}
 	for _, id := range ids {
 		_ = f.quals.OnProofFinished(ctx, id)
 	}
@@ -2115,8 +2574,97 @@ func TestRun_AbortWhenTaskExpiresAndDailyLimit(t *testing.T) {
 		}
 		_ = f.quals.Abort(ctx, r.ID, "test")
 	}
-	_, err := f.quals.Start(ctx, f.userID, "go")
+	_, err = f.quals.Start(ctx, f.userID, "go")
 	problem(t, err, 429, "daily_limit")
+}
+
+func TestStart_NeedsOnlineConnector(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	err := f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE agent_presence SET last_seen_at = now() - interval '3 minutes' WHERE agent_id = $1`, f.agentID)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.quals.Start(ctx, f.userID, "go")
+	problem(t, err, 409, "agent_offline")
+}
+
+func TestScore_CountsOnlyHiddenTestsByName(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	run, _ := f.quals.Start(ctx, f.userID, "python")
+	for i := 0; i < 3; i++ {
+		f.drive(t, 0) // every hidden test fails; the two tests outside the hidden set pass
+	}
+	got, _ := f.quals.Get(ctx, f.userID, run.ID)
+	if got.Status != "scored" || got.Score == nil || *got.Score != 0 || *got.RatingAfter != 1000 {
+		t.Fatalf("tests outside the hidden set must not score: %+v", got)
+	}
+}
+
+func TestRun_HoldsTheSlotAndSweepsStalled(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	run, _ := f.quals.Start(ctx, f.userID, "go")
+
+	// Task 1 finishes on a worker without the hook, as if the API stopped
+	// between the verdict and the advance.
+	deaf := proofs.NewWorker(f.d.AppPool, f.fake, t.TempDir(), slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	p1, task, _ := f.proofs.Claim(ctx, f.agentID)
+	f.fake.Result = sandbox.Result{Tests: passing(f.hidden[task.Slug])}
+	f.fake.Err = nil
+	if err := f.proofs.SubmitResult(ctx, f.agentID, p1.ID, proofs.ResultInput{Diff: noteDiff}); err != nil {
+		t.Fatal(err)
+	}
+	if err := deaf.RunProof(ctx, p1.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// No proof is open, yet the run keeps the slot.
+	_, err := f.proofs.Create(ctx, f.userID, "go-fix-retry")
+	problem(t, err, 409, "qualification_in_progress")
+	if last, _ := f.proofs.Latest(ctx, f.agentID); last == nil || last.ID != "proof_seed" {
+		t.Fatalf("last_proof must stay the basic proof: %+v", last)
+	}
+
+	if n, _ := f.quals.SweepStalled(ctx); n != 0 {
+		t.Fatalf("a proof finished seconds ago is not stalled yet")
+	}
+	f.age(t, run.ID)
+	if n, err := f.quals.SweepStalled(ctx); err != nil || n != 1 {
+		t.Fatalf("sweep: %d %v", n, err)
+	}
+	if err := f.quals.OnProofFinished(ctx, p1.ID); err != nil { // the late hook is a no-op
+		t.Fatal(err)
+	}
+	got, _ := f.quals.Get(ctx, f.userID, run.ID)
+	if len(got.Tasks) != 2 || *got.Tasks[1].Position != 2 {
+		t.Fatalf("exactly one next task: %+v", got.Tasks)
+	}
+
+	// Task 2's result is too big: FailOversized closes it outside the worker.
+	p2, _, _ := f.proofs.Claim(ctx, f.agentID)
+	err = f.proofs.SubmitResult(ctx, f.agentID, p2.ID, proofs.ResultInput{Diff: strings.Repeat("+x\n", 100_000)})
+	problem(t, err, 413, "diff_too_large")
+	_, err = f.proofs.Retry(ctx, f.userID, p2.ID)
+	problem(t, err, 409, "state_conflict")
+	f.age(t, run.ID)
+	if n, err := f.quals.SweepStalled(ctx); err != nil || n != 1 {
+		t.Fatalf("sweep after oversized: %d %v", n, err)
+	}
+	got, _ = f.quals.Get(ctx, f.userID, run.ID)
+	if len(got.Tasks) != 3 || *got.Tasks[2].Position != 3 {
+		t.Fatalf("an oversized task 2 must still move the run on: %+v", got.Tasks)
+	}
 }
 
 func TestNewVersion_ResetsConfidenceKeepsPrior(t *testing.T) {
@@ -2125,9 +2673,9 @@ func TestNewVersion_ResetsConfidenceKeepsPrior(t *testing.T) {
 	f.operational(t)
 	f.version(t, "d1")
 	run, _ := f.quals.Start(ctx, f.userID, "go")
-	f.drive(t, 5, 5)
-	f.drive(t, 4, 4)
-	f.drive(t, 5, 5)
+	f.drive(t, 1)
+	f.drive(t, 1)
+	f.drive(t, 1)
 	if got, _ := f.quals.Get(ctx, f.userID, run.ID); *got.RatingAfter != 2400 {
 		t.Fatalf("perfect run must rate 2400, got %+v", got)
 	}
@@ -2278,6 +2826,15 @@ func (s *Service) Start(ctx context.Context, userID, skill string) (Run, error) 
 		}
 		if !passed {
 			return httpx.New(http.StatusConflict, "agent_not_operational", "Pass the basic proof first")
+		}
+		// Same rule as proofs.Create: an offline connector would let the first
+		// task expire unclaimed and burn one of the day's runs.
+		var online bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agent_presence WHERE agent_id = $1 AND last_seen_at > now() - interval '2 minutes')`, agentID).Scan(&online); err != nil {
+			return err
+		}
+		if !online {
+			return httpx.New(http.StatusConflict, "agent_offline", "The connector is not online; run `arena connect` first")
 		}
 		var versionID *string
 		if err := tx.QueryRow(ctx, `SELECT current_version_id FROM agents WHERE id = $1`, agentID).Scan(&versionID); err != nil {
@@ -2436,7 +2993,9 @@ import (
 
 // OnProofFinished implements proofs.FinishListener: it moves the run to
 // the next task, re-queues a task that hit an infra error once, and scores
-// the run after the last one. Non-qualification proofs are ignored.
+// the run after the last one. Non-qualification proofs are ignored. It is
+// idempotent: only the run's newest proof, once finished, moves the run, so
+// the worker's hook and SweepStalled may both fire for the same proof.
 func (s *Service) OnProofFinished(ctx context.Context, proofID string) error {
 	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		p, err := s.proofs.GetByIDTx(ctx, tx, proofID)
@@ -2450,8 +3009,15 @@ func (s *Service) OnProofFinished(ctx context.Context, proofID string) error {
 		if err := scanRun(tx.QueryRow(ctx, `SELECT `+runCols+` FROM qualification_runs WHERE id = $1 FOR UPDATE`, *p.QualificationRunID), &run); err != nil {
 			return err
 		}
-		if run.Status != StatusRunning {
+		if run.Status != StatusRunning || p.FinishedAt == nil {
 			return nil
+		}
+		var newest string
+		if err := tx.QueryRow(ctx, `SELECT id FROM proofs WHERE qualification_run_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1`, run.ID).Scan(&newest); err != nil {
+			return err
+		}
+		if newest != p.ID {
+			return nil // already moved on
 		}
 		switch p.Status {
 		case proofs.StatusExpired:
@@ -2478,17 +3044,55 @@ func (s *Service) OnProofFinished(ctx context.Context, proofID string) error {
 	})
 }
 
+// SweepStalled moves on runs whose newest proof finished over a minute ago
+// with nothing after it: the worker's hook never ran for it (the API stopped
+// between the two transactions) or the proof was closed outside the worker
+// (FailOversized). cmd/api calls it every 30 seconds.
+func (s *Service) SweepStalled(ctx context.Context) (int, error) {
+	var ids []string
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT newest.id FROM qualification_runs q
+			CROSS JOIN LATERAL (SELECT id, finished_at FROM proofs WHERE qualification_run_id = q.id ORDER BY created_at DESC, id DESC LIMIT 1) newest
+			WHERE q.status = 'running' AND newest.finished_at < now() - interval '1 minute'`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			ids = append(ids, id)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return 0, err
+	}
+	for _, id := range ids {
+		if err := s.OnProofFinished(ctx, id); err != nil {
+			return 0, err
+		}
+	}
+	return len(ids), nil
+}
+
 func (s *Service) abortTx(ctx context.Context, tx pgx.Tx, runID string) error {
 	_, err := tx.Exec(ctx, `UPDATE qualification_runs SET status = 'aborted', finished_at = now() WHERE id = $1`, runID)
 	return err
 }
 
 // scoreTx computes the run score from the last terminal proof per position
-// and folds it into the skill rating.
+// and folds it into the skill rating. A task scores the share of its hidden
+// tests, by name, that passed; a test outside the hidden set (a visible one,
+// or one the agent wrote) never counts, and a name reported both passed and
+// failed counts as failed.
 func (s *Service) scoreTx(ctx context.Context, tx pgx.Tx, run Run) error {
 	rows, err := tx.Query(ctx, `
-		SELECT DISTINCT ON (p.position) p.position, p.status, p.sandbox_result, t.hidden_tests, t.difficulty
-		FROM proofs p JOIN skill_tasks t ON t.slug = p.skill_task_slug
+		SELECT DISTINCT ON (p.position) p.position, p.status, p.sandbox_result, t.hidden_tests, t.difficulty, t.hidden_tar, s.language
+		FROM proofs p JOIN skill_tasks t ON t.slug = p.skill_task_slug JOIN skills s ON s.slug = t.skill_slug
 		WHERE p.qualification_run_id = $1 AND p.finished_at IS NOT NULL
 		ORDER BY p.position, p.finished_at DESC`, run.ID)
 	if err != nil {
@@ -2497,19 +3101,30 @@ func (s *Service) scoreTx(ctx context.Context, tx pgx.Tx, run Run) error {
 	var weighted, weights float64
 	for rows.Next() {
 		var position, hidden, difficulty int
-		var status string
+		var status, language string
+		var hiddenTar []byte
 		var sr *proofs.SandboxResult
-		if err := rows.Scan(&position, &status, &sr, &hidden, &difficulty); err != nil {
+		if err := rows.Scan(&position, &status, &sr, &hidden, &difficulty, &hiddenTar, &language); err != nil {
 			rows.Close()
 			return err
 		}
 		if status == proofs.StatusInfraError {
 			continue // excluded: the platform failed, not the agent
 		}
+		names, err := proofs.HiddenTestNames(language, hiddenTar)
+		if err != nil {
+			rows.Close()
+			return err
+		}
 		passed := 0
 		if sr != nil {
+			ok := map[string]bool{}
 			for _, t := range sr.Tests {
-				if t.Passed {
+				prev, seen := ok[t.Name]
+				ok[t.Name] = t.Passed && (!seen || prev)
+			}
+			for _, n := range names {
+				if ok[n] {
 					passed++
 				}
 			}
@@ -2645,7 +3260,7 @@ func (s *Service) RatingsFor(ctx context.Context, agentID string) ([]SkillRating
 }
 ```
 
-В `cmd/api/main.go`: `qs := qualifications.NewService(pool, ps); agentsSvc.SetVersionListener(qs); worker.SetFinishListener(qs)`; `qs` в `deps`.
+В `cmd/api/main.go` (после того как танки подключили `worker.SetGameBotJudge(gs)`): `qs := qualifications.NewService(pool, ps); agentsSvc.SetVersionListener(qs); worker.SetFinishListener(qs)`; `qs` в `deps`; рядом с `go worker.Run(ctx)` — горутина, которая каждые 30 с вызывает `qs.SweepStalled(ctx)` и пишет в лог ошибку или число продвинутых прогонов (`time.NewTicker`, выход по `ctx.Done()`).
 
 Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/qualifications/ ./internal/proofs/... -v` → PASS.
 
@@ -2655,7 +3270,7 @@ Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./internal/qualifications/ ./internal/
 cd backend && gofmt -l . && go vet ./... && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...
 git add -A && git commit -m "Add qualification runs: three hidden tasks, worker-driven advance, skill ratings
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2664,7 +3279,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `backend/internal/qualifications/http.go`, `backend/internal/skills/http.go`, `backend/internal/agents/public.go`
-- Modify: `backend/cmd/api/handler.go`, `backend/cmd/api/main_test.go`, `backend/contracts/openapi/openapi.yaml`, `backend/internal/agents/model.go`, `backend/internal/agents/presence.go`
+- Modify: `backend/cmd/api/handler.go`, `backend/cmd/api/compose.go`, `backend/cmd/api/main.go`, `backend/cmd/api/main_test.go`, `backend/contracts/openapi/openapi.yaml`, `backend/internal/agents/model.go`, `backend/internal/agents/presence.go`, `backend/internal/agents/service.go`
 
 **Interfaces:**
 - Produces: `GET /api/v1/skills`, `POST /api/v1/qualifications`, `GET /api/v1/qualifications`, `GET /api/v1/qualifications/{id}` (cookie); `GET /api/v1/agents/{name}` (без auth); `Overview.Skills []qualifications.SkillRating` в `/me`; `agents.SkillsSource interface{ RatingsFor(ctx, agentID) ([]qualifications.SkillRating, error) }` — чтобы `agents` не импортировал `qualifications`, тип рейтинга переезжает в отдельный пакет `internal/rating` как `rating.SkillRating` (тот же набор полей), а `qualifications.SkillRating = rating.SkillRating` через alias.
@@ -2904,7 +3519,7 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service, skills SkillsSource) {
 
 `rating.SkillRating` — перенести структуру из `qualifications/model.go` в `rating/rating.go` (те же поля и json-теги); в `qualifications`: `type SkillRating = rating.SkillRating`.
 
-`agents/model.go`: `Overview.Skills []rating.SkillRating \`json:"skills"\``; `presence.go` `overview` заполняет через `s.skills.RatingsFor`, где `s.skills SkillsSource` задаётся `SetSkillsSource` (в тестах среза 1 без него — пустой список).
+`agents/model.go`: `Overview.Skills []rating.SkillRating \`json:"skills"\``; `presence.go` `overview` заполняет через `s.skills.RatingsFor`, где `s.skills SkillsSource` задаётся `SetSkillsSource` (без него — пустой срез `[]rating.SkillRating{}`, не `nil`: схема требует массив). `cmd/api/compose.go` `connectorStatus`: в блок `agent` добавить `"skills": o.Skills` рядом с `"version"` из задачи 2 — `arena status` печатает рейтинги отсюда. `cmd/api/main.go`: `agentsSvc.SetSkillsSource(qs)`.
 
 `cmd/api/handler.go`:
 
@@ -2922,11 +3537,41 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service, skills SkillsSource) {
 
 - [ ] **Step 2: OpenAPI**
 
-Добавить в `openapi.yaml` пути `/skills`, `/qualifications`, `/qualifications/{id}`, `/agents/{name}` (security `[]`), схемы `SkillRating` (`skill_slug, rating, uncertainty, access, tier{none,verified,strong,elite}, verified, runs, version_id, version_number, on_current_version, prior_rating nullable`), `SkillView`, `QualificationRun` (все поля `Run`, `tasks: array of Proof`), `PublicProfile`, `AgentVersion` (`id, number, model, harness, config_digest, created_at`). `Proof` дополняется `kind{proof,qualification}`, `qualification_run_id nullable`, `position nullable`, `skill_task_slug nullable`. `AgentOverview` дополняется `version nullable AgentVersion` и `skills array`. Ответ `/connector/heartbeat` дополняется `version nullable`. `/connector/tasks/next` ответ дополняется `kind`.
+Добавить в `openapi.yaml` пути `/skills`, `/qualifications`, `/qualifications/{id}`, `/agents/{name}` (security `[]`), схемы `SkillRating` (`skill_slug, rating, uncertainty, access, tier{none,verified,strong,elite}, verified, runs, version_id, version_number, on_current_version, prior_rating nullable`), `SkillView`, `QualificationRun` (все поля `Run`, `tasks: array of Proof`), `PublicProfile`, `AgentVersion` (`id, number, model, harness, config_digest, created_at`). Enum `Proof.kind` (танки ввели `[proof, game_bot]`) дополняется значением `qualification`; `Proof` получает `qualification_run_id nullable`, `position nullable`, `skill_task_slug nullable`. `AgentOverview` дополняется `version nullable AgentVersion` и `skills array SkillRating` (это и `/me`: `ownerAgent` встраивает overview). Блок `agent` ответа `/connector/heartbeat` дополняется `version` (nullable), блок `agent` ответа `/connector/status` — `version` и `skills`. `kind` в ответе `/connector/tasks/next` уже есть (танки), его enum дополняется `qualification`.
 
 - [ ] **Step 3: e2e**
 
-Добавить в `cmd/api/main_test.go` (в `newE2E` синхронизировать `skills`-каталог и подключить `qualifications` как в задаче 4):
+`newE2E` в `cmd/api/main_test.go` дополнить, не трогая проводку танков: после `proofs.SyncCatalog` — `skills.LoadCatalog(filepath.Join("..", "..", "fixtures", "skills"))` и `skills.SyncCatalog(ctx, d.AdminPool, sk, stasks)`; `qs := qualifications.NewService(d.AppPool, ps)`; сервис агентов создать отдельной переменной и вызвать `SetVersionListener(qs)` и `SetSkillsSource(qs)`; `quals: qs` в `deps`; воркер, который возвращается в `e.worker`, получает `SetFinishListener(qs)`. Добавить хелперы:
+
+```go
+// noteDiff applies to any task repository: it adds a file no test reads.
+const noteDiff = "diff --git a/NOTES.md b/NOTES.md\nnew file mode 100644\n--- /dev/null\n+++ b/NOTES.md\n@@ -0,0 +1 @@\n+agent notes\n"
+
+// hiddenNames maps each skill task to its hidden test names, read from the
+// catalog newE2E syncs.
+func hiddenNames(t *testing.T) map[string][]string {
+	t.Helper()
+	sk, tasks, err := skills.LoadCatalog(filepath.Join("..", "..", "fixtures", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lang := map[string]string{}
+	for _, s := range sk {
+		lang[s.Slug] = s.Language
+	}
+	out := map[string][]string{}
+	for _, tk := range tasks {
+		names, err := proofs.HiddenTestNames(lang[tk.SkillSlug], tk.HiddenTar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[tk.Slug] = names
+	}
+	return out
+}
+```
+
+Тест:
 
 ```go
 func TestEndToEnd_Qualification(t *testing.T) {
@@ -2956,7 +3601,7 @@ func TestEndToEnd_Qualification(t *testing.T) {
 	var proof proofs.Proof
 	e.call(t, owner, "POST", "/api/v1/proofs", "", map[string]string{"task_slug": "go-fix-retry"}, &proof)
 	e.call(t, plain, "GET", "/api/v1/connector/tasks/next?wait=1", keyResp.Key, nil, nil)
-	e.call(t, plain, "POST", "/api/v1/connector/proofs/"+proof.ID+"/result", keyResp.Key, map[string]any{"diff": "--- a/x\n+++ b/x\n"}, nil)
+	e.call(t, plain, "POST", "/api/v1/connector/proofs/"+proof.ID+"/result", keyResp.Key, map[string]any{"diff": noteDiff}, nil)
 	_ = e.worker.RunProof(context.Background(), proof.ID)
 
 	e.call(t, owner, "GET", "/api/v1/skills", "", nil, &sk)
@@ -2967,13 +3612,27 @@ func TestEndToEnd_Qualification(t *testing.T) {
 	if code := e.call(t, owner, "POST", "/api/v1/qualifications", "", map[string]string{"skill": "go"}, &run); code != 201 || len(run.Tasks) != 1 {
 		t.Fatalf("start: %d %+v", code, run)
 	}
+	hidden := hiddenNames(t)
 	for i := 0; i < 3; i++ {
-		var next struct{ ProofID string `json:"proof_id"`; Kind string `json:"kind"` }
+		var next struct {
+			ProofID string `json:"proof_id"`
+			Kind    string `json:"kind"`
+			Task    struct {
+				Slug string `json:"slug"`
+			} `json:"task"`
+		}
 		if code := e.call(t, plain, "GET", "/api/v1/connector/tasks/next?wait=1", keyResp.Key, nil, &next); code != 200 || next.Kind != "qualification" {
 			t.Fatalf("task %d: %d %+v", i, code, next)
 		}
-		e.call(t, plain, "POST", "/api/v1/connector/proofs/"+next.ProofID+"/result", keyResp.Key, map[string]any{"diff": "--- a/x\n+++ b/x\n"}, nil)
-		e.fake.Result = sandbox.Result{ExitCode: 0, Tests: []sandbox.TestResult{{Name: "TestHidden_A", Passed: true}, {Name: "TestHidden_B", Passed: true}, {Name: "TestHidden_C", Passed: true}, {Name: "TestHidden_D", Passed: true}, {Name: "TestHidden_E", Passed: true}}}
+		if code := e.call(t, owner, "POST", "/api/v1/proofs", "", map[string]string{"task_slug": "go-fix-retry"}, nil); code != 409 {
+			t.Fatalf("a proof during a qualification run: %d", code)
+		}
+		e.call(t, plain, "POST", "/api/v1/connector/proofs/"+next.ProofID+"/result", keyResp.Key, map[string]any{"diff": noteDiff}, nil)
+		var tests []sandbox.TestResult
+		for _, n := range hidden[next.Task.Slug] {
+			tests = append(tests, sandbox.TestResult{Name: n, Passed: true})
+		}
+		e.fake.Result = sandbox.Result{ExitCode: 0, Tests: tests}
 		if err := e.worker.RunProof(context.Background(), next.ProofID); err != nil {
 			t.Fatal(err)
 		}
@@ -2984,6 +3643,30 @@ func TestEndToEnd_Qualification(t *testing.T) {
 	}
 	if run.Tasks[0].SandboxResult == nil || run.Tasks[0].SandboxResult.Tests[0].Name != "hidden-1" || run.Tasks[0].SandboxResult.Output != "" {
 		t.Fatalf("hidden tests leaked: %+v", run.Tasks[0].SandboxResult)
+	}
+
+	var me struct {
+		Agent struct {
+			LastProof *proofs.Proof        `json:"last_proof"`
+			Version   *agents.Version      `json:"version"`
+			Skills    []rating.SkillRating `json:"skills"`
+		} `json:"agent"`
+	}
+	e.call(t, owner, "GET", "/api/v1/me", "", nil, &me)
+	if me.Agent.LastProof == nil || me.Agent.LastProof.ID != proof.ID || me.Agent.Version == nil || len(me.Agent.Skills) != 1 {
+		t.Fatalf("/me: last_proof stays the basic proof, version and skills are there: %+v", me.Agent)
+	}
+	var st struct {
+		Agent struct {
+			Version *struct {
+				Number int `json:"number"`
+			} `json:"version"`
+			Skills []rating.SkillRating `json:"skills"`
+		} `json:"agent"`
+	}
+	e.call(t, plain, "GET", "/api/v1/connector/status", keyResp.Key, nil, &st)
+	if st.Agent.Version == nil || st.Agent.Version.Number != 1 || len(st.Agent.Skills) != 1 {
+		t.Fatalf("/connector/status: %+v", st.Agent)
 	}
 
 	var prof struct {
@@ -3009,7 +3692,7 @@ func TestEndToEnd_Qualification(t *testing.T) {
 }
 ```
 
-Хелпер `rawGet` в тесте: GET без валидации, возвращает тело строкой (для проверки утечек). Обратить внимание: `newE2E` из среза 1 должен вызвать `SetVersionListener`/`SetFinishListener` и синхронизировать каталог направлений.
+Хелпер `rawGet` в тесте: GET без валидации, возвращает тело строкой (для проверки утечек).
 
 Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./cmd/api/ -v` → PASS.
 
@@ -3019,7 +3702,7 @@ Run: `ARENA_TEST_REQUIRE_DOCKER=1 go test ./cmd/api/ -v` → PASS.
 cd backend && gofmt -l . && go vet ./... && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...
 git add -A && git commit -m "Add skills and qualification API, public agent profile, contract and e2e
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -3031,7 +3714,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Modify: `backend/cmd/arena/config.go`, `backend/cmd/arena/client.go`, `backend/cmd/arena/main.go`
 
 **Interfaces:**
-- Produces: `config.Agent.Model, Harness string; FingerprintFiles []string`; `configDigest(cfg config, read func(string) ([]byte, error)) (string, error)`; `client.Heartbeat(ctx, v versionInfo)`; `versionInfo{Model, Harness, ConfigDigest string}`; `heartbeatResp.Version *struct{Number int}`; константа `version = "0.2.0"`.
+- Produces: `config.Agent.Model, Harness string; FingerprintFiles []string`; `configDigest(cfg config, read func(string) ([]byte, error)) (string, error)`; `client.Heartbeat(ctx, v versionInfo)`; `versionInfo{Model, Harness, ConfigDigest string}`; `heartbeatResp.Agent.Version *struct{Number int}`; `statusResp.Agent.Version`, `statusResp.Agent.Skills []statusSkill`; `formatStatus` печатает версию и рейтинги.
+- Consumes: блок `agent` с `version` в ответе heartbeat (задача 2) и с `version` и `skills` в `GET /connector/status` (задачи 2 и 5).
 
 - [ ] **Step 1: Тест digest**
 
@@ -3154,9 +3838,40 @@ func configDigest(cfg config, read func(string) ([]byte, error)) (string, error)
 }
 ```
 
-`client.go`: `const version = "0.2.0"`; тип `versionInfo struct{ Model string \`json:"model"\`; Harness string \`json:"harness"\`; ConfigDigest string \`json:"config_digest"\` }`; `Heartbeat(ctx, v versionInfo)` шлёт `{"connector_version", "hostname", "version": v}`; `heartbeatResp` получает `Version *struct{ Number int \`json:"number"\` } \`json:"version"\``.
+`client.go`: поднять `const version` на минорную версию (сейчас `"0.1.0"`; если танки уже подняли — следующую); тип `versionInfo struct{ Model string \`json:"model"\`; Harness string \`json:"harness"\`; ConfigDigest string \`json:"config_digest"\` }`; `Heartbeat(ctx, v versionInfo)` шлёт `map[string]any{"connector_version": version, "hostname": host, "version": v}`; в `heartbeatResp.Agent` добавить `Version *struct{ Number int \`json:"number"\` } \`json:"version"\``. `statusResp.Agent` получает `Version *struct{ Number int \`json:"number"\`; Model string \`json:"model"\` } \`json:"version"\`` и `Skills []statusSkill \`json:"skills"\``:
 
-`main.go`: `newClient` дополнительно считает `digest, err := configDigest(cfg, os.ReadFile)` и возвращает `versionInfo`; `cmdConnect` и `cmdStatus` передают её в `Heartbeat`; вывод `connect`: `"%s is online (%s, v%d). Waiting for tasks..."`; `status`: `"%s: %s · v%d · model %s"`.
+```go
+type statusSkill struct {
+	SkillSlug        string `json:"skill_slug"`
+	Rating           int    `json:"rating"`
+	Uncertainty      int    `json:"uncertainty"`
+	Tier             string `json:"tier"`
+	VersionNumber    int    `json:"version_number"`
+	OnCurrentVersion bool   `json:"on_current_version"`
+}
+```
+
+`main.go`: `cmdConnect` после `newClient` считает `digest, err := configDigest(cfg, os.ReadFile)` (ошибка — выход с её текстом, в нём уже сказано, что делать), собирает `vi := versionInfo{Model: cfg.Agent.Model, Harness: cfg.Agent.Harness, ConfigDigest: digest}` и передаёт её и в первый, и в периодический `Heartbeat`; вывод `"%s is online (%s, v%d). Waiting for tasks; Ctrl-C to stop.\n"`, а если версии в ответе нет — прежняя строка. `cmdStatus` не меняется: heartbeat он не шлёт (так сделано в доделках среза 1), всё берёт из `c.Status`. `formatStatus`: к первой строке `name: stage` добавить ` · vN · model M`, если версия есть; после строки о последней проверке — по строке на направление: `go: 2014 ± 350 · verified` (уровень как есть, `none` → `not verified`), а при `!OnCurrentVersion` — `go: 2014 ± 350 · on v1, not proven on v2`. Ожидания существующего `TestClient_StatusDoesNotHeartbeat` (без версии и направлений) не меняются.
+
+Добавить в `version_test.go` (импорты `encoding/json`, `time`):
+
+```go
+func TestFormatStatus_VersionAndSkills(t *testing.T) {
+	var st statusResp
+	if err := json.Unmarshal([]byte(`{"agent": {"name": "fixer", "stage": "operational",
+		"version": {"number": 2, "model": "claude-sonnet-5"},
+		"skills": [
+			{"skill_slug": "go", "rating": 2014, "uncertainty": 350, "tier": "verified", "version_number": 2, "on_current_version": true},
+			{"skill_slug": "python", "rating": 1700, "uncertainty": 350, "tier": "none", "version_number": 1, "on_current_version": false}]},
+		"last_proof": null}`), &st); err != nil {
+		t.Fatal(err)
+	}
+	want := "fixer: operational · v2 · model claude-sonnet-5\nlast proof: none yet\ngo: 2014 ± 350 · verified\npython: 1700 ± 350 · on v1, not proven on v2\n"
+	if got := formatStatus(st, time.Now()); got != want {
+		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}
+```
 
 Run: `go test ./cmd/arena/ -v` → PASS.
 
@@ -3166,7 +3881,7 @@ Run: `go test ./cmd/arena/ -v` → PASS.
 cd backend && gofmt -l . && go vet ./cmd/arena/ && go test ./cmd/arena/
 git add -A && git commit -m "Connector reports agent version from a config digest
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -3175,7 +3890,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `frontend/app/app/skills/page.tsx`, `frontend/app/app/qualifications/[id]/page.tsx`, `frontend/app/agents/[name]/page.tsx`, `frontend/components/rating-pill.tsx`, `frontend/components/skill-card.tsx`, `frontend/components/qualification/lanes.tsx`
-- Modify: `frontend/lib/types.ts`, `frontend/lib/format.ts`, `frontend/components/app-shell.tsx`, `frontend/components/stage-card.tsx`, `frontend/app/app/page.tsx`, `frontend/app/app/agent/connect/page.tsx`, `frontend/app/app/proofs/[id]/page.tsx`
+- Modify: `frontend/lib/types.ts`, `frontend/lib/format.ts`, `frontend/components/app-shell.tsx`, `frontend/components/stage-card.tsx`, `frontend/app/app/page.tsx`, `frontend/app/app/agent/connect/page.tsx`, `frontend/app/app/proofs/[id]/page.tsx`, `frontend/scripts/check-mobile.mjs`, `.github/workflows/ci.yml` (шаг `migrate` задания `mobile`)
 
 **Interfaces:**
 - Consumes: API задачи 5. Produces: `RatingPill({r})`, `SkillCard({skill, onStart, starting})`, `Lanes({run})`.
@@ -3506,12 +4221,26 @@ export default function AgentProfilePage({ params }: { params: Promise<{ name: s
 cd frontend && pnpm typecheck && pnpm build
 ```
 
-Проверить 375px на `/app/skills`, `/app/qualifications/<id>`, `/agents/<name>` (как в срезе 1). Руками с запущенным API: `make up`, пройти базовую проверку, «Prove Go» → страница прогона обновляется, три дорожки, результат с рейтингом; `/agents/<name>` открывается без входа.
+Ширину 375px проверяет CI (`pnpm check:mobile`), поэтому новые страницы добавляются в `frontend/scripts/check-mobile.mjs`. После ожидания `finished_at` потребовать `finished.status === 'passed'` (иначе квалификация не стартует) и дописать:
+
+```js
+  // Slice 2 pages. The proof above passed, so the agent is operational as
+  // soon as the connector reports a version.
+  await call('POST', '/connector/heartbeat', {
+    key,
+    data: { connector_version: 'ci', hostname: 'ci', version: { model: 'ci-model', harness: 'ci', config_digest: `ci-${run}` } },
+  })
+  const qrun = await call('POST', '/qualifications', { data: { skill: 'go' } })
+  await check(owner, ['/app/skills', `/app/qualifications/${qrun.id}`])
+  await check(anonymous, [`/agents/mobile-${run % 1_000_000}`])
+```
+
+В `.github/workflows/ci.yml` шаг `migrate` задания `mobile` получает `ARENA_SKILLS_DIR=./fixtures/skills` рядом с `ARENA_PROOFS_DIR`, иначе каталог направлений пуст и `POST /qualifications` отвечает 404. Руками с запущенным API: `make up`, пройти базовую проверку, «Prove Go» → страница прогона обновляется, три дорожки, результат с рейтингом; `/agents/<name>` открывается без входа.
 
 ```bash
 git add -A frontend && git commit -m "Add skills page, qualification run page, public profile and version in header
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -3547,7 +4276,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 - [ ] **Step 2: Приёмка**
 
-1. `make up` (соберёт три образа). Зарегистрироваться, создать агента, `arena login`, `arena init` с `model: claude-opus-5-5`, `harness: claude-code`, `command: claude -p "$(cat TASK.md)" --dangerously-skip-permissions`, `arena connect`.
+1. `make up` (соберёт образы проверки, направлений и танков). Зарегистрироваться, создать агента, `arena login`, `arena init` с `model: claude-opus-5-5`, `harness: claude-code`, `command: claude -p "$(cat TASK.md)" --dangerously-skip-permissions`, `arena connect`.
 2. «Run basic proof» → `passed`.
 3. «Prove Go» → три задачи проходят по очереди (по 3–10 минут каждая), страница прогона показывает дорожки, результат: балл, `rating ± 350`, `verified`, если access ≥ 1500.
 4. `/agents/<имя>` без входа показывает `Go · <rating> ± 350 · Verified`, модель и `v1`.
@@ -3561,16 +4290,18 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```bash
 git add -A && git commit -m "Document qualification and record live acceptance
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
 ## Самопроверка плана
 
-**Покрытие спеки.** §3.1 сущности → задача 2. §3.2 жизненный цикл (выбор задач с ротацией, продвижение, infra-повтор, abort) → задачи 3–4. §3.3 формула → задача 1, применение → задача 4. §4.1 API → задача 5; `GET /me` с `version` и `skills` → задачи 2 и 5. §4.2 публичный профиль → задача 5. §4.3 heartbeat с версией и `kind` в выдаче → задачи 2, 4. §5 коннектор → задача 6. §6 пакеты задач → задача 3 (шесть задач, все проверены вручную: без фикса падают заявленные тесты, с эталонным фиксом всё зелёное, worker-pool стабилен ×5 под `-race`). §7 парсер pytest и образы → задача 3. §8 кабинет → задача 7. §9 тесты → распределены по задачам; docker-тест двух задач направлений → задача 3 шаг 6; e2e → задача 5; приёмка → задача 8. §10 порядок совпадает.
+**Покрытие спеки.** §3.1 сущности → задача 2. §3.2 жизненный цикл (выбор задач с ротацией, продвижение, infra-повтор, abort) → задачи 3–4. §3.3 формула → задача 1, применение → задача 4. §4.1 API → задача 5; `GET /me` с `version` и `skills` → задачи 2 и 5. §4.2 публичный профиль → задача 5. §4.3 heartbeat с версией и `kind` в выдаче → задачи 2, 4. §5 коннектор → задача 6. §6 пакеты задач → задача 3 (шесть задач, все проверены вручную: без фикса падают заявленные тесты, с эталонным фиксом всё зелёное, worker-pool стабилен ×5 под `-race`). §7 парсер pytest и образы → задача 3. §8 кабинет → задача 7. §9 тесты → распределены по задачам; docker-тест двух задач направлений → задача 3 шаг 7; имена скрытых тестов и запрет правки тестов → задача 3 шаг 6; e2e → задача 5; приёмка → задача 8. §10 порядок совпадает.
 
-**Отступления от спеки.** `arena status` показывает версию и стадию, но не рейтинги (они не в ответе heartbeat; отдельный эндпоинт для коннектора не вводится, чтобы не расширять поверхность ключа). `SkillRating` живёт в пакете `rating`, а не `qualifications`, чтобы `agents` мог отдавать его без цикла импортов.
+**Отступления от спеки.** `SkillRating` живёт в пакете `rating`, а не `qualifications`, чтобы `agents` мог отдавать его без цикла импортов (пакет `internal/rating` не путать с `internal/games/rating` танков: если оба понадобятся в одном файле, импорт танков — под псевдонимом). `arena status` показывает и рейтинги: после доделок среза 1 у коннектора есть read-only `GET /connector/status`, и рейтинги идут в его блоке `agent`. Спека (§3.1) говорит `kind` = `proof | qualification`; после танков значений три. Критерий готовности спеки приводит пример `Go · 1842 ± 350 · verified`, но `1842 − 350 = 1492 < 1500` — это не verified; правильный пример — от 1850 при одном прогоне (спека поправлена).
+
+**Ревизия 25 сентября: что сверено с кодом.** Сигнатуры `agents.NewService`, `Heartbeat`, `Overview`, `identity.NewService`, `Signup`, `sandbox.Fake`, `httpx.New`/`StateConflict`, поля `e2e`, `proofCols`/`scanProof`, `task`/`Claim`/`RepoTar`, `ExpireStale`, `FailOversized`, `Retry`, `List`, `Latest`, `RunProof`, `applyDiff`, `hiddenTestNames`, `diffTouchesTestFiles`, `PassAll`, `compose.go`, `client.Heartbeat`/`Status`/`formatStatus`, `check-mobile.mjs` и CI — по main `5c988761`. Изменения `proofs` танков (задачи 8 и 11) — по их плану: код ещё не написан, поэтому исполнитель задачи 4 сначала сверяет `RunProof`, `Claim` и `taskFor` с тем, что танки влили, и сохраняет их ветку `game_bot`. Известный остаточный риск, общий со срезом 1: код участника работает в том же процессе, что и тесты, и может подделать вывод `go test`/pytest; план закрывает дешёвые пути (тестовые файлы, `conftest.py`, строки в захваченном выводе, «PASSED» после сводки), остальное — ротация задач и живая приёмка.
 
 **Плейсхолдеры.** Нет. Описания правок существующих файлов (heartbeat, `taskFor`, `Overview`, `stage-card`) даны с точными именами и сигнатурами, полные файлы существуют после среза 1.
 
