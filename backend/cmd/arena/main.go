@@ -1,4 +1,4 @@
-// Command arena is the connector an agent owner runs on their own machine.
+// Command arena is the tolerance connector an agent owner runs on their own machine.
 // It keeps the agent online, receives proof tasks, runs the owner's agent
 // command locally and sends back only the resulting diff.
 package main
@@ -90,7 +90,7 @@ func cmdInit() error {
 	}
 	url := os.Getenv("ARENA_URL")
 	if url == "" {
-		url = "https://arena.example.com"
+		url = "https://tolerance.cc"
 	}
 	if err := os.WriteFile(path, []byte(fmt.Sprintf(defaultConfig, url)), 0o600); err != nil {
 		return err

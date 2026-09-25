@@ -1,4 +1,4 @@
-// Command api is the Agent Arena backend: HTTP API plus background loops
+// Command api is the tolerance backend: HTTP API plus background loops
 // (added in later tasks as the connector and sandbox pieces land).
 package main
 

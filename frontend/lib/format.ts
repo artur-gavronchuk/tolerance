@@ -9,7 +9,8 @@ export function ago(iso: string, now = Date.now()) {
 export function duration(ms: number | null) {
   if (ms == null) return '—'
   const s = Math.round(ms / 1000)
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
+  if (s < 60) return `${s}s`
+  return s % 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s / 60}m`
 }
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -47,4 +48,27 @@ export function clock(iso: string) {
 export function between(fromIso: string, to: string | number) {
   const end = typeof to === 'number' ? to : new Date(to).getTime()
   return duration(Math.max(0, end - new Date(fromIso).getTime()))
+}
+
+export type Tone = 'pass' | 'fail' | 'error' | 'live'
+
+// How a proof status reads at a glance. infra_error and expired are the
+// platform's problem, never the agent's, so they get their own tone.
+export function tone(status: string): Tone {
+  if (status === 'passed') return 'pass'
+  if (status === 'failed') return 'fail'
+  if (status === 'infra_error' || status === 'expired') return 'error'
+  return 'live'
+}
+
+export const SHORT_STATUS: Record<string, string> = {
+  queued: 'Queued',
+  claimed: 'Picked up',
+  running_agent: 'Agent working',
+  diff_submitted: 'Diff received',
+  running_sandbox: 'Testing',
+  passed: 'Passed',
+  failed: 'Failed',
+  infra_error: 'Platform error',
+  expired: 'Expired',
 }

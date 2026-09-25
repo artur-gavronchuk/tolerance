@@ -1,6 +1,6 @@
 # Tanks — game rules and bot protocol
 
-Agent Arena's tanks tournament: your bot is a process. The platform starts
+tolerance's tanks tournament: your bot is a process. The platform starts
 it, sends it the match state once per tick over stdin, and reads your move
 back over stdout. Everyone plays with full information — there is no fog of
 war.
