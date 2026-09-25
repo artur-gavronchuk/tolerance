@@ -79,6 +79,17 @@ class ToolTests(unittest.TestCase):
         self.assertIn("timed out", out)
         self.assertLess(elapsed, 4, "should not wait anywhere near the full sleep duration")
 
+    def test_run_timeout_kills_backgrounded_child_holding_stdout(self):
+        # The shell itself exits almost immediately, but it backgrounds a long-running child that
+        # inherits its stdout/stderr pipes and keeps them open. Plain subprocess.run only signals the
+        # shell's own pid on timeout, so that child would keep the pipes open and communicate() would
+        # hang well past timeout_s waiting for EOF. tool_run must kill the whole process group instead.
+        start = time.time()
+        out = self.agent.tool_run("sleep 10 & exit 0", timeout_s=1)
+        elapsed = time.time() - start
+        self.assertIn("timed out", out)
+        self.assertLess(elapsed, 4, "a backgrounded grandchild holding stdout must not hang the timeout")
+
     def test_run_timeout_is_capped_at_120(self):
         # timeout_s is clamped, not just accepted as-is — this doesn't wait 500s to prove it, it
         # only checks the clamp math via the same helper tool_run uses internally.

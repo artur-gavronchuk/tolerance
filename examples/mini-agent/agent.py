@@ -17,6 +17,7 @@ Model: $AGENT_MODEL, or claude-sonnet-5 if unset. Needs ANTHROPIC_API_KEY.
 
 import json
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +25,7 @@ from pathlib import Path
 DEFAULT_MODEL = "claude-sonnet-5"
 MODEL = os.environ.get("AGENT_MODEL", DEFAULT_MODEL)
 MAX_STEPS = 40
+MAX_TOKENS = 16000
 MAX_RUN_TIMEOUT_S = 120
 OUTPUT_CAP_BYTES = 8 * 1024
 
@@ -85,19 +87,34 @@ def tool_write_file(path: str, content: str) -> str:
 
 def tool_run(command: str, timeout_s: int = 30) -> str:
     timeout_s = max(1, min(int(timeout_s), MAX_RUN_TIMEOUT_S))
+    # start_new_session=True puts the shell (and anything it forks) in its own process group, so a timeout
+    # can SIGKILL that whole group instead of just the shell's own pid — plain subprocess.run only ever
+    # signals the shell itself, so a command that backgrounds a child and exits (`sleep 999 & disown`, a
+    # daemonized server, ...) leaves that child holding the stdout/stderr pipes open, and communicate()
+    # hangs waiting for EOF on them long past the timeout even though the shell it started from is gone.
+    proc = subprocess.Popen(
+        command,
+        shell=True,
+        cwd=WORK_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
     try:
-        proc = subprocess.run(
-            command,
-            shell=True,
-            cwd=WORK_DIR,
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-        )
+        output, _ = proc.communicate(timeout=timeout_s)
     except subprocess.TimeoutExpired:
+        # start_new_session=True makes this process the leader of its own new group, so its pgid is
+        # always its own pid — killpg(proc.pid, ...) works even once the shell itself has already exited
+        # (e.g. it backgrounded a child and returned immediately), when os.getpgid(proc.pid) would raise
+        # ProcessLookupError because that specific pid is no longer around to look up.
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass  # every process in the group is already gone
+        proc.communicate()  # reap it; every fd holding the pipes open is dead now, so this won't hang
         return f"error: command timed out after {timeout_s}s"
-    output = cap_output((proc.stdout or "") + (proc.stderr or ""))
-    return f"exit code: {proc.returncode}\n{output}"
+    return f"exit code: {proc.returncode}\n{cap_output(output or '')}"
 
 
 TOOLS = [
@@ -171,36 +188,47 @@ def main() -> None:
     for step in range(1, MAX_STEPS + 1):
         response = client.messages.create(
             model=MODEL,
-            max_tokens=4096,
+            max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
             tools=TOOLS,
             messages=messages,
         )
         messages.append({"role": "assistant", "content": response.content})
 
-        if response.stop_reason != "tool_use":
+        if response.stop_reason == "tool_use":
+            tool_results = []
             for block in response.content:
-                if block.type == "text":
-                    print(block.text)
-            if response.stop_reason != "end_turn":
-                print(f"(stopped: {response.stop_reason})", file=sys.stderr)
-            return
+                if block.type != "tool_use":
+                    continue
+                print(f"[step {step}] {block.name}({json.dumps(block.input)})")
+                try:
+                    result = HANDLERS[block.name](**block.input)
+                    is_error = False
+                except Exception as e:  # a bad path, a bad arg, a failed command — report it, don't crash the loop
+                    result = f"error: {e}"
+                    is_error = True
+                tool_results.append(
+                    {"type": "tool_result", "tool_use_id": block.id, "content": str(result), "is_error": is_error}
+                )
+            messages.append({"role": "user", "content": tool_results})
+            continue
 
-        tool_results = []
         for block in response.content:
-            if block.type != "tool_use":
-                continue
-            print(f"[step {step}] {block.name}({json.dumps(block.input)})")
-            try:
-                result = HANDLERS[block.name](**block.input)
-                is_error = False
-            except Exception as e:  # a bad path, a bad arg, a failed command — report it, don't crash the loop
-                result = f"error: {e}"
-                is_error = True
-            tool_results.append(
-                {"type": "tool_result", "tool_use_id": block.id, "content": str(result), "is_error": is_error}
-            )
-        messages.append({"role": "user", "content": tool_results})
+            if block.type == "text":
+                print(block.text)
+
+        if response.stop_reason == "max_tokens":
+            # The response got cut off mid-generation rather than finishing on its own. The partial
+            # assistant turn is already appended to messages above (exactly what the model produced before
+            # running out of room), so asking it to continue from there — rather than treating this as
+            # done — picks up where it left off instead of silently truncating its output or its work.
+            print(f"[step {step}] hit max_tokens, continuing", file=sys.stderr)
+            messages.append({"role": "user", "content": "Continue exactly where you left off — you ran out of room."})
+            continue
+
+        if response.stop_reason != "end_turn":
+            print(f"(stopped: {response.stop_reason})", file=sys.stderr)
+        return
 
     print(f"stopped after {MAX_STEPS} steps without finishing", file=sys.stderr)
 

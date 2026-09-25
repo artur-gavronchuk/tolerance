@@ -116,20 +116,23 @@ candidate.parents` его отловит. Если проверять пути �
 ### 2.3 Таймаут и лимит вывода для команд
 
 `run` — самый опасный инструмент из четырёх, потому что он не файл читает,
-а исполняет что угодно через `sh -c`. Два ограничения обязательны:
+а исполняет что угодно через `sh -c`. Три ограничения обязательны:
 
 ```python
 def tool_run(command: str, timeout_s: int = 30) -> str:
     timeout_s = max(1, min(int(timeout_s), MAX_RUN_TIMEOUT_S))  # MAX_RUN_TIMEOUT_S = 120
+    proc = subprocess.Popen(
+        command, shell=True, cwd=WORK_DIR,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        start_new_session=True,  # своя группа процессов — см. ниже
+    )
     try:
-        proc = subprocess.run(
-            command, shell=True, cwd=WORK_DIR,
-            capture_output=True, text=True, timeout=timeout_s,
-        )
+        output, _ = proc.communicate(timeout=timeout_s)
     except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)  # вся группа, не только сам shell
+        proc.communicate()
         return f"error: command timed out after {timeout_s}s"
-    output = cap_output((proc.stdout or "") + (proc.stderr or ""))
-    return f"exit code: {proc.returncode}\n{output}"
+    return f"exit code: {proc.returncode}\n{cap_output(output or '')}"
 ```
 
 Таймаут капается на 120 секунд вне зависимости от того, что попросила
@@ -140,6 +143,18 @@ def tool_run(command: str, timeout_s: int = 30) -> str:
 каждом следующем запросе (API не хранит состояние — история отправляется
 целиком на каждый шаг).
 
+Третье ограничение менее очевидно: обычный `subprocess.run(..., timeout=...)`
+на таймауте убивает только сам процесс shell, а не то, что он успел
+породить. Команда вида `sleep 999 & disown` (или просто демон, который
+форкается и отсоединяется) оставляет после себя процесс, который
+унаследовал файловые дескрипторы stdout/stderr — и `communicate()` зависнет,
+ожидая EOF от них, даже когда сам shell давно завершился и таймаут вроде
+бы должен был сработать. `start_new_session=True` кладёт shell и всё, что
+он форкнёт, в отдельную группу процессов (её id всегда совпадает с pid
+самого shell — именно поэтому `os.killpg(proc.pid, ...)` работает и без
+`os.getpgid`, даже если сам shell к этому моменту уже завершился), и по
+таймауту `SIGKILL` уходит сразу всей группе.
+
 ### 2.4 Сам цикл
 
 ```python
@@ -147,35 +162,44 @@ messages = [{"role": "user", "content": task}]
 
 for step in range(1, MAX_STEPS + 1):  # MAX_STEPS = 40
     response = client.messages.create(
-        model=MODEL, max_tokens=4096,
+        model=MODEL, max_tokens=MAX_TOKENS,  # MAX_TOKENS = 16000
         system=SYSTEM_PROMPT, tools=TOOLS, messages=messages,
     )
     messages.append({"role": "assistant", "content": response.content})
 
-    if response.stop_reason != "tool_use":
+    if response.stop_reason == "tool_use":
+        tool_results = []
         for block in response.content:
-            if block.type == "text":
-                print(block.text)
-        return  # end_turn (или что-то ещё, что не tool_use) — агент закончил
+            if block.type != "tool_use":
+                continue
+            print(f"[step {step}] {block.name}({json.dumps(block.input)})")
+            try:
+                result = HANDLERS[block.name](**block.input)
+                is_error = False
+            except Exception as e:
+                result, is_error = f"error: {e}", True
+            tool_results.append({
+                "type": "tool_result", "tool_use_id": block.id,
+                "content": str(result), "is_error": is_error,
+            })
+        messages.append({"role": "user", "content": tool_results})
+        continue
 
-    tool_results = []
     for block in response.content:
-        if block.type != "tool_use":
-            continue
-        print(f"[step {step}] {block.name}({json.dumps(block.input)})")
-        try:
-            result = HANDLERS[block.name](**block.input)
-            is_error = False
-        except Exception as e:
-            result, is_error = f"error: {e}", True
-        tool_results.append({
-            "type": "tool_result", "tool_use_id": block.id,
-            "content": str(result), "is_error": is_error,
-        })
-    messages.append({"role": "user", "content": tool_results})
+        if block.type == "text":
+            print(block.text)
+
+    if response.stop_reason == "max_tokens":
+        # Ответ оборвался на середине, а не закончился сам — партия
+        # ассистента уже дописана в messages выше как есть, просим
+        # продолжить с того места, а не считаем это концом хода.
+        messages.append({"role": "user", "content": "Continue exactly where you left off — you ran out of room."})
+        continue
+
+    return  # end_turn (или что-то ещё) — агент закончил
 ```
 
-Три вещи здесь заслуживают внимания:
+Четыре вещи здесь заслуживают внимания:
 
 - **История растёт, а не заменяется.** Каждый шаг дописывает в `messages`
   ход ассистента и результаты инструментов — API не помнит ничего между
@@ -185,6 +209,13 @@ for step in range(1, MAX_STEPS + 1):  # MAX_STEPS = 40
   отклонён или команда упала, и это часть протокола, а не авария.
   40 строк кода не пытаются угадать, что было не так, — они просто
   показывают модели ровно то, что случилось.
+- **`max_tokens` — это не конец хода, а обрыв связи.** Если модель упёрлась
+  в лимит токенов посреди ответа (в том числе посреди формирования
+  `tool_use` — тогда сам вызов инструмента может быть неполным и его
+  не запускают), это не то же самое, что `end_turn`: агент ничего не решил,
+  у него кончилось место. Партия, которую модель успела написать, уже в
+  `messages` — цикл просто просит продолжить с этого места, вместо того
+  чтобы молча оборвать работу агента на середине.
 - **Лимит шагов — это не оптимизация, а защита.** Без него агент, который
   зациклился (пишет файл, читает его же, снова пишет то же самое), будет
   жечь токены бесконечно. 40 шагов — щедрый лимит для маленькой задачи;
