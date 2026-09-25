@@ -1050,7 +1050,7 @@ type MatchLog struct {
 }
 
 // Qualify runs the four checks on a pending version, stores checks, check_log, the check match (kind
-// 'check', players: candidate, house idle, house hunter; ticks cfg.CheckTicks) with its replay, and either
+// 'check', players: candidate and house idle, 1v1; ticks cfg.CheckTicks) with its replay, and either
 // activates the version (bot.active_version_id; rating kept, sigma = rating.Refresh) or rejects it. A version
 // that is not pending is left alone and its stored result returned. err != nil only for platform failures.
 func (s *Service) Qualify(ctx context.Context, versionID string) (passed bool, checks []Check, err error)
