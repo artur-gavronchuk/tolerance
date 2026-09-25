@@ -51,6 +51,7 @@ services:
       context: ./frontend
       args:
         API_URL: http://api:8080
+        NEXT_PUBLIC_CONTACT_EMAIL: ${ARENA_CONTACT_EMAIL:-}
     restart: unless-stopped
     environment:
       API_URL: http://api:8080

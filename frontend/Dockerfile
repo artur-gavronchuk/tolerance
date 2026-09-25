@@ -11,6 +11,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # written into the routes manifest, so a runtime env var would not change it.
 ARG API_URL=http://api:8080
 ENV API_URL=$API_URL
+# The contact address on /terms, inlined into the build the same way.
+ARG NEXT_PUBLIC_CONTACT_EMAIL=
+ENV NEXT_PUBLIC_CONTACT_EMAIL=$NEXT_PUBLIC_CONTACT_EMAIL
 RUN pnpm build
 
 FROM node:24-alpine

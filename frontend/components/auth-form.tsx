@@ -48,6 +48,11 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
           {mode === 'signup' && <p className="text-xs text-muted-foreground">At least 10 characters.</p>}
         </div>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        {mode === 'signup' && (
+          <p className="text-xs text-muted-foreground">
+            By creating an account you accept the <Link className="underline" href="/terms">terms and fair play rules</Link>.
+          </p>
+        )}
         <Button type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}</Button>
       </form>
       <p className="mt-6 text-sm text-muted-foreground">
@@ -57,6 +62,9 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
           <>Already registered? <Link className="underline" href="/login">Sign in</Link></>
         )}
       </p>
+      {mode === 'login' && (
+        <p className="mt-2 text-sm text-muted-foreground"><Link className="underline" href="/terms">Terms and fair play</Link></p>
+      )}
     </main>
   )
 }
