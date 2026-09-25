@@ -108,6 +108,18 @@ func TestSubmitResult_OversizedDiffFailsTheProof(t *testing.T) {
 	if err != nil || p == nil {
 		t.Fatalf("claim: %v %+v", err, p)
 	}
+	// An oversized submit from an agent that does not own this proof must not
+	// touch it: FailOversized and SubmitResult both scope their UPDATE to
+	// agent_id, so a stranger's oversized diff matches zero rows.
+	if err := f.proofs.FailOversized(ctx, "agent_other", p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.proofs.SubmitResult(ctx, "agent_other", p.ID, proofs.ResultInput{Diff: strings.Repeat("x", 256<<10+1)}); err == nil {
+		t.Fatal("expected an error for a stranger's oversized submit")
+	}
+	if got, _ := f.proofs.Get(ctx, f.userID, p.ID); got.Status != proofs.StatusClaimed || got.FailureReason != "" {
+		t.Fatalf("a stranger's oversized submit must not fail this proof: %+v", got)
+	}
 	err = f.proofs.SubmitResult(ctx, f.agent, p.ID, proofs.ResultInput{Diff: strings.Repeat("x", 256<<10+1)})
 	problem(t, err, 413, "diff_too_large")
 	got, _ := f.proofs.Get(ctx, f.userID, p.ID)
