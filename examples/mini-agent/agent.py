@@ -222,8 +222,33 @@ def main() -> None:
             # assistant turn is already appended to messages above (exactly what the model produced before
             # running out of room), so asking it to continue from there — rather than treating this as
             # done — picks up where it left off instead of silently truncating its output or its work.
-            print(f"[step {step}] hit max_tokens, continuing", file=sys.stderr)
-            messages.append({"role": "user", "content": "Continue exactly where you left off — you ran out of room."})
+            #
+            # If the cutoff landed inside a tool_use block, that block is still in the assistant turn we
+            # just appended — the Messages API requires every tool_use to be answered by a tool_result in
+            # the very next user message, or the next request comes back 400. The call may also be
+            # incomplete (truncated JSON input), so don't run it — answer it with an error tool_result
+            # instead and let the model retry it deliberately.
+            truncated_calls = [block for block in response.content if block.type == "tool_use"]
+            if truncated_calls:
+                print(f"[step {step}] hit max_tokens mid tool_use, answering with an error", file=sys.stderr)
+                tool_results = [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": (
+                            "Your tool call was cut off by the output limit; its input may be incomplete. "
+                            "Send it again, smaller if needed — e.g. write the file in parts."
+                        ),
+                        "is_error": True,
+                    }
+                    for block in truncated_calls
+                ]
+                messages.append({"role": "user", "content": tool_results})
+            else:
+                print(f"[step {step}] hit max_tokens, continuing", file=sys.stderr)
+                messages.append(
+                    {"role": "user", "content": "Continue exactly where you left off — you ran out of room."}
+                )
             continue
 
         if response.stop_reason != "end_turn":

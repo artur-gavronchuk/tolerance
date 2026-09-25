@@ -10,8 +10,10 @@ even without the anthropic package installed.
 """
 
 import os
+import sys
 import tempfile
 import time
+import types
 import unittest
 from pathlib import Path
 
@@ -125,6 +127,125 @@ class ToolTests(unittest.TestCase):
     def test_safe_path_allows_working_directory_itself(self):
         # Should not raise for "." or the working directory root.
         self.assertEqual(self.agent.safe_path("."), self.work_dir)
+
+
+class FakeBlock:
+    """Stand-in for an SDK content block — just the attributes agent.py reads off one."""
+
+    def __init__(self, type, **kwargs):
+        self.type = type
+        self.__dict__.update(kwargs)
+
+
+class FakeResponse:
+    def __init__(self, content, stop_reason):
+        self.content = content
+        self.stop_reason = stop_reason
+
+
+class FakeMessages:
+    """Stands in for client.messages — hands back canned responses, records every request."""
+
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls = []
+
+    def create(self, **kwargs):
+        # main() keeps mutating the same `messages` list after this call returns (appending the
+        # next turn), so snapshot its current contents now rather than keep the live reference —
+        # otherwise a later assertion on calls[i]["messages"] would see future turns too.
+        snapshot = dict(kwargs)
+        snapshot["messages"] = list(kwargs["messages"])
+        self.calls.append(snapshot)
+        return self._responses.pop(0)
+
+
+class AgentLoopTests(unittest.TestCase):
+    """Exercises main()'s request loop against a fake client — no network, no API key."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.work_dir = Path(self.tmpdir.name).resolve()
+
+        self._prev_cwd = os.getcwd()
+        os.chdir(self.work_dir)
+        self.addCleanup(os.chdir, self._prev_cwd)
+
+        import importlib
+
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import agent
+
+        importlib.reload(agent)
+        self.agent = agent
+
+    def _run_main_with(self, fake_messages):
+        # main() does `import anthropic` itself and calls anthropic.Anthropic() to build its
+        # client, so a fake module standing in for the real package is enough to run the loop
+        # against canned responses — no real SDK, no network.
+        fake_client = types.SimpleNamespace(messages=fake_messages)
+        fake_anthropic = types.SimpleNamespace(Anthropic=lambda: fake_client)
+        prev_module = sys.modules.get("anthropic")
+        sys.modules["anthropic"] = fake_anthropic
+
+        def restore():
+            if prev_module is None:
+                sys.modules.pop("anthropic", None)
+            else:
+                sys.modules["anthropic"] = prev_module
+
+        self.addCleanup(restore)
+
+        prev_argv = sys.argv
+        sys.argv = ["agent.py", "do the task"]
+        self.addCleanup(setattr, sys, "argv", prev_argv)
+
+        self.agent.main()
+
+    def test_max_tokens_mid_tool_use_is_answered_with_a_tool_result(self):
+        # First response is cut off mid tool_use (stop_reason "max_tokens") — the truncated call
+        # must be answered with a matching tool_result, not executed, or the next request's history
+        # would have a tool_use with no tool_result and the real API would reject it with a 400.
+        truncated_call = FakeBlock(
+            "tool_use", id="toolu_01", name="list_files", input={"path": "."}
+        )
+        responses = [
+            FakeResponse(content=[truncated_call], stop_reason="max_tokens"),
+            FakeResponse(content=[FakeBlock("text", text="done")], stop_reason="end_turn"),
+        ]
+        fake_messages = FakeMessages(responses)
+
+        self._run_main_with(fake_messages)
+
+        self.assertEqual(len(fake_messages.calls), 2, "expected exactly one retry request")
+        second_request_messages = fake_messages.calls[1]["messages"]
+        last_user_message = second_request_messages[-1]
+        self.assertEqual(last_user_message["role"], "user")
+
+        tool_results = last_user_message["content"]
+        self.assertEqual(len(tool_results), 1)
+        result = tool_results[0]
+        self.assertEqual(result["type"], "tool_result")
+        self.assertEqual(result["tool_use_id"], "toolu_01")
+        self.assertTrue(result["is_error"])
+        self.assertIn("cut off", result["content"])
+
+    def test_max_tokens_without_tool_use_still_sends_plain_continue(self):
+        # A cutoff that doesn't land inside a tool_use block keeps the old plain-text nudge.
+        responses = [
+            FakeResponse(content=[FakeBlock("text", text="partial answer")], stop_reason="max_tokens"),
+            FakeResponse(content=[FakeBlock("text", text="done")], stop_reason="end_turn"),
+        ]
+        fake_messages = FakeMessages(responses)
+
+        self._run_main_with(fake_messages)
+
+        self.assertEqual(len(fake_messages.calls), 2)
+        last_user_message = fake_messages.calls[1]["messages"][-1]
+        self.assertEqual(last_user_message["role"], "user")
+        self.assertIsInstance(last_user_message["content"], str)
+        self.assertIn("Continue exactly where you left off", last_user_message["content"])
 
 
 if __name__ == "__main__":
