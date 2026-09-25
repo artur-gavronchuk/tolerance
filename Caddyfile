@@ -84,7 +84,15 @@
 		request_body @connectorResult {
 			max_size 2MB
 		}
-		@rest not path /api/v1/connector/proofs/*/result
+		# Bot version uploads (base64-encoded archive in a JSON body) are
+		# capped at 2 MiB by the backend (games.maxVersionUploadBytes); 4 MiB
+		# here just keeps Caddy from being the stricter limit, same reasoning
+		# as connectorResult above.
+		@tanksVersion path /api/v1/me/tanks/versions /api/v1/connector/tanks/versions
+		request_body @tanksVersion {
+			max_size 4MB
+		}
+		@rest not path /api/v1/connector/proofs/*/result /api/v1/me/tanks/versions /api/v1/connector/tanks/versions
 		request_body @rest {
 			max_size 256KB
 		}
