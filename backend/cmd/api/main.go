@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -23,7 +24,6 @@ import (
 	"tolerance/internal/games"
 	"tolerance/internal/games/match"
 	"tolerance/internal/identity"
-	"tolerance/internal/platform/captcha"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/proofs"
@@ -43,7 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 	log := baseLog.With("role", scale.role)
-	identity.SetHashConcurrency(scale.hashConcurrency)
+	slog.SetDefault(log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -55,11 +55,12 @@ func main() {
 	}
 	defer pool.Close()
 
-	ps := proofs.NewService(pool)
-	var captchaVerifier captcha.Verifier
-	if cfg.turnstileSecret != "" {
-		captchaVerifier = captcha.NewTurnstile(cfg.turnstileSecret)
+	if err := checkSchema(ctx, pool); err != nil {
+		log.Error("schema check", "err", err)
+		os.Exit(1)
 	}
+
+	ps := proofs.NewService(pool)
 
 	// The launcher is a plain struct (match.DockerLauncher / match.WithHouse
 	// wrap it, they don't touch Docker) — constructing it does no I/O — so
@@ -78,11 +79,11 @@ func main() {
 
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps, games: gamesSvc,
-		limiter:         ratelimit.New(nil),
-		ipLimiter:       ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 1_000_000),
-		keyLimiter:      ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 1_000_000),
-		longPoll:        ratelimit.NewConcurrencyLimiter(2),
-		captchaVerifier: captchaVerifier,
+		limiter:    ratelimit.New(nil),
+		providers:  providersFromConfig(cfg),
+		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 1_000_000),
+		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 1_000_000),
+		longPoll:   ratelimit.NewConcurrencyLimiter(2),
 	}
 
 	var wg sync.WaitGroup
@@ -166,4 +167,21 @@ func main() {
 	// the deferred pool.Close() above runs, so nothing is still using the
 	// pool when it closes.
 	wg.Wait()
+}
+
+// checkSchema fails fast, with a clear message, when the database predates
+// the GitHub/Google sign-in change: 00002_schema.sql was edited in place
+// (no new migration number), so a database that already ran goose still has
+// the old password_hash-only users table and no user_identities, which
+// otherwise surfaces later as confusing 500s on dev login and oauth_failed
+// on every OAuth callback.
+func checkSchema(ctx context.Context, pool *db.Pool) error {
+	var name *string
+	if err := pool.Raw().QueryRow(ctx, `SELECT to_regclass('user_identities')`).Scan(&name); err != nil {
+		return fmt.Errorf("check schema: %w", err)
+	}
+	if name == nil {
+		return errors.New("database schema is out of date: user_identities is missing; recreate the database (make reset)")
+	}
+	return nil
 }

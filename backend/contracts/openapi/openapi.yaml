@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: tolerance API
   version: "0.4.0"
-  description: Slice 1 — sign up, connect an agent, run a proof.
+  description: Slice 1 — sign in with GitHub or Google, connect an agent, run a proof.
 servers:
   - url: /api/v1
 security:
@@ -11,28 +11,70 @@ security:
   - {}
 
 paths:
-  /auth/signup:
-    post:
-      operationId: signup
+  /auth/providers:
+    get:
+      operationId: listAuthProviders
       security: []
-      requestBody: { $ref: "#/components/requestBodies/SignupCredentials" }
       responses:
-        "201": { $ref: "#/components/responses/UserEnvelope" }
+        "200":
+          description: Sign-in options this server offers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [providers, dev_login]
+                properties:
+                  providers:
+                    type: array
+                    items: { type: string, enum: [github, google] }
+                  dev_login: { type: boolean }
+        "429": { $ref: "#/components/responses/Problem" }
+  /auth/dev:
+    post:
+      operationId: devLogin
+      description: Development sign-in by email; exists only when ARENA_DEV_LOGIN=true.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/UserEnvelope" }
         "403": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
         "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
-  /auth/login:
-    post:
-      operationId: login
+  /auth/{provider}/start:
+    get:
+      operationId: oauthStart
       security: []
-      requestBody: { $ref: "#/components/requestBodies/Credentials" }
+      parameters:
+        - { name: provider, in: path, required: true, schema: { type: string } }
+        - { name: next, in: query, required: false, schema: { type: string } }
       responses:
-        "200": { $ref: "#/components/responses/UserEnvelope" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "413": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
+        "302": { description: "To the provider's consent screen, or to /login?error=rate_limited" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /auth/{provider}/callback:
+    get:
+      operationId: oauthCallback
+      security: []
+      parameters:
+        - { name: provider, in: path, required: true, schema: { type: string } }
+        - { name: code, in: query, required: false, schema: { type: string } }
+        - { name: state, in: query, required: false, schema: { type: string } }
+        - { name: error, in: query, required: false, schema: { type: string } }
+      responses:
+        "302":
+          description: >-
+            Signed in: to the start's next path with the session cookie. Failed: to
+            /login?error= one of oauth_denied, oauth_state, oauth_failed, email_unverified, rate_limited.
+        "404": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
   /auth/logout:
     post:
@@ -541,16 +583,6 @@ components:
     cookieAuth: { type: apiKey, in: cookie, name: arena_session }
     apiKeyAuth: { type: http, scheme: bearer }
   requestBodies:
-    Credentials:
-      required: true
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/Credentials" }
-    SignupCredentials:
-      required: true
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/SignupCredentials" }
     ArchiveUpload:
       required: true
       content:
@@ -586,23 +618,6 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Proof" }
   schemas:
-    Credentials:
-      type: object
-      required: [email, password]
-      properties:
-        email: { type: string }
-        password: { type: string }
-    SignupCredentials:
-      allOf:
-        - { $ref: "#/components/schemas/Credentials" }
-        - type: object
-          properties:
-            turnstile_token:
-              type: string
-              description: >-
-                Cloudflare Turnstile token. Optional: accepted and ignored
-                when the deployment has no ARENA_TURNSTILE_SECRET
-                configured; required and verified otherwise.
     Problem:
       type: object
       required: [code, message]

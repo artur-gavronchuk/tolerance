@@ -90,18 +90,23 @@ services:
       # headers via trusted_proxies in the Caddyfile) instead of the socket
       # peer address, which would otherwise always be Caddy's container IP.
       ARENA_TRUST_PROXY: "true"
-      # Empty means "let the backend default to NumCPU".
-      ARENA_HASH_CONCURRENCY: ${ARENA_HASH_CONCURRENCY:-}
       # Separate Prometheus listener; not published to the host, only
       # reachable from the prometheus container on the compose network.
       ARENA_METRICS_ADDR: 0.0.0.0:9091
-      # Abuse controls; ARENA_TURNSTILE_SECRET empty disables the captcha
-      # check, so this stays safe to leave unset in dev.
       ARENA_RATE_IP_RPS: ${ARENA_RATE_IP_RPS:-20}
       ARENA_RATE_IP_BURST: ${ARENA_RATE_IP_BURST:-60}
       ARENA_RATE_KEY_RPS: ${ARENA_RATE_KEY_RPS:-5}
       ARENA_RATE_KEY_BURST: ${ARENA_RATE_KEY_BURST:-20}
-      ARENA_TURNSTILE_SECRET: ${ARENA_TURNSTILE_SECRET:-}
+      # Sign-in: dev-only email login, and GitHub/Google OAuth when both a
+      # provider's client id and secret are set. ARENA_DEV_LOGIN must never
+      # be true in production - loadConfig refuses it alongside secure
+      # cookies, and `make up` refuses it too (see the Makefile).
+      ARENA_DEV_LOGIN: ${ARENA_DEV_LOGIN:-false}
+      ARENA_PUBLIC_URL: ${ARENA_PUBLIC_URL:-http://localhost:3000}
+      ARENA_GITHUB_CLIENT_ID: ${ARENA_GITHUB_CLIENT_ID:-}
+      ARENA_GITHUB_CLIENT_SECRET: ${ARENA_GITHUB_CLIENT_SECRET:-}
+      ARENA_GOOGLE_CLIENT_ID: ${ARENA_GOOGLE_CLIENT_ID:-}
+      ARENA_GOOGLE_CLIENT_SECRET: ${ARENA_GOOGLE_CLIENT_SECRET:-}
     ports:
       # Removed in prod by deploy/compose.prod.yml (ports: !reset []) once
       # there's more than one replica; Caddy is the only public entrypoint
@@ -124,10 +129,6 @@ services:
       ARENA_ROLE: worker
       ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
-      ARENA_WORK_DIR: /var/lib/arena/work
-      ARENA_SANDBOX: docker
-      # Parallel sandbox runs; keep at 1 on small boxes, raise once there's
-      # spare CPU/RAM (each sandbox run can use up to ~1 vCPU/1 GB).
       ARENA_WORKER_CONCURRENCY: ${ARENA_WORKER_CONCURRENCY:-1}
       # Tanks bot matches: the runtime image `make up`/`bot-image` builds
       # (see Makefile), how often the games worker schedules a tick, and how
@@ -164,7 +165,6 @@ services:
       args:
         API_URL: http://api:8080
         NEXT_PUBLIC_CONTACT_EMAIL: ${ARENA_CONTACT_EMAIL:-}
-        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${ARENA_TURNSTILE_SITE_KEY:-}
     restart: unless-stopped
     logging: *default-logging
     environment:

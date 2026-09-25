@@ -3,10 +3,23 @@
 CREATE TABLE users (
     id text PRIMARY KEY,
     email text NOT NULL UNIQUE,
-    password_hash text NOT NULL,
     role text NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- One row per external account. subject is the provider's stable user id;
+-- 'dev' identities exist only where ARENA_DEV_LOGIN is on.
+CREATE TABLE user_identities (
+    provider text NOT NULL CHECK (provider IN ('github', 'google', 'dev')),
+    subject text NOT NULL,
+    user_id text NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    email text NOT NULL,
+    login text NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    last_login_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (provider, subject)
+);
+CREATE INDEX user_identities_user_idx ON user_identities (user_id);
 
 -- id is the SHA-256 hex of the cookie token; the token itself is never stored.
 CREATE TABLE sessions (
@@ -131,4 +144,5 @@ DROP TABLE agent_presence;
 DROP TABLE api_keys;
 DROP TABLE agents;
 DROP TABLE sessions;
+DROP TABLE IF EXISTS user_identities;
 DROP TABLE users;

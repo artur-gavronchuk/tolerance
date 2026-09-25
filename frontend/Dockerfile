@@ -14,10 +14,6 @@ ENV API_URL=$API_URL
 # The contact address on /terms, inlined into the build the same way.
 ARG NEXT_PUBLIC_CONTACT_EMAIL=
 ENV NEXT_PUBLIC_CONTACT_EMAIL=$NEXT_PUBLIC_CONTACT_EMAIL
-# Cloudflare Turnstile site key for the signup form, inlined the same way.
-# Empty renders no widget and sends nothing extra (dev unchanged).
-ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=
-ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 RUN pnpm build
 
 FROM node:24-alpine

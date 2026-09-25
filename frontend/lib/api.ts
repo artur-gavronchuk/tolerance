@@ -44,9 +44,6 @@ export function friendlyMessage(err: unknown): string {
     if (err.status === 413 || err.code === 'payload_too_large') {
       return 'That request is too large.'
     }
-    if (err.status === 403 && err.code === 'captcha_failed') {
-      return 'We could not verify you’re not a robot. Please try again.'
-    }
     return err.message
   }
   return 'Something went wrong. Please try again.'

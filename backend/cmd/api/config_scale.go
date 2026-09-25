@@ -9,17 +9,15 @@ import (
 	"errors"
 	"net"
 	"os"
-	"runtime"
 	"strconv"
 )
 
 // scaleConfig is the deployment-shape and rate-limiting configuration: what
-// role this process plays, how many proof workers and concurrent argon2
-// hashes it runs, where (if anywhere) it exposes Prometheus metrics, and
-// the request-rate ceilings for the global rate-limiting middleware.
+// role this process plays, how many proof workers it runs, where (if
+// anywhere) it exposes Prometheus metrics, and the request-rate ceilings
+// for the global rate-limiting middleware.
 type scaleConfig struct {
 	role              string // "all" | "api" | "worker"
-	hashConcurrency   int
 	workerConcurrency int
 	metricsAddr       string // "" disables the metrics listener
 	trustProxy        bool
@@ -33,7 +31,6 @@ type scaleConfig struct {
 func loadScaleConfig() (scaleConfig, error) {
 	sc := scaleConfig{
 		role:              env("ARENA_ROLE", "all"),
-		hashConcurrency:   envInt("ARENA_HASH_CONCURRENCY", runtime.NumCPU()),
 		workerConcurrency: envInt("ARENA_WORKER_CONCURRENCY", 1),
 		metricsAddr:       os.Getenv("ARENA_METRICS_ADDR"),
 		trustProxy:        os.Getenv("ARENA_TRUST_PROXY") == "true",
@@ -45,8 +42,8 @@ func loadScaleConfig() (scaleConfig, error) {
 	if sc.role != "all" && sc.role != "api" && sc.role != "worker" {
 		return scaleConfig{}, errors.New("ARENA_ROLE must be all, api or worker")
 	}
-	if sc.hashConcurrency < 1 || sc.workerConcurrency < 1 {
-		return scaleConfig{}, errors.New("ARENA_HASH_CONCURRENCY and ARENA_WORKER_CONCURRENCY must be at least 1")
+	if sc.workerConcurrency < 1 {
+		return scaleConfig{}, errors.New("ARENA_WORKER_CONCURRENCY must be at least 1")
 	}
 	if sc.metricsAddr != "" {
 		host, _, err := net.SplitHostPort(sc.metricsAddr)

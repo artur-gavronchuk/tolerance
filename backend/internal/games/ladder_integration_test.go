@@ -9,6 +9,7 @@ import (
 
 	"tolerance/internal/games"
 	"tolerance/internal/games/tanks"
+	"tolerance/internal/identity"
 	"tolerance/internal/platform/dbtest"
 	"tolerance/internal/platform/idgen"
 )
@@ -31,7 +32,7 @@ if __name__ == "__main__":
 func newUserBotWithArchive(t *testing.T, f fixture, email, name string, archive []byte) (userID, botID string) {
 	t.Helper()
 	ctx := context.Background()
-	u, _, err := f.users.Signup(ctx, email, "longenough1")
+	u, _, err := f.users.SignIn(ctx, identity.Identity{Provider: "dev", Subject: email, Email: email, EmailVerified: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -573,7 +574,7 @@ func TestMatchLogOnlyOwnSlot(t *testing.T) {
 		t.Fatalf("match id = %q, want %q", logEntry.MatchID, matchID)
 	}
 
-	other, _, err := f.users.Signup(ctx, "other@example.com", "longenough1")
+	other, _, err := f.users.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "other@example.com", Email: "other@example.com", EmailVerified: true})
 	if err != nil {
 		t.Fatal(err)
 	}

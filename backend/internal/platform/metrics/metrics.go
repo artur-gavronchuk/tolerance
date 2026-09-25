@@ -155,20 +155,6 @@ func MatchFinished(result string) { matchesTotal.WithLabelValues(result).Inc() }
 // where issuing one UPDATE already covers every match instead of finishing them one at a time.
 func MatchesFinishedAdd(result string, n int) { matchesTotal.WithLabelValues(result).Add(float64(n)) }
 
-// ---- password hashing ----
-
-var (
-	PasswordHashInflight = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "arena_password_hash_inflight",
-		Help: "Number of argon2id hash/verify operations currently running.",
-	})
-	PasswordHashWaitSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
-		Name:    "arena_password_hash_wait_seconds",
-		Help:    "Time spent waiting to acquire the argon2id concurrency semaphore, in seconds.",
-		Buckets: prometheus.DefBuckets,
-	})
-)
-
 // ---- rate limiting ----
 
 var rateLimited = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -178,14 +164,15 @@ var rateLimited = promauto.NewCounterVec(prometheus.CounterOpts{
 
 func RateLimited(scope string) { rateLimited.WithLabelValues(scope).Inc() }
 
-// ---- captcha ----
+// ---- oauth ----
 
-var captchaFailures = promauto.NewCounter(prometheus.CounterOpts{
-	Name: "arena_captcha_failures_total",
-	Help: "Total signup attempts rejected for failing Turnstile captcha verification.",
-})
+var oauthLogins = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "arena_oauth_logins_total",
+	Help: "OAuth sign-in attempts completed at the callback, by provider and result (ok, denied, state, failed, email_unverified, rate_limited).",
+}, []string{"provider", "result"})
 
-func CaptchaFailure() { captchaFailures.Inc() }
+// OAuthLogin records one OAuth callback outcome.
+func OAuthLogin(provider, result string) { oauthLogins.WithLabelValues(provider, result).Inc() }
 
 // ---- build info ----
 
