@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { use, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Check, Copy } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/page-header'
@@ -19,30 +19,55 @@ function ratingDelta(before: number | null, after: number | null): string {
   return d === 0 ? '±0' : d > 0 ? `+${d}` : `${d}`
 }
 
+type ReplayState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'ready'; replay: Replay }
+  | { kind: 'expired' }
+  | { kind: 'unsupported' }
+  | { kind: 'error'; message: string }
+
 export default function MatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [match, setMatch] = useState<MatchView | null>(null)
-  const [replay, setReplay] = useState<Replay | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [replayState, setReplayState] = useState<ReplayState>({ kind: 'idle' })
   const [copied, setCopied] = useState(false)
+  const aliveRef = useRef(true)
+
+  const loadReplay = useCallback(async (matchId: string) => {
+    if (typeof DecompressionStream === 'undefined') {
+      setReplayState({ kind: 'unsupported' })
+      return
+    }
+    setReplayState({ kind: 'loading' })
+    try {
+      const r = await fetchReplay(matchId)
+      if (aliveRef.current) setReplayState({ kind: 'ready', replay: r })
+    } catch (e) {
+      if (!aliveRef.current) return
+      if (e instanceof ApiError && e.status === 404) setReplayState({ kind: 'expired' })
+      else setReplayState({ kind: 'error', message: e instanceof ApiError ? e.message : 'Could not load the replay.' })
+    }
+  }, [])
 
   useEffect(() => {
-    let cancelled = false
+    aliveRef.current = true
     void api<MatchView>(`/tanks/matches/${id}`)
       .then((m) => {
-        if (cancelled) return
+        if (!aliveRef.current) return
         setMatch(m)
-        if (m.has_replay) {
-          void fetchReplay(id)
-            .then((r) => { if (!cancelled) setReplay(r) })
-            .catch(() => {})
-        }
+        if (m.has_replay) void loadReplay(id)
+        else setReplayState({ kind: 'expired' })
       })
-      .catch((e) => setError((e as ApiError).status === 404 ? 'There is no match with this id.' : (e as ApiError).message))
+      .catch((e) => {
+        if (!aliveRef.current) return
+        setError(e instanceof ApiError && e.status === 404 ? 'There is no match with this id.' : (e as ApiError).message)
+      })
     return () => {
-      cancelled = true
+      aliveRef.current = false
     }
-  }, [id])
+  }, [id, loadReplay])
 
   async function copyLink() {
     try {
@@ -92,10 +117,20 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       </PageHeader>
 
       <div className="mt-8">
-        {replay ? (
-          <ReplayPlayer replay={replay} />
-        ) : match.has_replay ? (
+        {replayState.kind === 'ready' ? (
+          <ReplayPlayer replay={replayState.replay} />
+        ) : replayState.kind === 'loading' ? (
           <Skeleton className="aspect-[3/2] w-full rounded-[18px]" />
+        ) : replayState.kind === 'unsupported' ? (
+          <div className="rounded-[18px] border border-dashed border-input px-6 py-14 text-center text-sm text-muted-foreground">
+            Your browser can&apos;t open replays here — it&apos;s missing gzip decompression support. Try a
+            recent version of Chrome, Firefox, Safari or Edge.
+          </div>
+        ) : replayState.kind === 'error' ? (
+          <div className="flex flex-col items-center gap-4 rounded-[18px] border border-dashed border-input px-6 py-14 text-center">
+            <p className="text-sm text-destructive">Couldn&apos;t load the replay: {replayState.message}</p>
+            <Button variant="outline" onClick={() => void loadReplay(id)}>Retry</Button>
+          </div>
         ) : (
           <div className="rounded-[18px] border border-dashed border-input px-6 py-14 text-center text-sm text-muted-foreground">
             Replay expired. Replays are kept for 3 days unless the match is featured.

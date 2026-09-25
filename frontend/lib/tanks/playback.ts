@@ -112,10 +112,27 @@ export class Clock {
   private speed = 1
   private readonly maxTick: number
   private ended = false
+  private readonly listeners = new Set<() => void>()
   onEnd?: () => void
 
   constructor(private readonly replay: Replay) {
     this.maxTick = replay.frames.length ? replay.frames[replay.frames.length - 1].t : 0
+  }
+
+  // Lets a renderer (Canvas2D, and task 15's Scene3D) react to play, pause,
+  // seek and speed changes immediately instead of polling now() on a timer
+  // — needed so a paused viewer can stop its render loop and still redraw
+  // exactly once when the state actually changes (a seek, a resize, a
+  // resume), rather than looping at full rate for nothing.
+  subscribe(fn: () => void): () => void {
+    this.listeners.add(fn)
+    return () => {
+      this.listeners.delete(fn)
+    }
+  }
+
+  private notify(): void {
+    for (const fn of this.listeners) fn()
   }
 
   play(): void {
@@ -124,12 +141,14 @@ export class Clock {
     this.ended = false
     this.playStartWall = performance.now()
     this.playStartTick = this.tickPos
+    this.notify()
   }
 
   pause(): void {
     if (!this.playing) return
     this.tickPos = this.now()
     this.playing = false
+    this.notify()
   }
 
   seek(tick: number): void {
@@ -140,6 +159,7 @@ export class Clock {
       this.playStartWall = performance.now()
       this.playStartTick = clamped
     }
+    this.notify()
   }
 
   setSpeed(x: number): void {
@@ -149,6 +169,7 @@ export class Clock {
       this.playStartTick = this.tickPos
     }
     this.speed = x
+    this.notify()
   }
 
   now(): number {
@@ -162,7 +183,10 @@ export class Clock {
         this.tickPos = this.maxTick
         // Deferred: firing mid-read (during a render's now() call) could
         // trigger a state update in the same tick as this read.
-        queueMicrotask(() => this.onEnd?.())
+        queueMicrotask(() => {
+          this.notify()
+          this.onEnd?.()
+        })
       }
       return this.maxTick
     }

@@ -21,7 +21,7 @@ export default function ReplayFilePage() {
       setReplay(r)
       setError(null)
     } catch {
-      setError('Could not read that file. Expected a replay written by `arena tanks play` (.json or .json.gz).')
+      setError(`Could not read that file. Expected a replay written by \`${CLI} tanks play\` (.json or .json.gz).`)
     }
   }
 

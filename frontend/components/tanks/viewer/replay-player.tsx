@@ -57,20 +57,43 @@ export function ReplayPlayer({ replay, startTick = 0, live = false, autoPlay = t
   const [playing, setPlaying] = useState(clock.isPlaying())
   const [speed, setSpeed] = useState(1)
   const [tick, setTick] = useState(startTick)
+  const rafRef = useRef(0)
   const lastUiRef = useRef(0)
 
+  // The UI (scrubber, mm:ss, scoreboard, event feed) needs a continuous
+  // stream of tick updates while playing, but nothing changes while
+  // paused — so the loop only runs while the clock is actually playing,
+  // driven on and off by Clock.subscribe rather than polling forever.
+  // Pause/seek/speed changes update state immediately via the same
+  // subscription, without waiting for the next animation frame.
   useEffect(() => {
-    let raf = 0
     function loop(nowMs: number) {
       if (nowMs - lastUiRef.current > 90) {
         lastUiRef.current = nowMs
         setTick(clock.now())
-        setPlaying(clock.isPlaying())
       }
-      raf = requestAnimationFrame(loop)
+      rafRef.current = requestAnimationFrame(loop)
     }
-    raf = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf)
+    function start() {
+      if (rafRef.current) return
+      lastUiRef.current = 0
+      rafRef.current = requestAnimationFrame(loop)
+    }
+    function stop() {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = 0
+    }
+    const unsubscribe = clock.subscribe(() => {
+      setPlaying(clock.isPlaying())
+      setTick(clock.now())
+      if (clock.isPlaying()) start()
+      else stop()
+    })
+    if (clock.isPlaying()) start()
+    return () => {
+      stop()
+      unsubscribe()
+    }
   }, [clock])
 
   const feed = useMemo(() => recentEvents(replay, tick, 8), [replay, tick])
@@ -82,8 +105,6 @@ export function ReplayPlayer({ replay, startTick = 0, live = false, autoPlay = t
   function handlePlayPause() {
     if (clock.isPlaying()) clock.pause()
     else clock.play()
-    setPlaying(clock.isPlaying())
-    setTick(clock.now())
   }
   function handleSpeed(x: number) {
     clock.setSpeed(x)
@@ -91,7 +112,6 @@ export function ReplayPlayer({ replay, startTick = 0, live = false, autoPlay = t
   }
   function handleSeek(t: number) {
     clock.seek(t)
-    setTick(clock.now())
   }
 
   return (

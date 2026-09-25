@@ -221,8 +221,18 @@ export default function TanksDocsPage() {
         <ul className="flex list-disc flex-col gap-1.5 pl-5">
           <li><span className="font-medium text-foreground">package</span> — the archive is well-formed, <code>bot.json</code> parses, and <code>entry</code> exists.</li>
           <li><span className="font-medium text-foreground">starts</span> — the bot answers <code>ready</code> within 5 seconds.</li>
-          <li><span className="font-medium text-foreground">stable</span> — in a 600-tick trial match against house bots, it answers at least 95% of the ticks it was alive for, and doesn&apos;t crash.</li>
-          <li><span className="font-medium text-foreground">beats_idle</span> — it finishes above <code>house:idle</code>, the bot that does nothing, in that trial match.</li>
+          <li>
+            <span className="font-medium text-foreground">stable</span> — in a 600-tick, 1-on-1 trial match against{' '}
+            <code>house:idle</code> only (not <code>house:hunter</code> — a second, aggressive opponent made the outcome
+            depend heavily on spawn geometry, rejecting perfectly good bots at random), it answers at least 95% of the
+            ticks it was alive for, and doesn&apos;t crash. Stray stdout lines don&apos;t fail this check on their own,
+            but they show up in the report with a hint to use stderr instead.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">beats_idle</span> — it finishes above <code>house:idle</code>{' '}
+            in that same trial match. A bot that does nothing ties <code>house:idle</code> for first place and fails
+            this check.
+          </li>
         </ul>
         <p>All four pass: the version goes active and plays in the ladder. Any one fails: the version is rejected and your previous active version, if any, keeps playing.</p>
       </Section>

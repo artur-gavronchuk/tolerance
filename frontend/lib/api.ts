@@ -29,13 +29,10 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
   })
+  if (!res.ok) await throwProblem(res)
   if (res.status === 204) return undefined as T
   const text = await res.text()
-  const body = text ? JSON.parse(text) : null
-  if (!res.ok) {
-    throw new ApiError(res.status, body?.code ?? 'error', body?.message ?? res.statusText)
-  }
-  return body as T
+  return (text ? JSON.parse(text) : null) as T
 }
 
 export const post = <T,>(path: string, body?: unknown) =>
