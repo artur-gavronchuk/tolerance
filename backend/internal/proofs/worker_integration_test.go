@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"tolerance/internal/platform/dbtest"
 	"tolerance/internal/platform/jobs"
 	"tolerance/internal/proofs"
 	"tolerance/internal/proofs/sandbox"
@@ -362,5 +363,69 @@ func TestRetry_ResubmitRunsAgain(t *testing.T) {
 	got, _ := f.proofs.Get(ctx, f.userID, id)
 	if got.Status != proofs.StatusPassed || len(fake.Calls) != 2 {
 		t.Fatalf("second run: %+v calls=%d", got, len(fake.Calls))
+	}
+}
+
+// syncGameBotTask upserts a kind = game_bot proof task with the given repo files and an empty hidden
+// tarball, the way games.Sync sets up tanks-bot in the real server - this package doesn't depend on
+// games, so it builds a minimal one directly.
+func syncGameBotTask(t *testing.T, d *dbtest.DB, slug string, repoFiles map[string][]byte) {
+	t.Helper()
+	repoTar, err := proofs.TarFiles(repoFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hiddenTar, err := proofs.TarFiles(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := proofs.Task{
+		Slug: slug, Title: "Improve your bot", Language: "python", Kind: proofs.KindGameBot,
+		Image: "arena-tanks-bot:1", RunCmd: "true", AgentTimeoutS: 1200, SandboxTimeoutS: 120,
+		TaskMD: "task", RepoTar: repoTar, HiddenTar: hiddenTar,
+	}
+	if err := proofs.SyncCatalog(context.Background(), d.AdminPool, []proofs.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestGameBotProofWithoutJudgeIsInfra: RunProof on a game_bot proof without SetGameBotJudge configured
+// must not silently treat the proof as an ordinary one - it is a platform error (the job retries) that
+// ends in infra_error once retries are exhausted, exactly like a runner that can't reach docker.
+func TestGameBotProofWithoutJudgeIsInfra(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	ctx := context.Background()
+	f := setup(t)
+	syncGameBotTask(t, f.d, "tanks-bot", map[string][]byte{"README.md": []byte("old\n")})
+	_ = f.agents.Heartbeat(ctx, f.agent, "0.1", "h")
+
+	p, err := f.proofs.CreateWithRepo(ctx, f.userID, "tanks-bot", nil)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	claimed, _, err := f.proofs.Claim(ctx, f.agent)
+	if err != nil || claimed == nil {
+		t.Fatalf("claim: %v %+v", err, claimed)
+	}
+	diff := "--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n"
+	if err := f.proofs.SubmitResult(ctx, f.agent, p.ID, proofs.ResultInput{Diff: diff}); err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	w := proofs.NewWorker(f.d.AppPool, sandbox.PassAll{}, t.TempDir(), log)
+	// No SetGameBotJudge call.
+	if err := w.RunProof(ctx, p.ID); err == nil {
+		t.Fatal("expected an error: no game bot judge is configured")
+	}
+	got, _ := f.proofs.Get(ctx, f.userID, p.ID)
+	if got.Status != proofs.StatusRunningSandbox {
+		t.Fatalf("before giving up the proof stays running_sandbox: %+v", got)
+	}
+	if err := w.MarkInfraError(ctx, p.ID, "no game bot judge configured"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = f.proofs.Get(ctx, f.userID, p.ID)
+	if got.Status != proofs.StatusInfraError || got.FailureReason == "" {
+		t.Fatalf("%+v", got)
 	}
 }

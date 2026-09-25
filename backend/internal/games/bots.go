@@ -335,23 +335,18 @@ func (s *Service) agentNameFor(ctx context.Context, tx pgx.Tx, userID string) (s
 	return name, err
 }
 
-// uploadVersion is the shared body of UploadVersion and UploadVersionForAgent: normalize the archive,
-// resolve (or create) the owner's bot, enforce the daily upload limit, insert a pending version and
-// enqueue its check.
-func (s *Service) uploadVersion(ctx context.Context, userID string, archive []byte) (VersionView, error) {
-	packed, m, err := botpkg.Normalize(archive)
-	if err != nil {
-		var pkgErr *botpkg.Error
-		if errors.As(err, &pkgErr) {
-			return VersionView{}, httpx.WithField(http.StatusUnprocessableEntity, "invalid_package", pkgErr.Msg, "archive", "invalid")
-		}
-		return VersionView{}, err
-	}
+// createVersion is the shared body of uploadVersion (source 'upload') and JudgeProof (source 'agent'):
+// resolve (or create) the owner's bot, enforce the daily upload limit (uploads only - an agent run is
+// already limited by proofs' own daily cap), insert a pending version with the given source and optional
+// proofID, and enqueue its check_bot job for an upload. An agent run's check runs synchronously right
+// after this call (see JudgeProof), so it does not enqueue a second, redundant check_bot job for the same
+// version - Qualify is idempotent either way, but there is no reason to spend a second check match on it.
+func (s *Service) createVersion(ctx context.Context, userID string, packed []byte, m botpkg.Manifest, source string, proofID *string) (VersionView, error) {
 	sum := sha256.Sum256(packed)
 	sha := hex.EncodeToString(sum[:])
 
 	var v VersionView
-	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		agentName, err := s.agentNameFor(ctx, tx, userID)
 		if err != nil {
 			return err
@@ -361,33 +356,40 @@ func (s *Service) uploadVersion(ctx context.Context, userID string, archive []by
 			return err
 		}
 		// Lock the bot row for the rest of this transaction before computing the next version number, so
-		// two concurrent uploads for the same bot serialize instead of both computing the same
+		// two concurrent version creations for the same bot serialize instead of both computing the same
 		// coalesce(max(number), 0) + 1 and racing on the (bot_id, number) unique constraint.
 		if _, err := tx.Exec(ctx, `SELECT 1 FROM game_bots WHERE id = $1 FOR UPDATE`, botID); err != nil {
 			return err
 		}
-		var count int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM bot_versions WHERE bot_id = $1 AND source = 'upload' AND created_at > now() - interval '24 hours'`, botID).Scan(&count); err != nil {
-			return err
-		}
-		if count >= maxUploadsPerBotPerDay {
-			return httpx.New(http.StatusTooManyRequests, "upload_limit", "At most 20 uploads per bot per day")
+		if source == "upload" {
+			var count int
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM bot_versions WHERE bot_id = $1 AND source = 'upload' AND created_at > now() - interval '24 hours'`, botID).Scan(&count); err != nil {
+				return err
+			}
+			if count >= maxUploadsPerBotPerDay {
+				return httpx.New(http.StatusTooManyRequests, "upload_limit", "At most 20 uploads per bot per day")
+			}
 		}
 		var number int
 		if err := tx.QueryRow(ctx, `SELECT coalesce(max(number), 0) + 1 FROM bot_versions WHERE bot_id = $1`, botID).Scan(&number); err != nil {
 			return err
 		}
 		id := idgen.New("bv")
-		v, err = scanVersion(tx.QueryRow(ctx, `INSERT INTO bot_versions (id, bot_id, number, source, language, entry, archive, archive_sha256, status)
-			VALUES ($1, $2, $3, 'upload', $4, $5, $6, $7, 'pending') RETURNING `+versionCols,
-			id, botID, number, m.Language, m.Entry, packed, sha))
+		v, err = scanVersion(tx.QueryRow(ctx, `INSERT INTO bot_versions (id, bot_id, number, source, language, entry, archive, archive_sha256, proof_id, status)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending') RETURNING `+versionCols,
+			id, botID, number, source, m.Language, m.Entry, packed, sha, proofID))
 		if err != nil {
 			return err
 		}
-		if _, err := jobs.Enqueue(ctx, tx, "check_bot", CheckBotPayload{VersionID: id}, ""); err != nil {
-			return err
+		action := "bot_version.uploaded"
+		if source == "upload" {
+			if _, err := jobs.Enqueue(ctx, tx, "check_bot", CheckBotPayload{VersionID: id}, ""); err != nil {
+				return err
+			}
+		} else {
+			action = "bot_version.agent_run"
 		}
-		return audit.Record(ctx, tx, audit.Event{ActorID: userID, Action: "bot_version.uploaded", AggregateKind: "bot_version", AggregateID: id, RequestID: httpx.RequestID(ctx)})
+		return audit.Record(ctx, tx, audit.Event{ActorID: userID, Action: action, AggregateKind: "bot_version", AggregateID: id, RequestID: httpx.RequestID(ctx)})
 	})
 	if isUniqueViolation(err, "bot_versions_bot_id_number_key") || isUniqueViolation(err, "game_bots_owner_idx") {
 		// Backstop: the FOR UPDATE lock (version numbering) and the advisory lock in ensureBot (first bot
@@ -399,6 +401,20 @@ func (s *Service) uploadVersion(ctx context.Context, userID string, archive []by
 		return VersionView{}, err
 	}
 	return v, nil
+}
+
+// uploadVersion is the shared body of UploadVersion and UploadVersionForAgent: normalize the archive
+// (botpkg.Normalize) and hand it to createVersion as source 'upload'.
+func (s *Service) uploadVersion(ctx context.Context, userID string, archive []byte) (VersionView, error) {
+	packed, m, err := botpkg.Normalize(archive)
+	if err != nil {
+		var pkgErr *botpkg.Error
+		if errors.As(err, &pkgErr) {
+			return VersionView{}, httpx.WithField(http.StatusUnprocessableEntity, "invalid_package", pkgErr.Msg, "archive", "invalid")
+		}
+		return VersionView{}, err
+	}
+	return s.createVersion(ctx, userID, packed, m, "upload", nil)
 }
 
 // UploadVersion normalizes archive (botpkg.Normalize), creates the caller's bot if they don't have one

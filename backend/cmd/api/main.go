@@ -48,9 +48,10 @@ func main() {
 		runner = sandbox.PassAll{}
 		launcher = match.WithHouse(match.ProcessLauncher{})
 	}
-	go proofs.NewWorker(pool, runner, cfg.workDir, log).Run(ctx)
-
+	worker := proofs.NewWorker(pool, runner, cfg.workDir, log)
 	gamesSvc := games.NewService(pool, ps, launcher, log, games.Config{WorkDir: cfg.workDir})
+	worker.SetGameBotJudge(gamesSvc)
+	go worker.Run(ctx)
 	go games.NewWorker(gamesSvc, pool, games.WorkerConfig{Interval: cfg.matchInterval, Concurrency: cfg.matchConcurrency}, log).Run(ctx)
 
 	server := &http.Server{
