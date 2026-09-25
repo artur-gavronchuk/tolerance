@@ -51,6 +51,7 @@ func main() {
 	worker := proofs.NewWorker(pool, runner, cfg.workDir, log)
 	gamesSvc := games.NewService(pool, ps, launcher, log, games.Config{WorkDir: cfg.workDir})
 	worker.SetGameBotJudge(gamesSvc)
+	d.games = gamesSvc
 	go worker.Run(ctx)
 	go games.NewWorker(gamesSvc, pool, games.WorkerConfig{Interval: cfg.matchInterval, Concurrency: cfg.matchConcurrency}, log).Run(ctx)
 
