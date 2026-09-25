@@ -165,6 +165,10 @@ while True:
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
+	// Close is idempotent, so this cleanup runs harmlessly after the explicit Close below too; it just
+	// makes sure the runaway process (and its "sleep 60" child) doesn't outlive the test if an assertion
+	// fails first.
+	t.Cleanup(func() { bot.Close() })
 
 	select {
 	case line, ok := <-bot.Lines():

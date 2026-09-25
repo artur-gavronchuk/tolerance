@@ -15,8 +15,13 @@ const maxLineBytes = 64 * 1024
 // output, the preceding "\r" too. It returns a truncated line (see maxLineBytes) rather than growing
 // without bound. A final line with no trailing newline is still returned once, before the error (usually
 // io.EOF) that ended the read; after that, err is returned with a nil line.
+//
+// A returned line is nil only alongside a non-nil err (nothing left to read). An empty line ("\n" with
+// nothing before it) is a real, valid line and comes back as a non-nil, zero-length slice with a nil
+// err — callers must branch on err, not on the line being nil, to tell "no more input" from "the bot
+// printed a blank line" (the latter still counts toward noise once it fails to parse as a command).
 func readLine(r *bufio.Reader, max int) ([]byte, error) {
-	var buf []byte
+	buf := []byte{}
 	discarding := false
 	for {
 		b, err := r.ReadByte()

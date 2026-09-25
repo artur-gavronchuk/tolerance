@@ -87,7 +87,6 @@ type processBot struct {
 	closing chan struct{} // closed by the first Close, so a full lines buffer stops blocking readStdout
 
 	closeOnce sync.Once
-	stdinOnce sync.Once
 }
 
 // readStdout drains stdout line by line until it ends, delivering each line on Lines (dropping it instead
@@ -98,15 +97,16 @@ func (b *processBot) readStdout(stdout io.Reader) {
 	r := bufio.NewReaderSize(stdout, 4096)
 	for {
 		line, err := readLine(r, maxLineBytes)
-		if line != nil {
+		if err == nil {
 			select {
 			case b.lines <- line:
 			case <-b.closing:
 			}
+			continue
 		}
-		if err != nil {
-			break
-		}
+		// A final line with no trailing newline comes back alongside err == nil (see readLine), so
+		// reaching here with err != nil means line is nil: nothing left to deliver, just stop.
+		break
 	}
 	close(b.lines)
 	_ = b.cmd.Wait()
@@ -144,7 +144,7 @@ func (b *processBot) Stderr() string { return b.tail.String() }
 func (b *processBot) Close() error {
 	b.closeOnce.Do(func() {
 		close(b.closing)
-		b.closeStdin()
+		_ = b.stdin.Close()
 
 		select {
 		case <-b.waited:
@@ -158,10 +158,4 @@ func (b *processBot) Close() error {
 		<-b.waited
 	})
 	return nil
-}
-
-func (b *processBot) closeStdin() {
-	b.stdinOnce.Do(func() {
-		_ = b.stdin.Close()
-	})
 }
