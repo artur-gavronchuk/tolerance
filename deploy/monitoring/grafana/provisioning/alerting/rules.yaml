@@ -1,0 +1,263 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: tolerance-capacity
+    folder: Tolerance
+    interval: 1m
+    rules:
+      - uid: tolerance-cpu-high
+        title: "CPU >85% for 10m"
+        condition: C
+        for: 10m
+        noDataState: NoData
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU usage has been above 85% for 10 minutes — add CPU or a sandbox worker host."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              refId: A
+              range: true
+              instant: false
+              expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [85] }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { type: last }
+
+      - uid: tolerance-ram-low
+        title: "RAM available <10% for 5m"
+        condition: C
+        for: 5m
+        noDataState: NoData
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Available RAM has been below 10% for 5 minutes — add RAM or reduce ARENA_WORKER_CONCURRENCY."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: A
+              range: true
+              instant: false
+              expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [10] }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { type: last }
+
+      - uid: tolerance-disk-high
+        title: "Disk >85% used on /"
+        condition: C
+        for: 5m
+        noDataState: NoData
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Root filesystem is over 85% full — grow the disk or prune old data/backups."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: A
+              range: true
+              instant: false
+              expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [85] }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { type: last }
+
+      - uid: tolerance-sandbox-backlog
+        title: "Sandbox backlog oldest job >10m"
+        condition: C
+        for: 2m
+        noDataState: NoData
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "The oldest pending run_proof job has been waiting over 10 minutes — raise ARENA_WORKER_CONCURRENCY or add a worker host (deploy/scale.sh, deploy/add-worker.sh)."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 120, to: 0 }
+            model:
+              refId: A
+              range: true
+              instant: false
+              expr: max(arena_jobs_oldest_pending_age_seconds{kind="run_proof"})
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 120, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [600] }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { type: last }
+
+      - uid: tolerance-5xx-rate
+        title: "5xx rate >2% for 5m"
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 2% of API responses have been 5xx for 5 minutes."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: A
+              range: true
+              instant: false
+              expr: (sum(rate(arena_http_requests_total{code=~"5.."}[5m])) or vector(0)) / clamp_min(sum(rate(arena_http_requests_total[5m])), 1) * 100
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { type: last }
+
+      - uid: tolerance-api-p95-high
+        title: "API p95 latency (excl. long-poll) >1.5s for 10m"
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency (excluding the connector long-poll route) has been above 1.5s for 10 minutes — check CPU/DB pool headroom, consider scaling api."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              refId: A
+              range: true
+              instant: false
+              expr: histogram_quantile(0.95, sum by (le) (rate(arena_http_request_duration_seconds_bucket{route!="/api/v1/connector/tasks/next"}[5m])))
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [1.5] }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { type: last }
+
+      - uid: tolerance-target-down
+        title: "Scrape target down for 2m"
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "A Prometheus scrape target has been down (up == 0) for 2 minutes."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 120, to: 0 }
+            model:
+              refId: A
+              range: true
+              instant: false
+              expr: min(up) by (job, instance)
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 120, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { type: last }
+
+      - uid: tolerance-rate-limited-high
+        title: "Rate-limited requests >50/s for 5m"
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained rate-limiting above 50 req/s — likely an attack or a misbehaving connector; check Grafana's Защита row and Cloudflare."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: A
+              range: true
+              instant: false
+              expr: sum(rate(arena_rate_limited_total[5m]))
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [50] }
+                  operator: { type: and }
+                  query: { params: [A] }
+                  reducer: { type: last }

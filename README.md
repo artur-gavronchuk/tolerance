@@ -37,10 +37,88 @@ make down
 
 ## Сервер
 
-В `.env`: `ARENA_ENV=production`, `ARENA_DOMAIN=<домен>`,
-`ARENA_SECURE_COOKIES=true`, свои пароли. `make up` поднимет Caddy с TLS и
-ежедневный бэкап Postgres. Порты 80 и 443 должны быть открыты, домен
-указывать на сервер.
+**Требования к железу.** Рекомендуется 16–32 vCPU, 64–128 ГБ RAM, NVMe —
+под сотни тысяч визитов и тысячи подключённых агентов, каждый sandbox-прогон
+может занять до ~1 vCPU/1 ГБ. Минимум для старта — 8 vCPU/16 ГБ. На 1
+vCPU/1 ГБ тоже поднимается (все лимиты и профиль monitoring — по умолчанию
+консервативные и отключаемые), но это временный вариант.
+
+### Первый деплой
+
+```sh
+deploy/bootstrap.sh          # один раз на свежем Ubuntu, от root:
+                              # docker, compose, swap, лимиты, sysctl,
+                              # unattended-upgrades; не трогает посторонние
+                              # сервисы (например danted на 1080)
+deploy/deploy.sh <ssh-host>  # с рабочей машины: пакует репозиторий,
+                              # копирует в /opt/tolerance, на первом запуске
+                              # создаёт .env со случайными паролями и
+                              # размерами, посчитанными из nproc/RAM хоста
+                              # (см. формулы в самом deploy.sh), поднимает
+                              # стек через `make up` в setsid/nohup (обрыв
+                              # ssh не убьёт сборку) и проверяет
+                              # https://$ARENA_DOMAIN/ и /api/v1/healthz
+```
+
+`deploy.sh` никогда не перезаписывает существующий `.env` — если параметры
+хоста изменились (например, после переезда на бо́льшую машину), скрипт
+только печатает, какими были бы новые размеры; применяйте вручную или через
+`deploy/scale.sh`.
+
+**Cloudflare.** DNS на Cloudflare, оранжевое облако (проксирование)
+включено, SSL/TLS режим — Full (strict). После этого можно закрыть origin
+от прямых обращений: `sudo deploy/cf-origin-lock.sh on` — 80/443 доступны
+только с IP Cloudflare (DOCKER-USER/iptables, не ufw — Docker публикует
+порты в обход ufw), правило переживает перезагрузку (systemd unit). **Не
+включайте до того, как оранжевое облако реально работает** — иначе сайт
+станет недоступен и вам самим. `deploy/cf-origin-lock.sh off` снимает
+ограничение. Постороннее (ssh, `danted` на 1080) скрипт не трогает.
+
+### Grafana: когда пора масштабировать
+
+Grafana — `https://$ARENA_DOMAIN/grafana` (после `ARENA_MONITORING=true` в
+`.env`, включено по умолчанию в `deploy.sh`). Логин `admin`, пароль —
+`GRAFANA_ADMIN_PASSWORD` из `.env` (выводится в конце `deploy.sh`).
+Дашборд «Tolerance: обзор», строка **«Пора масштабировать?»**:
+
+- **CPU >85% (10м) или бэклог песочницы растёт при высоком CPU** → добавить
+  CPU/сервер или увести воркеров на отдельный хост.
+- **Бэклог песочницы / возраст самой старой задачи высокие, а CPU есть** →
+  `deploy/scale.sh HOST workers=N` (больше контейнеров-воркеров) или
+  `deploy/scale.sh HOST concurrency=N` (`ARENA_WORKER_CONCURRENCY` на
+  каждый). Если CPU уже за 80% — новый хост воркера:
+  `deploy/add-worker.sh NEW_HOST MAIN_HOST` (нужна приватная сеть между
+  хостами, см. комментарии в самом скрипте).
+- **RAM свободно <10% (5м)** → больше RAM или меньше
+  `ARENA_WORKER_CONCURRENCY` (каждый sandbox-прогон — до ~1 ГБ).
+- **p95 API (без long-poll) или web высокие при свободном CPU** →
+  `deploy/scale.sh HOST web=N api=N`.
+- **Насыщенность пула БД высокая** → поднять `ARENA_DB_POOL_MAX` и/или
+  `PG_MAX_CONNECTIONS`.
+
+Дашборд «Поиск по запросу» ищет по логам всех контейнеров (Loki + Alloy) по
+`request_id`/`client_ip`/`user_id`. Loki и Alloy держатся в своих
+`mem_limit` (по умолчанию 512 МБ и 256 МБ, `LOKI_MEM_LIMIT`/
+`ALLOY_MEM_LIMIT` в `.env`), чтобы всплеск логов не отобрал память у
+api/worker/postgres.
+
+### Как масштабировать
+
+```sh
+deploy/scale.sh <host> workers=3              # больше воркеров на этом хосте
+deploy/scale.sh <host> concurrency=2          # параллельных sandbox-прогонов на воркер
+deploy/scale.sh <host> web=3 api=2            # реплики web/api (без пересборки, без простоя)
+deploy/add-worker.sh <new-host> <host>        # новый хост только под воркеры
+deploy/remove-worker.sh <worker-host> <host>  # убрать хост-воркер
+deploy/status.sh <host>                       # docker compose ps, free, df, uptime, ошибки в логах api
+```
+
+`deploy/scale.sh` меняет `.env` на сервере и делает
+`docker compose up -d --no-build --scale ...` — без пересборки образов и
+без простоя остальных сервисов; работает только в production
+(`deploy/compose.prod.yml` убирает публикацию портов api/web на хосте,
+поэтому у них может быть несколько реплик, а Caddy балансирует между ними
+по DNS).
 
 ## Разработка
 

@@ -1,46 +1,151 @@
-# Local: `make up` → web on :3000 (proxies /api to api), api on :8080.
-# Server: same file with ARENA_DOMAIN set and `--profile prod` → Caddy
-# terminates TLS and routes /api/* to api, everything else to web.
+# Local: `make up` → web on :3000 (proxies /api to api), api on :8080. A
+# one-shot `migrate` service runs goose + catalog sync and exits; `api`
+# (public HTTP, no Docker access) and `worker` (sandbox runs, needs
+# docker.sock) both wait for it, then run continuously.
+# Server: same file plus deploy/compose.prod.yml (ARENA_ENV=production, see
+# Makefile) → Caddy terminates TLS and load-balances api/web across however
+# many replicas are running; `deploy/scale.sh` changes replica counts and
+# ARENA_WORKER_CONCURRENCY without a rebuild; `deploy/add-worker.sh` adds a
+# whole separate worker host (deploy/compose.worker.yml).
+# `--profile monitoring` (ARENA_MONITORING=true, see Makefile) adds
+# prometheus/grafana/node-exporter/cadvisor/postgres-exporter/loki/alloy,
+# reachable only through Caddy (Grafana) or from other containers on the
+# compose network.
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: arena_migrate
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: arena
+    # Tuned via env so deploy.sh can size these from the host's actual
+    # CPU/RAM; defaults below are conservative enough for a 1 vCPU/1 GB box.
+    command: >-
+      postgres
+      -c max_connections=${PG_MAX_CONNECTIONS:-200}
+      -c shared_buffers=${PG_SHARED_BUFFERS:-128MB}
+      -c effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-512MB}
+      -c work_mem=${PG_WORK_MEM:-4MB}
+      -c maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-64MB}
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c checkpoint_completion_target=0.9
+      -c wal_compression=on
+      -c wal_buffers=16MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+    shm_size: ${PG_SHM_SIZE:-256mb}
     volumes:
       - arena-postgres-data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5432:5432"
+      # 127.0.0.1 by default; set PG_BIND to the host's private IP (e.g. a
+      # Hetzner Cloud Network address) so deploy/add-worker.sh hosts can
+      # reach Postgres directly. Restrict that with
+      # deploy/cf-origin-lock.sh's PG_ALLOW_CIDR when it's not 127.0.0.1.
+      - "${PG_BIND:-127.0.0.1}:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U arena_migrate -d arena"]
       interval: 2s
       timeout: 2s
       retries: 30
 
+  # One-shot: runs goose migrations + proof catalog sync, then exits. api
+  # and worker both wait for it to complete successfully before starting.
+  migrate:
+    build: ./backend
+    command: ["migrate"]
+    restart: "no"
+    logging: *default-logging
+    environment:
+      ARENA_MIGRATE_DATABASE_URL: postgres://arena_migrate:${POSTGRES_PASSWORD}@postgres:5432/arena?sslmode=disable
+      ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Public HTTP API: owner dashboard + connector endpoints. No Docker
+  # access needed — sandbox runs happen in the worker service.
   api:
     build: ./backend
     restart: unless-stopped
+    logging: *default-logging
     environment:
+      ARENA_ROLE: api
       ARENA_ADDR: 0.0.0.0:8080
       ARENA_ALLOW_NON_LOOPBACK: "true"
-      ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable
-      ARENA_MIGRATE_DATABASE_URL: postgres://arena_migrate:${POSTGRES_PASSWORD}@postgres:5432/arena?sslmode=disable
+      ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
       ARENA_ADMIN_EMAILS: ${ARENA_ADMIN_EMAILS:-}
       ARENA_SECURE_COOKIES: ${ARENA_SECURE_COOKIES:-false}
+      # Trust X-Real-IP set by Caddy (itself derived from Cloudflare/proxy
+      # headers via trusted_proxies in the Caddyfile) instead of the socket
+      # peer address, which would otherwise always be Caddy's container IP.
+      ARENA_TRUST_PROXY: "true"
+      # Empty means "let the backend default to NumCPU".
+      ARENA_HASH_CONCURRENCY: ${ARENA_HASH_CONCURRENCY:-}
+      # Separate Prometheus listener; not published to the host, only
+      # reachable from the prometheus container on the compose network.
+      ARENA_METRICS_ADDR: 0.0.0.0:9091
+      # Abuse controls; ARENA_TURNSTILE_SECRET empty disables the captcha
+      # check, so this stays safe to leave unset in dev.
+      ARENA_RATE_IP_RPS: ${ARENA_RATE_IP_RPS:-20}
+      ARENA_RATE_IP_BURST: ${ARENA_RATE_IP_BURST:-60}
+      ARENA_RATE_KEY_RPS: ${ARENA_RATE_KEY_RPS:-5}
+      ARENA_RATE_KEY_BURST: ${ARENA_RATE_KEY_BURST:-20}
+      ARENA_TURNSTILE_SECRET: ${ARENA_TURNSTILE_SECRET:-}
+    ports:
+      # Removed in prod by deploy/compose.prod.yml (ports: !reset []) once
+      # there's more than one replica; Caddy is the only public entrypoint
+      # there.
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  # Sandbox workers: claims proofs, runs them in Docker, posts verdicts.
+  # Talks to Postgres directly (no HTTP API of its own besides metrics), so
+  # it can run on a separate host from api/web — see deploy/add-worker.sh.
+  worker:
+    build: ./backend
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      ARENA_ROLE: worker
+      ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
+      ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
       ARENA_WORK_DIR: /var/lib/arena/work
       ARENA_SANDBOX: docker
-    # The api runs as a non-root user; this is the group that owns docker.sock
-    # (detected by `make up`, see DOCKER_GID in the Makefile).
+      # Parallel sandbox runs; keep at 1 on small boxes, raise once there's
+      # spare CPU/RAM (each sandbox run can use up to ~1 vCPU/1 GB).
+      ARENA_WORKER_CONCURRENCY: ${ARENA_WORKER_CONCURRENCY:-1}
+      # 0.0.0.0 (not loopback) so prometheus can scrape it from another
+      # container; ARENA_ALLOW_NON_LOOPBACK is what makes that allowed.
+      ARENA_METRICS_ADDR: 0.0.0.0:9091
+      ARENA_ALLOW_NON_LOOPBACK: "true"
+    # The worker runs as a non-root user; this is the group that owns
+    # docker.sock (detected by `make up`, see DOCKER_GID in the Makefile).
     group_add: ["${DOCKER_GID:-999}"]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - arena-work:/var/lib/arena/work
-    ports:
-      - "127.0.0.1:${API_PORT:-8080}:8080"
+      # Deliberately NOT a shared named volume: with several worker
+      # replicas (or replicas on separate hosts, see add-worker.sh), each
+      # container gets its own writable layer here. worker.go always makes
+      # a fresh os.MkdirTemp() subdirectory per proof and removes it when
+      # done, so this only ever holds in-flight runs for THIS container.
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
 
@@ -52,10 +157,14 @@ services:
       args:
         API_URL: http://api:8080
         NEXT_PUBLIC_CONTACT_EMAIL: ${ARENA_CONTACT_EMAIL:-}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${ARENA_TURNSTILE_SITE_KEY:-}
     restart: unless-stopped
+    logging: *default-logging
     environment:
       API_URL: http://api:8080
     ports:
+      # Removed in prod by deploy/compose.prod.yml once there's more than
+      # one replica.
       - "127.0.0.1:${WEB_PORT:-3000}:3000"
     depends_on:
       - api
@@ -64,6 +173,7 @@ services:
     image: caddy:2-alpine
     profiles: [prod]
     restart: unless-stopped
+    logging: *default-logging
     environment:
       ARENA_DOMAIN: ${ARENA_DOMAIN}
     ports:
@@ -79,6 +189,7 @@ services:
     image: postgres:16-alpine
     profiles: [prod]
     restart: unless-stopped
+    logging: *default-logging
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -89,8 +200,140 @@ services:
       postgres:
         condition: service_healthy
 
+  # --- monitoring profile (ARENA_MONITORING=true) ---------------------------
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROM_RETENTION:-30d}
+    volumes:
+      - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # File-based service discovery for remote worker hosts, written by
+      # deploy/add-worker.sh and deploy/remove-worker.sh; Prometheus
+      # reloads these automatically without a restart.
+      - ./deploy/monitoring/targets:/etc/prometheus/targets:ro
+      - arena-prometheus-data:/prometheus
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana:12.4.11
+    profiles: [monitoring]
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      GF_SERVER_ROOT_URL: https://${ARENA_DOMAIN}/grafana
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # No external auth (OAuth/SAML) is configured, so basic auth (the
+      # admin/password login form) has to stay on; grafana itself has no
+      # published port, it's reachable only through Caddy's /grafana route.
+      GF_AUTH_BASIC_ENABLED: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_COOKIE_SAMESITE: "strict"
+    volumes:
+      - arena-grafana-data:/var/lib/grafana
+      - ./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    logging: *default-logging
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    command:
+      - --path.rootfs=/host
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    logging: *default-logging
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.18.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      DATA_SOURCE_NAME: postgresql://arena_migrate:${POSTGRES_PASSWORD}@postgres:5432/arena?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Centralized logging: Alloy tails every container's stdout/stderr via the
+  # Docker socket and ships it to Loki. Capped with mem_limit so a log burst
+  # can't starve api/worker/postgres on a small box.
+  loki:
+    image: grafana/loki:3.7.8
+    profiles: [monitoring]
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: ${LOKI_MEM_LIMIT:-512m}
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./deploy/monitoring/loki-config.yml:/etc/loki/config.yml:ro
+      - arena-loki-data:/loki
+    ports:
+      # Private-network only, same posture as PG_BIND: remote worker hosts'
+      # alloy ships logs here (see compose.worker.yml, add-worker.sh).
+      # Restricted alongside Postgres by deploy/cf-origin-lock.sh when
+      # LOKI_BIND is not 127.0.0.1.
+      - "${LOKI_BIND:-127.0.0.1}:3100:3100"
+
+  alloy:
+    image: grafana/alloy:v1.19.2
+    profiles: [monitoring]
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: ${ALLOY_MEM_LIMIT:-256m}
+    environment:
+      LOKI_URL: http://loki:3100/loki/api/v1/push
+    command:
+      - run
+      - --stability.level=generally-available
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./deploy/monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - arena-alloy-data:/var/lib/alloy/data
+    depends_on:
+      - loki
+
 volumes:
   arena-postgres-data:
-  arena-work:
   arena-caddy-data:
   arena-backups:
+  arena-prometheus-data:
+  arena-grafana-data:
+  arena-loki-data:
+  arena-alloy-data:
