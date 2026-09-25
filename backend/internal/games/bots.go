@@ -2,10 +2,12 @@ package games
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
@@ -22,6 +24,9 @@ import (
 )
 
 const maxUploadsPerBotPerDay = 20
+
+// maxBotNameLen matches agents.NameRe's own limit (a leading character plus up to 31 more).
+const maxBotNameLen = 32
 
 const botSelectCols = `g.id, g.name, g.mu, g.sigma, g.matches, g.wins, v.number`
 const botSelectFrom = ` FROM game_bots g LEFT JOIN bot_versions v ON v.id = g.active_version_id`
@@ -190,10 +195,12 @@ func (s *Service) SaveBot(ctx context.Context, userID, name string) (MyBot, erro
 	return m, err
 }
 
-// botForUpload returns the id of userID's bot, creating it from the archive's manifest name when the
-// caller has none yet. A name collision on that auto-derived name (rather than one the owner chose
-// explicitly through SaveBot) is reported as 409 no_bot, steering them to name their bot first.
-func (s *Service) botForUpload(ctx context.Context, tx pgx.Tx, userID, manifestName string) (string, error) {
+// ensureBot returns the id of userID's bot, automatically creating and naming one when the caller has
+// none yet - controller ruling: a manual "name your bot first" error is a poor experience here, since the
+// starter kit's own bot.json defaults to "my-tank" and a second owner uploading it unmodified would always
+// hit it. preferred (e.g. the archive's manifest name, then the caller's agent name) is tried in order;
+// each candidate only counts if it already matches agents.NameRe. Owners can rename with SaveBot afterwards.
+func (s *Service) ensureBot(ctx context.Context, tx pgx.Tx, userID string, preferred ...string) (string, error) {
 	var id string
 	err := tx.QueryRow(ctx, `SELECT id FROM game_bots WHERE game = $1 AND owner_user_id = $2`, Game, userID).Scan(&id)
 	if err == nil {
@@ -202,17 +209,105 @@ func (s *Service) botForUpload(ctx context.Context, tx pgx.Tx, userID, manifestN
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return "", err
 	}
-	id = idgen.New("bot")
-	if _, err := tx.Exec(ctx, `INSERT INTO game_bots (id, game, owner_user_id, name) VALUES ($1, $2, $3, $4)`, id, Game, userID, manifestName); err != nil {
-		if isUniqueViolation(err, "") {
-			return "", httpx.New(http.StatusConflict, "no_bot", "Name your bot first")
-		}
+	id, err = s.createBotWithName(ctx, tx, userID, preferred)
+	if err != nil {
 		return "", err
 	}
 	if err := audit.Record(ctx, tx, audit.Event{ActorID: userID, Action: "game_bot.created", AggregateKind: "game_bot", AggregateID: id, RequestID: httpx.RequestID(ctx)}); err != nil {
 		return "", err
 	}
 	return id, nil
+}
+
+// createBotWithName picks a free name for a new bot and inserts it: each of preferred that already matches
+// agents.NameRe, tried plain and then suffixed "-2".."-99" (base truncated to keep the result within
+// agents.NameRe's 32-character limit); if every one of those is taken, a random "tank-xxxxxx" name. Each
+// attempt is race-safe (INSERT ... ON CONFLICT DO NOTHING RETURNING id), so concurrent callers naming
+// different bots never see a raw unique-violation error.
+func (s *Service) createBotWithName(ctx context.Context, tx pgx.Tx, userID string, preferred []string) (string, error) {
+	var candidates []string
+	for _, n := range preferred {
+		if n != "" && agents.NameRe.MatchString(n) {
+			candidates = append(candidates, n)
+		}
+	}
+	for _, base := range candidates {
+		if id, ok, err := tryCreateBot(ctx, tx, userID, base); err != nil {
+			return "", err
+		} else if ok {
+			return id, nil
+		}
+		for n := 2; n <= 99; n++ {
+			if id, ok, err := tryCreateBot(ctx, tx, userID, suffixedBotName(base, n)); err != nil {
+				return "", err
+			} else if ok {
+				return id, nil
+			}
+		}
+	}
+	for attempt := 0; attempt < 20; attempt++ {
+		name, err := randomBotName()
+		if err != nil {
+			return "", err
+		}
+		if id, ok, err := tryCreateBot(ctx, tx, userID, name); err != nil {
+			return "", err
+		} else if ok {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("games: could not find a free bot name for user %s", userID)
+}
+
+// suffixedBotName appends "-n" to base, truncating base first if needed so the result stays within
+// agents.NameRe's 32-character limit (the suffix is always 2-3 characters, so the truncated base is always
+// long enough to keep matching the pattern).
+func suffixedBotName(base string, n int) string {
+	suffix := fmt.Sprintf("-%d", n)
+	if len(base)+len(suffix) > maxBotNameLen {
+		base = base[:maxBotNameLen-len(suffix)]
+	}
+	return base + suffix
+}
+
+const botNameSuffixAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+// randomBotName returns "tank-" plus 6 random lowercase alphanumeric characters, matching agents.NameRe.
+func randomBotName() (string, error) {
+	buf := make([]byte, 6)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	out := make([]byte, 6)
+	for i, b := range buf {
+		out[i] = botNameSuffixAlphabet[int(b)%len(botNameSuffixAlphabet)]
+	}
+	return "tank-" + string(out), nil
+}
+
+// tryCreateBot attempts to create one game_bots row with the given name, racing safely against any other
+// transaction doing the same: ok is false (not an error) when the name is already taken.
+func tryCreateBot(ctx context.Context, tx pgx.Tx, userID, name string) (id string, ok bool, err error) {
+	id = idgen.New("bot")
+	err = tx.QueryRow(ctx, `INSERT INTO game_bots (id, game, owner_user_id, name) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (game, (lower(name))) DO NOTHING RETURNING id`, id, Game, userID, name).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return id, true, nil
+}
+
+// agentNameFor returns the name of userID's agent, or "" if they don't have one yet.
+func (s *Service) agentNameFor(ctx context.Context, tx pgx.Tx, userID string) (string, error) {
+	var name string
+	err := tx.QueryRow(ctx, `SELECT name FROM agents WHERE owner_user_id = $1`, userID).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return name, err
 }
 
 // uploadVersion is the shared body of UploadVersion and UploadVersionForAgent: normalize the archive,
@@ -232,8 +327,18 @@ func (s *Service) uploadVersion(ctx context.Context, userID string, archive []by
 
 	var v VersionView
 	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		botID, err := s.botForUpload(ctx, tx, userID, m.Name)
+		agentName, err := s.agentNameFor(ctx, tx, userID)
 		if err != nil {
+			return err
+		}
+		botID, err := s.ensureBot(ctx, tx, userID, m.Name, agentName)
+		if err != nil {
+			return err
+		}
+		// Lock the bot row for the rest of this transaction before computing the next version number, so
+		// two concurrent uploads for the same bot serialize instead of both computing the same
+		// coalesce(max(number), 0) + 1 and racing on the (bot_id, number) unique constraint.
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM game_bots WHERE id = $1 FOR UPDATE`, botID); err != nil {
 			return err
 		}
 		var count int
@@ -259,6 +364,11 @@ func (s *Service) uploadVersion(ctx context.Context, userID string, archive []by
 		}
 		return audit.Record(ctx, tx, audit.Event{ActorID: userID, Action: "bot_version.uploaded", AggregateKind: "bot_version", AggregateID: id, RequestID: httpx.RequestID(ctx)})
 	})
+	if isUniqueViolation(err, "bot_versions_bot_id_number_key") {
+		// Backstop: the FOR UPDATE lock above should make this unreachable, but a raw 500 from the
+		// database is still worse than telling the caller to just retry the upload.
+		return VersionView{}, httpx.New(http.StatusConflict, "upload_conflict", "Another upload is in progress; try again")
+	}
 	if err != nil {
 		return VersionView{}, err
 	}
