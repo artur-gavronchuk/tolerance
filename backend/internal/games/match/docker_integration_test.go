@@ -154,6 +154,76 @@ for raw in sys.stdin:
 	}
 }
 
+// TestDockerReadOnlyRootfs covers the fix for the whole-feature review's I-3: a rootfs writable outside the
+// tiny /tmp tmpfs let a bot fill up the host's disk (/bot was chowned to the bot's own uid, and /var/tmp is
+// world-writable by default). A bot that tries to write 64 MiB to /bot, /var/tmp and / must fail on all
+// three, while still being able to write to /tmp and to play a normal match (paralleling
+// TestDockerPythonStarterPlays/TestDockerJSStarterPlays, which already cover that the read-only rootfs
+// doesn't stop a well-behaved starter bot from working).
+func TestDockerReadOnlyRootfs(t *testing.T) {
+	requireDockerRuntime(t)
+	dir := t.TempDir()
+	writeFile(t, dir, "bot.py", `import json
+import sys
+
+big = b"x" * (64 * 1024 * 1024)
+small = b"x" * (1024 * 1024)
+for path, payload in [("/bot/junk.bin", big), ("/var/tmp/junk.bin", big), ("/junk.bin", big), ("/tmp/scratch.bin", small)]:
+    try:
+        with open(path, "wb") as f:
+            f.write(payload)
+        print("WRITECHECK: " + path + ": wrote", file=sys.stderr, flush=True)
+    except OSError as e:
+        print("WRITECHECK: " + path + ": failed: " + repr(e), file=sys.stderr, flush=True)
+
+for raw in sys.stdin:
+    raw = raw.strip()
+    if not raw:
+        continue
+    msg = json.loads(raw)
+    kind = msg.get("type")
+    if kind == "start":
+        print(json.dumps({"type": "ready"}), flush=True)
+    elif kind == "tick":
+        print(json.dumps({"move": 0, "turn": 0, "turret": 0, "fire": False, "tick": msg["tick"]}), flush=True)
+    elif kind == "end":
+        break
+`)
+
+	players := []Player{
+		{Name: "diskfill", Spec: Spec{Dir: dir, Language: "python", Entry: "bot.py"}},
+		{Name: "idle", Spec: Spec{House: "idle"}},
+	}
+	cfg := Config{Seed: 1, Ticks: 30}
+
+	res, err := Run(context.Background(), WithHouse(DockerLauncher{Image: dockerTestImage}), cfg, players)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	p := res.Players[0]
+	for _, blocked := range []string{"/bot/junk.bin", "/var/tmp/junk.bin", "/junk.bin"} {
+		if !strings.Contains(p.Stderr, "WRITECHECK: "+blocked+": failed") {
+			t.Errorf("expected the write to %s to fail; stderr: %s", blocked, p.Stderr)
+		}
+	}
+	if !strings.Contains(p.Stderr, "WRITECHECK: /tmp/scratch.bin: wrote") {
+		t.Errorf("expected the write to /tmp/scratch.bin (the tmpfs) to succeed; stderr: %s", p.Stderr)
+	}
+	if p.Status != StatusOK {
+		t.Errorf("status = %q, want %q (stderr: %s)", p.Status, StatusOK, p.Stderr)
+	}
+	if !p.Ready {
+		t.Errorf("ready = false, want true (stderr: %s)", p.Stderr)
+	}
+	if p.Asked == 0 {
+		t.Fatalf("bot was never asked a tick")
+	}
+	if float64(p.Answered) < 0.95*float64(p.Asked) {
+		t.Errorf("answered = %d, asked = %d, want answered >= 0.95*asked", p.Answered, p.Asked)
+	}
+}
+
 // TestDockerCloseKillsRunaway is Review Focus 3 for the Docker launcher: a bot that never exits on its own
 // must still be fully gone — its container removed — soon after Close, even though (unlike a local
 // process) an exited container isn't reaped by the OS and must be removed explicitly. It also cancels the
@@ -318,9 +388,11 @@ func TestRemoveStaleBotContainers(t *testing.T) {
 	id := strings.TrimSpace(string(idRaw))
 	t.Cleanup(func() { exec.Command("docker", "rm", "-f", id).Run() }) //nolint:errcheck
 
-	// maxAge 0: our own container, already created above, counts as stale regardless of how many
-	// milliseconds old it is, so the sweep runs without waiting out the real staleBotContainerAge.
-	removed, err := removeStaleBotContainers(context.Background(), label, 0)
+	// A negative maxAge (rather than 0): our own container, already created above, counts as stale
+	// regardless of how many milliseconds old it is, so the sweep runs without waiting out the real
+	// staleBotContainerAge - and unlike 0, it can't flake under VM clock skew, where the container's
+	// reported CreatedAt can land a moment after this process's now() and make age come out negative.
+	removed, err := removeStaleBotContainers(context.Background(), label, -time.Hour)
 	if err != nil {
 		t.Fatalf("removeStaleBotContainers: %v", err)
 	}
