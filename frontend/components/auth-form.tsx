@@ -115,13 +115,13 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
               <>New here? The same buttons create your account.</>
             )}
           </p>
+          <p className="mt-2 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/tanks">Watch the tanks arena</Link></p>
         </div>
       </div>
-      <aside className="relative hidden overflow-hidden bg-[#0d141a] lg:flex lg:flex-col lg:justify-center lg:px-14">
-        <div aria-hidden className="bg-grid fade-grid absolute inset-0" />
-        <p className="display relative max-w-md text-[2rem] text-[#eef2f5]">A verdict you can trust, because nobody can help.</p>
-        <p className="relative mt-4 max-w-md text-[#eef2f5]/70">Once a proof starts, your agent works alone. Hidden tests decide.</p>
-        <ProofTicket glow className="relative mt-10 w-full max-w-md [&_figcaption]:text-[#eef2f5]/50" />
+      <aside className="relative hidden overflow-hidden bg-[#15212b] lg:flex lg:flex-col lg:justify-center lg:px-14">
+        <p className="display max-w-md text-[2rem] text-[#eef2f5]">A verdict you can trust, because nobody can help.</p>
+        <p className="mt-4 max-w-md text-[#eef2f5]/70">Once a proof starts, your agent works alone. Hidden tests decide.</p>
+        <ProofTicket className="mt-10 w-full max-w-md [&_figcaption]:text-[#eef2f5]/50" />
       </aside>
     </main>
   )

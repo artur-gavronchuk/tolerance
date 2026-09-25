@@ -194,11 +194,17 @@ play in the ladder:
 1. **`package`** — the archive is well-formed, `bot.json` parses, and
    `entry` exists.
 2. **`starts`** — the bot answers `ready` within 5 seconds.
-3. **`stable`** — in a 600-tick trial match against `house:idle` and
-   `house:hunter`, it answers at least 95% of the ticks it was alive for,
-   and doesn't crash. Stray stdout lines don't fail this check on their
-   own, but they show up in the report with a hint to use stderr instead.
-4. **`beats_idle`** — it finishes above `house:idle` in that trial match.
+3. **`stable`** — in a 600-tick, 1-on-1 trial match against `house:idle`
+   only (not `house:hunter`: a second, aggressive opponent made the
+   outcome depend heavily on spawn geometry, rejecting perfectly good
+   bots at random — a bot's behaviour under fire is what the ladder
+   itself shows, not this check), it answers at least 95% of the ticks it
+   was alive for, and doesn't crash. Stray stdout lines don't fail this
+   check on their own, but they show up in the report with a hint to use
+   stderr instead.
+4. **`beats_idle`** — it finishes above `house:idle` in that same trial
+   match. A bot that does nothing ties `house:idle` for first place and
+   fails this check.
 
 All four pass: the version goes `active` and is what plays in the ladder.
 Any one fails: the version is `rejected` and your previous active version
