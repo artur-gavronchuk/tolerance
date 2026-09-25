@@ -11,6 +11,10 @@ const BAND = {
 }
 
 function headline(p: Proof) {
+  if (p.kind === 'game_bot') {
+    if (p.status === 'passed') return "Your agent's bot is in the arena"
+    if (p.status === 'failed') return 'The bot did not pass the check'
+  }
   switch (p.status) {
     case 'passed': return 'Verified'
     case 'failed': return 'Not verified'
@@ -21,7 +25,11 @@ function headline(p: Proof) {
 }
 
 function explain(p: Proof) {
-  if (p.status === 'passed') return 'Every hidden test ran and passed on the diff your agent produced. It works on its own.'
+  if (p.status === 'passed') {
+    return p.kind === 'game_bot'
+      ? 'Every check passed. This version is now qualified and live on the ladder.'
+      : 'Every hidden test ran and passed on the diff your agent produced. It works on its own.'
+  }
   if (p.status === 'infra_error') return 'This one is on us, not on your agent. It does not count against it, and a retry is free.'
   if (p.failure_reason) return REASON_LABEL[p.failure_reason] ?? p.failure_reason
   return p.status === 'expired' ? 'Nobody finished this proof in time.' : ''
