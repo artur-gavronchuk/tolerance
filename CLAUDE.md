@@ -31,7 +31,7 @@ and `frontend/` (Next.js owner dashboard, talks to the backend over HTTP only).
   task-by-task plan `plans/2026-09-23-agent-connect-and-proof.md`.
 - Slice 2 (qualification and rating) is designed but not started:
   `specs/2026-09-23-qualification-and-rating-design.md` + its plan.
-  Tanks (a public bot tournament whose bots are written by agents) is in progress:
+  Tanks (a public bot tournament whose bots are written by agents) is built:
   `specs/2026-09-25-tanks-arena-design.md` + `plans/2026-09-25-tanks-arena.md`.
   Slice 3 (competitions) needs a new spec; slice 4 (versions, several agents) comes
   from the old challenges-and-versions spec. Jobs, money and autopilot specs are
@@ -112,6 +112,12 @@ export TESTCONTAINERS_RYUK_DISABLED=true   # tests Terminate() in t.Cleanup them
 The `internal/proofs/sandbox` package's own tests invoke the `docker` CLI
 directly (not testcontainers) and are unaffected by that quirk.
 
+`internal/games/match` and `internal/games/qualify_integration_test.go` also
+need `python3` and `node` on `PATH` — they run the tanks house/starter bots
+as real processes (`match.ProcessLauncher`) the same way `ARENA_SANDBOX=fake`
+does. Missing either interpreter fails those tests under
+`ARENA_TEST_REQUIRE_DOCKER=1`; without that flag they skip instead.
+
 ## Architecture
 
 Go module is `tolerance`; all env vars are prefixed `ARENA_`; Postgres database
@@ -122,22 +128,31 @@ syncs the on-disk proof catalog into `proof_tasks`.
 ```
 backend/cmd/api          config, handler (all routing), main (server + worker goroutine), main_test (e2e)
 backend/cmd/migrate      goose up + catalog sync
-backend/cmd/arena        the owner-side connector CLI: login, init, connect, status
+backend/cmd/arena        the owner-side connector CLI: login, init, connect, status, tanks new|play|submit
 backend/internal/identity  GitHub/Google OAuth (state + PKCE), dev login, sessions, RequireSession/RequireAgent, /auth/*, /me
 backend/internal/agents    agent, API keys, presence, derived stage, /agent/*, /connector/heartbeat
 backend/internal/proofs    proof lifecycle, catalog, owner + connector HTTP, worker, sandbox/
+backend/internal/games     tanks arena: bots/versions, the check, ladder, worker, HTTP (owner, connector, public)
+backend/internal/games/tanks    engine, protocol, maps, house bots, Python/JS starters
+backend/internal/games/match    match runner: Spec/Launcher, process and Docker launchers, house wrapper
+backend/internal/games/botpkg   bot archive validation (size, file count, macOS junk, language)
+backend/internal/games/rating   TrueSkill-style μ/σ rating update
 backend/internal/platform  db, dbtest, httpx, jobs, auth (API keys), audit, idgen, ratelimit, sanitize
-backend/fixtures/proofs    proof task definitions
+backend/fixtures/proofs    proof task definitions (the tanks-bot task is synced by games.Sync instead, see below)
 backend/contracts/openapi  openapi.yaml + validator used by the e2e test
 ```
 
 **Two auth schemes, two route groups.** `cmd/api/handler.go` is the single place
 routing is declared. Owner routes (`/api/v1/me`, `/agent*`, `/proof-tasks`,
-`/proofs*`) sit behind `identity.RequireSession` — an HttpOnly session cookie,
-30 days, only the hash stored. Connector routes (`/api/v1/connector/*`) sit
-behind `identity.RequireAgent` — `Authorization: Bearer <api key>`, SHA-256 in
-the database, plaintext shown once at creation. Adding a route means adding it
-to the right mux *and* to `contracts/openapi/openapi.yaml`.
+`/proofs*`, `/me/tanks*`) sit behind `identity.RequireSession` — an HttpOnly
+session cookie, 30 days, only the hash stored. Connector routes
+(`/api/v1/connector/*`, including `/connector/tanks/versions`) sit behind
+`identity.RequireAgent` — `Authorization: Bearer <api key>`, SHA-256 in
+the database, plaintext shown once at creation. `/api/v1/tanks/*`
+(leaderboard, matches, a match's replay, a bot's profile, the live broadcast)
+is public — no session, no API key, so it can be embedded on `/tanks/*` pages
+without a login. Adding a route means adding it to the right mux *and* to
+`contracts/openapi/openapi.yaml`.
 
 Owner sign-in is OAuth only (GitHub, Google); `ARENA_DEV_LOGIN=true` adds
 `POST /auth/dev` for local runs and CI and is refused next to
@@ -170,6 +185,20 @@ by name to have actually run and passed, not just "no failures reported."
 malicious diff can't write outside the sandbox work directory. Keep both
 properties when touching the worker.
 
+`proofs.kind` (and `proof_tasks.kind`) is `proof | game_bot` (default `proof`,
+CHECK constraints `proofs_kind_check` / `proof_tasks_kind_check` — unnamed in
+the migration, so Postgres names them after `<table>_<column>_check`; slice 2
+will widen the set). A `game_bot` proof is how an agent improves its tanks
+bot: `games.StartAgentRun` builds a one-off repo (the bot's active version or
+the Python starter, plus `GAME.md`/`RESULTS.md`) and calls
+`proofs.CreateWithRepo`, which stores it on the proof row itself via the
+`proofs.repo_tar`/`repo_sha256` columns instead of pointing at a shared
+`proof_tasks` catalog entry — every agent's tanks-bot proof has its own repo.
+`worker.go` dispatches on `kind`: a `game_bot` proof's diff is judged by
+`games.Service.JudgeProof` (`proofs.GameBotJudge`), which applies the diff,
+packages it as a bot archive via `botpkg`, and runs the check match, instead
+of the sandbox's `go test -json`.
+
 **Agent stage** (`registered, offline, connected, checking, operational,
 check_failed`) is never stored — it is derived in `internal/agents/stage.go` from
 presence freshness (2 min) plus proof history. Don't add a column for it.
@@ -195,6 +224,46 @@ Nothing builds the sandbox image outside tests or `make up`:
 `docker build -t arena-proof-go:1` itself, and the root `Makefile`'s
 `proof-image` target does the same for `make up`. A real proof run needs that
 image present on the host already.
+
+Note that the `tanks-bot` proof task (see below) is not one of these fixtures:
+`games.Sync` builds and upserts it (Python repo, hidden files, image
+`arena-tanks-bot:1` — a label only; bot code never runs in the proof sandbox,
+only the diff-apply and packaging step does) from `cmd/migrate` alongside the
+house bots, the same way `cmd/migrate` syncs `backend/fixtures/proofs`.
+
+**Tanks arena.** `internal/games` is a public bot tournament (game `tanks`)
+built the same way as proofs: an agent's `game_bot` proof produces a bot
+version, versions run matches, matches feed a rating. `game_bots` are owned
+by a user (`house = false`) or built into the platform (`house = true`,
+`internal/games/tanks/house`: `idle`, `sniper`, `hunter`). A `bot_versions`
+row is `pending` until it passes a **check**: a 1v1 match against the house
+`idle` bot (`qualify.go`), gated on `beats_idle` among other checks — only a
+`pending` version that wins is promoted to `active`. Versions come from three
+`source`s: `agent` (via a `game_bot` proof, see above), `upload` (owner posts
+an archive validated by `botpkg` — size/file-count/language, macOS zip junk
+stripped), `house` (seeded by `games.Sync`). Once a bot has an `active`
+version, `internal/games/worker.go` schedules it into the **ladder**: house
+matches run at most every 2 minutes, everything else on `ARENA_MATCH_INTERVAL`
+(default 20s) with up to `ARENA_MATCH_CONCURRENCY` (default 1) matches
+running at once, each played by `internal/games/match.Run` against
+`internal/games/tanks` (the deterministic engine) and rated by
+`internal/games/rating` (TrueSkill-style μ/σ). Matches broadcast live over
+`internal/games/broadcast.go`; `/api/v1/tanks/*` (leaderboard, matches, a
+match's replay, a bot's profile, the live feed) is public, no auth, so
+`frontend/app/tanks/*` can read it straight from the browser.
+
+A match's bot processes are started through a `match.Launcher`: `main.go`
+wires `match.DockerLauncher{Image: cfg.botImage}` (image `arena-bot-runtime:1`
+— see `make bot-image` below) normally, or `match.ProcessLauncher{}` when
+`ARENA_SANDBOX=fake`, which runs each bot as a plain local process on the
+host in its own process group (no isolation — dev/CI only, the same flag that
+picks the fake proof sandbox). `match.WithHouse` wraps either launcher so a
+`house = true` bot always runs as an in-process Go strategy instead, no
+process or container at all. `ARENA_BOT_IMAGE`, `ARENA_MATCH_INTERVAL`,
+`ARENA_MATCH_CONCURRENCY` are read in `cmd/api/config.go`; `make bot-image`
+(root `Makefile`) builds `arena-bot-runtime:1` from
+`backend/internal/games/match/runtime`, and `make up`'s `up` target depends
+on it the same way it depends on `proof-image`.
 
 ## Conventions
 
