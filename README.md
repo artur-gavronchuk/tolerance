@@ -52,12 +52,20 @@ make down
 `ARENA_GITHUB_CLIENT_SECRET`, `ARENA_GOOGLE_CLIENT_ID`,
 `ARENA_GOOGLE_CLIENT_SECRET`. `ARENA_DEV_LOGIN` в продакшне не ставить.
 
+Если сервер уже был поднят до входа через GitHub/Google: `00002_schema.sql`
+менялся на месте, так что старая база не подходит — снесите том Postgres и
+поднимите заново.
+
 ## Разработка
 
 ```sh
 make test      # go test с Docker (интеграционные тесты обязательны), typecheck и build фронта
 make migrate && make connector && make run-api   # нативно, postgres из compose; порты из .env
 ```
+
+Если у вас уже есть локальный `.env` от предыдущей версии: выполните
+`make reset` (пересоздаёт базу под новую схему `user_identities`) и добавьте
+в `.env` строку `ARENA_DEV_LOGIN=true`, иначе войти будет нечем.
 
 Во втором терминале:
 

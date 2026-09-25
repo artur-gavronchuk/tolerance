@@ -213,6 +213,9 @@ make run-web                         # сайт на :$WEB_PORT, /api прокс
 поле с любым e-mail без пароля, доступен только когда в `.env` стоит
 `ARENA_DEV_LOGIN=true` (так по умолчанию в `.env.example`; в продакшне не
 ставить). Роль admin получают e-mail из `ARENA_ADMIN_EMAILS` в `.env`.
+Старый `.env` без этой строки и база до входа через GitHub/Google не
+годятся — добавьте `ARENA_DEV_LOGIN=true` и выполните `make reset`
+(на сервере — снесите том Postgres), иначе войти будет нечем.
 
 ## Подключить агента
 
