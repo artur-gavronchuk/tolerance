@@ -11,13 +11,19 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 
 	"tolerance/internal/agents"
+	"tolerance/internal/games"
+	"tolerance/internal/games/match"
 	"tolerance/internal/games/tanks"
+	"tolerance/internal/identity"
+	"tolerance/internal/platform/dbtest"
 	"tolerance/internal/proofs"
 	"tolerance/internal/proofs/sandbox"
 )
@@ -391,5 +397,190 @@ func TestGameBotProofDeletesManifest(t *testing.T) {
 	}
 	if got.SandboxResult.Output == "" {
 		t.Fatal("expected an error message in Output")
+	}
+}
+
+// setupAgentRunWithLauncher is setupAgentRun with a caller-supplied non-house launcher (wrapped in
+// match.WithHouse), so a test can make the check match's own bot launch fail on demand.
+func setupAgentRunWithLauncher(t *testing.T, l match.Launcher) (fixture, string) {
+	t.Helper()
+	d := dbtest.New(t)
+	ctx := context.Background()
+	if err := games.Sync(ctx, d.AdminPool); err != nil {
+		t.Fatal(err)
+	}
+	ps := proofs.NewService(d.AppPool)
+	as := agents.NewService(d.AppPool, ps)
+	us := identity.NewService(d.AppPool, nil)
+	svc := games.NewService(d.AppPool, ps, match.WithHouse(l), slog.Default(), games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
+	u, _, err := us.Signup(ctx, "o@example.com", "longenough1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := as.Create(ctx, u.ID, agents.CreateInput{Name: "runner-agent"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := as.Heartbeat(ctx, a.ID, "0.1", "h"); err != nil {
+		t.Fatal(err)
+	}
+	return fixture{d: d, svc: svc, users: us, agents: as, proofs: ps, userID: u.ID}, a.ID
+}
+
+// flakyLauncher fails the first failLeft launches (of a non-house spec - WithHouse never forwards a house
+// spec to it) and then behaves exactly like next, simulating a platform hiccup (docker down, ...) on an
+// otherwise good run.
+type flakyLauncher struct {
+	mu       sync.Mutex
+	failLeft int
+	next     match.Launcher
+}
+
+func (l *flakyLauncher) Launch(ctx context.Context, s match.Spec) (match.Bot, error) {
+	l.mu.Lock()
+	fail := l.failLeft > 0
+	if fail {
+		l.failLeft--
+	}
+	l.mu.Unlock()
+	if fail {
+		return nil, fmt.Errorf("flakyLauncher: simulated launch failure")
+	}
+	return l.next.Launch(ctx, s)
+}
+
+// TestJudgeProofRetrySafeAfterQualifyFails is the regression test for the bug a review caught: JudgeProof
+// used to insert a brand new bot_versions row on every call, so a run_proof job retry after a platform
+// failure inside Qualify (the check match's launcher erroring, not the bot's own fault) left the first
+// attempt's version stuck 'pending' forever and qualified a second, redundant one. createVersion now
+// reuses whatever version this proof already produced (looked up by (bot_id, proof_id)) instead of
+// inserting again, so a retry re-qualifies the *same* version - which Qualify itself already treats as
+// idempotent.
+func TestJudgeProofRetrySafeAfterQualifyFails(t *testing.T) {
+	requirePython3(t)
+	flaky := &flakyLauncher{failLeft: 1, next: match.ProcessLauncher{}}
+	f, agentID := setupAgentRunWithLauncher(t, flaky)
+	ctx := context.Background()
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	p, err := f.svc.StartAgentRun(ctx, f.userID)
+	if err != nil {
+		t.Fatalf("StartAgentRun: %v", err)
+	}
+	claimed, _, err := f.proofs.Claim(ctx, agentID)
+	if err != nil || claimed == nil {
+		t.Fatalf("claim: %v %+v", err, claimed)
+	}
+	old := starterBotPy(t)
+	diff := makeDiff(t, "bot.py", old, strings.Replace(old, "0.08", "0.05", 1))
+	if err := f.proofs.SubmitResult(ctx, agentID, claimed.ID, proofs.ResultInput{Diff: diff}); err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	w := proofs.NewWorker(f.d.AppPool, sandbox.PassAll{}, t.TempDir(), log)
+	w.SetGameBotJudge(f.svc)
+
+	// First attempt: Qualify's own check match fails to even launch the candidate bot - a platform
+	// failure, not a verdict on the bot - so RunProof must return an error (the job would retry) and
+	// leave the proof running_sandbox, not finished.
+	if err := w.RunProof(ctx, p.ID); err == nil {
+		t.Fatal("expected the first attempt to fail: the launcher is flaky")
+	}
+	got, err := f.proofs.Get(ctx, f.userID, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != proofs.StatusRunningSandbox {
+		t.Fatalf("proof should still be running_sandbox after a platform failure, got %+v", got)
+	}
+
+	botID := botIDFor(t, f.d, f.userID)
+	countVersions := func() int {
+		t.Helper()
+		var n int
+		if err := f.d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT count(*) FROM bot_versions WHERE bot_id = $1 AND proof_id = $2`, botID, p.ID).Scan(&n)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if n := countVersions(); n != 1 {
+		t.Fatalf("expected exactly one bot_versions row after the first (failed) attempt, got %d", n)
+	}
+
+	// Retry: the job runner would re-claim and call RunProof again with the same proof id.
+	if err := w.RunProof(ctx, p.ID); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	got, err = f.proofs.Get(ctx, f.userID, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != proofs.StatusPassed {
+		out := ""
+		if got.SandboxResult != nil {
+			out = got.SandboxResult.Output
+		}
+		t.Fatalf("expected the retry to pass, got status=%q reason=%q output=%s", got.Status, got.FailureReason, out)
+	}
+	if n := countVersions(); n != 1 {
+		t.Fatalf("expected exactly one bot_versions row for this proof after the retry, got %d", n)
+	}
+}
+
+// TestJudgeProofIdempotentAfterSuccess is JudgeProof's second idempotency requirement: called again after
+// it already produced a resolved (active/rejected) verdict for a proof, it must not create another version
+// or run another check match - Qualify on the same, already-resolved version id just hands back what it
+// already stored, so the verdict is identical.
+func TestJudgeProofIdempotentAfterSuccess(t *testing.T) {
+	requirePython3(t)
+	f, agentID := setupAgentRun(t)
+	ctx := context.Background()
+
+	p, err := f.svc.StartAgentRun(ctx, f.userID)
+	if err != nil {
+		t.Fatalf("StartAgentRun: %v", err)
+	}
+
+	dir := t.TempDir()
+	starter, err := tanks.Starter("python")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range starter {
+		if name == "GAME.md" {
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	v1, err := f.svc.JudgeProof(ctx, p.ID, agentID, dir)
+	if err != nil {
+		t.Fatalf("first JudgeProof: %v", err)
+	}
+	if !v1.Passed {
+		t.Fatalf("expected the unmodified starter kit to pass, got %+v", v1)
+	}
+
+	v2, err := f.svc.JudgeProof(ctx, p.ID, agentID, dir)
+	if err != nil {
+		t.Fatalf("second JudgeProof: %v", err)
+	}
+	if !reflect.DeepEqual(v1, v2) {
+		t.Fatalf("second call returned a different verdict:\nfirst:  %+v\nsecond: %+v", v1, v2)
+	}
+
+	botID := botIDFor(t, f.d, f.userID)
+	var count int
+	if err := f.d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM bot_versions WHERE bot_id = $1 AND proof_id = $2`, botID, p.ID).Scan(&count)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("expected exactly one bot_versions row for this proof, got %d", count)
 	}
 }

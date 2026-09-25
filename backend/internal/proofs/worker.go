@@ -162,23 +162,31 @@ func (w *Worker) RunProof(ctx context.Context, proofID string) error {
 		return err
 	}
 	defer os.RemoveAll(dir)
-	if err := Untar(in.repoTar, dir); err != nil {
-		return err
-	}
-	if in.kind != KindGameBot && diffTouchesTestFiles(in.diff) {
-		return w.finish(ctx, proofID, StatusFailed, "test_file_modified", nil)
-	}
-	if reason := applyDiff(ctx, dir, in.diff); reason != "" {
-		return w.finish(ctx, proofID, StatusFailed, reason, nil)
-	}
 
 	if in.kind == KindGameBot {
+		// No diffTouchesTestFiles gate and no hidden-test bookkeeping here - a bot package has no notion
+		// of a protected test file, and its "hidden tarball" is empty (see games.syncTanksBotTask).
+		if err := Untar(in.repoTar, dir); err != nil {
+			return err
+		}
+		if reason := applyDiff(ctx, dir, in.diff); reason != "" {
+			return w.finish(ctx, proofID, StatusFailed, reason, nil)
+		}
 		return w.runGameBotProof(ctx, proofID, in.agentID, dir)
 	}
 
 	hidden, err := hiddenTestNames(in.hiddenTr)
 	if err != nil {
 		return err
+	}
+	if err := Untar(in.repoTar, dir); err != nil {
+		return err
+	}
+	if diffTouchesTestFiles(in.diff) {
+		return w.finish(ctx, proofID, StatusFailed, "test_file_modified", nil)
+	}
+	if reason := applyDiff(ctx, dir, in.diff); reason != "" {
+		return w.finish(ctx, proofID, StatusFailed, reason, nil)
 	}
 	if err := Untar(in.hiddenTr, dir); err != nil {
 		return err

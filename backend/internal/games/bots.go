@@ -341,6 +341,18 @@ func (s *Service) agentNameFor(ctx context.Context, tx pgx.Tx, userID string) (s
 // proofID, and enqueue its check_bot job for an upload. An agent run's check runs synchronously right
 // after this call (see JudgeProof), so it does not enqueue a second, redundant check_bot job for the same
 // version - Qualify is idempotent either way, but there is no reason to spend a second check match on it.
+//
+// When proofID is set, this call is retry-safe: a game_bot proof's run_proof job can retry after a
+// platform failure (docker down mid check match, ...), and each retry re-extracts and re-applies the same
+// diff and calls JudgeProof again. Before inserting, it looks for a version already carrying this
+// proofID for this bot and, if one exists, returns that row untouched instead of inserting a second one -
+// whether that row is still 'pending' (the caller's next Qualify call will actually run the check, or run
+// it again) or already resolved ('active'/'rejected', in which case Qualify just hands back the stored
+// result - see its own doc comment on why that's idempotent). This is race-safe against two concurrent
+// retries for the same proof because it runs after ensureBot's per-user advisory lock (held for the rest
+// of this transaction whether or not it had to create a bot) and the FOR UPDATE below, both scoped to this
+// same user/bot: a second transaction's lookup can't run until the first one's insert (or no-op) has
+// committed.
 func (s *Service) createVersion(ctx context.Context, userID string, packed []byte, m botpkg.Manifest, source string, proofID *string) (VersionView, error) {
 	sum := sha256.Sum256(packed)
 	sha := hex.EncodeToString(sum[:])
@@ -360,6 +372,16 @@ func (s *Service) createVersion(ctx context.Context, userID string, packed []byt
 		// coalesce(max(number), 0) + 1 and racing on the (bot_id, number) unique constraint.
 		if _, err := tx.Exec(ctx, `SELECT 1 FROM game_bots WHERE id = $1 FOR UPDATE`, botID); err != nil {
 			return err
+		}
+		if proofID != nil {
+			existing, err := scanVersion(tx.QueryRow(ctx, `SELECT `+versionCols+` FROM bot_versions WHERE bot_id = $1 AND proof_id = $2`, botID, *proofID))
+			if err == nil {
+				v = existing
+				return nil
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
 		}
 		if source == "upload" {
 			var count int
