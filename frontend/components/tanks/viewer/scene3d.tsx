@@ -101,11 +101,15 @@ function disposeMesh(mesh: THREE.Mesh | THREE.Sprite) {
 // while the clock is playing, renders one frame on pause/seek/resize via
 // Clock.subscribe, and disposes every three.js resource it created on
 // unmount.
-export default function Scene3D({ replay, clock, selectedSlot, onSelect }: {
+export default function Scene3D({ replay, clock, selectedSlot, onSelect, onUnsupported }: {
   replay: Replay
   clock: Clock
   selectedSlot?: number | null
   onSelect?: (slot: number | null) => void
+  // Called once if WebGL isn't available so the caller can fall back to
+  // the 2D view instead of leaving the viewer stuck showing just a
+  // message — see replay-player.tsx.
+  onUnsupported?: () => void
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const selectedSlotRef = useRef<number | null | undefined>(selectedSlot)
@@ -115,6 +119,8 @@ export default function Scene3D({ replay, clock, selectedSlot, onSelect }: {
   // (the scene effect intentionally does not depend on selectedSlot).
   const requestRenderRef = useRef<() => void>(() => {})
   const [unsupported, setUnsupported] = useState(false)
+  const onUnsupportedRef = useRef(onUnsupported)
+  onUnsupportedRef.current = onUnsupported
 
   useEffect(() => {
     selectedSlotRef.current = selectedSlot
@@ -130,10 +136,12 @@ export default function Scene3D({ replay, clock, selectedSlot, onSelect }: {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
     } catch {
       setUnsupported(true)
+      onUnsupportedRef.current?.()
       return
     }
     if (!renderer.getContext()) {
       setUnsupported(true)
+      onUnsupportedRef.current?.()
       renderer.dispose()
       return
     }
@@ -309,6 +317,7 @@ export default function Scene3D({ replay, clock, selectedSlot, onSelect }: {
     let updatingControls = false
     let wasFollowing = false
     const overviewPosition = camera.position.clone()
+    const overviewTarget = controls.target.clone()
     function render() {
       if (cssW === 0) return
       const t = clock.now()
@@ -408,10 +417,13 @@ export default function Scene3D({ replay, clock, selectedSlot, onSelect }: {
         // remembered orbit, so restore the last Overview pose explicitly
         // rather than feeding update() that arbitrary position (which is
         // also what made update() clamp-and-dispatch-'change' unpredictably
-        // right after a release).
+        // right after a release). Restoring the remembered pan target too
+        // (not just the position) keeps whatever the user was looking at
+        // before they switched to Follow, instead of recentering on the
+        // field.
         if (wasFollowing) {
           camera.position.copy(overviewPosition)
-          controls.target.set(0, 0, 0)
+          controls.target.copy(overviewTarget)
           wasFollowing = false
         }
         controls.enabled = true
@@ -426,10 +438,14 @@ export default function Scene3D({ replay, clock, selectedSlot, onSelect }: {
         // to do.
         if (!updatingControls) {
           updatingControls = true
-          controls.update()
-          updatingControls = false
+          try {
+            controls.update()
+          } finally {
+            updatingControls = false
+          }
         }
         overviewPosition.copy(camera.position)
+        overviewTarget.copy(controls.target)
       }
 
       renderer.render(scene, camera)

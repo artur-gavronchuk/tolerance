@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import { Clock, snapshotAt } from '@/lib/tanks/playback'
 import type { Replay, ReplayEvent } from '@/lib/tanks/replay'
@@ -21,6 +21,44 @@ const Scene3D = dynamic(() => import('./scene3d'), {
     </div>
   ),
 })
+
+// A rejected dynamic-import chunk fetch (e.g. a flaky network mid-deploy)
+// surfaces as a thrown render error under Turbopack's next/dynamic — NOT
+// as the `error` field on the `loading` render prop the way the older
+// webpack-era loadable runtime documents it (verified: with the scene3d
+// chunk request aborted, `loading`'s `error` never populates and a
+// pageerror is thrown instead, previously crashing to Next's generic "This
+// page couldn't load" overlay). A real error boundary is required to
+// catch it locally instead of taking down the whole page. Placed only
+// around <Scene3D> below (inside the '3d'-only branch), so it fully
+// unmounts and resets whenever the view switches away — the natural way
+// back in is just toggling to 2D and back to 3D again.
+class Scene3DBoundary extends Component<{ onBackTo2D: () => void; children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false }
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          className="flex w-full flex-col items-center justify-center gap-3 rounded-[14px] bg-[#0c1720] px-6 text-center text-sm text-muted-foreground"
+          style={{ aspectRatio: '3 / 2' }}
+        >
+          <p>Couldn&apos;t load the 3D view.</p>
+          <button
+            type="button"
+            onClick={this.props.onBackTo2D}
+            className="rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+          >
+            Back to 2D
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 type ViewMode = '2d' | '3d'
 const VIEW_MODE_KEY = 'tanks-viewer-mode'
@@ -103,9 +141,29 @@ export function ReplayPlayer({ replay, startTick = 0, live = false, autoPlay = t
   useEffect(() => {
     setViewMode(loadViewMode())
   }, [])
+  // A short-lived note next to the toggle — currently only used when
+  // Scene3D reports WebGL isn't available and the view is switched back
+  // to 2D automatically. Cleared on the next manual toggle click.
+  const [notice, setNotice] = useState<string | null>(null)
   function handleViewMode(mode: ViewMode) {
     setViewMode(mode)
+    setNotice(null)
     saveViewMode(mode)
+  }
+  // The toggle click that got us into 3D already persisted '3d' via
+  // handleViewMode below — WebGL genuinely isn't available here, so that
+  // stored preference has to be corrected back to '2d' too, or the next
+  // visit would try 3D again and immediately bounce back on every load.
+  // (A transient chunk-load failure, by contrast, doesn't overwrite the
+  // stored preference — see handleSceneLoadBack — since it isn't evidence
+  // the browser can't do 3D, just that this one fetch failed.)
+  function handleUnsupported() {
+    setViewMode('2d')
+    setNotice("3D isn't available in this browser — showing 2D instead.")
+    saveViewMode('2d')
+  }
+  function handleSceneLoadBack() {
+    setViewMode('2d')
   }
 
   // Which tank the 3D Follow camera chases, picked by clicking a
@@ -171,25 +229,38 @@ export function ReplayPlayer({ replay, startTick = 0, live = false, autoPlay = t
       <div className="min-w-0 flex-1 space-y-3">
         <div className="relative">
           {viewMode === '3d' ? (
-            <Scene3D replay={replay} clock={clock} selectedSlot={selectedSlot} onSelect={setSelectedSlot} />
+            <Scene3DBoundary onBackTo2D={handleSceneLoadBack}>
+              <Scene3D
+                replay={replay}
+                clock={clock}
+                selectedSlot={selectedSlot}
+                onSelect={setSelectedSlot}
+                onUnsupported={handleUnsupported}
+              />
+            </Scene3DBoundary>
           ) : (
             <Canvas2D replay={replay} clock={clock} />
           )}
-          <div className="absolute right-2.5 top-2.5 flex gap-0.5 rounded-full border border-border bg-card/90 p-0.5 backdrop-blur">
-            {(['2d', '3d'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => handleViewMode(mode)}
-                aria-pressed={viewMode === mode}
-                className={cn(
-                  'rounded-full px-2.5 py-1 text-xs font-bold uppercase',
-                  viewMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {mode}
-              </button>
-            ))}
+          <div className="absolute right-2.5 top-2.5 flex flex-col items-end gap-1.5">
+            <div className="flex gap-0.5 rounded-full border border-border bg-card/90 p-0.5 backdrop-blur">
+              {(['2d', '3d'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => handleViewMode(mode)}
+                  aria-pressed={viewMode === mode}
+                  className={cn(
+                    'rounded-full px-2.5 py-1 text-xs font-bold uppercase',
+                    viewMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+            {notice && (
+              <p className="max-w-[14rem] rounded-md bg-black/55 px-2 py-1 text-right text-xs text-white backdrop-blur">{notice}</p>
+            )}
           </div>
         </div>
         <Controls
