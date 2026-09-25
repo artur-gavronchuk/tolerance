@@ -34,7 +34,7 @@ async function check(context, paths) {
 
 try {
   const anonymous = await browser.newContext({ viewport: { width: WIDTH, height: 800 } })
-  await check(anonymous, ['/', '/login', '/signup', '/terms'])
+  await check(anonymous, ['/', '/login', '/signup', '/terms', '/tanks', '/tanks/leaderboard', '/tanks/docs', '/tanks/replay'])
 
   const owner = await browser.newContext({ viewport: { width: WIDTH, height: 800 } })
   const call = async (method, path, { data, key } = {}) => {

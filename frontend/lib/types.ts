@@ -24,3 +24,46 @@ export interface Proof {
   diff: string; agent_log_tail: string; agent_duration_ms: number | null; agent_exit_code: number | null
   sandbox_result: SandboxResult | null; failure_reason: string; kind: 'proof' | 'game_bot'
 }
+
+// Tanks: the public ladder, matches and bot profiles. See
+// backend/contracts/openapi/openapi.yaml (`/tanks/*`, `/me/tanks*`).
+export type BotSource = 'agent' | 'upload' | 'house'
+
+export interface Check { name: string; passed: boolean; detail: string }
+
+export interface LeaderboardEntry {
+  rank: number; bot_id: string; name: string; rating: number; mu: number; sigma: number
+  matches: number; wins: number; house: boolean; source: BotSource; version: number
+}
+
+export interface MatchPlayerView {
+  slot: number; bot_id: string; name: string; house: boolean; source: string; version: number
+  place: number | null; kills: number; damage: number; death_tick: number | null; status: string
+  rating_before: number | null; rating_after: number | null
+}
+
+export interface MatchView {
+  id: string; kind: 'ladder' | 'check'; status: string; map: string; seed: number; ticks: number
+  featured: boolean; has_replay: boolean; created_at: string; started_at: string | null; finished_at: string | null
+  players: MatchPlayerView[]
+}
+
+export interface VersionPublic { number: number; source: string; status: string; created_at: string }
+
+export interface BotProfile extends LeaderboardEntry { created_at: string; versions: VersionPublic[] }
+
+export interface VersionView {
+  id: string; number: number; source: string; status: 'pending' | 'active' | 'rejected'; language: string
+  checks: Check[]; check_log: string; check_match_id: string | null; proof_id: string | null; created_at: string
+}
+
+export interface MyBot {
+  id: string; name: string; rating: number; mu: number; sigma: number
+  matches: number; wins: number; active_version: number | null
+}
+
+export interface MyTanks { bot: MyBot | null; versions: VersionView[]; agent_runs: Proof[]; matches: MatchView[] }
+
+export interface LiveView { match_id: string | null; starts_at: string | null; duration_ms: number; now: string }
+
+export interface MatchLog { match_id: string; slot: number; stderr: string }
