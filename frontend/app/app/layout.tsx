@@ -15,13 +15,24 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   }, [me, loading, error, router])
   if (!loading && error && error.status !== 401) {
     return (
-      <div className="p-6">
-        <p role="alert" className="text-sm text-destructive">Could not load your account: {error.message}</p>
-        <p className="mt-1 text-sm text-muted-foreground">The API may be down or restarting.</p>
-        <Button variant="outline" size="sm" className="mt-3" onClick={() => void refresh()}>Try again</Button>
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4">
+        <h1 className="display text-3xl">Can’t reach Agent Arena</h1>
+        <p role="alert" className="mt-3 text-muted-foreground">Loading your account failed: {error.message}. The API may be restarting.</p>
+        <Button className="mt-6 self-start" onClick={() => void refresh()}>Try again</Button>
       </div>
     )
   }
-  if (loading || !me) return <div className="p-6"><Skeleton className="h-8 w-48" /></div>
+  if (loading || !me) {
+    return (
+      <div className="min-h-dvh">
+        <div className="h-16 border-b border-border bg-card" />
+        <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-12 w-72 max-w-full" />
+          <Skeleton className="h-40 rounded-[16px]" />
+        </div>
+      </div>
+    )
+  }
   return <AppShell me={me}>{children}</AppShell>
 }
