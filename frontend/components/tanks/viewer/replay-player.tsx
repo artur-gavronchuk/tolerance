@@ -1,12 +1,47 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { Clock, snapshotAt } from '@/lib/tanks/playback'
 import type { Replay, ReplayEvent } from '@/lib/tanks/replay'
 import { Canvas2D } from './canvas2d'
 import { Controls } from './controls'
 import { Scoreboard } from './scoreboard'
 import { EventFeed } from './event-feed'
+import { cn } from '@/lib/utils'
+
+// Loaded only once the viewer actually switches to 3D — three.js and its
+// OrbitControls add real weight, and most visits never leave the 2D
+// default, so this keeps that weight out of /tanks' first-load JS.
+const Scene3D = dynamic(() => import('./scene3d'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex w-full items-center justify-center rounded-[14px] bg-[#0c1720] text-sm text-muted-foreground" style={{ aspectRatio: '3 / 2' }}>
+      Loading 3D…
+    </div>
+  ),
+})
+
+type ViewMode = '2d' | '3d'
+const VIEW_MODE_KEY = 'tanks-viewer-mode'
+
+function loadViewMode(): ViewMode {
+  try {
+    const v = window.localStorage.getItem(VIEW_MODE_KEY)
+    return v === '3d' ? '3d' : '2d'
+  } catch {
+    return '2d'
+  }
+}
+
+function saveViewMode(mode: ViewMode) {
+  try {
+    window.localStorage.setItem(VIEW_MODE_KEY, mode)
+  } catch {
+    // Best-effort only — a private window or blocked storage just means
+    // the choice doesn't stick across visits.
+  }
+}
 
 // Every notable event (everything but "shot") up to and including `t`,
 // newest first — recomputed from scratch on every tick change so scrubbing
@@ -59,6 +94,23 @@ export function ReplayPlayer({ replay, startTick = 0, live = false, autoPlay = t
   const [tick, setTick] = useState(startTick)
   const rafRef = useRef(0)
   const lastUiRef = useRef(0)
+
+  // Starts at '2d' on both server and client (avoiding a hydration
+  // mismatch) and picks up the remembered choice right after mount.
+  // Switching modes only swaps which renderer reads the shared Clock —
+  // it never touches playback state.
+  const [viewMode, setViewMode] = useState<ViewMode>('2d')
+  useEffect(() => {
+    setViewMode(loadViewMode())
+  }, [])
+  function handleViewMode(mode: ViewMode) {
+    setViewMode(mode)
+    saveViewMode(mode)
+  }
+
+  // Which tank the 3D Follow camera chases, picked by clicking a
+  // scoreboard row. Harmless in 2D — the row just highlights.
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
 
   // The UI (scrubber, mm:ss, scoreboard, event feed) needs a continuous
   // stream of tick updates while playing, but nothing changes while
@@ -117,7 +169,29 @@ export function ReplayPlayer({ replay, startTick = 0, live = false, autoPlay = t
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
       <div className="min-w-0 flex-1 space-y-3">
-        <Canvas2D replay={replay} clock={clock} />
+        <div className="relative">
+          {viewMode === '3d' ? (
+            <Scene3D replay={replay} clock={clock} selectedSlot={selectedSlot} onSelect={setSelectedSlot} />
+          ) : (
+            <Canvas2D replay={replay} clock={clock} />
+          )}
+          <div className="absolute right-2.5 top-2.5 flex gap-0.5 rounded-full border border-border bg-card/90 p-0.5 backdrop-blur">
+            {(['2d', '3d'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => handleViewMode(mode)}
+                aria-pressed={viewMode === mode}
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-xs font-bold uppercase',
+                  viewMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </div>
         <Controls
           playing={playing}
           onPlayPause={handlePlayPause}
@@ -131,7 +205,13 @@ export function ReplayPlayer({ replay, startTick = 0, live = false, autoPlay = t
         />
       </div>
       <div className="flex w-full flex-col gap-4 lg:w-72 lg:shrink-0">
-        <Scoreboard players={replay.players} tanks={tanks} killsBySlot={killsBySlot} />
+        <Scoreboard
+          players={replay.players}
+          tanks={tanks}
+          killsBySlot={killsBySlot}
+          selectedSlot={selectedSlot}
+          onSelect={setSelectedSlot}
+        />
         <EventFeed events={feed} players={replay.players} />
       </div>
     </div>
