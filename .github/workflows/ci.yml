@@ -16,6 +16,8 @@ jobs:
         run: cd backend && go vet ./... && test -z "$(gofmt -l .)"
       - name: build proof image
         run: docker build -q -t arena-proof-go:1 backend/fixtures/proofs/go-fix-retry
+      - name: build bot runtime image
+        run: docker build -q -t arena-bot-runtime:1 backend/internal/games/match/runtime
       - name: test (integration tests must run, not skip)
         run: cd backend && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...
   frontend:

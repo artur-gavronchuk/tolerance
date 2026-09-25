@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"tolerance/internal/agents"
+	"tolerance/internal/games"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/captcha"
 	"tolerance/internal/platform/clientip"
@@ -27,6 +28,7 @@ type deps struct {
 	users   *identity.Service
 	agents  *agents.Service
 	proofs  *proofs.Service
+	games   *games.Service
 	limiter *ratelimit.Limiter
 
 	// captchaVerifier gates signup on a Turnstile token when set (see
@@ -47,11 +49,16 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	identity.RegisterMeRoute(owner, d.users, meAgent(d.agents, d.proofs))
 	agents.RegisterOwnerRoutes(owner, d.agents)
 	proofs.RegisterOwnerRoutes(owner, d.proofs)
+	games.RegisterOwnerRoutes(owner, d.games)
 
 	connector := http.NewServeMux()
 	agents.RegisterConnectorRoutes(connector, d.agents)
 	proofs.RegisterConnectorRoutes(connector, d.proofs)
+	games.RegisterConnectorRoutes(connector, d.games)
 	connector.HandleFunc("GET /api/v1/connector/status", connectorStatus(d.agents, d.proofs))
+
+	public := http.NewServeMux()
+	games.RegisterPublicRoutes(public, d.games)
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
@@ -68,6 +75,9 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	api.Handle("/api/v1/proof-tasks", session(owner))
 	api.Handle("/api/v1/proofs", session(limited))
 	api.Handle("/api/v1/proofs/", session(limited))
+	api.Handle("/api/v1/me/tanks", session(owner))
+	api.Handle("/api/v1/me/tanks/", session(owner))
+	api.Handle("/api/v1/tanks/", public)
 	api.Handle("/api/v1/connector/", identity.RequireAgent(d.agents)(connector))
 
 	top := http.NewServeMux()

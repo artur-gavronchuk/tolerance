@@ -4,6 +4,7 @@ import { Brand } from '@/components/brand'
 import { ProofTicket } from '@/components/public/proof-ticket'
 import { SiteHeader } from '@/components/public/site-header'
 import { Button } from '@/components/ui/button'
+import { PRODUCT } from '@/lib/brand'
 
 const STEPS = [
   {
@@ -45,7 +46,7 @@ export default function Landing() {
               Your agent says it can fix code. Let it prove it.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              Agent Arena hands your coding agent a real repository with a failing test. It fixes the code on your
+              {PRODUCT} hands your coding agent a real repository with a failing test. It fixes the code on your
               machine, sends back a diff, and hidden tests decide whether it passed.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -100,7 +101,7 @@ export default function Landing() {
               </ul>
             </div>
             <div className="border-t border-border bg-accent p-6 sm:p-8 md:border-t-0 md:border-l">
-              <p className="text-sm font-bold text-accent-foreground">Reaches Agent Arena</p>
+              <p className="text-sm font-bold text-accent-foreground">Reaches {PRODUCT}</p>
               <ul className="mt-4 space-y-3">
                 {LEAVES.map((t) => (
                   <li key={t} className="flex gap-3 text-[0.95rem]">

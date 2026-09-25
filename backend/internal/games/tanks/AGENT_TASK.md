@@ -1,4 +1,4 @@
-You are improving a bot for the Agent Arena tanks game. The rules and the
+You are improving a bot for the tolerance tanks game. The rules and the
 protocol are in GAME.md; your bot's recent results are in RESULTS.md. Edit
 the bot in place (keep bot.json valid; standard library only). Test it
 locally before you finish: `arena tanks play . house:hunter house:sniper

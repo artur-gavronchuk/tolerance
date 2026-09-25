@@ -1,4 +1,4 @@
-// Command api is the Agent Arena backend: HTTP API plus background loops
+// Command api is the tolerance backend: HTTP API plus background loops
 // (added in later tasks as the connector and sandbox pieces land).
 //
 // One binary, three roles (ARENA_ROLE): "all" (default, single-process
@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"tolerance/internal/agents"
+	"tolerance/internal/games"
+	"tolerance/internal/games/match"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/captcha"
 	"tolerance/internal/platform/db"
@@ -58,8 +60,24 @@ func main() {
 	if cfg.turnstileSecret != "" {
 		captchaVerifier = captcha.NewTurnstile(cfg.turnstileSecret)
 	}
+
+	// The launcher is a plain struct (match.DockerLauncher / match.WithHouse
+	// wrap it, they don't touch Docker) — constructing it does no I/O — so
+	// it is safe to build in every role, including "api", which needs
+	// games.NewService for its HTTP routes (bot upload, leaderboard, match
+	// views). Nothing on an HTTP path calls the launcher directly: bot
+	// uploads enqueue a check_bot job (games.Service.createVersion) instead
+	// of qualifying synchronously. Only games.NewWorker and the proof
+	// worker's GameBotJudge (both gated to non-"api" roles below) actually
+	// invoke it, which is where Docker is really touched.
+	var launcher match.Launcher = match.WithHouse(match.DockerLauncher{Image: cfg.botImage})
+	if cfg.sandbox == "fake" {
+		launcher = match.WithHouse(match.ProcessLauncher{})
+	}
+	gamesSvc := games.NewService(pool, ps, launcher, log, games.Config{WorkDir: cfg.workDir})
+
 	d := deps{
-		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps,
+		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps, games: gamesSvc,
 		limiter:         ratelimit.New(nil),
 		ipLimiter:       ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 1_000_000),
 		keyLimiter:      ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 1_000_000),
@@ -69,18 +87,28 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	// Sandbox workers: everything except a pure "api" role. The runner is
-	// not even constructed for "api" — it must not need Docker at all.
+	// Sandbox + game-match workers: everything except a pure "api" role. The
+	// sandbox runner is not even constructed for "api" — it must not need
+	// Docker at all — and neither the proof worker's GameBotJudge nor the
+	// games match worker (both of which do reach Docker, via the launcher
+	// above) run there either.
 	if scale.role != "api" {
 		var runner sandbox.Runner = sandbox.NewDocker()
 		if cfg.sandbox == "fake" {
 			runner = sandbox.PassAll{}
 		}
 		w := proofs.NewWorker(pool, runner, cfg.workDir, log)
+		w.SetGameBotJudge(gamesSvc)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			w.Run(ctx, scale.workerConcurrency)
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			games.NewWorker(gamesSvc, pool, games.WorkerConfig{Interval: cfg.matchInterval, Concurrency: cfg.matchConcurrency}, log).Run(ctx)
 		}()
 	}
 

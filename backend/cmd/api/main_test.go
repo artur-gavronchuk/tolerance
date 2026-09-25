@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -10,6 +13,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,6 +22,9 @@ import (
 
 	"tolerance/contracts/openapi"
 	"tolerance/internal/agents"
+	"tolerance/internal/games"
+	"tolerance/internal/games/match"
+	"tolerance/internal/games/tanks"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/dbtest"
 	"tolerance/internal/platform/httpx"
@@ -31,6 +38,7 @@ type e2e struct {
 	router routers.Router
 	worker *proofs.Worker
 	fake   *sandbox.Fake
+	games  *games.Service
 }
 
 func newE2E(t *testing.T) *e2e {
@@ -44,6 +52,9 @@ func newE2E(t *testing.T) *e2e {
 	if err := proofs.SyncCatalog(ctx, d.AdminPool, tasks); err != nil {
 		t.Fatal(err)
 	}
+	if err := games.Sync(ctx, d.AdminPool); err != nil {
+		t.Fatal(err)
+	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake"}
 	// Effectively unlimited: the e2e test fires many requests back to back
@@ -52,8 +63,13 @@ func newE2E(t *testing.T) *e2e {
 	scale := scaleConfig{role: "all", hashConcurrency: 4, workerConcurrency: 1,
 		rateIPRPS: 1e6, rateIPBurst: 1_000_000, rateKeyRPS: 1e6, rateKeyBurst: 1_000_000}
 	ps := proofs.NewService(d.AppPool)
+	// A real process launcher for house bots (in-process, no interpreter needed) and any uploaded bot
+	// (python/js, via python3/node) - short check matches so the qualify-driving tests stay fast. The games
+	// worker itself is never started here: tests call ScheduleTick/RunMatch/Qualify directly to arrange
+	// their own fixtures deterministically.
+	gamesSvc := games.NewService(d.AppPool, ps, match.WithHouse(match.ProcessLauncher{}), log, games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
-		agents: agents.NewService(d.AppPool, ps), proofs: ps,
+		agents: agents.NewService(d.AppPool, ps), proofs: ps, games: gamesSvc,
 		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 100),
 		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 100),
 		longPoll:   ratelimit.NewConcurrencyLimiter(2)}
@@ -70,7 +86,46 @@ func newE2E(t *testing.T) *e2e {
 		tests = append(tests, sandbox.TestResult{Name: n, Passed: true})
 	}
 	fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: tests}}
-	return &e2e{srv: srv, router: router, worker: proofs.NewWorker(d.AppPool, fake, t.TempDir(), log), fake: fake}
+	worker := proofs.NewWorker(d.AppPool, fake, t.TempDir(), log)
+	worker.SetGameBotJudge(gamesSvc)
+	return &e2e{srv: srv, router: router, worker: worker, fake: fake, games: gamesSvc}
+}
+
+// requirePython3 skips a test when python3 isn't on PATH, unless ARENA_TEST_REQUIRE_DOCKER=1 (CI always
+// has it), in which case a missing interpreter fails the test rather than silently skipping it - the same
+// convention internal/games's own tests use.
+func requirePython3(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("python3"); err != nil {
+		if os.Getenv("ARENA_TEST_REQUIRE_DOCKER") == "1" {
+			t.Fatalf("python3 not found in PATH: %v", err)
+		}
+		t.Skipf("python3 not found in PATH: %v", err)
+	}
+}
+
+// hasFieldPath reports whether fields contains a FieldError for the given path.
+func hasFieldPath(fields []httpx.FieldError, path string) bool {
+	for _, f := range fields {
+		if f.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+// tanksStarterArchive is the unmodified python starter kit, tarred as a bot upload.
+func tanksStarterArchive(t *testing.T) []byte {
+	t.Helper()
+	files, err := tanks.Starter("python")
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive, err := proofs.TarFiles(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return archive
 }
 
 func (e *e2e) browser(t *testing.T) *http.Client {
@@ -323,5 +378,284 @@ func TestEndToEnd_OversizedResultFailsTheProof(t *testing.T) {
 	e.call(t, owner, "GET", "/api/v1/proofs/"+proof.ID, "", nil, &proof)
 	if proof.Status != proofs.StatusFailed || proof.FailureReason != "diff_too_large" || proof.FinishedAt == nil {
 		t.Fatalf("after an oversized result: %+v", proof)
+	}
+}
+
+func TestTanksPublicEmpty(t *testing.T) {
+	e := newE2E(t)
+	plain := &http.Client{}
+
+	var lb struct {
+		Items []games.LeaderboardEntry `json:"items"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/tanks/leaderboard", "", nil, &lb); code != 200 {
+		t.Fatalf("leaderboard: %d", code)
+	}
+	if len(lb.Items) != 2 {
+		t.Fatalf("expected exactly hunter and sniper (idle hidden), got %+v", lb.Items)
+	}
+	names := map[string]bool{}
+	for _, entry := range lb.Items {
+		names[entry.Name] = true
+	}
+	if !names["hunter"] || !names["sniper"] || names["idle"] {
+		t.Fatalf("unexpected leaderboard names: %+v", names)
+	}
+
+	// limit clamping and validation: an over-max limit is clamped (never an error), while anything that
+	// doesn't parse as a positive integer is 422 validation_failed on fields.limit.
+	var clamped struct {
+		Items []games.LeaderboardEntry `json:"items"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/tanks/leaderboard?limit=9999", "", nil, &clamped); code != 200 {
+		t.Fatalf("leaderboard limit=9999: %d", code)
+	}
+	if len(clamped.Items) > 500 {
+		t.Fatalf("expected leaderboard clamped to at most 500 items, got %d", len(clamped.Items))
+	}
+	for _, path := range []string{"/api/v1/tanks/leaderboard?limit=0", "/api/v1/tanks/leaderboard?limit=abc"} {
+		var problem httpx.Problem
+		if code := e.call(t, plain, "GET", path, "", nil, &problem); code != 422 || problem.Code != "validation_failed" {
+			t.Fatalf("%s: %d %+v", path, code, problem)
+		}
+		if !hasFieldPath(problem.Fields, "limit") {
+			t.Fatalf("%s: expected fields.limit, got %+v", path, problem.Fields)
+		}
+	}
+	{
+		var problem httpx.Problem
+		if code := e.call(t, plain, "GET", "/api/v1/tanks/matches?limit=0", "", nil, &problem); code != 422 || problem.Code != "validation_failed" {
+			t.Fatalf("matches limit=0: %d %+v", code, problem)
+		}
+		if !hasFieldPath(problem.Fields, "limit") {
+			t.Fatalf("matches limit=0: expected fields.limit, got %+v", problem.Fields)
+		}
+	}
+
+	var live games.LiveView
+	if code := e.call(t, plain, "GET", "/api/v1/tanks/live", "", nil, &live); code != 200 {
+		t.Fatalf("live: %d", code)
+	}
+	if live.MatchID != nil {
+		t.Fatalf("expected no broadcast yet, got %+v", live)
+	}
+
+	var problem httpx.Problem
+	if code := e.call(t, plain, "GET", "/api/v1/tanks/matches/nope", "", nil, &problem); code != 404 {
+		t.Fatalf("unknown match: %d", code)
+	}
+}
+
+func TestTanksUploadAndQualify(t *testing.T) {
+	requirePython3(t)
+	e := newE2E(t)
+	owner := e.browser(t)
+
+	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "rookie@example.com", "password": "longenough1"}, nil); code != 201 {
+		t.Fatalf("signup: %d", code)
+	}
+
+	var bot games.MyBot
+	if code := e.call(t, owner, "POST", "/api/v1/me/tanks/bot", "", map[string]string{"name": "rookie"}, &bot); code != 200 {
+		t.Fatalf("save bot: %d", code)
+	}
+
+	// bad base64
+	var problem httpx.Problem
+	if code := e.call(t, owner, "POST", "/api/v1/me/tanks/versions", "", map[string]string{"archive_base64": "not-valid-base64!!"}, &problem); code != 422 || problem.Code != "validation_failed" {
+		t.Fatalf("bad base64: %d %+v", code, problem)
+	}
+	fieldOK := false
+	for _, f := range problem.Fields {
+		if f.Path == "archive_base64" {
+			fieldOK = true
+		}
+	}
+	if !fieldOK {
+		t.Fatalf("expected fields.archive_base64, got %+v", problem.Fields)
+	}
+
+	// junk archive: valid base64, not a valid bot package
+	junk := base64.StdEncoding.EncodeToString([]byte("not a tarball"))
+	if code := e.call(t, owner, "POST", "/api/v1/me/tanks/versions", "", map[string]string{"archive_base64": junk}, &problem); code != 422 || problem.Code != "invalid_package" {
+		t.Fatalf("junk archive: %d %+v", code, problem)
+	}
+
+	// a real upload
+	b64 := base64.StdEncoding.EncodeToString(tanksStarterArchive(t))
+	var v games.VersionView
+	if code := e.call(t, owner, "POST", "/api/v1/me/tanks/versions", "", map[string]string{"archive_base64": b64}, &v); code != 201 || v.Status != "pending" {
+		t.Fatalf("upload: %d %+v", code, v)
+	}
+
+	if _, _, err := e.games.Qualify(context.Background(), v.ID); err != nil {
+		t.Fatalf("qualify: %v", err)
+	}
+
+	var mine games.MyTanks
+	if code := e.call(t, owner, "GET", "/api/v1/me/tanks", "", nil, &mine); code != 200 {
+		t.Fatalf("my tanks: %d", code)
+	}
+	if mine.Bot == nil || mine.Bot.ActiveVersion == nil {
+		t.Fatalf("expected an active version, got %+v", mine.Bot)
+	}
+	if len(mine.Versions) != 1 || len(mine.Versions[0].Checks) != 4 {
+		t.Fatalf("expected 4 checks on the one version, got %+v", mine.Versions)
+	}
+
+	var profile games.BotProfile
+	if code := e.call(t, owner, "GET", "/api/v1/tanks/bots/"+bot.ID, "", nil, &profile); code != 200 || profile.Name != "rookie" || len(profile.Versions) != 1 {
+		t.Fatalf("bot profile: %d %+v", code, profile)
+	}
+}
+
+func TestTanksLadderPublic(t *testing.T) {
+	requirePython3(t)
+	e := newE2E(t)
+	ctx := context.Background()
+	owner := e.browser(t)
+	other := e.browser(t)
+	plain := &http.Client{}
+
+	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "ladder-owner@example.com", "password": "longenough1"}, nil); code != 201 {
+		t.Fatalf("signup owner: %d", code)
+	}
+	if code := e.call(t, other, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "ladder-other@example.com", "password": "longenough1"}, nil); code != 201 {
+		t.Fatalf("signup other: %d", code)
+	}
+
+	var bot games.MyBot
+	if code := e.call(t, owner, "POST", "/api/v1/me/tanks/bot", "", map[string]string{"name": "lead"}, &bot); code != 200 {
+		t.Fatalf("save bot: %d", code)
+	}
+	b64 := base64.StdEncoding.EncodeToString(tanksStarterArchive(t))
+	var v games.VersionView
+	if code := e.call(t, owner, "POST", "/api/v1/me/tanks/versions", "", map[string]string{"archive_base64": b64}, &v); code != 201 {
+		t.Fatalf("upload: %d", code)
+	}
+	if _, _, err := e.games.Qualify(ctx, v.ID); err != nil {
+		t.Fatalf("qualify: %v", err)
+	}
+
+	matchID, err := e.games.ScheduleTick(ctx, 1, 0)
+	if err != nil {
+		t.Fatalf("schedule tick: %v", err)
+	}
+	if matchID == "" {
+		t.Fatal("expected a scheduled ladder match")
+	}
+	if err := e.games.RunMatch(ctx, matchID); err != nil {
+		t.Fatalf("run match: %v", err)
+	}
+
+	var matches struct {
+		Items []games.MatchView `json:"items"`
+	}
+	if code := e.call(t, owner, "GET", "/api/v1/tanks/matches?bot_id="+bot.ID, "", nil, &matches); code != 200 {
+		t.Fatalf("matches: %d", code)
+	}
+	found := false
+	for _, m := range matches.Items {
+		if m.ID == matchID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected match %s in %+v", matchID, matches.Items)
+	}
+
+	req, _ := http.NewRequest("GET", e.srv.URL+"/api/v1/tanks/matches/"+matchID+"/replay", nil)
+	resp, err := plain.Do(req)
+	if err != nil || resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "application/gzip" {
+		t.Fatalf("replay: %v %v", err, resp)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	openapi.ValidateResponse(t, e.router, req, resp, raw)
+	resp.Body.Close()
+	if _, err := tanks.DecodeReplay(raw); err != nil {
+		t.Fatalf("decode replay: %v", err)
+	}
+
+	var log games.MatchLog
+	if code := e.call(t, owner, "GET", "/api/v1/me/tanks/matches/"+matchID+"/log", "", nil, &log); code != 200 || log.MatchID != matchID {
+		t.Fatalf("own match log: %d %+v", code, log)
+	}
+	if code := e.call(t, other, "GET", "/api/v1/me/tanks/matches/"+matchID+"/log", "", nil, nil); code != 404 {
+		t.Fatalf("another owner's match log: %d", code)
+	}
+}
+
+func TestTanksAgentRun(t *testing.T) {
+	e := newE2E(t)
+	owner := e.browser(t)
+	plain := &http.Client{}
+
+	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "agent-owner@example.com", "password": "longenough1"}, nil); code != 201 {
+		t.Fatalf("signup: %d", code)
+	}
+	if code := e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "runner"}, nil); code != 201 {
+		t.Fatalf("create agent: %d", code)
+	}
+	var key struct {
+		Key string `json:"key"`
+	}
+	if code := e.call(t, owner, "POST", "/api/v1/agent/keys", "", map[string]string{"name": "k"}, &key); code != 201 {
+		t.Fatalf("create key: %d", code)
+	}
+	if code := e.call(t, plain, "POST", "/api/v1/connector/heartbeat", key.Key, map[string]string{"connector_version": "0.1.0", "hostname": "h"}, nil); code != 200 {
+		t.Fatalf("heartbeat: %d", code)
+	}
+
+	var proof proofs.Proof
+	if code := e.call(t, owner, "POST", "/api/v1/me/tanks/agent-runs", "", nil, &proof); code != 201 || proof.Kind != proofs.KindGameBot {
+		t.Fatalf("agent run: %d %+v", code, proof)
+	}
+
+	var next struct {
+		ProofID string      `json:"proof_id"`
+		Kind    string      `json:"kind"`
+		Task    proofs.Task `json:"task"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/connector/tasks/next?wait=1", key.Key, nil, &next); code != 200 || next.Kind != proofs.KindGameBot || next.ProofID != proof.ID {
+		t.Fatalf("next: %d %+v", code, next)
+	}
+
+	req, _ := http.NewRequest("GET", e.srv.URL+"/api/v1/connector/proofs/"+proof.ID+"/repo.tar.gz", nil)
+	req.Header.Set("Authorization", "Bearer "+key.Key)
+	resp, err := plain.Do(req)
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("repo download: %v %v", err, resp)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	openapi.ValidateResponse(t, e.router, req, resp, raw)
+	resp.Body.Close()
+	sum := sha256.Sum256(raw)
+	if hex.EncodeToString(sum[:]) != next.Task.RepoSHA256 {
+		t.Fatalf("repo sha256 mismatch: got %x want %s", sum, next.Task.RepoSHA256)
+	}
+}
+
+func TestTanksConnectorUpload(t *testing.T) {
+	e := newE2E(t)
+	owner := e.browser(t)
+	plain := &http.Client{}
+
+	if code := e.call(t, owner, "POST", "/api/v1/auth/signup", "", map[string]string{"email": "connector-upload@example.com", "password": "longenough1"}, nil); code != 201 {
+		t.Fatalf("signup: %d", code)
+	}
+	if code := e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "uploader"}, nil); code != 201 {
+		t.Fatalf("create agent: %d", code)
+	}
+	var key struct {
+		Key string `json:"key"`
+	}
+	if code := e.call(t, owner, "POST", "/api/v1/agent/keys", "", map[string]string{"name": "k"}, &key); code != 201 {
+		t.Fatalf("create key: %d", code)
+	}
+
+	b64 := base64.StdEncoding.EncodeToString(tanksStarterArchive(t))
+	var v games.VersionView
+	if code := e.call(t, plain, "POST", "/api/v1/connector/tanks/versions", key.Key, map[string]string{"archive_base64": b64}, &v); code != 201 || v.Source != "upload" {
+		t.Fatalf("connector upload: %d %+v", code, v)
 	}
 }

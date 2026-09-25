@@ -1,4 +1,4 @@
-// Command arena is the connector an agent owner runs on their own machine.
+// Command arena is the tolerance connector an agent owner runs on their own machine.
 // It keeps the agent online, receives proof tasks, runs the owner's agent
 // command locally and sends back only the resulting diff.
 package main
@@ -17,6 +17,10 @@ import (
 	"time"
 )
 
+// defaultSiteURL is where the platform lives when nothing else says otherwise: `arena init`'s default
+// config.yaml, and the fallback `arena tanks play` replay hint uses before `arena init` has ever run.
+const defaultSiteURL = "https://tolerance.cc"
+
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -32,6 +36,8 @@ func main() {
 		err = cmdConnect()
 	case "status":
 		err = cmdStatus()
+	case "tanks":
+		err = runTanks(os.Args[2:], os.Stdout, os.Stderr)
 	default:
 		usage()
 		os.Exit(2)
@@ -43,12 +49,15 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `usage: arena <login|init|connect|status>
+	fmt.Fprintln(os.Stderr, `usage: arena <login|init|connect|status|tanks>
 
-  login    read an API key from stdin and store it in ~/.arena/key
-  init     write ~/.arena/config.yaml with the agent command to edit
-  connect  stay online and run proof tasks as they arrive
-  status   show the agent's stage and latest proof (not a heartbeat)`)
+  login       read an API key from stdin and store it in ~/.arena/key
+  init        write ~/.arena/config.yaml with the agent command to edit
+  connect     stay online and run proof tasks as they arrive
+  status      show the agent's stage and latest proof (not a heartbeat)
+  tanks new    scaffold a starter tanks bot: arena tanks new <dir> [--lang python|js]
+  tanks play   play a local tanks match: arena tanks play <bot>... [--seed N] [--map NAME] [--ticks N] [--out FILE]
+  tanks submit upload a bot version to the platform: arena tanks submit <dir>`)
 }
 
 func cmdLogin() error {
@@ -86,7 +95,7 @@ func cmdInit() error {
 	}
 	url := os.Getenv("ARENA_URL")
 	if url == "" {
-		url = "https://tolerance.cc"
+		url = defaultSiteURL
 	}
 	if err := os.WriteFile(path, []byte(fmt.Sprintf(defaultConfig, url)), 0o600); err != nil {
 		return err

@@ -2,6 +2,8 @@ package proofs
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
@@ -27,7 +29,7 @@ type Service struct {
 func NewService(pool *db.Pool) *Service { return &Service{pool: pool, notify: newNotifier()} }
 
 const proofCols = `id, agent_id, task_slug, status, created_at, claimed_at, diff_submitted_at, finished_at,
-	diff, agent_log_tail, agent_duration_ms, agent_exit_code, sandbox_result, failure_reason`
+	diff, agent_log_tail, agent_duration_ms, agent_exit_code, sandbox_result, failure_reason, kind`
 
 func utcp(t *time.Time) *time.Time {
 	if t == nil {
@@ -37,13 +39,17 @@ func utcp(t *time.Time) *time.Time {
 	return &u
 }
 
-func scanProof(row interface{ Scan(...any) error }, p *Proof) error {
-	if err := row.Scan(&p.ID, &p.AgentID, &p.TaskSlug, &p.Status, &p.CreatedAt, &p.ClaimedAt, &p.DiffSubmittedAt, &p.FinishedAt,
-		&p.Diff, &p.AgentLogTail, &p.AgentDurationMS, &p.AgentExitCode, &p.SandboxResult, &p.FailureReason); err != nil {
-		return err
-	}
+func normalizeProofTimes(p *Proof) {
 	p.CreatedAt = p.CreatedAt.UTC()
 	p.ClaimedAt, p.DiffSubmittedAt, p.FinishedAt = utcp(p.ClaimedAt), utcp(p.DiffSubmittedAt), utcp(p.FinishedAt)
+}
+
+func scanProof(row interface{ Scan(...any) error }, p *Proof) error {
+	if err := row.Scan(&p.ID, &p.AgentID, &p.TaskSlug, &p.Status, &p.CreatedAt, &p.ClaimedAt, &p.DiffSubmittedAt, &p.FinishedAt,
+		&p.Diff, &p.AgentLogTail, &p.AgentDurationMS, &p.AgentExitCode, &p.SandboxResult, &p.FailureReason, &p.Kind); err != nil {
+		return err
+	}
+	normalizeProofTimes(p)
 	return nil
 }
 
@@ -56,11 +62,13 @@ func (s *Service) agentOf(ctx context.Context, tx pgx.Tx, userID string) (string
 	return id, err
 }
 
-// Tasks lists the catalog without tarballs.
+// Tasks lists the catalog without tarballs. Only kind = 'proof' tasks are listed here; game_bot tasks
+// (like tanks-bot) are driven by the games package, not the proofs dashboard page.
 func (s *Service) Tasks(ctx context.Context) ([]Task, error) {
 	out := []Task{}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT slug, title, language, agent_timeout_s, sandbox_timeout_s, visible_tests, hidden_tests, task_md, repo_sha256 FROM proof_tasks ORDER BY slug`)
+		rows, err := tx.Query(ctx, `SELECT slug, title, language, agent_timeout_s, sandbox_timeout_s, visible_tests, hidden_tests, task_md, repo_sha256
+			FROM proof_tasks WHERE kind = 'proof' ORDER BY slug`)
 		if err != nil {
 			return err
 		}
@@ -77,39 +85,59 @@ func (s *Service) Tasks(ctx context.Context) ([]Task, error) {
 	return out, err
 }
 
-// Create queues a proof for the caller's agent. The agent must be online
-// (presence within 2 minutes), have no proof in flight and be under the
-// daily limit; the partial unique index is the last word on "in flight".
-func (s *Service) Create(ctx context.Context, userID, slug string) (Proof, error) {
+// checkCreatable enforces the checks every new proof shares regardless of kind: the task exists and has
+// the wanted kind, the caller's agent is online (presence within 2 minutes), and it is under the daily
+// limit. It returns the agent id to create the proof against.
+func (s *Service) checkCreatable(ctx context.Context, tx pgx.Tx, userID, slug, wantKind string) (string, error) {
+	agentID, err := s.agentOf(ctx, tx, userID)
+	if err != nil {
+		return "", err
+	}
+	var kind string
+	err = tx.QueryRow(ctx, `SELECT kind FROM proof_tasks WHERE slug = $1`, slug).Scan(&kind)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", httpx.NotFound()
+	}
+	if err != nil {
+		return "", err
+	}
+	if kind != wantKind {
+		return "", httpx.NotFound()
+	}
+	var online bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agent_presence WHERE agent_id = $1 AND last_seen_at > now() - interval '2 minutes')`, agentID).Scan(&online); err != nil {
+		return "", err
+	}
+	if !online {
+		return "", httpx.New(http.StatusConflict, "agent_offline", "The connector is not online; run `arena connect` first")
+	}
+	var today int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM proofs WHERE agent_id = $1 AND created_at > now() - interval '24 hours'`, agentID).Scan(&today); err != nil {
+		return "", err
+	}
+	if today >= dailyLimit {
+		return "", httpx.New(http.StatusTooManyRequests, "daily_limit", "At most 10 proofs per day per agent")
+	}
+	return agentID, nil
+}
+
+// create is the shared body of Create and CreateWithRepo: check, insert (with an optional per-proof repo
+// override) and audit, all in one transaction.
+func (s *Service) create(ctx context.Context, userID, slug, wantKind string, repoTar []byte) (Proof, error) {
 	var p Proof
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		agentID, err := s.agentOf(ctx, tx, userID)
+		agentID, err := s.checkCreatable(ctx, tx, userID, slug, wantKind)
 		if err != nil {
 			return err
 		}
-		var exists bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM proof_tasks WHERE slug = $1)`, slug).Scan(&exists); err != nil {
-			return err
+		var repoSHA256 *string
+		if repoTar != nil {
+			sum := sha256.Sum256(repoTar)
+			sha := hex.EncodeToString(sum[:])
+			repoSHA256 = &sha
 		}
-		if !exists {
-			return httpx.NotFound()
-		}
-		var online bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agent_presence WHERE agent_id = $1 AND last_seen_at > now() - interval '2 minutes')`, agentID).Scan(&online); err != nil {
-			return err
-		}
-		if !online {
-			return httpx.New(http.StatusConflict, "agent_offline", "The connector is not online; run `arena connect` first")
-		}
-		var today int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM proofs WHERE agent_id = $1 AND created_at > now() - interval '24 hours'`, agentID).Scan(&today); err != nil {
-			return err
-		}
-		if today >= dailyLimit {
-			return httpx.New(http.StatusTooManyRequests, "daily_limit", "At most 10 proofs per day per agent")
-		}
-		if err := scanProof(tx.QueryRow(ctx, `INSERT INTO proofs (id, agent_id, task_slug) VALUES ($1, $2, $3) RETURNING `+proofCols,
-			idgen.New("proof"), agentID, slug), &p); err != nil {
+		if err := scanProof(tx.QueryRow(ctx, `INSERT INTO proofs (id, agent_id, task_slug, kind, repo_tar, repo_sha256) VALUES ($1, $2, $3, $4, $5, $6) RETURNING `+proofCols,
+			idgen.New("proof"), agentID, slug, wantKind, repoTar, repoSHA256), &p); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{ActorID: userID, Action: "proof.created", AggregateKind: "proof", AggregateID: p.ID, RequestID: httpx.RequestID(ctx)})
@@ -126,6 +154,22 @@ func (s *Service) Create(ctx context.Context, userID, slug string) (Proof, error
 	return p, err
 }
 
+// Create queues a proof for the caller's agent against a kind = 'proof' task. The agent must be online
+// (presence within 2 minutes), have no proof in flight and be under the daily limit; the partial unique
+// index is the last word on "in flight".
+func (s *Service) Create(ctx context.Context, userID, slug string) (Proof, error) {
+	return s.create(ctx, userID, slug, KindProof, nil)
+}
+
+// CreateWithRepo is Create for a kind = 'game_bot' task, with a per-proof repo tarball that overrides the
+// task's own repo for this one proof (the games package hands the agent its current bot code to improve,
+// rather than the task's starter kit). repoTar's sha256 is stored alongside it.
+func (s *Service) CreateWithRepo(ctx context.Context, userID, slug string, repoTar []byte) (Proof, error) {
+	return s.create(ctx, userID, slug, KindGameBot, repoTar)
+}
+
+// List returns the caller's kind = 'proof' proofs, newest first. Tanks agent runs (kind = 'game_bot') are
+// shown separately, via games.MyTanks.AgentRuns.
 func (s *Service) List(ctx context.Context, userID string) ([]Proof, error) {
 	out := []Proof{}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
@@ -133,7 +177,7 @@ func (s *Service) List(ctx context.Context, userID string) ([]Proof, error) {
 		if err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT `+proofCols+` FROM proofs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT 50`, agentID)
+		rows, err := tx.Query(ctx, `SELECT `+proofCols+` FROM proofs WHERE agent_id = $1 AND kind = 'proof' ORDER BY created_at DESC LIMIT 50`, agentID)
 		if err != nil {
 			return err
 		}
@@ -151,12 +195,13 @@ func (s *Service) List(ctx context.Context, userID string) ([]Proof, error) {
 	return out, err
 }
 
-// Latest returns the agent's most recent proof in list form (no diff, no
-// log), or nil when it has none. /me and `arena status` show it.
+// Latest returns the agent's most recent kind = 'proof' proof in list form (no diff, no log), or nil when
+// it has none. /me and `arena status` show it; a tanks agent run is not a base capability check, so it is
+// left out here too and shown via games.MyTanks.AgentRuns instead.
 func (s *Service) Latest(ctx context.Context, agentID string) (*Proof, error) {
 	var p Proof
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		return scanProof(tx.QueryRow(ctx, `SELECT `+proofCols+` FROM proofs WHERE agent_id = $1 ORDER BY created_at DESC LIMIT 1`, agentID), &p)
+		return scanProof(tx.QueryRow(ctx, `SELECT `+proofCols+` FROM proofs WHERE agent_id = $1 AND kind = 'proof' ORDER BY created_at DESC LIMIT 1`, agentID), &p)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -210,14 +255,15 @@ func (s *Service) Retry(ctx context.Context, userID, id string) (Proof, error) {
 	return p, err
 }
 
-// ProofFacts implements agents.ProofFactsSource.
+// ProofFacts implements agents.ProofFactsSource. Every fact is filtered to kind = 'proof': agent stage is
+// about the base capability check, which game_bot proofs (tanks-bot) have nothing to do with.
 func (s *Service) ProofFacts(ctx context.Context, agentID string) (agents.ProofFacts, error) {
 	var f agents.ProofFacts
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT
-			EXISTS (SELECT 1 FROM proofs WHERE agent_id = $1 AND status = 'passed'),
-			EXISTS (SELECT 1 FROM proofs WHERE agent_id = $1 AND status = ANY($2)),
-			coalesce((SELECT status FROM proofs WHERE agent_id = $1 AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1), '')`,
+			EXISTS (SELECT 1 FROM proofs WHERE agent_id = $1 AND status = 'passed' AND kind = 'proof'),
+			EXISTS (SELECT 1 FROM proofs WHERE agent_id = $1 AND status = ANY($2) AND kind = 'proof'),
+			coalesce((SELECT status FROM proofs WHERE agent_id = $1 AND finished_at IS NOT NULL AND kind = 'proof' ORDER BY finished_at DESC LIMIT 1), '')`,
 			agentID, openStatuses).Scan(&f.HasPassed, &f.HasOpen, &f.LastFinishedStatus)
 	})
 	return f, err
@@ -252,16 +298,24 @@ func (s *Service) WaitForProof(agentID string) (<-chan struct{}, func()) {
 
 // Claim hands the agent's oldest queued proof to the connector. SKIP LOCKED
 // makes two connectors on one key race safely: one wins, the other sees nil.
+// A per-proof repo override (CreateWithRepo) takes precedence over the task's own repo, both for the
+// tarball and for the sha256 the connector verifies against.
 func (s *Service) Claim(ctx context.Context, agentID string) (*Proof, *Task, error) {
 	var p Proof
 	var t *Task
+	var repoTar []byte
+	var repoSHA256 *string
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		err := scanProof(tx.QueryRow(ctx, `UPDATE proofs SET status = 'claimed', claimed_at = now()
+		err := tx.QueryRow(ctx, `UPDATE proofs SET status = 'claimed', claimed_at = now()
 			WHERE id = (SELECT id FROM proofs WHERE agent_id = $1 AND status = 'queued' ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1)
-			RETURNING `+proofCols, agentID), &p)
+			RETURNING `+proofCols+`, repo_tar, repo_sha256`, agentID).Scan(
+			&p.ID, &p.AgentID, &p.TaskSlug, &p.Status, &p.CreatedAt, &p.ClaimedAt, &p.DiffSubmittedAt, &p.FinishedAt,
+			&p.Diff, &p.AgentLogTail, &p.AgentDurationMS, &p.AgentExitCode, &p.SandboxResult, &p.FailureReason, &p.Kind,
+			&repoTar, &repoSHA256)
 		if err != nil {
 			return err
 		}
+		normalizeProofTimes(&p)
 		t, err = s.task(ctx, tx, p.TaskSlug)
 		return err
 	})
@@ -271,13 +325,19 @@ func (s *Service) Claim(ctx context.Context, agentID string) (*Proof, *Task, err
 	if err != nil {
 		return nil, nil, err
 	}
+	if repoTar != nil {
+		t.RepoTar = repoTar
+	}
+	if repoSHA256 != nil {
+		t.RepoSHA256 = *repoSHA256
+	}
 	return &p, t, nil
 }
 
 func (s *Service) RepoTar(ctx context.Context, agentID, proofID string) ([]byte, error) {
 	var tar []byte
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT t.repo_tar FROM proofs p JOIN proof_tasks t ON t.slug = p.task_slug
+		return tx.QueryRow(ctx, `SELECT coalesce(p.repo_tar, t.repo_tar) FROM proofs p JOIN proof_tasks t ON t.slug = p.task_slug
 			WHERE p.id = $1 AND p.agent_id = $2 AND p.status IN ('claimed', 'running_agent')`, proofID, agentID).Scan(&tar)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -4,7 +4,9 @@ import (
 	"errors"
 	"net"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type config struct {
@@ -17,6 +19,9 @@ type config struct {
 	sandbox          string // "docker" | "fake"
 	connectorDir     string // prebuilt connector binaries; "" = none
 	turnstileSecret  string // "" = captcha verification disabled (dev/tests)
+	matchInterval    time.Duration
+	matchConcurrency int
+	botImage         string
 }
 
 func loadConfig() (config, error) {
@@ -29,6 +34,23 @@ func loadConfig() (config, error) {
 		sandbox:          env("ARENA_SANDBOX", "docker"),
 		connectorDir:     os.Getenv("ARENA_CONNECTOR_DIR"),
 		turnstileSecret:  os.Getenv("ARENA_TURNSTILE_SECRET"),
+		matchInterval:    20 * time.Second,
+		matchConcurrency: 1,
+		botImage:         env("ARENA_BOT_IMAGE", "arena-bot-runtime:1"),
+	}
+	if v := os.Getenv("ARENA_MATCH_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return config{}, errors.New("ARENA_MATCH_INTERVAL must be a valid duration")
+		}
+		cfg.matchInterval = d
+	}
+	if v := os.Getenv("ARENA_MATCH_CONCURRENCY"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return config{}, errors.New("ARENA_MATCH_CONCURRENCY must be an integer >= 1")
+		}
+		cfg.matchConcurrency = n
 	}
 	for _, e := range strings.Split(os.Getenv("ARENA_ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {
