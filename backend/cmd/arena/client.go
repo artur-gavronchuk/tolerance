@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -174,6 +175,23 @@ type statusResp struct {
 func (c *client) Status(ctx context.Context) (statusResp, error) {
 	var out statusResp
 	err := c.do(ctx, http.MethodGet, "/api/v1/connector/status", nil, &out)
+	return out, err
+}
+
+// versionResp is the fields of the server's VersionView that `arena tanks submit` needs to report the
+// upload back to the caller.
+type versionResp struct {
+	ID     string `json:"id"`
+	Number int    `json:"number"`
+	Status string `json:"status"`
+}
+
+// SubmitBot uploads an already-packed bot archive (see botpkg.PackDir) as a new version of the caller's
+// bot, base64-encoding it the way the server's /connector/tanks/versions route expects.
+func (c *client) SubmitBot(ctx context.Context, archive []byte) (versionResp, error) {
+	var out versionResp
+	body := map[string]string{"archive_base64": base64.StdEncoding.EncodeToString(archive)}
+	err := c.do(ctx, http.MethodPost, "/api/v1/connector/tanks/versions", body, &out)
 	return out, err
 }
 

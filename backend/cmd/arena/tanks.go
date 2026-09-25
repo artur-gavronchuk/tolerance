@@ -1,7 +1,7 @@
-// Local tanks tournament tooling: scaffold a starter bot (`arena tanks new`)
-// and play local matches against other bots or the house strategies without
-// any server (`arena tanks play`). `arena tanks submit` (uploading a bot to
-// the platform) is a separate command, added later.
+// Local tanks tournament tooling: scaffold a starter bot (`arena tanks new`),
+// play local matches against other bots or the house strategies without any
+// server (`arena tanks play`), and upload a bot version to the platform
+// (`arena tanks submit`).
 package main
 
 import (
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -27,18 +28,20 @@ import (
 // --out isn't given.
 const defaultReplayFile = "tanks-replay.json"
 
-// runTanks dispatches `arena tanks <new|play> ...`.
+// runTanks dispatches `arena tanks <new|play|submit> ...`.
 func runTanks(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: arena tanks <new|play>")
+		return errors.New("usage: arena tanks <new|play|submit>")
 	}
 	switch args[0] {
 	case "new":
 		return tanksNew(args[1:], stdout)
 	case "play":
 		return tanksPlay(args[1:], stdout)
+	case "submit":
+		return tanksSubmit(args[1:], stdout)
 	default:
-		return fmt.Errorf("usage: arena tanks <new|play>, got %q", args[0])
+		return fmt.Errorf("usage: arena tanks <new|play|submit>, got %q", args[0])
 	}
 }
 
@@ -223,6 +226,37 @@ func tanksPlay(args []string, stdout io.Writer) error {
 	return nil
 }
 
+// tanksSubmit packs dir into an archive with botpkg.PackDir — the same validation the server's
+// /connector/tanks/versions route runs, so a bad package is rejected locally before any network call — and
+// uploads it as a new version of the caller's bot: arena tanks submit <dir>.
+func tanksSubmit(args []string, stdout io.Writer) error {
+	if len(args) != 1 {
+		return errors.New("usage: arena tanks submit <dir>")
+	}
+	dir := args[0]
+
+	archive, _, err := botpkg.PackDir(dir)
+	if err != nil {
+		return err
+	}
+
+	c, cfg, err := newClient()
+	if err != nil {
+		return err
+	}
+	v, err := c.SubmitBot(context.Background(), archive)
+	if err != nil {
+		var ae *apiError
+		if errors.As(err, &ae) && ae.Status == http.StatusUnauthorized {
+			return errors.New("API key rejected; run `arena login` with a fresh key")
+		}
+		return err
+	}
+
+	fmt.Fprintf(stdout, "Uploaded version %d (%s). It plays a check match in a minute: %s/app/tanks\n", v.Number, v.Status, cfg.URL)
+	return nil
+}
+
 // mapNames lists the built-in map names, in tanks.Maps' fixed order.
 func mapNames() []string {
 	maps := tanks.Maps()
@@ -239,7 +273,7 @@ func siteURL() string {
 	if cfg, err := loadConfig(); err == nil && cfg.URL != "" {
 		return cfg.URL
 	}
-	return "https://arena.example.com"
+	return defaultSiteURL
 }
 
 // buildPlayers turns each `arena tanks play` argument into a match.Player: "house:<name>" selects a house
