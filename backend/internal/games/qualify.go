@@ -19,10 +19,23 @@ import (
 )
 
 // Qualify runs the four automated checks on a pending version, stores them (with the check match and its
-// replay) and either activates the version or rejects it. A version that is not pending is left alone: its
-// already-stored result is returned instead of re-running anything, which makes Qualify idempotent. err is
-// non-nil only for a platform failure (the job that called this will retry); every verdict about the bot
-// itself is recorded and returned with err == nil.
+// replay) and either activates the version or rejects it. The check match is 1v1 against the house idle
+// bot only (not hunter): an aggressive third player made the outcome depend heavily on spawn geometry (an
+// unmodified starter kit passed only about 70% of the time), which would reject perfectly good bots at
+// random - a bot's behaviour under fire is what the ladder itself shows, not this check.
+//
+// A version that is not pending is left alone: its already-stored result is returned instead of re-running
+// anything, which makes Qualify idempotent. err is non-nil only for a platform failure (the job that
+// called this will retry); every verdict about the bot itself is recorded and returned with err == nil.
+//
+// Activation is decided under game_bots's row lock (not from a snapshot read before the check match runs):
+// two pending versions of the same bot can be qualified concurrently (two worker goroutines, or two API
+// replicas), and deciding from a pre-match snapshot of active_version_id would let an older version's
+// activation land after a newer one's and silently move active_version_id backwards. Locking game_bots in
+// the final transaction (after the slow part - running the match - is already done) means whichever
+// version's Qualify call reaches that transaction second sees the first one's committed result and is
+// correctly superseded instead of overwriting it. See VersionView's doc comment for what 'active' means on
+// a bot_versions row versus on the bot itself.
 func (s *Service) Qualify(ctx context.Context, versionID string) (bool, []Check, error) {
 	var v struct {
 		botID, source, language, entry, status string
@@ -30,19 +43,13 @@ func (s *Service) Qualify(ctx context.Context, versionID string) (bool, []Check,
 		archive, checksRaw                     []byte
 	}
 	var botName string
-	var botMu, botSigma float64
-	var activeVersionID *string
-	var activeNumber *int
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
-			SELECT bv.bot_id, bv.number, bv.source, bv.language, bv.entry, bv.archive, bv.status, bv.checks,
-			       gb.name, gb.mu, gb.sigma, gb.active_version_id, av.number
+			SELECT bv.bot_id, bv.number, bv.source, bv.language, bv.entry, bv.archive, bv.status, bv.checks, gb.name
 			FROM bot_versions bv
 			JOIN game_bots gb ON gb.id = bv.bot_id
-			LEFT JOIN bot_versions av ON av.id = gb.active_version_id
 			WHERE bv.id = $1`, versionID).
-			Scan(&v.botID, &v.number, &v.source, &v.language, &v.entry, &v.archive, &v.status, &v.checksRaw,
-				&botName, &botMu, &botSigma, &activeVersionID, &activeNumber)
+			Scan(&v.botID, &v.number, &v.source, &v.language, &v.entry, &v.archive, &v.status, &v.checksRaw, &botName)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil, httpx.NotFound()
@@ -65,15 +72,11 @@ func (s *Service) Qualify(ctx context.Context, versionID string) (bool, []Check,
 	if err != nil {
 		return false, nil, err
 	}
-	hunter, err := s.houseParticipant(ctx, "hunter")
-	if err != nil {
-		return false, nil, err
-	}
 	candidate := playerInput{
 		BotID: v.botID, VersionID: versionID, Name: botName, Source: v.source, Number: v.number,
 		Language: v.language, Entry: v.entry, Archive: v.archive,
 	}
-	participants := []playerInput{candidate, idle, hunter}
+	participants := []playerInput{candidate, idle}
 
 	players, cleanup, err := s.launchSpecs(participants)
 	defer cleanup()
@@ -83,6 +86,17 @@ func (s *Service) Qualify(ctx context.Context, versionID string) (bool, []Check,
 
 	rng := rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), uint64(os.Getpid())))
 	seed := rng.Int64N(1 << 53)
+	// bunkers's per-spawn L-shaped walls can trap a bot that has no obstacle avoidance - just turning and
+	// driving straight at the target's angle, like both starter kits ship - so it never even reaches idle:
+	// measured against an unmodified starter kit, arena and crossroads resolved every one of 40 sampled
+	// seeds outright, while bunkers tied (never engaged at all) on all 40. A tie shares first place with
+	// idle and fails beats_idle, which would reject an otherwise perfectly competent bot purely for
+	// landing on this map. Nudge to the next map bucket instead (tanks.Maps() is [arena, crossroads,
+	// bunkers], so seed+1 always lands on arena from a bunkers seed). The ladder itself still plays
+	// bunkers - this only keeps it out of the qualification gate.
+	if tanks.PickMap(seed).Name == "bunkers" {
+		seed++
+	}
 	m := tanks.PickMap(seed)
 
 	result, err := match.Run(ctx, s.l, match.Config{Seed: seed, Map: m.Name, Ticks: s.cfg.CheckTicks}, players)
@@ -99,18 +113,32 @@ func (s *Service) Qualify(ctx context.Context, versionID string) (bool, []Check,
 		return false, nil, err
 	}
 
-	status := "rejected"
-	switch {
-	case !qualified:
-		status = "rejected"
-	case activeNumber == nil || v.number > *activeNumber:
-		status = "active"
-	default:
-		checks = append(checks, Check{Name: "supersede", Passed: false,
-			Detail: fmt.Sprintf("superseded by version %d", *activeNumber)})
-	}
-
+	var status string
 	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		var activeVersionID *string
+		var mu, sigma float64
+		if err := tx.QueryRow(ctx, `SELECT active_version_id, mu, sigma FROM game_bots WHERE id = $1 FOR UPDATE`, v.botID).
+			Scan(&activeVersionID, &mu, &sigma); err != nil {
+			return err
+		}
+		var activeNumber *int
+		if activeVersionID != nil {
+			if err := tx.QueryRow(ctx, `SELECT number FROM bot_versions WHERE id = $1`, *activeVersionID).Scan(&activeNumber); err != nil {
+				return err
+			}
+		}
+
+		switch {
+		case !qualified:
+			status = "rejected"
+		case activeNumber == nil || v.number > *activeNumber:
+			status = "active"
+		default:
+			status = "rejected"
+			checks = append(checks, Check{Name: "supersede", Passed: false,
+				Detail: fmt.Sprintf("superseded by version %d", *activeNumber)})
+		}
+
 		checksJSON, err := json.Marshal(checks)
 		if err != nil {
 			return err
@@ -125,7 +153,7 @@ func (s *Service) Qualify(ctx context.Context, versionID string) (bool, []Check,
 			return nil // lost a race with another Qualify run on this version; leave it as that run left it
 		}
 		if status == "active" {
-			refreshed := rating.Refresh(rating.Rating{Mu: botMu, Sigma: botSigma})
+			refreshed := rating.Refresh(rating.Rating{Mu: mu, Sigma: sigma})
 			if _, err := tx.Exec(ctx, `UPDATE game_bots SET active_version_id = $2, sigma = $3 WHERE id = $1`,
 				v.botID, versionID, refreshed.Sigma); err != nil {
 				return err

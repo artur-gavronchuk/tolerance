@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -114,31 +115,25 @@ if __name__ == "__main__":
     tanks.run(NoisyHunter())
 `
 
-// qualifyUntilPassed uploads archive as a fresh pending version and qualifies it, retrying with another
-// fresh upload of the same archive if the version doesn't pass, up to a bounded number of attempts. The
-// check match's third slot is a full-strength house hunter (internal/games/tanks/house), so even a
-// perfectly competent bot doesn't win that three-way fight on every random seed - only in the clear
-// majority of them - so a single attempt would make this test flaky. 20 attempts against a >=60%
-// per-attempt win rate fail on the order of 1e-4 of runs.
-func qualifyUntilPassed(t *testing.T, f fixture, archive []byte) games.VersionView {
+// qualifyExpectPass uploads archive as a fresh pending version and qualifies it, asserting the
+// qualification passes. The check match is 1v1 against the house idle bot only (see Qualify's doc comment
+// for why a third, aggressive player was dropped), so an unmodified, competent starter bot passes
+// deterministically - no retries needed.
+func qualifyExpectPass(t *testing.T, f fixture, archive []byte) games.VersionView {
 	t.Helper()
 	ctx := context.Background()
-	for attempt := 1; attempt <= 20; attempt++ {
-		v, err := f.svc.UploadVersion(ctx, f.userID, archive)
-		if err != nil {
-			t.Fatalf("upload (attempt %d): %v", attempt, err)
-		}
-		passed, checks, err := f.svc.Qualify(ctx, v.ID)
-		if err != nil {
-			t.Fatalf("qualify (attempt %d): %v", attempt, err)
-		}
-		if passed {
-			return v
-		}
-		t.Logf("attempt %d did not pass, retrying with a fresh check match: %+v", attempt, checks)
+	v, err := f.svc.UploadVersion(ctx, f.userID, archive)
+	if err != nil {
+		t.Fatalf("upload: %v", err)
 	}
-	t.Fatal("did not qualify after 20 attempts")
-	return games.VersionView{}
+	passed, checks, err := f.svc.Qualify(ctx, v.ID)
+	if err != nil {
+		t.Fatalf("qualify: %v", err)
+	}
+	if !passed {
+		t.Fatalf("expected the qualification to pass, got checks=%+v", checks)
+	}
+	return v
 }
 
 func botIDFor(t *testing.T, d *dbtest.DB, userID string) string {
@@ -199,11 +194,38 @@ func hasReplay(t *testing.T, d *dbtest.DB, matchID string) bool {
 	return n == 1
 }
 
+// TestQualifyStarterActivates uploads and qualifies the unmodified starter kit 5 times over (each a fresh
+// version) to demonstrate the 1v1 check match passes a competent bot deterministically, not just usually -
+// the whole point of dropping the house hunter from the check match (see Qualify's doc comment).
 func TestQualifyStarterActivates(t *testing.T) {
 	requirePython3(t)
 	f := setupMatch(t)
+	archive := pythonStarterArchive(t)
+	ctx := context.Background()
 
-	v := qualifyUntilPassed(t, f, pythonStarterArchive(t))
+	var v games.VersionView
+	for i := 0; i < 5; i++ {
+		uploaded, err := f.svc.UploadVersion(ctx, f.userID, archive)
+		if err != nil {
+			t.Fatalf("upload %d: %v", i, err)
+		}
+		passed, checks, err := f.svc.Qualify(ctx, uploaded.ID)
+		if err != nil {
+			t.Fatalf("qualify %d: %v", i, err)
+		}
+		if !passed {
+			t.Fatalf("attempt %d: expected passed, got checks=%+v", i, checks)
+		}
+		if len(checks) != 4 {
+			t.Fatalf("attempt %d: expected 4 checks, got %d: %+v", i, len(checks), checks)
+		}
+		for _, c := range checks {
+			if !c.Passed {
+				t.Errorf("attempt %d: check %s failed: %s", i, c.Name, c.Detail)
+			}
+		}
+		v = uploaded
+	}
 
 	status, checkMatchID := versionRow(t, f.d, v.ID)
 	if status != "active" {
@@ -238,7 +260,7 @@ func TestQualifyCrashingBotRejected(t *testing.T) {
 	f := setupMatch(t)
 	ctx := context.Background()
 
-	v1 := qualifyUntilPassed(t, f, pythonStarterArchive(t))
+	v1 := qualifyExpectPass(t, f, pythonStarterArchive(t))
 	botID := botIDFor(t, f.d, f.userID)
 
 	crashArchive := archiveWithFile(t, "bot.py", "raise SystemExit(1)\n")
@@ -284,7 +306,7 @@ func TestQualifyNoisyBotHint(t *testing.T) {
 	requirePython3(t)
 	f := setupMatch(t)
 
-	v := qualifyUntilPassed(t, f, archiveWithFile(t, "bot.py", noisyHunterPy))
+	v := qualifyExpectPass(t, f, archiveWithFile(t, "bot.py", noisyHunterPy))
 
 	status, _ := versionRow(t, f.d, v.ID)
 	if status != "active" {
@@ -320,12 +342,12 @@ func TestQualifyRefreshesSigma(t *testing.T) {
 	f := setupMatch(t)
 	archive := pythonStarterArchive(t)
 
-	v1 := qualifyUntilPassed(t, f, archive)
+	v1 := qualifyExpectPass(t, f, archive)
 	botID := botIDFor(t, f.d, f.userID)
 	_, muBefore, _ := botRow(t, f.d, botID)
 	setBotSigma(t, f.d, botID, 2)
 
-	v2 := qualifyUntilPassed(t, f, archive)
+	v2 := qualifyExpectPass(t, f, archive)
 	if v2.ID == v1.ID {
 		t.Fatal("expected a second, distinct version")
 	}
@@ -344,7 +366,7 @@ func TestQualifyIdempotent(t *testing.T) {
 	f := setupMatch(t)
 	ctx := context.Background()
 
-	v := qualifyUntilPassed(t, f, pythonStarterArchive(t))
+	v := qualifyExpectPass(t, f, pythonStarterArchive(t))
 	status1, checkMatchID1 := versionRow(t, f.d, v.ID)
 	if status1 != "active" {
 		t.Fatalf("version status = %q, want active", status1)
@@ -384,5 +406,126 @@ func TestQualifyIdempotent(t *testing.T) {
 	}
 	if matchCountBefore != matchCountAfter {
 		t.Fatalf("expected no new check match, before=%d after=%d", matchCountBefore, matchCountAfter)
+	}
+}
+
+// TestQualifyOutOfOrderActivationKeepsNewest is a regression test for a race where Qualify decided
+// active-vs-superseded from a snapshot of game_bots read before the (slow) check match ran: if an older
+// version's Qualify call finished after a newer version's, it would see a stale "nothing active yet"
+// snapshot and move active_version_id backwards. Here the newer version is qualified first (so it really
+// is active by the time the older one's Qualify call makes its decision), and the older one - despite
+// passing its own check - must be superseded, not activated.
+func TestQualifyOutOfOrderActivationKeepsNewest(t *testing.T) {
+	requirePython3(t)
+	f := setupMatch(t)
+	ctx := context.Background()
+	archive := pythonStarterArchive(t)
+
+	vOld, err := f.svc.UploadVersion(ctx, f.userID, archive)
+	if err != nil {
+		t.Fatalf("upload old: %v", err)
+	}
+	vNew, err := f.svc.UploadVersion(ctx, f.userID, archive)
+	if err != nil {
+		t.Fatalf("upload new: %v", err)
+	}
+	if vNew.Number <= vOld.Number {
+		t.Fatalf("expected the second upload to have a higher number, got %d then %d", vOld.Number, vNew.Number)
+	}
+
+	passedNew, _, err := f.svc.Qualify(ctx, vNew.ID)
+	if err != nil || !passedNew {
+		t.Fatalf("qualify new: passed=%v err=%v", passedNew, err)
+	}
+
+	passedOld, checksOld, err := f.svc.Qualify(ctx, vOld.ID)
+	if err != nil {
+		t.Fatalf("qualify old: %v", err)
+	}
+	if passedOld {
+		t.Fatalf("expected the older version to be superseded, got passed=true checks=%+v", checksOld)
+	}
+	var supersedeDetail string
+	for _, c := range checksOld {
+		if c.Name == "supersede" {
+			supersedeDetail = c.Detail
+		}
+	}
+	if !strings.Contains(supersedeDetail, "superseded by version") {
+		t.Fatalf("expected a supersede check, got checks=%+v", checksOld)
+	}
+
+	botID := botIDFor(t, f.d, f.userID)
+	activeVersionID, _, _ := botRow(t, f.d, botID)
+	if activeVersionID == nil || *activeVersionID != vNew.ID {
+		t.Fatalf("active_version_id = %v, want the newer version %s (must not move backwards)", activeVersionID, vNew.ID)
+	}
+	statusOld, _ := versionRow(t, f.d, vOld.ID)
+	if statusOld != "rejected" {
+		t.Fatalf("older version status = %q, want rejected", statusOld)
+	}
+	statusNew, _ := versionRow(t, f.d, vNew.ID)
+	if statusNew != "active" {
+		t.Fatalf("newer version status = %q, want active", statusNew)
+	}
+}
+
+// TestQualifyConcurrentActivationKeepsNewest is TestQualifyOutOfOrderActivationKeepsNewest's concurrent
+// counterpart: two pending versions of the same bot qualified from two goroutines at once. Whichever
+// finishes second must see the first one's already-committed result (via game_bots's row lock in the
+// final transaction) rather than a pre-match snapshot, so the bot always ends up on its newer version
+// regardless of which goroutine's check match happens to finish first.
+func TestQualifyConcurrentActivationKeepsNewest(t *testing.T) {
+	requirePython3(t)
+	f := setupMatch(t)
+	ctx := context.Background()
+	archive := pythonStarterArchive(t)
+
+	vOld, err := f.svc.UploadVersion(ctx, f.userID, archive)
+	if err != nil {
+		t.Fatalf("upload old: %v", err)
+	}
+	vNew, err := f.svc.UploadVersion(ctx, f.userID, archive)
+	if err != nil {
+		t.Fatalf("upload new: %v", err)
+	}
+	if vNew.Number <= vOld.Number {
+		t.Fatalf("expected the second upload to have a higher number, got %d then %d", vOld.Number, vNew.Number)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for _, id := range []string{vOld.ID, vNew.ID} {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			_, _, err := f.svc.Qualify(ctx, id)
+			errs <- err
+		}(id)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("qualify: %v", err)
+		}
+	}
+
+	// The critical, race-safe invariant: active_version_id must end up on the newer version no matter
+	// which goroutine's final transaction happens to win game_bots's row lock first - vNew.number is
+	// greater than whatever it finds active (nil, or vOld once vOld's own turn came first), so it always
+	// activates itself. What vOld's own status ends up as is genuinely racy and not asserted here: if
+	// vOld's final transaction runs first (nothing active yet), it legitimately activates - it did pass
+	// its own check - and is never revisited afterwards, so it stays 'active' even once superseded; if it
+	// runs second (vNew already active), it is rejected with a supersede check instead. Both are correct;
+	// TestQualifyOutOfOrderActivationKeepsNewest above pins down the latter, deterministic case.
+	botID := botIDFor(t, f.d, f.userID)
+	activeVersionID, _, _ := botRow(t, f.d, botID)
+	if activeVersionID == nil || *activeVersionID != vNew.ID {
+		t.Fatalf("active_version_id = %v, want the newer version %s regardless of goroutine ordering", activeVersionID, vNew.ID)
+	}
+	statusNew, _ := versionRow(t, f.d, vNew.ID)
+	if statusNew != "active" {
+		t.Fatalf("newer version status = %q, want active", statusNew)
 	}
 }

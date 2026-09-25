@@ -25,6 +25,13 @@ type Check struct {
 }
 
 // VersionView is one bot_versions row as shown to its owner.
+//
+// Status semantics: 'pending' (awaiting or mid check), 'rejected' (failed a check, or a passing check
+// superseded by a newer already-active version - see Qualify), or 'active' meaning only "this version once
+// passed its check", not "this is the bot's current version" - a bot can accumulate several 'active'
+// versions over time as it uploads newer ones. The bot's actual current version is always
+// game_bots.active_version_id alone; at most one version can be referenced by it, and Qualify only ever
+// moves that pointer forward (to a higher version number), never back.
 type VersionView struct {
 	ID           string    `json:"id"`
 	Number       int       `json:"number"`

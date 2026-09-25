@@ -64,7 +64,9 @@ func (w *Worker) claimLoop(ctx context.Context, owner string) {
 			return
 		}
 		job, err := w.queue.Claim(ctx, owner, []string{"run_match", "check_bot"}, 10*time.Minute)
-		if err != nil {
+		if err != nil && ctx.Err() == nil {
+			// A Claim error caused by ctx being cancelled (server shutdown) is expected, not a real
+			// failure - the loop exits on its own right after via the ctx.Err() check at the top.
 			w.log.Error("games: jobs claim", "err", err)
 		}
 		if job != nil {
