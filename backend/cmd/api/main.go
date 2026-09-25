@@ -21,6 +21,7 @@ import (
 
 	"tolerance/internal/agents"
 	"tolerance/internal/identity"
+	"tolerance/internal/platform/captcha"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/proofs"
@@ -53,12 +54,17 @@ func main() {
 	defer pool.Close()
 
 	ps := proofs.NewService(pool)
+	var captchaVerifier captcha.Verifier
+	if cfg.turnstileSecret != "" {
+		captchaVerifier = captcha.NewTurnstile(cfg.turnstileSecret)
+	}
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps,
-		limiter:    ratelimit.New(nil),
-		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 1_000_000),
-		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 1_000_000),
-		longPoll:   ratelimit.NewConcurrencyLimiter(2),
+		limiter:         ratelimit.New(nil),
+		ipLimiter:       ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 1_000_000),
+		keyLimiter:      ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 1_000_000),
+		longPoll:        ratelimit.NewConcurrencyLimiter(2),
+		captchaVerifier: captchaVerifier,
 	}
 
 	var wg sync.WaitGroup

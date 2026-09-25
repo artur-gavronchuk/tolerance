@@ -157,6 +157,15 @@ var rateLimited = promauto.NewCounterVec(prometheus.CounterOpts{
 
 func RateLimited(scope string) { rateLimited.WithLabelValues(scope).Inc() }
 
+// ---- captcha ----
+
+var captchaFailures = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "arena_captcha_failures_total",
+	Help: "Total signup attempts rejected for failing Turnstile captcha verification.",
+})
+
+func CaptchaFailure() { captchaFailures.Inc() }
+
 // ---- build info ----
 
 var buildInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{

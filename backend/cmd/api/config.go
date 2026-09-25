@@ -16,6 +16,7 @@ type config struct {
 	workDir          string
 	sandbox          string // "docker" | "fake"
 	connectorDir     string // prebuilt connector binaries; "" = none
+	turnstileSecret  string // "" = captcha verification disabled (dev/tests)
 }
 
 func loadConfig() (config, error) {
@@ -27,6 +28,7 @@ func loadConfig() (config, error) {
 		workDir:          env("ARENA_WORK_DIR", os.TempDir()),
 		sandbox:          env("ARENA_SANDBOX", "docker"),
 		connectorDir:     os.Getenv("ARENA_CONNECTOR_DIR"),
+		turnstileSecret:  os.Getenv("ARENA_TURNSTILE_SECRET"),
 	}
 	for _, e := range strings.Split(os.Getenv("ARENA_ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {

@@ -11,6 +11,7 @@ import (
 
 	"tolerance/internal/agents"
 	"tolerance/internal/identity"
+	"tolerance/internal/platform/captcha"
 	"tolerance/internal/platform/clientip"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
@@ -27,6 +28,12 @@ type deps struct {
 	agents  *agents.Service
 	proofs  *proofs.Service
 	limiter *ratelimit.Limiter
+
+	// captchaVerifier gates signup on a Turnstile token when set (see
+	// internal/platform/captcha and ARENA_TURNSTILE_SECRET); nil leaves
+	// signup's captcha field accepted-but-ignored, which is every dev
+	// setup and existing test.
+	captchaVerifier captcha.Verifier
 
 	// Global request-rate ceiling (see ratelimit_middleware.go), separate
 	// from limiter's fixed-window business rules above.
@@ -48,7 +55,7 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
-	identity.RegisterAuthRoutes(api, d.users, d.limiter, cfg.secureCookies, scale.trustProxy)
+	identity.RegisterAuthRoutes(api, d.users, d.limiter, cfg.secureCookies, scale.trustProxy, d.captchaVerifier)
 	// Public: the owner downloads the connector before having it set up.
 	// The exact GET pattern wins over the key-protected /api/v1/connector/ prefix.
 	api.HandleFunc("GET /api/v1/connector/download", connectorDownload(cfg.connectorDir))

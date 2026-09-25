@@ -15,9 +15,10 @@ paths:
     post:
       operationId: signup
       security: []
-      requestBody: { $ref: "#/components/requestBodies/Credentials" }
+      requestBody: { $ref: "#/components/requestBodies/SignupCredentials" }
       responses:
         "201": { $ref: "#/components/responses/UserEnvelope" }
+        "403": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
         "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
@@ -364,12 +365,12 @@ components:
       required: true
       content:
         application/json:
-          schema:
-            type: object
-            required: [email, password]
-            properties:
-              email: { type: string }
-              password: { type: string }
+          schema: { $ref: "#/components/schemas/Credentials" }
+    SignupCredentials:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/SignupCredentials" }
   responses:
     Problem:
       description: Error
@@ -396,6 +397,23 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Proof" }
   schemas:
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+    SignupCredentials:
+      allOf:
+        - { $ref: "#/components/schemas/Credentials" }
+        - type: object
+          properties:
+            turnstile_token:
+              type: string
+              description: >-
+                Cloudflare Turnstile token. Optional: accepted and ignored
+                when the deployment has no ARENA_TURNSTILE_SECRET
+                configured; required and verified otherwise.
     Problem:
       type: object
       required: [code, message]
