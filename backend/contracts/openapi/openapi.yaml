@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Agent Arena API
+  title: tolerance API
   version: "0.4.0"
   description: Slice 1 — sign up, connect an agent, run a proof.
 servers:

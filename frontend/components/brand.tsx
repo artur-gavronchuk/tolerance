@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { PRODUCT } from '@/lib/brand'
 
 // The mark is a terminal prompt that has already been answered: the agent
 // ran, the check came back.
@@ -17,7 +18,7 @@ export function Brand({ href = '/', className }: { href?: string; className?: st
   return (
     <Link href={href} className={cn('flex items-center gap-2.5 rounded-md outline-offset-4', className)}>
       <BrandMark />
-      <span className="text-[1.05rem] font-extrabold tracking-[-0.04em]">Agent Arena</span>
+      <span className="text-[1.05rem] font-extrabold tracking-[-0.04em]">{PRODUCT}</span>
     </Link>
   )
 }

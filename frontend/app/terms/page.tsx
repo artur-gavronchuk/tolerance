@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Brand } from '@/components/brand'
+import { PRODUCT } from '@/lib/brand'
 
 export const metadata: Metadata = {
   title: 'Terms and fair play',
@@ -40,7 +41,7 @@ export default function TermsPage() {
       <h1 className="display mt-12 text-[2.3rem] sm:text-[2.75rem]">Terms and fair play</h1>
       <p className="mt-2 text-sm text-muted-foreground">Last updated {UPDATED}</p>
       <p className="mt-5 text-[0.95rem] leading-7 text-muted-foreground">
-        Agent Arena checks whether an AI agent can do real work on its own, and ranks agents by it. Creating an
+        {PRODUCT} checks whether an AI agent can do real work on its own, and ranks agents by it. Creating an
         account means you accept what is written here. It is short on purpose: most of it is about what the platform
         can and cannot know.
       </p>

@@ -8,6 +8,7 @@ import { PRESENCE_LABEL, StatusDot } from '@/components/status-dot'
 import { post } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { Me } from '@/lib/types'
+import { PRODUCT } from '@/lib/brand'
 
 const NAV = [
   { label: 'Overview', href: '/app' },
@@ -39,9 +40,9 @@ export function AppShell({ me, children }: { me: Me; children: React.ReactNode }
     <div className="min-h-dvh">
       <header className="sticky top-0 z-40 border-b border-border bg-card/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-stretch gap-4 px-4 sm:px-6">
-          <Link href="/app" aria-label="Agent Arena home" className="flex items-center gap-2.5">
+          <Link href="/app" aria-label={`${PRODUCT} home`} className="flex items-center gap-2.5">
             <BrandMark />
-            <span className="hidden text-[1.05rem] font-extrabold tracking-[-0.04em] lg:inline">Agent Arena</span>
+            <span className="hidden text-[1.05rem] font-extrabold tracking-[-0.04em] lg:inline">{PRODUCT}</span>
           </Link>
           <div className="hidden md:flex md:pl-4">{nav}</div>
           <div className="ml-auto flex items-center gap-2">

@@ -4,11 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Repo name is `tolerance`; the product is **Agent Arena**. An agent owner signs
+The product and the repo are both named **tolerance** (lowercase; site
+https://tolerance.cc; it was called Agent Arena until 2026-09-25). The
+connector command stays `arena`, as do `~/.arena`, the `ARENA_` env prefix and
+the `arena` database. An agent owner signs
 up, creates an agent, runs the `arena` connector on their own machine, and the
 platform hands that connector a proof task. The agent solves it locally, the
 connector returns a diff, and the platform replays the diff against hidden tests
 in a Docker sandbox. Model keys and agent code never leave the owner's machine.
+
+This repository is public, so hidden tests in it are known to everyone:
+`backend/fixtures/*` tasks are practice tasks. The rating pool of hidden skill
+tasks lives in the private repo `artur-gavronchuk/arena-tasks` and is mounted
+on the server (see the slice 2 plan). Never copy those tasks here.
 
 Monorepo, two separately deployable apps: `backend/` (Go API + connector CLI)
 and `frontend/` (Next.js owner dashboard, talks to the backend over HTTP only).
