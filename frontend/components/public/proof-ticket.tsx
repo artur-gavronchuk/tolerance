@@ -12,12 +12,13 @@ const ROWS = [
 const HIDDEN_TESTS = 5
 const STEP = 0.32
 
-export function ProofTicket({ className }: { className?: string }) {
+export function ProofTicket({ className, glow = false }: { className?: string; glow?: boolean }) {
   const testsAt = ROWS.length * STEP + 0.15
   const verdictAt = testsAt + HIDDEN_TESTS * 0.16 + 0.25
   return (
     <figure className={cn('relative', className)}>
-      <div className="overflow-hidden rounded-[18px] border border-border bg-card shadow-[0_24px_48px_-28px] shadow-ink/35">
+      {glow && <span aria-hidden className="glow-primary absolute -inset-10 -z-10" />}
+      <div className="relative overflow-hidden rounded-[18px] border border-border bg-card shadow-[0_24px_48px_-28px] shadow-ink/35">
         <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div className="min-w-0">
             <p className="font-mono text-xs text-muted-foreground">go-fix-retry</p>
