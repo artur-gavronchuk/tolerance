@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -191,9 +192,27 @@ func decodeState(v string) (oauthState, error) {
 
 // safeNext keeps a post-sign-in redirect on this site: a path, never a
 // scheme-relative or backslash URL a browser would read as another host.
+// http.Redirect runs path.Clean on the target, and path.Clean does not
+// treat '\' as a separator, so "/./\evil.com" cleans to "/\evil.com" —
+// which a browser reads as "//evil.com". Reject any backslash outright
+// rather than trying to out-think path.Clean's ".." handling.
 func safeNext(next string) string {
-	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") ||
-		strings.ContainsAny(next, "\r\n\t") {
+	if len(next) > 512 {
+		return "/app"
+	}
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		return "/app"
+	}
+	for i := 0; i < len(next); i++ {
+		if b := next[i]; b == '\\' || b < 0x20 || b == 0x7f {
+			return "/app"
+		}
+	}
+	p := next
+	if i := strings.IndexAny(p, "?#"); i >= 0 {
+		p = p[:i]
+	}
+	if strings.HasPrefix(path.Clean(p), "//") {
 		return "/app"
 	}
 	return next

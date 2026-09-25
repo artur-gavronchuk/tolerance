@@ -136,6 +136,29 @@ func TestOAuthStart_RedirectsWithStateAndSetsTheCookie(t *testing.T) {
 	}
 }
 
+func TestOAuthStart_RejectsABackslashNextEvenWhenPathCleanWouldTurnItIntoADoubleSlash(t *testing.T) {
+	// /./\evil.com: path.Clean does not treat '\' as a separator, so
+	// http.Redirect's own path.Clean call turns this into "/\evil.com",
+	// which a browser reads as "//evil.com" (an open redirect).
+	rec := serve(authMux(), httptest.NewRequest("GET", "/api/v1/auth/github/start?next=%2F.%2F%5Cevil.com", nil))
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status %d", rec.Code)
+	}
+	var c *http.Cookie
+	for _, k := range rec.Result().Cookies() {
+		if k.Name == OAuthCookie {
+			c = k
+		}
+	}
+	if c == nil {
+		t.Fatal("no oauth cookie set")
+	}
+	st, err := decodeState(c.Value)
+	if err != nil || st.Next != "/app" {
+		t.Fatalf("state %+v %v, want Next /app", st, err)
+	}
+}
+
 func TestOAuthStart_UnknownProviderIs404(t *testing.T) {
 	if rec := serve(authMux(), httptest.NewRequest("GET", "/api/v1/auth/google/start", nil)); rec.Code != http.StatusNotFound {
 		t.Fatalf("status %d", rec.Code)

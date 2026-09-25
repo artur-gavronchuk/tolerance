@@ -141,14 +141,19 @@ func TestGoogle_IdentifiesBySub(t *testing.T) {
 
 func TestSafeNext(t *testing.T) {
 	for in, want := range map[string]string{
-		"":                 "/app",
-		"/app":             "/app",
-		"/app/proofs/p_1":  "/app/proofs/p_1",
-		"//evil.com":       "/app",
-		"/\\evil.com":      "/app",
-		"https://evil.com": "/app",
-		"app":              "/app",
-		"/app\r\nX: y":     "/app",
+		"":                             "/app",
+		"/app":                         "/app",
+		"/app/proofs/p_1":              "/app/proofs/p_1",
+		"//evil.com":                   "/app",
+		"/\\evil.com":                  "/app",
+		"https://evil.com":             "/app",
+		"app":                          "/app",
+		"/app\r\nX: y":                 "/app",
+		"/./\\evil.com":                "/app",
+		"/../\\evil.com":               "/app",
+		"/x/../\\evil.com?a=b":         "/app",
+		"/" + strings.Repeat("a", 600): "/app",
+		"/app\x7f":                     "/app",
 	} {
 		if got := safeNext(in); got != want {
 			t.Errorf("safeNext(%q) = %q, want %q", in, got, want)

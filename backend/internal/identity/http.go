@@ -153,7 +153,9 @@ func oauthCallback(s *Service, limiter *ratelimit.Limiter, cfg AuthConfig) http.
 			return
 		}
 		SetSessionCookie(w, token, cfg.Secure)
-		http.Redirect(w, r, st.Next, http.StatusFound)
+		// st.Next was already validated by safeNext when the cookie was set,
+		// but the cookie is not signed, so re-check before trusting it here.
+		http.Redirect(w, r, safeNext(st.Next), http.StatusFound)
 	}
 }
 
