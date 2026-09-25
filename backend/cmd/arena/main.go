@@ -48,7 +48,7 @@ func usage() {
   login    read an API key from stdin and store it in ~/.arena/key
   init     write ~/.arena/config.yaml with the agent command to edit
   connect  stay online and run proof tasks as they arrive
-  status   show the agent's stage`)
+  status   show the agent's stage and latest proof (not a heartbeat)`)
 }
 
 func cmdLogin() error {
@@ -112,12 +112,29 @@ func cmdStatus() error {
 	if err != nil {
 		return err
 	}
-	hb, err := c.Heartbeat(context.Background())
+	st, err := c.Status(context.Background())
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s: %s\n", hb.Agent.Name, hb.Agent.Stage)
+	fmt.Print(formatStatus(st, time.Now()))
 	return nil
+}
+
+// formatStatus renders what `arena status` prints.
+func formatStatus(st statusResp, now time.Time) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s: %s\n", st.Agent.Name, st.Agent.Stage)
+	p := st.LastProof
+	if p == nil {
+		b.WriteString("last proof: none yet\n")
+		return b.String()
+	}
+	fmt.Fprintf(&b, "last proof: %s %s", p.TaskSlug, p.Status)
+	if p.FailureReason != "" {
+		fmt.Fprintf(&b, " (%s)", p.FailureReason)
+	}
+	fmt.Fprintf(&b, ", started %s ago\n", now.Sub(p.CreatedAt).Round(time.Second))
+	return b.String()
 }
 
 func cmdConnect() error {
@@ -169,18 +186,24 @@ func cmdConnect() error {
 			continue
 		}
 		fmt.Printf("Task %s (%s): running your agent, up to %ds\n", task.Task.Slug, task.ProofID, task.Task.AgentTimeoutS)
-		repo, err := c.Repo(ctx, task.ProofID)
+		// The server gives up on this proof agent_timeout_s + 60s after the
+		// claim, so nothing is worth retrying past that.
+		taskCtx, cancel := context.WithTimeout(ctx, time.Duration(task.Task.AgentTimeoutS+60)*time.Second)
+		repo, err := c.Repo(taskCtx, task.ProofID)
 		if err != nil {
+			cancel()
 			fmt.Fprintln(os.Stderr, "download repo:", err)
 			continue
 		}
-		_ = c.Started(ctx, task.ProofID)
-		res, err := runTask(ctx, *task, repo, cfg.Agent.Command)
+		_ = c.Started(taskCtx, task.ProofID)
+		res, err := runTask(taskCtx, *task, repo, cfg.Agent.Command)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "run:", err)
 			res = result{LogTail: "connector error: " + err.Error(), ExitCode: -1}
 		}
-		if err := c.Result(ctx, task.ProofID, res); err != nil {
+		err = c.Result(taskCtx, task.ProofID, res)
+		cancel()
+		if err != nil {
 			fmt.Fprintln(os.Stderr, "send result:", err)
 			continue
 		}

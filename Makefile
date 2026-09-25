@@ -1,4 +1,4 @@
-.PHONY: up down logs reset ps proof-image test check migrate run-api run-web
+.PHONY: up down logs reset ps proof-image test check migrate run-api run-web connector
 
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
 -include .env
@@ -12,6 +12,10 @@ PROFILE := $(if $(filter production,$(ARENA_ENV)),--profile prod,)
 # a VM and the host's groups say nothing about it. Only expanded by `up`;
 # set DOCKER_GID in .env to override. compose falls back to 999 when empty.
 DOCKER_GID ?= $(shell docker run --rm -v /var/run/docker.sock:/var/run/docker.sock alpine:3.22 stat -c %g /var/run/docker.sock 2>/dev/null)
+
+# Prebuilt connectors for GET /api/v1/connector/download in native runs; the
+# api image builds its own.
+CONNECTOR_DIR := $(CURDIR)/backend/.connector
 
 up: .env proof-image
 	@docker info >/dev/null 2>&1 || (command -v colima >/dev/null && colima start) || (echo "Docker is not running"; exit 1)
@@ -45,10 +49,17 @@ migrate:
 		ARENA_APP_ROLE_PASSWORD="$(ARENA_APP_ROLE_PASSWORD)" ARENA_PROOFS_DIR=./fixtures/proofs go run ./cmd/migrate
 
 run-api:
-	cd backend && ARENA_APP_DATABASE_URL="postgres://arena_app:$(ARENA_APP_ROLE_PASSWORD)@127.0.0.1:5432/arena?sslmode=disable" go run ./cmd/api
+	cd backend && ARENA_ADDR=127.0.0.1:$(API_PORT) ARENA_CONNECTOR_DIR=$(CONNECTOR_DIR) \
+		ARENA_APP_DATABASE_URL="postgres://arena_app:$(ARENA_APP_ROLE_PASSWORD)@127.0.0.1:5432/arena?sslmode=disable" go run ./cmd/api
 
 run-web:
-	cd frontend && API_URL=http://127.0.0.1:$(API_PORT) pnpm dev
+	cd frontend && API_URL=http://127.0.0.1:$(API_PORT) pnpm dev -p $(WEB_PORT)
+
+connector:
+	cd backend && for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do \
+		CGO_ENABLED=0 GOOS=$${target%/*} GOARCH=$${target#*/} go build -trimpath \
+			-o $(CONNECTOR_DIR)/arena-$${target%/*}-$${target#*/} ./cmd/arena || exit 1; \
+	done
 
 test:
 	cd backend && ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...

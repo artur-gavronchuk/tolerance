@@ -1,6 +1,8 @@
 package proofs
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -60,9 +62,20 @@ func RegisterConnectorRoutes(mux *http.ServeMux, s *Service) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("POST /api/v1/connector/proofs/{id}/result", func(w http.ResponseWriter, r *http.Request) {
-		raw, err := httpx.ReadBodyLimit(w, r, 512<<10)
-		if err != nil {
-			httpx.WriteError(w, r, err)
+		agentID, proofID := identity.MustFromContext(r.Context()).AgentID, r.PathValue("id")
+		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxResultBodyBytes))
+		var tooBig *http.MaxBytesError
+		switch {
+		case errors.As(err, &tooBig):
+			// Too big to even read: the verdict is known without the body.
+			if err := s.FailOversized(r.Context(), agentID, proofID); err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+			httpx.WriteError(w, r, errDiffTooLarge)
+			return
+		case err != nil:
+			httpx.WriteError(w, r, httpx.InvalidBody("could not read the request body"))
 			return
 		}
 		var in ResultInput
@@ -70,7 +83,7 @@ func RegisterConnectorRoutes(mux *http.ServeMux, s *Service) {
 			httpx.WriteError(w, r, err)
 			return
 		}
-		if err := s.SubmitResult(r.Context(), identity.MustFromContext(r.Context()).AgentID, r.PathValue("id"), in); err != nil {
+		if err := s.SubmitResult(r.Context(), agentID, proofID, in); err != nil {
 			httpx.WriteError(w, r, err)
 			return
 		}
