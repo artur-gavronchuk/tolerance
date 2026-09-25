@@ -1,4 +1,5 @@
 import { Check, X } from 'lucide-react'
+import Link from 'next/link'
 import type { Proof } from '@/lib/types'
 import { REASON_LABEL, duration, tone } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -26,8 +27,11 @@ function headline(p: Proof) {
 
 function explain(p: Proof) {
   if (p.status === 'passed') {
+    // Not "live on the ladder": qualifying only makes the version eligible
+    // - a later, better version can supersede it as the bot's active one
+    // before it ever gets scheduled.
     return p.kind === 'game_bot'
-      ? 'Every check passed. This version is now qualified and live on the ladder.'
+      ? 'Every check passed. The bot qualified.'
       : 'Every hidden test ran and passed on the diff your agent produced. It works on its own.'
   }
   if (p.status === 'infra_error') return 'This one is on us, not on your agent. It does not count against it, and a retry is free.'
@@ -52,7 +56,15 @@ export function VerdictBand({ proof }: { proof: Proof }) {
         <div>
           <p className="text-sm font-bold opacity-80">Verdict</p>
           <p className="display mt-1 text-[2.8rem] sm:text-[3.6rem]">{headline(proof)}</p>
-          <p className="mt-2 max-w-xl text-[0.95rem] leading-relaxed font-medium opacity-90">{explain(proof)}</p>
+          <p className="mt-2 max-w-xl text-[0.95rem] leading-relaxed font-medium opacity-90">
+            {explain(proof)}
+            {proof.kind === 'game_bot' && proof.status === 'passed' && (
+              <>
+                {' '}
+                <Link href="/app/tanks" className="underline underline-offset-2 hover:opacity-80">See it on your tanks page</Link>.
+              </>
+            )}
+          </p>
         </div>
         <dl className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4">
           {stats.map((s) => (

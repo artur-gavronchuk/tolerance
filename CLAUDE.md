@@ -112,11 +112,11 @@ export TESTCONTAINERS_RYUK_DISABLED=true   # tests Terminate() in t.Cleanup them
 The `internal/proofs/sandbox` package's own tests invoke the `docker` CLI
 directly (not testcontainers) and are unaffected by that quirk.
 
-`internal/games/match` and `internal/games/qualify_integration_test.go` also
-need `python3` and `node` on `PATH` — they run the tanks house/starter bots
-as real processes (`match.ProcessLauncher`) the same way `ARENA_SANDBOX=fake`
-does. Missing either interpreter fails those tests under
-`ARENA_TEST_REQUIRE_DOCKER=1`; without that flag they skip instead.
+`internal/games/match` needs `python3` and `node` on `PATH`, and
+`internal/games/qualify_integration_test.go` needs `python3` — they run the
+tanks house/starter bots as real processes (`match.ProcessLauncher`) the
+same way `ARENA_SANDBOX=fake` does. Missing an interpreter fails those tests
+under `ARENA_TEST_REQUIRE_DOCKER=1`; without that flag they skip instead.
 
 ## Architecture
 
