@@ -413,7 +413,7 @@ func setupAgentRunWithLauncher(t *testing.T, l match.Launcher) (fixture, string)
 	as := agents.NewService(d.AppPool, ps)
 	us := identity.NewService(d.AppPool, nil)
 	svc := games.NewService(d.AppPool, ps, match.WithHouse(l), slog.Default(), games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
-	u, _, err := us.Signup(ctx, "o@example.com", "longenough1")
+	u, _, err := us.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "o@example.com", Email: "o@example.com", EmailVerified: true})
 	if err != nil {
 		t.Fatal(err)
 	}

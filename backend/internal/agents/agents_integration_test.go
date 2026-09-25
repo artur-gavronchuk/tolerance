@@ -13,9 +13,9 @@ func TestAgentLifecycle_StageFollowsKeysAndPresence(t *testing.T) {
 	d := dbtest.New(t)
 	ctx := context.Background()
 	users := identity.NewService(d.AppPool, nil)
-	u, _, err := users.Signup(ctx, "o@example.com", "longenough1")
+	u, _, err := users.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "o@example.com", Email: "o@example.com", EmailVerified: true})
 	if err != nil {
-		t.Fatalf("signup: %v", err)
+		t.Fatalf("sign in: %v", err)
 	}
 	s := agents.NewService(d.AppPool, agents.NoProofFacts{})
 

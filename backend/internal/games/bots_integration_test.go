@@ -40,7 +40,7 @@ func setup(t *testing.T) fixture {
 	as := agents.NewService(d.AppPool, ps)
 	us := identity.NewService(d.AppPool, nil)
 	svc := games.NewService(d.AppPool, ps, nil, slog.Default(), games.Config{})
-	u, _, err := us.Signup(ctx, "o@example.com", "longenough1")
+	u, _, err := us.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "o@example.com", Email: "o@example.com", EmailVerified: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestSaveBotNameTaken(t *testing.T) {
 	problem(t, err, 409, "name_taken")
 
 	// Collides with another owner's bot in a different case.
-	other, _, err := f.users.Signup(ctx, "other@example.com", "longenough1")
+	other, _, err := f.users.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "other@example.com", Email: "other@example.com", EmailVerified: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestSecondUploaderOfUnmodifiedStarterGetsSuffixedName(t *testing.T) {
 		t.Fatalf("unexpected first version: %+v", v1)
 	}
 
-	other, _, err := f.users.Signup(ctx, "other@example.com", "longenough1")
+	other, _, err := f.users.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "other@example.com", Email: "other@example.com", EmailVerified: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +377,7 @@ func TestConcurrentFirstUploadsForSameUserCreateOneBot(t *testing.T) {
 	archiveB := archiveWithManifestName(t, "BBBBBBBBBB")
 
 	for i := 0; i < 10; i++ {
-		u, _, err := f.users.Signup(ctx, fmt.Sprintf("racer%d@example.com", i), "longenough1")
+		u, _, err := f.users.SignIn(ctx, identity.Identity{Provider: "dev", Subject: fmt.Sprintf("racer%d@example.com", i), Email: fmt.Sprintf("racer%d@example.com", i), EmailVerified: true})
 		if err != nil {
 			t.Fatalf("iteration %d: signup: %v", i, err)
 		}

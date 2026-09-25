@@ -130,7 +130,7 @@ func TestWorkerFinalCheckBotFailureRejectsVersion(t *testing.T) {
 	svc := NewService(d.AppPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
 	w := NewWorker(svc, d.AppPool, WorkerConfig{}, slog.Default())
 
-	u, _, err := us.Signup(ctx, "worker-test@example.com", "longenough1")
+	u, _, err := us.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "worker-test@example.com", Email: "worker-test@example.com", EmailVerified: true})
 	if err != nil {
 		t.Fatal(err)
 	}

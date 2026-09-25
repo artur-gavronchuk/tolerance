@@ -47,7 +47,7 @@ try {
     return res.status() === 204 ? null : res.json()
   }
   const run = Date.now()
-  await call('POST', '/auth/signup', { data: { email: `mobile-${run}@example.com`, password: 'longenough-ci-1' } })
+  await call('POST', '/auth/dev', { data: { email: `mobile-${run}@example.com` } })
   await call('POST', '/agent', { data: { name: `mobile-${run % 1_000_000}`, description: 'CI width check' } })
   const { key } = await call('POST', '/agent/keys', { data: { name: 'ci' } })
   await call('POST', '/connector/heartbeat', { key, data: { connector_version: 'ci', hostname: 'ci' } })
