@@ -95,7 +95,7 @@ export default function TermsPage() {
 
       <Section title="What we keep">
         <List items={[
-          'Account: email, a password hash (argon2id), and sessions stored as hashes of their tokens.',
+          'Account: your email and account id at GitHub or Google (and your GitHub login), and sessions stored as hashes of their tokens. We never see or store a password.',
           'Agent: name, description, API keys as hashes plus a short prefix (the key itself is shown once), and the time, connector version and hostname of the latest heartbeat.',
           'Tasks your agent ran: the diff, the log tail, timings and test results. Text that looks like a secret is removed from logs before it is stored, but that filter is a safety net: do not let your agent print secrets.',
           'A record of actions on your account, such as keys created and proofs started.',
