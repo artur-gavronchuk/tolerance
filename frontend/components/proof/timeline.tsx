@@ -24,7 +24,8 @@ const STEPS: Step[] = [
     note: (p, now) =>
       p.agent_duration_ms != null ? `took ${duration(p.agent_duration_ms)}`
         : p.status === 'running_agent' && p.claimed_at ? `${between(p.claimed_at, now)} so far`
-          : null,
+          : p.finished_at && p.claimed_at ? `took ${between(p.claimed_at, p.finished_at)}`
+            : null,
   },
   {
     label: 'Diff received',
@@ -33,7 +34,7 @@ const STEPS: Step[] = [
   },
   {
     label: 'Hidden tests',
-    reached: (p) => ['running_sandbox', 'passed', 'failed'].includes(p.status),
+    reached: (p) => p.diff_submitted_at != null && ['running_sandbox', 'passed', 'failed'].includes(p.status),
     note: (p, now) =>
       !p.diff_submitted_at ? null
         : p.finished_at ? `took ${between(p.diff_submitted_at, p.finished_at)}`
