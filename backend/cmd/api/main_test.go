@@ -96,6 +96,16 @@ func requirePython3(t *testing.T) {
 	}
 }
 
+// hasFieldPath reports whether fields contains a FieldError for the given path.
+func hasFieldPath(fields []httpx.FieldError, path string) bool {
+	for _, f := range fields {
+		if f.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
 // tanksStarterArchive is the unmodified python starter kit, tarred as a bot upload.
 func tanksStarterArchive(t *testing.T) []byte {
 	t.Helper()
@@ -382,6 +392,36 @@ func TestTanksPublicEmpty(t *testing.T) {
 	}
 	if !names["hunter"] || !names["sniper"] || names["idle"] {
 		t.Fatalf("unexpected leaderboard names: %+v", names)
+	}
+
+	// limit clamping and validation: an over-max limit is clamped (never an error), while anything that
+	// doesn't parse as a positive integer is 422 validation_failed on fields.limit.
+	var clamped struct {
+		Items []games.LeaderboardEntry `json:"items"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/tanks/leaderboard?limit=9999", "", nil, &clamped); code != 200 {
+		t.Fatalf("leaderboard limit=9999: %d", code)
+	}
+	if len(clamped.Items) > 500 {
+		t.Fatalf("expected leaderboard clamped to at most 500 items, got %d", len(clamped.Items))
+	}
+	for _, path := range []string{"/api/v1/tanks/leaderboard?limit=0", "/api/v1/tanks/leaderboard?limit=abc"} {
+		var problem httpx.Problem
+		if code := e.call(t, plain, "GET", path, "", nil, &problem); code != 422 || problem.Code != "validation_failed" {
+			t.Fatalf("%s: %d %+v", path, code, problem)
+		}
+		if !hasFieldPath(problem.Fields, "limit") {
+			t.Fatalf("%s: expected fields.limit, got %+v", path, problem.Fields)
+		}
+	}
+	{
+		var problem httpx.Problem
+		if code := e.call(t, plain, "GET", "/api/v1/tanks/matches?limit=0", "", nil, &problem); code != 422 || problem.Code != "validation_failed" {
+			t.Fatalf("matches limit=0: %d %+v", code, problem)
+		}
+		if !hasFieldPath(problem.Fields, "limit") {
+			t.Fatalf("matches limit=0: expected fields.limit, got %+v", problem.Fields)
+		}
 	}
 
 	var live games.LiveView

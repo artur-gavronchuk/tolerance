@@ -326,6 +326,7 @@ paths:
               schema: { $ref: "#/components/schemas/VersionView" }
         "401": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
   /me/tanks/agent-runs:
@@ -498,6 +499,7 @@ paths:
               schema: { $ref: "#/components/schemas/VersionView" }
         "401": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
 
@@ -678,7 +680,7 @@ components:
       properties:
         id: { type: string }
         number: { type: integer }
-        source: { type: string }
+        source: { type: string, enum: [agent, upload, house] }
         status: { type: string, enum: [pending, active, rejected] }
         language: { type: string }
         checks:
@@ -724,7 +726,7 @@ components:
         bot_id: { type: string }
         name: { type: string }
         house: { type: boolean }
-        source: { type: string }
+        source: { type: string, enum: [agent, upload, house] }
         version: { type: integer }
         place: { type: integer, nullable: true }
         kills: { type: integer }
@@ -764,14 +766,14 @@ components:
         matches: { type: integer }
         wins: { type: integer }
         house: { type: boolean }
-        source: { type: string }
+        source: { type: string, enum: [agent, upload, house] }
         version: { type: integer }
     VersionPublic:
       type: object
       required: [number, source, status, created_at]
       properties:
         number: { type: integer }
-        source: { type: string }
+        source: { type: string, enum: [agent, upload, house] }
         status: { type: string, enum: [pending, active, rejected] }
         created_at: { type: string, format: date-time }
     BotProfile:
