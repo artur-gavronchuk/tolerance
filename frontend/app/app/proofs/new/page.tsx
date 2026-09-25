@@ -10,6 +10,7 @@ import { api, post, ApiError, friendlyMessage } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import { duration } from '@/lib/format'
 import type { Proof, ProofTask } from '@/lib/types'
+import { CLI } from '@/lib/brand'
 
 // The catalog has one proof task in slice 1.
 const TASK_SLUG = 'go-fix-retry'
@@ -40,7 +41,7 @@ export default function NewProofPage() {
       router.push(`/app/proofs/${p.id}`)
     } catch (e) {
       const a = e as ApiError
-      setError(a.code === 'agent_offline' ? 'The connector is not online. Start arena connect on your machine first.' : friendlyMessage(a))
+      setError(a.code === 'agent_offline' ? `The connector is not online. Start ${CLI} connect on your machine first.` : friendlyMessage(a))
       setStarting(false)
     }
   }

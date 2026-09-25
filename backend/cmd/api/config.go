@@ -86,6 +86,9 @@ func loadConfig() (config, error) {
 	if cfg.devLogin && cfg.secureCookies {
 		return config{}, errors.New("ARENA_DEV_LOGIN is for local runs and CI; it cannot be on with ARENA_SECURE_COOKIES=true")
 	}
+	if cfg.sandbox == "fake" && cfg.secureCookies {
+		return config{}, errors.New("ARENA_SANDBOX=fake is for local runs and CI; it cannot be on with ARENA_SECURE_COOKIES=true")
+	}
 	for _, p := range [][3]string{{"GITHUB", cfg.githubID, cfg.githubSecret}, {"GOOGLE", cfg.googleID, cfg.googleSecret}} {
 		if (p[1] == "") != (p[2] == "") {
 			return config{}, fmt.Errorf("set both ARENA_%s_CLIENT_ID and ARENA_%s_CLIENT_SECRET, or neither", p[0], p[0])

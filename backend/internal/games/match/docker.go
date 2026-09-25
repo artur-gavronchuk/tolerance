@@ -37,11 +37,22 @@ const botContainerLabel = "arena-bot=1"
 const staleBotContainerAge = 30 * time.Minute
 
 // DockerLauncher runs each bot in its own throwaway container: no network, 256 MiB, half a CPU, 64 pids,
-// all capabilities dropped, no-new-privileges, uid 65534, 16 MiB tmpfs /tmp. Code is copied in with
-// docker cp (the API may itself run in a container, so a bind mount of Spec.Dir would not be visible to
-// the daemon — the same reasoning as internal/proofs/sandbox.Docker), stdin/stdout/stderr are attached
-// with docker start -ai. Never use it for anything but untrusted bot code; ProcessLauncher is for the
-// connector and for trusted house-adjacent uses.
+// all capabilities dropped, no-new-privileges, uid 65534, a read-only root filesystem, and a 16 MiB tmpfs
+// /tmp. Code is copied in with docker cp (the API may itself run in a container, so a bind mount of
+// Spec.Dir would not be visible to the daemon — the same reasoning as internal/proofs/sandbox.Docker),
+// stdin/stdout/stderr are attached with docker start -ai. Never use it for anything but untrusted bot code;
+// ProcessLauncher is for the connector and for trusted house-adjacent uses.
+//
+// /bot is an anonymous volume, not part of the read-only rootfs, specifically so docker cp still has
+// somewhere to write the bot's files before the container starts — but the volume is initialized from the
+// image's own /bot directory (root-owned, mode 0755; see runtime/Dockerfile), so the bot process itself,
+// running as uid 65534, gets permission denied trying to write there, the same as everywhere else in the
+// read-only rootfs. Verified empirically (docker 28.4.0 server via Colima) that: docker cp into that volume
+// on a created-but-not-started --read-only container succeeds (the daemon writes through the volume
+// directly, unconstrained by the container's own runtime mount flags); a bot running as 65534 then fails to
+// write to /bot, /var/tmp or / alike, while /tmp (the tmpfs) still works. Close removes the container with
+// `docker rm -f -v` specifically so that volume is deleted with it — leaving it behind on every match would
+// just be a slower version of the same disk-fill problem.
 //
 // Every container is created with the label "arena-bot=1" (see botContainerLabel and
 // RemoveStaleBotContainers); Labels adds further labels on top of that — tests use it to tag their own
@@ -69,12 +80,13 @@ func (d DockerLauncher) labelArgs() []string {
 	return args
 }
 
-// removeContainer force-removes id, bounded by dockerRemoveTimeout on top of ctx (which may itself already
-// be Background() with no deadline, in callers that want an independent cleanup).
+// removeContainer force-removes id (and, with -v, the anonymous /bot volume mounted into it - see the
+// comment above DockerLauncher), bounded by dockerRemoveTimeout on top of ctx (which may itself already be
+// Background() with no deadline, in callers that want an independent cleanup).
 func removeContainer(ctx context.Context, id string) error {
 	rmCtx, cancel := context.WithTimeout(ctx, dockerRemoveTimeout)
 	defer cancel()
-	return exec.CommandContext(rmCtx, "docker", "rm", "-f", id).Run()
+	return exec.CommandContext(rmCtx, "docker", "rm", "-f", "-v", id).Run()
 }
 
 // Launch creates a container for s, copies s.Dir into it and starts it attached. An error here means the
@@ -93,7 +105,9 @@ func (d DockerLauncher) Launch(ctx context.Context, s Spec) (Bot, error) {
 		"--pids-limit", "64",
 		"--cap-drop=ALL", "--security-opt=no-new-privileges",
 		"--user", "65534:65534",
+		"--read-only",
 		"--tmpfs", "/tmp:rw,size=16m",
+		"--mount", "type=volume,dst=/bot",
 	}, d.labelArgs()...)
 	createArgs = append(createArgs, "-w", "/bot", d.image())
 	createArgs = append(createArgs, argv...)

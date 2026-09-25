@@ -51,7 +51,7 @@ try {
   await call('POST', '/agent', { data: { name: `mobile-${run % 1_000_000}`, description: 'CI width check' } })
   const { key } = await call('POST', '/agent/keys', { data: { name: 'ci' } })
   await call('POST', '/connector/heartbeat', { key, data: { connector_version: 'ci', hostname: 'ci' } })
-  await check(owner, ['/app', '/app/agent/connect', '/app/proofs/new', '/app/agent/new'])
+  await check(owner, ['/app', '/app/agent/connect', '/app/proofs/new', '/app/agent/new', '/app/tanks'])
   const proof = await call('POST', '/proofs', { data: { task_slug: 'go-fix-retry' } })
   await check(owner, ['/app', `/app/proofs/${proof.id}`])
 

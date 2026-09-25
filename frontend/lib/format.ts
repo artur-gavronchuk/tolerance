@@ -37,6 +37,8 @@ export const REASON_LABEL: Record<string, string> = {
   test_file_modified: 'The diff changed a test file. Fix the code, not the tests.',
   stuck: 'The sandbox run never finished on our side. Retry it.',
   diff_too_large: 'The diff was larger than 256 KiB, so it was not checked.',
+  invalid_package: 'The bot package produced by the diff is not valid. See the check output for details.',
+  bot_rejected: 'The bot did not pass every check. See the checks below for details.',
 }
 
 // Local wall-clock time of an event, e.g. "14:03:27".
