@@ -86,7 +86,7 @@ func cmdInit() error {
 	}
 	url := os.Getenv("ARENA_URL")
 	if url == "" {
-		url = "https://arena.example.com"
+		url = "https://tolerance.cc"
 	}
 	if err := os.WriteFile(path, []byte(fmt.Sprintf(defaultConfig, url)), 0o600); err != nil {
 		return err
