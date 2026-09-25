@@ -64,7 +64,7 @@ tar_extra_args=()
 tar --help 2>&1 | grep -q -- '--no-xattrs' && tar_extra_args+=(--no-xattrs)
 tar --help 2>&1 | grep -q -- '--no-mac-metadata' && tar_extra_args+=(--no-mac-metadata)
 COPYFILE_DISABLE=1 tar czf "$tarball" \
-	"${tar_extra_args[@]}" \
+	${tar_extra_args[@]+"${tar_extra_args[@]}"} \
 	-C "$repo_root" \
 	--exclude='.git' --exclude='node_modules' --exclude='.next' \
 	--exclude='.env' --exclude='.superset' --exclude='backend/.connector' \

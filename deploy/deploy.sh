@@ -50,7 +50,7 @@ if tar --help 2>&1 | grep -q -- '--no-mac-metadata'; then
 fi
 
 COPYFILE_DISABLE=1 tar czf "$tarball" \
-	"${tar_extra_args[@]}" \
+	${tar_extra_args[@]+"${tar_extra_args[@]}"} \
 	-C "$repo_root" \
 	--exclude='.git' \
 	--exclude='node_modules' \
