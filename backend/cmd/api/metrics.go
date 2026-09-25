@@ -20,7 +20,7 @@ import (
 // config change does not need code changes; it is cheap and every role
 // does it exactly once at startup.
 func newMetricsServer(scale scaleConfig, pool *db.Pool, log *slog.Logger) *http.Server {
-	metrics.SetBuildInfo(scale.role)
+	metrics.SetBuildInfo(scale.role, scale.track, scale.version)
 	metrics.RegisterPoolStats(pool.Raw())
 	// DB-derived dashboard gauges (arena_proofs, arena_jobs_*, arena_agents_*,
 	// arena_users_total) only for roles serving the owner API: every replica
