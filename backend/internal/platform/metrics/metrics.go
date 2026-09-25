@@ -134,6 +134,27 @@ var (
 	})
 )
 
+// ---- games (tanks matches) ----
+
+var (
+	MatchRunSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "arena_match_run_seconds",
+		Help:    "Duration of a tanks match run (match.Run) in seconds.",
+		Buckets: []float64{0.5, 1, 2, 5, 10, 15, 30, 60, 90, 120, 180},
+	})
+	matchesTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "arena_matches_total",
+		Help: "Tanks matches finished, by result (finished, infra_error).",
+	}, []string{"result"})
+)
+
+// MatchFinished records a match reaching a terminal state (mirrors ProofVerdicts below for proofs).
+func MatchFinished(result string) { matchesTotal.WithLabelValues(result).Inc() }
+
+// MatchesFinishedAdd records n matches reaching a terminal state at once, for a bulk sweep (SweepStuck)
+// where issuing one UPDATE already covers every match instead of finishing them one at a time.
+func MatchesFinishedAdd(result string, n int) { matchesTotal.WithLabelValues(result).Add(float64(n)) }
+
 // ---- password hashing ----
 
 var (
