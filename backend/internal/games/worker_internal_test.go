@@ -162,6 +162,72 @@ func TestWorkerFinalCheckBotFailureRejectsVersion(t *testing.T) {
 	}
 }
 
+// TestSweepFailedChecksRejectsPendingVersion covers M-3: jobs.Queue.Reclaim can park a check_bot job as
+// failed without ever going through this package's own final-attempt handling in worker.handle - Reclaim is
+// generic (it has no idea what a check_bot job means) and is only ever called from
+// internal/proofs.Worker's own maintenance sweep, against the whole shared jobs table, not from anything in
+// this package. A version whose check_bot job dies that way must still get unstuck by the games worker's
+// own periodic sweep (sweepFailedChecks), not left pending forever.
+func TestSweepFailedChecksRejectsPendingVersion(t *testing.T) {
+	d := dbtest.New(t)
+	ctx := context.Background()
+	if err := Sync(ctx, d.AdminPool); err != nil {
+		t.Fatal(err)
+	}
+	us := identity.NewService(d.AppPool, nil)
+	svc := NewService(d.AppPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
+
+	u, _, err := us.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "sweep-test@example.com", Email: "sweep-test@example.com", EmailVerified: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := svc.UploadVersion(ctx, u.ID, starterArchiveForWorkerTest(t))
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+
+	// Simulate what Reclaim does to a leased job that has used every attempt: park it 'failed' directly,
+	// without going through worker.handle's final-attempt path.
+	if err := d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE jobs SET state = 'failed', attempts = max_attempts
+			WHERE kind = 'check_bot' AND payload ->> 'version_id' = $1`, v.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := svc.sweepFailedChecks(ctx)
+	if err != nil {
+		t.Fatalf("sweepFailedChecks: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("swept = %d, want 1", n)
+	}
+
+	var status string
+	var checksRaw []byte
+	if err := d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status, checks FROM bot_versions WHERE id = $1`, v.ID).Scan(&status, &checksRaw)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if status != "rejected" {
+		t.Fatalf("status = %q, want rejected", status)
+	}
+	var checks []Check
+	if err := json.Unmarshal(checksRaw, &checks); err != nil {
+		t.Fatal(err)
+	}
+	if len(checks) != 1 || checks[0].Name != "platform" || checks[0].Passed {
+		t.Fatalf("expected a single failing platform check, got %+v", checks)
+	}
+
+	// Nothing left pending with a failed job, so a second sweep is a no-op.
+	if n, err := svc.sweepFailedChecks(ctx); err != nil || n != 0 {
+		t.Fatalf("second sweep: n=%d err=%v, want 0, nil", n, err)
+	}
+}
+
 // TestFinishMatchStoresPlayedTicks covers I-1: a match that ends early by elimination (rather than by
 // reaching its configured tick limit) must have finishMatch record how many ticks it actually played, not
 // the tick count it was launched with - the live broadcast's duration is derived straight from this column,

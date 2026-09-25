@@ -267,3 +267,30 @@ func (s *Service) markCheckPlatformFailure(ctx context.Context, versionID string
 		return err
 	})
 }
+
+// sweepFailedChecks is markCheckPlatformFailure's periodic counterpart, for the one path that never goes
+// through the games worker's own final-attempt handling in worker.go: jobs.Queue.Reclaim parks a job as
+// failed once its lease expires and every attempt is used, but Reclaim itself is generic (it has no idea
+// what a check_bot job means) and is only ever called from internal/proofs.Worker's maintenance sweep,
+// against the whole shared jobs table - not from anything in this package. A check_bot job that dies that
+// way (its owning process crashed mid-check, rather than returning an error worker.handle could catch)
+// would otherwise leave its version stuck 'pending' forever. Called from the games worker's own periodic
+// loop alongside SweepStuck; returns how many versions it rejected.
+func (s *Service) sweepFailedChecks(ctx context.Context) (int, error) {
+	checks := []Check{{Name: "platform", Passed: false, Detail: "the platform could not run the check; upload again"}}
+	checksJSON, err := json.Marshal(checks)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `
+			UPDATE bot_versions SET status = 'rejected', checks = $1
+			WHERE status = 'pending' AND id IN (
+				SELECT payload ->> 'version_id' FROM jobs WHERE kind = 'check_bot' AND state = 'failed'
+			)`, checksJSON)
+		n = tag.RowsAffected()
+		return err
+	})
+	return int(n), err
+}
