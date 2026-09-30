@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"tolerance/internal/admin"
 	"tolerance/internal/agents"
 	"tolerance/internal/arena"
 	"tolerance/internal/games"
@@ -31,6 +32,7 @@ type deps struct {
 	agents    *agents.Service
 	quals     *qualifications.Service
 	arena     *arena.Service
+	admin     *admin.Service
 	proofs    *proofs.Service
 	games     *games.Service
 	limiter   *ratelimit.Limiter
@@ -63,6 +65,9 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	agents.RegisterPublicRoutes(public, d.agents)
 	arena.RegisterPublicRoutes(public, d.arena)
 
+	adminMux := http.NewServeMux()
+	admin.RegisterRoutes(adminMux, d.admin)
+
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
 	identity.RegisterAuthRoutes(api, d.users, d.limiter, identity.AuthConfig{
@@ -88,6 +93,9 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	api.Handle("/api/v1/me/tanks/", session(owner))
 	api.Handle("/api/v1/tanks/", public)
 	api.Handle("/api/v1/leaderboard", public)
+	// RequireAdmin reads the actor the session middleware attaches, so it sits
+	// inside session(), not outside it.
+	api.Handle("/api/v1/admin/", session(identity.RequireAdmin(adminMux)))
 	api.Handle("/api/v1/connector/", identity.RequireAgent(d.agents)(connector))
 
 	top := http.NewServeMux()

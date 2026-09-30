@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -82,4 +83,72 @@ func RecordExposure(ctx context.Context, tx pgx.Tx, taskSlug, agentID string) (b
 			THEN 'exposure limit reached' ELSE retired_reason END
 		WHERE slug = $1`, taskSlug, MaxExposures)
 	return true, err
+}
+
+// TaskStat is what an administrator needs in order to judge a task: how far it
+// has leaked, and how hard it turned out to be next to the difficulty someone
+// typed by hand. A wide gap between the two is the signal to re-weight — by
+// editing difficulty, which affects only future runs. Nothing here rewrites a
+// rating that has already been earned.
+type TaskStat struct {
+	Slug          string     `json:"slug"`
+	Title         string     `json:"title"`
+	Difficulty    int        `json:"difficulty"`
+	Exposures     int        `json:"exposures"`
+	Runs          int        `json:"runs"`
+	AvgScore      *float64   `json:"avg_score"`
+	Active        bool       `json:"active"`
+	ChallengeOnly bool       `json:"challenge_only"`
+	FirstUsedAt   *time.Time `json:"first_used_at"`
+	RetiredAt     *time.Time `json:"retired_at"`
+	RetiredReason string     `json:"retired_reason"`
+}
+
+// Retire takes a task out of the pool by hand, for a leak the exposure counter
+// cannot see. Results already scored on it keep counting: retiring a task never
+// changes a rating that was earned on it, and a run already in flight finishes.
+// Retiring an already-retired task keeps the reason it was retired the first time.
+func Retire(ctx context.Context, tx pgx.Tx, slug, reason string) error {
+	tag, err := tx.Exec(ctx, `UPDATE skill_tasks SET retired_at = coalesce(retired_at, now()),
+		retired_reason = CASE WHEN retired_at IS NULL THEN $2 ELSE retired_reason END
+		WHERE slug = $1`, slug, reason)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return httpx.NotFound()
+	}
+	return nil
+}
+
+// TaskStats lists one skill's whole catalog, retired tasks included.
+func TaskStats(ctx context.Context, tx pgx.Tx, skill string) ([]TaskStat, error) {
+	rows, err := tx.Query(ctx, `SELECT slug, title, difficulty, exposures, runs,
+			CASE WHEN runs > 0 THEN (sum_score / runs)::float8 ELSE NULL END,
+			active, challenge_only, first_used_at, retired_at, retired_reason
+		FROM skill_tasks WHERE skill_slug = $1 ORDER BY slug`, skill)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []TaskStat{}
+	for rows.Next() {
+		var s TaskStat
+		if err := rows.Scan(&s.Slug, &s.Title, &s.Difficulty, &s.Exposures, &s.Runs, &s.AvgScore,
+			&s.Active, &s.ChallengeOnly, &s.FirstUsedAt, &s.RetiredAt, &s.RetiredReason); err != nil {
+			return nil, err
+		}
+		s.FirstUsedAt, s.RetiredAt = utcp(s.FirstUsedAt), utcp(s.RetiredAt)
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// utcp normalizes a nullable timestamp; pgx decodes timestamptz into time.Local.
+func utcp(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	u := t.UTC()
+	return &u
 }

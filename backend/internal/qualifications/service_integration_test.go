@@ -668,6 +668,24 @@ func TestRun_InfraRequeueDoesNotWidenExposure(t *testing.T) {
 	}
 }
 
+// advanced asserts that the run has n finished proofs. The worker logs and
+// swallows a failing finish hook (proofs.Worker.notify), so without this a
+// stalled advance shows up only as a mysteriously unscored run several steps
+// later; here it fails at the step that stalled.
+func (f *fx) advanced(t *testing.T, runID string, n int) {
+	t.Helper()
+	var got int
+	err := f.d.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM proofs WHERE qualification_run_id = $1 AND finished_at IS NOT NULL`, runID).Scan(&got)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != n {
+		t.Fatalf("run %s has %d finished proofs, want %d: the advance stalled", runID, got, n)
+	}
+}
+
 func TestRun_FinishesOnTasksRetiredMidRun(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
@@ -676,9 +694,10 @@ func TestRun_FinishesOnTasksRetiredMidRun(t *testing.T) {
 	run := f.start(t, "go")
 	// Every task of the skill leaves the pool while the run is in flight.
 	f.admin(t, `UPDATE skill_tasks SET retired_at = now(), retired_reason = 'test' WHERE skill_slug = 'go'`)
-	f.drive(t, 1)
-	f.drive(t, 1)
-	f.drive(t, 1)
+	for i := 1; i <= 3; i++ {
+		f.drive(t, 1)
+		f.advanced(t, run.ID, i)
+	}
 	got := f.get(t, run.ID)
 	if got.Status != "scored" || got.Score == nil || *got.Score != 1 {
 		t.Fatalf("a run already in flight must finish on tasks that retired under it: %+v", got)
@@ -686,4 +705,63 @@ func TestRun_FinishesOnTasksRetiredMidRun(t *testing.T) {
 	// But no new run may start on the emptied pool.
 	_, err := f.quals.Start(ctx, f.userID, "go")
 	problem(t, err, 409, "skill_frozen")
+}
+
+// taskObserved reads the accumulated observed difficulty of one task.
+func (f *fx) taskObserved(t *testing.T, slug string) (runs int, sum float64) {
+	t.Helper()
+	err := f.d.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT runs, sum_score::float8 FROM skill_tasks WHERE slug = $1`, slug).Scan(&runs, &sum)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return runs, sum
+}
+
+func TestScore_AccumulatesObservedDifficultyPerTask(t *testing.T) {
+	f := setup(t)
+	f.operational(t)
+	f.version(t, "d1")
+	run := f.start(t, "go")
+	// Three tasks at 1.0, 0.5 and 0.0 of their hidden tests.
+	f.drive(t, 1)
+	f.drive(t, 0.5)
+	f.drive(t, 0)
+
+	got := f.get(t, run.ID)
+	if got.Status != "scored" {
+		t.Fatalf("run status = %q, want scored", got.Status)
+	}
+	var total float64
+	for i, slug := range run.TaskSlugs {
+		runs, sum := f.taskObserved(t, slug)
+		if runs != 1 {
+			t.Fatalf("task %d (%s): runs = %d, want 1", i+1, slug, runs)
+		}
+		total += sum
+	}
+	// 1.0 + 0.5 + 0.0, with each task's own hidden-test count rounding its own
+	// share. The point of the accumulation is that observed difficulty can later
+	// be compared against the difficulty someone typed by hand.
+	if total < 1.4 || total > 1.6 {
+		t.Fatalf("sum of observed scores = %v, want about 1.5", total)
+	}
+}
+
+func TestScore_InfraErroredTaskAddsNoObservation(t *testing.T) {
+	f := setup(t)
+	f.operational(t)
+	f.version(t, "d1")
+	run := f.start(t, "python")
+	first := run.TaskSlugs[0]
+	// Both attempts at task 1 die on the platform, so it is excluded from the run.
+	f.infraOut(t)
+	f.infraOut(t)
+	f.drive(t, 1)
+	f.drive(t, 1)
+
+	if runs, sum := f.taskObserved(t, first); runs != 0 || sum != 0 {
+		t.Fatalf("an infra-errored task = %d runs, %v sum; want 0, 0: a platform failure says nothing about difficulty", runs, sum)
+	}
 }

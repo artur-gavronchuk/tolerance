@@ -20,8 +20,10 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/routers"
+	"github.com/jackc/pgx/v5"
 
 	"tolerance/contracts/openapi"
+	"tolerance/internal/admin"
 	"tolerance/internal/agents"
 	"tolerance/internal/arena"
 	"tolerance/internal/games"
@@ -44,6 +46,7 @@ type e2e struct {
 	worker *proofs.Worker
 	fake   *sandbox.Fake
 	games  *games.Service
+	db     *dbtest.DB
 }
 
 func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
@@ -89,7 +92,7 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	agentsSvc.SetVersionListener(qs)
 	agentsSvc.SetSkillsSource(qs)
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
-		agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs, arena: arena.NewService(d.AppPool),
+		agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs, arena: arena.NewService(d.AppPool), admin: admin.NewService(d.AppPool),
 		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 100),
 		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 100),
 		longPoll:   ratelimit.NewConcurrencyLimiter(2)}
@@ -113,7 +116,7 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	worker := proofs.NewWorker(d.AppPool, fake, t.TempDir(), log)
 	worker.SetGameBotJudge(gamesSvc)
 	worker.SetFinishListener(qs)
-	return &e2e{srv: srv, router: router, worker: worker, fake: fake, games: gamesSvc}
+	return &e2e{srv: srv, router: router, worker: worker, fake: fake, games: gamesSvc, db: d}
 }
 
 // requirePython3 skips a test when python3 isn't on PATH, unless ARENA_TEST_REQUIRE_DOCKER=1 (CI always
@@ -1067,5 +1070,54 @@ func TestSkillsReportPoolHealth(t *testing.T) {
 		if it.PoolSize != 3 || it.Frozen {
 			t.Fatalf("skill %s: pool_size = %d frozen = %v, want 3 and false", it.Slug, it.PoolSize, it.Frozen)
 		}
+	}
+}
+
+func TestAdminRoutesRefuseANonAdmin(t *testing.T) {
+	e := newE2E(t)
+	plain := &http.Client{}
+	user := e.browser(t)
+	e.devLogin(t, user, "ordinary@example.com")
+	adminC := e.browser(t)
+	e.devLogin(t, adminC, "admin@arena.local") // in cfg.adminEmails
+
+	calls := []struct{ method, path string }{
+		{"GET", "/api/v1/admin/skill-tasks?skill=go"},
+		{"POST", "/api/v1/admin/skill-tasks/go-lru-cache-eviction/retire"},
+		{"POST", "/api/v1/admin/qualifications/qrun_nope/void"},
+		{"POST", "/api/v1/admin/agents/agent_nope/ban"},
+		{"POST", "/api/v1/admin/agents/agent_nope/unban"},
+	}
+	body := map[string]any{"reason": "because"}
+	for _, c := range calls {
+		if code := e.call(t, plain, c.method, c.path, "", body, nil); code != 401 {
+			t.Errorf("%s %s without a session: %d, want 401", c.method, c.path, code)
+		}
+		if code := e.call(t, user, c.method, c.path, "", body, nil); code != 403 {
+			t.Errorf("%s %s as an ordinary user: %d, want 403", c.method, c.path, code)
+		}
+	}
+	// No audit event may exist for a call that was refused.
+	var audited int
+	if err := e.db.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM audit_events WHERE action LIKE 'admin.%'`).Scan(&audited)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if audited != 0 {
+		t.Fatalf("%d admin audit events after refused calls, want 0", audited)
+	}
+
+	// The same admin call goes through with the admin role, and a blank reason is refused.
+	if code := e.call(t, adminC, "GET", "/api/v1/admin/skill-tasks?skill=go", "", nil, nil); code != 200 {
+		t.Error("an admin must be able to read task stats")
+	}
+	if code := e.call(t, adminC, "POST", "/api/v1/admin/skill-tasks/go-lru-cache-eviction/retire", "",
+		map[string]any{"reason": "  "}, nil); code != 422 {
+		t.Error("a blank reason must be refused")
+	}
+	if code := e.call(t, adminC, "POST", "/api/v1/admin/skill-tasks/go-lru-cache-eviction/retire", "",
+		map[string]any{"reason": "leaked on a forum"}, nil); code != 200 {
+		t.Error("an admin must be able to retire a task")
 	}
 }

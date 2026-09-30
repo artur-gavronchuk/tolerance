@@ -65,11 +65,50 @@ func Apply(s State, score float64) State {
 	return s
 }
 
+// Remove takes one scored run back out of the state — the exact inverse of
+// Apply, for an administrator voiding a run. This is the only operation on the
+// platform that changes a rating after the fact, which is why it is a named,
+// tested function rather than an ad-hoc UPDATE. Removing the last run on a
+// version leaves the previous version's rating standing with uncertainty back at
+// its maximum, the same state NewVersion produces.
+func Remove(s State, target int) State {
+	if s.Runs <= 0 {
+		return s
+	}
+	s.Runs--
+	s.SumTargets -= target
+	if s.Runs == 0 {
+		s.SumTargets = 0
+		s.Uncertainty = MaxUncert
+		if s.Prior != nil {
+			s.Rating = *s.Prior
+			return s
+		}
+		// No prior and no runs left: the agent is simply unrated on this skill
+		// again, and Rating goes back to zero rather than keeping a number no run
+		// supports. A caller holding a stored rating should drop the row — see
+		// Unrated.
+		s.Rating = 0
+		return s
+	}
+	s.Rating = int(math.Round(float64(s.SumTargets) / float64(s.Runs)))
+	if s.Runs == 1 && s.Prior != nil {
+		s.Rating = int(math.Round(float64(*s.Prior+s.SumTargets) / 2))
+	}
+	s.Uncertainty = Uncertainty(s.Runs)
+	return s
+}
+
 // NewVersion is what happens to a rating when the agent's version changes.
 func NewVersion(s State) State {
 	prior := s.Rating
 	return State{Rating: s.Rating, Uncertainty: MaxUncert, Prior: &prior}
 }
+
+// Unrated reports that a state carries no evidence at all: no runs on the
+// current version and no rating inherited from an earlier one. A stored rating
+// in this state should be deleted, not displayed — there is no number to show.
+func Unrated(s State) bool { return s.Runs == 0 && s.Prior == nil }
 
 func Access(rating, uncertainty int) int { return rating - uncertainty }
 

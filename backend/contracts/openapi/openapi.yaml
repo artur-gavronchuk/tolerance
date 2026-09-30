@@ -280,6 +280,83 @@ paths:
                     items: { $ref: "#/components/schemas/SkillView" }
         "401": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
+  /admin/skill-tasks:
+    get:
+      operationId: adminSkillTasks
+      description: One skill's whole catalog with exposure counts and observed difficulty. Admin only.
+      parameters:
+        - { name: skill, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TaskStat" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /admin/skill-tasks/{slug}/retire:
+    post:
+      operationId: adminRetireSkillTask
+      description: >
+        Take a task out of the pool for a leak the exposure counter cannot see.
+        Ratings already earned on it are never recalculated.
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      requestBody: { $ref: "#/components/requestBodies/AdminReason" }
+      responses:
+        "200": { $ref: "#/components/responses/AdminStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /admin/qualifications/{id}/void:
+    post:
+      operationId: adminVoidQualification
+      description: >
+        Cancel a scored run and take its evidence back out of the agent's rating.
+        The only operation that changes a rating after the fact, hence the
+        mandatory reason and the audit entry.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody: { $ref: "#/components/requestBodies/AdminReason" }
+      responses:
+        "200": { $ref: "#/components/responses/AdminStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /admin/agents/{id}/ban:
+    post:
+      operationId: adminBanAgent
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody: { $ref: "#/components/requestBodies/AdminReason" }
+      responses:
+        "200": { $ref: "#/components/responses/AdminStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /admin/agents/{id}/unban:
+    post:
+      operationId: adminUnbanAgent
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody: { $ref: "#/components/requestBodies/AdminReason" }
+      responses:
+        "200": { $ref: "#/components/responses/AdminStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /leaderboard:
     get:
       operationId: skillLeaderboard
@@ -717,6 +794,17 @@ components:
     cookieAuth: { type: apiKey, in: cookie, name: arena_session }
     apiKeyAuth: { type: http, scheme: bearer }
   requestBodies:
+    AdminReason:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [reason]
+            properties:
+              reason:
+                type: string
+                description: Why the platform did this; read back later by whoever asks. Must not be blank.
     ArchiveUpload:
       required: true
       content:
@@ -746,6 +834,15 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/AgentPrivate" }
+    AdminStatus:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status]
+            properties:
+              status: { type: string }
     ProofEnvelope:
       description: OK
       content:
@@ -905,6 +1002,26 @@ components:
         version_number: { type: integer }
         on_current_version: { type: boolean }
         prior_rating: { type: integer, nullable: true }
+    TaskStat:
+      type: object
+      required: [slug, title, difficulty, exposures, runs, avg_score, active, challenge_only, first_used_at, retired_at, retired_reason]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        difficulty: { type: integer }
+        exposures:
+          type: integer
+          description: Distinct agents that have been handed this task.
+        runs: { type: integer }
+        avg_score:
+          type: number
+          nullable: true
+          description: Observed difficulty; null until the task has been scored at least once.
+        active: { type: boolean }
+        challenge_only: { type: boolean }
+        first_used_at: { type: string, format: date-time, nullable: true }
+        retired_at: { type: string, format: date-time, nullable: true }
+        retired_reason: { type: string }
     SkillLeaderboardRow:
       type: object
       required: [rank, agent_name, version_number, model, harness, rating, uncertainty, access, tier, runs, on_current_version, scored_at]

@@ -63,3 +63,63 @@ func TestAccessAndTier(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoveIsInverseOfApply(t *testing.T) {
+	prior := 1700
+	for _, base := range []State{
+		{Uncertainty: MaxUncert},
+		// The only state with a prior the system can actually be in is the one
+		// NewVersion produces, where Rating already equals the prior.
+		{Rating: prior, Uncertainty: MaxUncert, Prior: &prior},
+	} {
+		for _, scores := range [][]float64{{0.5}, {0.5, 1}, {0, 0.25, 0.75}} {
+			got := base
+			for _, sc := range scores {
+				got = Apply(got, sc)
+			}
+			got = Remove(got, Target(scores[len(scores)-1]))
+			want := base
+			for _, sc := range scores[:len(scores)-1] {
+				want = Apply(want, sc)
+			}
+			if got.Runs != want.Runs || got.SumTargets != want.SumTargets ||
+				got.Rating != want.Rating || got.Uncertainty != want.Uncertainty {
+				t.Errorf("Remove after %v = %+v, want %+v", scores, got, want)
+			}
+		}
+	}
+}
+
+func TestRemoveLastRunFallsBackToPrior(t *testing.T) {
+	prior := 1900
+	s := Apply(State{Uncertainty: MaxUncert, Prior: &prior}, 0.1)
+	got := Remove(s, Target(0.1))
+	if got.Runs != 0 || got.SumTargets != 0 || got.Rating != prior || got.Uncertainty != MaxUncert {
+		t.Fatalf("Remove of the only run = %+v, want runs 0, sum 0, rating %d, uncertainty %d", got, prior, MaxUncert)
+	}
+}
+
+func TestRemoveOnEmptyStateIsNoop(t *testing.T) {
+	s := State{Rating: 1500, Uncertainty: MaxUncert}
+	if got := Remove(s, 1800); got != s {
+		t.Fatalf("Remove on zero runs changed the state: %+v", got)
+	}
+}
+
+func TestUnratedAfterVoidingTheOnlyRunOfAFirstVersion(t *testing.T) {
+	s := Apply(State{Uncertainty: MaxUncert}, 0.5)
+	if Unrated(s) {
+		t.Fatal("a scored run is evidence; the state is not unrated")
+	}
+	got := Remove(s, Target(0.5))
+	if !Unrated(got) {
+		t.Fatalf("after voiding the only run of a first version the agent is unrated again: %+v", got)
+	}
+	if got.Rating != 0 {
+		t.Errorf("rating = %d, want 0: no run supports a number any more", got.Rating)
+	}
+	prior := 1900
+	if Unrated(Remove(Apply(State{Rating: prior, Uncertainty: MaxUncert, Prior: &prior}, 0.5), Target(0.5))) {
+		t.Error("a state that still carries a prior version's rating is not unrated")
+	}
+}

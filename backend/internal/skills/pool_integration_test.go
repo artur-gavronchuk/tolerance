@@ -2,12 +2,14 @@ package skills_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 
 	"tolerance/internal/platform/dbtest"
+	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/skills"
 )
@@ -134,5 +136,78 @@ func TestPoolExcludesRetiredInactiveAndChallengeOnly(t *testing.T) {
 	mustExec(t, d, `UPDATE skill_tasks SET active = false WHERE slug = 'inactive'`)
 	if got := pool(t, d, "go"); fmt.Sprint(got) != "[keep]" {
 		t.Fatalf("pool = %v, want [keep]", got)
+	}
+}
+
+func retire(t *testing.T, d *dbtest.DB, slug, reason string) error {
+	t.Helper()
+	return d.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		return skills.Retire(ctx, tx, slug, reason)
+	})
+}
+
+func stats(t *testing.T, d *dbtest.DB, skill string) []skills.TaskStat {
+	t.Helper()
+	var out []skills.TaskStat
+	err := d.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		var err error
+		out, err = skills.TaskStats(ctx, tx, skill)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("task stats: %v", err)
+	}
+	return out
+}
+
+func TestRetireTakesATaskOutOfThePoolAndKeepsTheFirstReason(t *testing.T) {
+	d := dbtest.New(t)
+	seedSkillTask(t, d, "go", "leaked", false)
+	seedSkillTask(t, d, "go", "fresh", false)
+
+	if err := retire(t, d, "leaked", "posted on a forum"); err != nil {
+		t.Fatalf("retire: %v", err)
+	}
+	if got := pool(t, d, "go"); fmt.Sprint(got) != "[fresh]" {
+		t.Fatalf("pool = %v, want [fresh]", got)
+	}
+	// Retiring twice must not overwrite why it happened the first time.
+	if err := retire(t, d, "leaked", "second thoughts"); err != nil {
+		t.Fatalf("retire again: %v", err)
+	}
+	for _, s := range stats(t, d, "go") {
+		if s.Slug == "leaked" {
+			if s.RetiredAt == nil || s.RetiredReason != "posted on a forum" {
+				t.Fatalf("leaked = %+v, want the first reason kept", s)
+			}
+		}
+	}
+	err := retire(t, d, "no-such-task", "x")
+	var p *httpx.Problem
+	if !errors.As(err, &p) || p.Status != 404 {
+		t.Fatalf("retiring an unknown task = %v, want 404", err)
+	}
+}
+
+func TestTaskStatsReportObservedDifficulty(t *testing.T) {
+	d := dbtest.New(t)
+	seedSkillTask(t, d, "go", "measured", false)
+	seedSkillTask(t, d, "go", "unplayed", false)
+	// Four runs averaging 0.375: the task is harder than its hand-set difficulty 1.
+	mustExec(t, d, `UPDATE skill_tasks SET runs = 4, sum_score = 1.5 WHERE slug = 'measured'`)
+
+	byslug := map[string]skills.TaskStat{}
+	for _, s := range stats(t, d, "go") {
+		byslug[s.Slug] = s
+	}
+	m := byslug["measured"]
+	if m.Runs != 4 || m.AvgScore == nil || *m.AvgScore < 0.374 || *m.AvgScore > 0.376 {
+		t.Fatalf("measured = %+v, want 4 runs averaging 0.375", m)
+	}
+	if u := byslug["unplayed"]; u.AvgScore != nil {
+		t.Fatalf("a task nobody ran has no average, got %v", *u.AvgScore)
+	}
+	if m.Difficulty != 1 {
+		t.Errorf("difficulty = %d, want the hand-set 1 (observed score never rewrites it)", m.Difficulty)
 	}
 }

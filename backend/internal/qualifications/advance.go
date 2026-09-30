@@ -169,7 +169,7 @@ func (s *Service) SweepStalled(ctx context.Context) (int, error) {
 // failed counts as failed.
 func (s *Service) scoreTx(ctx context.Context, tx pgx.Tx, run Run) error {
 	rows, err := tx.Query(ctx, `
-		SELECT DISTINCT ON (p.position) p.position, p.status, p.sandbox_result, t.hidden_tests, t.difficulty, t.hidden_tar, s.language
+		SELECT DISTINCT ON (p.position) p.position, p.status, p.sandbox_result, p.skill_task_slug, t.hidden_tests, t.difficulty, t.hidden_tar, s.language
 		FROM proofs p JOIN skill_tasks t ON t.slug = p.skill_task_slug JOIN skills s ON s.slug = t.skill_slug
 		WHERE p.qualification_run_id = $1 AND p.finished_at IS NOT NULL
 		ORDER BY p.position, p.finished_at DESC`, run.ID)
@@ -177,12 +177,19 @@ func (s *Service) scoreTx(ctx context.Context, tx pgx.Tx, run Run) error {
 		return err
 	}
 	var weighted, weights float64
+	// Observed difficulty per task, applied after the rows are closed: pgx cannot
+	// run another query on this connection while they are open.
+	type observation struct {
+		slug string
+		frac float64
+	}
+	var observed []observation
 	for rows.Next() {
 		var position, hidden, difficulty int
-		var status, language string
+		var status, language, taskSlug string
 		var hiddenTar []byte
 		var sr *proofs.SandboxResult
-		if err := rows.Scan(&position, &status, &sr, &hidden, &difficulty, &hiddenTar, &language); err != nil {
+		if err := rows.Scan(&position, &status, &sr, &taskSlug, &hidden, &difficulty, &hiddenTar, &language); err != nil {
 			rows.Close()
 			return err
 		}
@@ -214,13 +221,24 @@ func (s *Service) scoreTx(ctx context.Context, tx pgx.Tx, run Run) error {
 		if passed > hidden {
 			passed = hidden
 		}
+		frac := float64(passed) / float64(hidden)
 		w := float64(difficulty)
-		weighted += w * float64(passed) / float64(hidden)
+		weighted += w * frac
 		weights += w
+		observed = append(observed, observation{slug: taskSlug, frac: frac})
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
+	}
+	// What the pool actually turned out to cost agents, for comparison against the
+	// difficulty someone typed by hand. It never rewrites difficulty on its own:
+	// a weight that changed by itself would move ratings nobody re-earned.
+	for _, o := range observed {
+		if _, err := tx.Exec(ctx, `UPDATE skill_tasks SET runs = runs + 1, sum_score = sum_score + $2 WHERE slug = $1`,
+			o.slug, o.frac); err != nil {
+			return err
+		}
 	}
 	if weights == 0 {
 		return s.abortTx(ctx, tx, run.ID, "no_scored_tasks")
