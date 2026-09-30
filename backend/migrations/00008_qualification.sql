@@ -105,15 +105,11 @@ GRANT SELECT ON skills, skill_tasks TO arena_worker;
 GRANT SELECT, UPDATE ON qualification_runs TO arena_worker;
 -- Scoring reads the rating state and upserts it (INSERT ... ON CONFLICT DO UPDATE needs both verbs).
 GRANT SELECT, INSERT, UPDATE ON skill_ratings TO arena_worker;
--- Versions are created only by the API's heartbeat path; the worker reads them to tell which version a run
--- was played against.
-GRANT SELECT ON agent_versions TO arena_worker;
--- One more agents column beside id, owner_user_id, name (00007): the version the agent currently runs.
-GRANT SELECT (current_version_id) ON agents TO arena_worker;
+-- Agent versions are neither read nor written by worker code: a run stores its own version_id, and the
+-- version listener and RatingsFor run in the api role. agents(current_version_id) is therefore not granted.
 
 -- +goose Down
-REVOKE SELECT (current_version_id) ON agents FROM arena_worker;
-REVOKE ALL ON agent_versions, skill_ratings, qualification_runs, skill_tasks, skills FROM arena_worker;
+REVOKE ALL ON skill_ratings, qualification_runs, skill_tasks, skills FROM arena_worker;
 REVOKE INSERT ON proofs FROM arena_worker;
 DROP TABLE skill_ratings;
 DELETE FROM proofs WHERE kind = 'qualification';

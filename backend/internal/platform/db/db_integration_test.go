@@ -26,13 +26,13 @@ func TestMigrate_CreatesSliceTablesAndAppRoleCanUseThem(t *testing.T) {
 // TestMigrate_WorkerRoleCanReadItsOwnTables is arena_app's own test above, for arena_worker: every table
 // the worker role's code paths touch (internal/proofs.Worker, internal/games.Worker) must be readable
 // through 00007_worker_grants.sql's grants. agents is intentionally not in this list - arena_worker only
-// has column-level SELECT on it (id, owner_user_id, name, current_version_id); SELECT * would fail, which is the point.
+// has column-level SELECT on it (id, owner_user_id, name); SELECT * would fail, which is the point.
 func TestMigrate_WorkerRoleCanReadItsOwnTables(t *testing.T) {
 	d := dbtest.New(t)
 	for _, table := range []string{
 		"jobs", "proofs", "proof_tasks",
 		"game_bots", "bot_versions", "matches", "match_players", "match_replays", "tanks_broadcasts",
-		"skills", "skill_tasks", "qualification_runs", "skill_ratings", "agent_versions",
+		"skills", "skill_tasks", "qualification_runs", "skill_ratings",
 	} {
 		err := d.WorkerPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, "SELECT 1 FROM "+table+" LIMIT 1")
@@ -45,7 +45,7 @@ func TestMigrate_WorkerRoleCanReadItsOwnTables(t *testing.T) {
 	// The three columns the worker's own code actually reads off agents (see games.agentNameFor and
 	// proofs.Worker's GameBotJudge path).
 	err := d.WorkerPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, "SELECT id, owner_user_id, name, current_version_id FROM agents LIMIT 1")
+		_, err := tx.Exec(ctx, "SELECT id, owner_user_id, name FROM agents LIMIT 1")
 		return err
 	})
 	if err != nil {
@@ -96,6 +96,8 @@ func TestMigrate_WorkerRoleCannotReachUserSecrets(t *testing.T) {
 		"INSERT INTO skills (slug) SELECT 'x' WHERE false",
 		"INSERT INTO skill_tasks (slug) SELECT 'x' WHERE false",
 		"INSERT INTO agent_versions (id) SELECT 'x' WHERE false",
+		"SELECT 1 FROM agent_versions LIMIT 1", // no worker code reads versions
+		"SELECT current_version_id FROM agents LIMIT 1",
 		"DELETE FROM skill_ratings WHERE false",
 	} {
 		if err := d.WorkerPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {

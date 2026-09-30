@@ -28,6 +28,7 @@ import (
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/proofs"
 	"tolerance/internal/proofs/sandbox"
+	"tolerance/internal/qualifications"
 )
 
 func main() {
@@ -84,8 +85,14 @@ func main() {
 	}
 	gamesSvc := games.NewService(pool, ps, launcher, log, games.Config{WorkDir: cfg.workDir})
 
+	// Qualification runs listen for version changes on every role: the heartbeat that reports a new
+	// version is served by "api" (and "all"), so the listener must be wired wherever agents.Service is.
+	agentsSvc := agents.NewService(pool, ps)
+	qs := qualifications.NewService(pool, ps)
+	agentsSvc.SetVersionListener(qs)
+
 	d := deps{
-		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agents.NewService(pool, ps), proofs: ps, games: gamesSvc,
+		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs,
 		limiter:    ratelimit.New(nil),
 		providers:  providersFromConfig(cfg),
 		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 1_000_000),
@@ -107,10 +114,35 @@ func main() {
 		}
 		w := proofs.NewWorker(pool, runner, cfg.workDir, log)
 		w.SetGameBotJudge(gamesSvc)
+		// Only roles that have a worker advance qualification runs: the finish hook (after each terminal
+		// proof transition) and the stalled-run sweep below both run as arena_worker there. Several
+		// replicas may sweep at once; OnProofFinished locks the run row and moves it only from its newest proof.
+		w.SetFinishListener(qs)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			w.Run(ctx, scale.workerConcurrency)
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tick := time.NewTicker(30 * time.Second)
+			defer tick.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-tick.C:
+					n, err := qs.SweepStalled(ctx)
+					if err != nil {
+						log.Error("sweep stalled qualification runs", "err", err)
+					}
+					if n > 0 {
+						log.Info("advanced stalled qualification runs", "count", n)
+					}
+				}
+			}
 		}()
 
 		wg.Add(1)

@@ -19,6 +19,7 @@ import (
 	"tolerance/internal/platform/metrics"
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/proofs"
+	"tolerance/internal/qualifications"
 )
 
 type deps struct {
@@ -26,6 +27,7 @@ type deps struct {
 	log       *slog.Logger
 	users     *identity.Service
 	agents    *agents.Service
+	quals     *qualifications.Service
 	proofs    *proofs.Service
 	games     *games.Service
 	limiter   *ratelimit.Limiter
