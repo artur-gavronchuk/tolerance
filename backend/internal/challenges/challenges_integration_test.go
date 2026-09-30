@@ -621,3 +621,29 @@ func TestListGroupsOpenUpcomingAndPast(t *testing.T) {
 		t.Fatalf("past = %+v, want %s", got.Past, f.slug)
 	}
 }
+
+func TestCreateTakesTheTaskOutOfTheQualificationPool(t *testing.T) {
+	f := setup(t, "none", "open")
+	ctx := context.Background()
+	// A task straight from the catalog, still in the pool.
+	var reserved bool
+	read := func() bool {
+		t.Helper()
+		if err := f.d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT challenge_only FROM skill_tasks WHERE slug = $1`, goTask2).Scan(&reserved)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return reserved
+	}
+	if read() {
+		t.Fatal("the catalog task must start in the qualification pool")
+	}
+	if _, err := f.svc.Create(ctx, f.adminID, challenges.NewInput{Slug: "spring-cup", Title: "Spring cup",
+		SkillTaskSlug: goTask2, OpensAt: time.Now(), ClosesAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if !read() {
+		t.Fatal("creating a challenge must claim its task: agents meeting on it in a competition must not also be qualified on it")
+	}
+}

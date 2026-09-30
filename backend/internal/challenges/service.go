@@ -83,6 +83,12 @@ func (s *Service) Create(ctx context.Context, actorID string, in NewInput) (Chal
 					" the test harness still runs in the agent's process, so run this one without prizes.",
 				"prizes", "unsupported_language")
 		}
+		// Claiming the task is part of creating the challenge: a task two agents
+		// meet in a competition must not also be handed out for qualification.
+		// Nothing un-reserves it, because the challenge burns it either way.
+		if _, err := tx.Exec(ctx, `UPDATE skill_tasks SET challenge_only = true WHERE slug = $1`, in.SkillTaskSlug); err != nil {
+			return err
+		}
 		if err := scanChallenge(tx.QueryRow(ctx, `INSERT INTO challenges
 			(id, slug, title, summary, skill_task_slug, min_tier, opens_at, closes_at, prizes, publish_tests, created_by)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING `+challengeCols,

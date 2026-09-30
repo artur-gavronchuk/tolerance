@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { VisibilityCard } from '@/components/arena/visibility-card'
 import { Journey } from '@/components/journey'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { ProofList } from '@/components/proof-list'
@@ -59,7 +60,7 @@ function Record({ proofs }: { proofs: Proof[] }) {
 }
 
 export default function HomePage() {
-  const { me } = useMe(5000)
+  const { me, refresh } = useMe(5000)
   const [proofs, setProofs] = useState<Proof[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const hasAgent = me?.agent != null
@@ -104,6 +105,7 @@ export default function HomePage() {
             <Journey me={me} proofs={proofs} />
           </div>
           {a && <ConnectorCard a={a} />}
+          {a && <VisibilityCard a={a} onChange={refresh} />}
           {a && proofs && <Record proofs={proofs} />}
         </aside>
       </div>

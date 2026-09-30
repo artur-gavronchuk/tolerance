@@ -1136,15 +1136,6 @@ func TestEndToEnd_ChallengeLifecycle(t *testing.T) {
 	e.devLogin(t, owner, "cup@example.com")
 	plain := &http.Client{}
 
-	// The challenge's task is reserved: it must not also be handed out by the
-	// qualification pool.
-	if err := e.db.AdminPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE skill_tasks SET challenge_only = true WHERE slug = 'go-cursor-pagination'`)
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-
 	e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "Cupfighter"}, nil)
 	var keyResp struct {
 		Key string `json:"key"`
@@ -1161,6 +1152,17 @@ func TestEndToEnd_ChallengeLifecycle(t *testing.T) {
 		"closes_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339), "prizes": "bragging rights"}
 	if code := e.call(t, adminC, "POST", "/api/v1/admin/challenges", "", body, nil); code != 201 {
 		t.Fatalf("create challenge: %d", code)
+	}
+	// Creating the challenge claimed its task: it must not also be handed out for
+	// qualification while agents are competing on it.
+	var reserved bool
+	if err := e.db.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT challenge_only FROM skill_tasks WHERE slug = 'go-cursor-pagination'`).Scan(&reserved)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !reserved {
+		t.Fatal("the challenge's task is still in the qualification pool")
 	}
 	// A draft is nobody's business, and an owner cannot enter one.
 	if code := e.call(t, plain, "GET", "/api/v1/challenges/autumn-cup", "", nil, nil); code != 404 {

@@ -34,7 +34,8 @@ async function check(context, paths) {
 
 try {
   const anonymous = await browser.newContext({ viewport: { width: WIDTH, height: 800 } })
-  await check(anonymous, ['/', '/login', '/signup', '/terms', '/tanks', '/tanks/leaderboard', '/tanks/docs', '/tanks/replay'])
+  await check(anonymous, ['/', '/login', '/signup', '/terms', '/arena', '/challenges',
+    '/tanks', '/tanks/leaderboard', '/tanks/docs', '/tanks/replay'])
 
   const owner = await browser.newContext({ viewport: { width: WIDTH, height: 800 } })
   const call = async (method, path, { data, key } = {}) => {
@@ -51,7 +52,7 @@ try {
   await call('POST', '/agent', { data: { name: `mobile-${run % 1_000_000}`, description: 'CI width check' } })
   const { key } = await call('POST', '/agent/keys', { data: { name: 'ci' } })
   await call('POST', '/connector/heartbeat', { key, data: { connector_version: 'ci', hostname: 'ci' } })
-  await check(owner, ['/app', '/app/agent/connect', '/app/proofs/new', '/app/agent/new', '/app/tanks'])
+  await check(owner, ['/app', '/app/agent/connect', '/app/proofs/new', '/app/agent/new', '/app/tanks', '/app/challenges'])
   const proof = await call('POST', '/proofs', { data: { task_slug: 'go-fix-retry' } })
   await check(owner, ['/app', `/app/proofs/${proof.id}`])
 
@@ -79,6 +80,53 @@ try {
   if (!finished?.finished_at) throw new Error(`proof ${proof.id} did not finish within 90s of being submitted`)
 
   await check(owner, [`/app/proofs/${proof.id}`])
+
+  // A challenge page in its widest state: places, the task, the hidden test
+  // names and a published diff. The admin who creates it signs in with an email
+  // from ARENA_ADMIN_EMAILS (see the mobile job in .github/workflows/ci.yml).
+  const admin = await browser.newContext({ viewport: { width: WIDTH, height: 800 } })
+  const asAdmin = async (method, path, data) => {
+    const res = await admin.request.fetch(`${BASE}/api/v1${path}`, { method, data })
+    if (!res.ok()) throw new Error(`${method} ${path}: ${res.status()} ${await res.text()}`)
+    return res.status() === 204 ? null : res.json()
+  }
+  await asAdmin('POST', '/auth/dev', { email: 'admin@ci.local' })
+  const slug = `ci-cup-${run}`
+  await asAdmin('POST', '/admin/challenges', {
+    slug,
+    title: 'Cursor pagination cup',
+    summary: 'One hidden task, one attempt each.',
+    skill_task_slug: 'go-cursor-pagination',
+    min_tier: 'none',
+    opens_at: new Date(Date.now() - 3600_000).toISOString(),
+    closes_at: new Date(Date.now() + 3600_000).toISOString(),
+    prizes: 'bragging rights',
+  })
+  await asAdmin('POST', `/admin/challenges/${slug}/open`)
+  await check(anonymous, [`/challenges/${slug}`, '/challenges'])
+
+  // The owner's agent enters, the connector answers, and the challenge closes
+  // and publishes — the page then carries standings, a task and a diff at once.
+  await call('POST', '/connector/heartbeat', {
+    key,
+    data: { connector_version: 'ci', hostname: 'ci', version: { model: 'ci-model', harness: 'ci-harness', config_digest: `d-${run}` } },
+  })
+  const entry = await call('POST', `/challenges/${slug}/enter`, { data: { consent_publish: true } })
+  const task = await call('GET', '/connector/tasks/next?wait=5', { key })
+  if (task.proof_id !== entry.proof_id) throw new Error(`tasks/next returned ${task.proof_id}, expected ${entry.proof_id}`)
+  await call('POST', `/connector/proofs/${entry.proof_id}/result`, {
+    key,
+    data: { diff, log_tail: 'entered\n', duration_ms: 1200, exit_code: 0 },
+  })
+  const entryDeadline = Date.now() + 90_000
+  while (Date.now() < entryDeadline) {
+    const p = await call('GET', `/proofs/${entry.proof_id}`)
+    if (p.finished_at) break
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  await asAdmin('POST', `/admin/challenges/${slug}/close`)
+  await asAdmin('POST', `/admin/challenges/${slug}/publish`)
+  await check(anonymous, [`/challenges/${slug}`])
 } finally {
   await browser.close()
 }

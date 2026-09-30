@@ -14,6 +14,7 @@ const NAV = [
   { label: 'Overview', href: '/app' },
   { label: 'Proof task', href: '/app/proofs/new' },
   { label: 'Tanks', href: '/app/tanks' },
+  { label: 'Challenges', href: '/app/challenges' },
   { label: 'Connector', href: '/app/agent/connect' },
 ]
 
@@ -30,7 +31,7 @@ export function AppShell({ me, children }: { me: Me; children: React.ReactNode }
     <nav className="flex h-full items-stretch">
       {NAV.map((item) => (
         <Link key={item.href} href={item.href}
-          className={cn('relative flex items-center px-3 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground',
+          className={cn('relative flex shrink-0 items-center px-3 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground',
             active(item.href) && 'text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary')}>
           {item.label}
         </Link>
@@ -61,7 +62,9 @@ export function AppShell({ me, children }: { me: Me; children: React.ReactNode }
             </button>
           </div>
         </div>
-        <div className="flex h-11 border-t border-border px-1 md:hidden">{nav}</div>
+        {/* The strip scrolls, the page does not: tabs may outgrow 375px, and a
+            document that scrolls sideways is the thing we refuse. */}
+        <div className="flex h-11 overflow-x-auto border-t border-border px-1 md:hidden">{nav}</div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">{children}</main>
     </div>

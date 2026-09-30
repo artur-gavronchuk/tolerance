@@ -7,6 +7,12 @@ import { Button } from '@/components/ui/button'
 import { useMe } from '@/lib/use-me'
 import { cn } from '@/lib/utils'
 
+const SITE_NAV = [
+  { label: 'Arena', href: '/arena' },
+  { label: 'Challenges', href: '/challenges' },
+  { label: 'Tanks', href: '/tanks' },
+]
+
 const TANKS_NAV = [
   { label: 'Live', href: '/tanks' },
   { label: 'Leaderboard', href: '/tanks/leaderboard' },
@@ -39,9 +45,7 @@ export function SiteHeader() {
         {inTanks ? (
           <nav className="ml-1 hidden items-center gap-1 sm:flex">{TANKS_NAV.map((item) => tanksLink(item))}</nav>
         ) : (
-          <Link href="/tanks" className="ml-2 shrink-0 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground">
-            Tanks
-          </Link>
+          <nav className="ml-1 hidden items-center gap-1 sm:flex">{SITE_NAV.map((item) => tanksLink(item))}</nav>
         )}
         <div className="ml-auto flex items-center gap-2">
           {loading ? null : me ? (
@@ -54,11 +58,9 @@ export function SiteHeader() {
           )}
         </div>
       </div>
-      {inTanks && (
-        <div className="flex h-11 items-center gap-1 overflow-x-auto border-t border-border px-4 sm:hidden">
-          {TANKS_NAV.map((item) => tanksLink(item, true))}
-        </div>
-      )}
+      <div className="flex h-11 items-center gap-1 overflow-x-auto border-t border-border px-4 sm:hidden">
+        {(inTanks ? TANKS_NAV : SITE_NAV).map((item) => tanksLink(item, true))}
+      </div>
     </header>
   )
 }
