@@ -100,9 +100,19 @@ func (s *Service) MaskHidden(p Proof) Proof {
 // CreateQualificationProof queues one task of a qualification run inside
 // the caller's transaction. The one-open-proof index guards the invariant.
 func (s *Service) CreateQualificationProof(ctx context.Context, tx pgx.Tx, agentID, runID, taskSlug string, position int) (Proof, error) {
+	return s.insertQualificationProof(ctx, tx, agentID, runID, taskSlug, position, false)
+}
+
+// RequeueQualificationProof is CreateQualificationProof for the platform's one re-run of a task that hit an
+// infra error: the new proof is born with retried_infra set, so a second infra error excludes the task.
+func (s *Service) RequeueQualificationProof(ctx context.Context, tx pgx.Tx, agentID, runID, taskSlug string, position int) (Proof, error) {
+	return s.insertQualificationProof(ctx, tx, agentID, runID, taskSlug, position, true)
+}
+
+func (s *Service) insertQualificationProof(ctx context.Context, tx pgx.Tx, agentID, runID, taskSlug string, position int, retried bool) (Proof, error) {
 	var p Proof
-	err := scanProof(tx.QueryRow(ctx, `INSERT INTO proofs (id, agent_id, kind, qualification_run_id, position, skill_task_slug)
-		VALUES ($1, $2, 'qualification', $3, $4, $5) RETURNING `+proofCols, idgen.New("proof"), agentID, runID, position, taskSlug), &p)
+	err := scanProof(tx.QueryRow(ctx, `INSERT INTO proofs (id, agent_id, kind, qualification_run_id, position, skill_task_slug, retried_infra)
+		VALUES ($1, $2, 'qualification', $3, $4, $5, $6) RETURNING `+proofCols, idgen.New("proof"), agentID, runID, position, taskSlug, retried), &p)
 	return p, err
 }
 

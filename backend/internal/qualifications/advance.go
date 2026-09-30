@@ -18,7 +18,16 @@ import (
 // idempotent: only the run's newest proof, once finished, moves the run, so
 // the worker's hook and SweepStalled may both fire for the same proof.
 func (s *Service) OnProofFinished(ctx context.Context, proofID string) error {
-	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+	_, err := s.advance(ctx, proofID)
+	return err
+}
+
+// advance is OnProofFinished reporting whether the run really moved (a next task queued, a re-run
+// queued, the run scored or aborted) as opposed to a no-op.
+func (s *Service) advance(ctx context.Context, proofID string) (bool, error) {
+	moved := false
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		moved = false
 		p, err := s.proofs.GetByIDTx(ctx, tx, proofID)
 		if err != nil {
 			return err
@@ -42,7 +51,12 @@ func (s *Service) OnProofFinished(ctx context.Context, proofID string) error {
 		}
 		switch p.Status {
 		case proofs.StatusExpired:
-			return s.abortTx(ctx, tx, run.ID, "task_expired")
+			// Never claimed: the connector was offline or its key revoked, so nothing was tried and the
+			// rating stays as it was. Expired after a claim (agent_timeout, ...) the task scores 0.
+			if p.FailureReason == "not_claimed" {
+				moved = true
+				return s.abortTx(ctx, tx, run.ID, "task_expired")
+			}
 		case proofs.StatusInfraError:
 			// retried_infra marks the platform's one re-run of a task: when that
 			// re-run also hits an infra error, the task is excluded and the
@@ -52,30 +66,69 @@ func (s *Service) OnProofFinished(ctx context.Context, proofID string) error {
 				return err
 			}
 			if !retried {
-				again, err := s.proofs.CreateQualificationProof(ctx, tx, run.AgentID, run.ID, *p.SkillTaskSlug, *p.Position)
-				if err != nil {
-					return err
-				}
-				_, err = tx.Exec(ctx, `UPDATE proofs SET retried_infra = true WHERE id = $1`, again.ID)
+				moved = true
+				_, err := s.proofs.RequeueQualificationProof(ctx, tx, run.AgentID, run.ID, *p.SkillTaskSlug, *p.Position)
 				return err
 			}
 		}
 		if *p.Position < tasksPerRun {
 			next := *p.Position + 1
+			if next > len(run.TaskSlugs) {
+				return fmt.Errorf("qualifications: run %s has no task at position %d", run.ID, next)
+			}
+			moved = true
 			_, err := s.proofs.CreateQualificationProof(ctx, tx, run.AgentID, run.ID, run.TaskSlugs[next-1], next)
 			return err
 		}
+		moved = true
 		return s.scoreTx(ctx, tx, run)
 	})
+	return moved, err
 }
 
-// SweepStalled moves on runs whose newest proof finished over a minute ago
-// with nothing after it: the worker's hook never ran for it (the API stopped
-// between the two transactions) or the proof was closed outside the worker
-// (FailOversized). cmd/api calls it every 30 seconds.
+// SweepStalled does two things. First it aborts runs that have been running far longer than their
+// tasks could need (3 x the slowest task's agent + sandbox timeouts, plus ten minutes), so a run whose
+// advance keeps failing cannot hold the agent's slot forever; this runs before, and independently of,
+// any advance attempt. Then it moves on runs whose newest proof finished over a minute ago with nothing
+// after it: the worker's hook never ran for it (the API stopped between the two transactions) or the
+// proof was closed outside the worker (FailOversized). It returns how many runs it moved. cmd/api calls
+// it every 30 seconds, on every replica that has a worker.
 func (s *Service) SweepStalled(ctx context.Context) (int, error) {
-	var ids []string
+	moved := 0
+	var errs []error
+	var overdue []string
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT q.id FROM qualification_runs q
+			WHERE q.status = 'running' AND q.created_at < now() - make_interval(secs => 3 * (
+			  SELECT coalesce(max(t.agent_timeout_s + t.sandbox_timeout_s), 0) FROM skill_tasks t WHERE t.slug = ANY(q.task_slugs)) + 600)`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			overdue = append(overdue, id)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		errs = append(errs, err)
+	}
+	for _, id := range overdue {
+		if err := s.Abort(ctx, id, "timed_out"); err != nil {
+			errs = append(errs, fmt.Errorf("run %s: %w", id, err))
+			continue
+		}
+		moved++
+	}
+
+	var ids []string
+	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		ids = nil
 		rows, err := tx.Query(ctx, `
 			SELECT newest.id FROM qualification_runs q
 			CROSS JOIN LATERAL (SELECT id, finished_at FROM proofs WHERE qualification_run_id = q.id ORDER BY created_at DESC, id DESC LIMIT 1) newest
@@ -94,18 +147,19 @@ func (s *Service) SweepStalled(ctx context.Context) (int, error) {
 		return rows.Err()
 	})
 	if err != nil {
-		return 0, err
+		errs = append(errs, err)
 	}
-	advanced := 0
-	var errs []error
 	for _, id := range ids {
-		if err := s.OnProofFinished(ctx, id); err != nil {
+		ok, err := s.advance(ctx, id)
+		if err != nil {
 			errs = append(errs, fmt.Errorf("proof %s: %w", id, err))
 			continue
 		}
-		advanced++
+		if ok {
+			moved++
+		}
 	}
-	return advanced, errors.Join(errs...)
+	return moved, errors.Join(errs...)
 }
 
 // scoreTx computes the run score from the last terminal proof per position

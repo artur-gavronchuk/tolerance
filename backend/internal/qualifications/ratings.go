@@ -91,7 +91,7 @@ func (s *Service) RatingsFor(ctx context.Context, agentID string) ([]SkillRating
 	out := []SkillRating{}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT r.skill_slug, r.rating, r.uncertainty, r.runs, ev.id, ev.number, r.prior_rating,
-			(a.current_version_id = ev.id)
+			coalesce(a.current_version_id = ev.id, false)
 			FROM skill_ratings r JOIN agents a ON a.id = r.agent_id
 			CROSS JOIN LATERAL (SELECT v.id, v.number FROM qualification_runs q JOIN agent_versions v ON v.id = q.version_id
 			  WHERE q.agent_id = r.agent_id AND q.skill_slug = r.skill_slug AND q.status = 'scored'

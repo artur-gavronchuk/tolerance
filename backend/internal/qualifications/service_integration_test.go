@@ -3,6 +3,7 @@ package qualifications_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"os"
@@ -272,8 +273,17 @@ func TestRun_ThreeTasksScoreAndRating(t *testing.T) {
 		if tk.SandboxResult.Output != "" {
 			t.Fatalf("sandbox output must not be exposed: %+v", tk.SandboxResult)
 		}
-		if tk.SandboxResult.Tests[0].Name != "hidden-1" {
-			t.Fatalf("hidden test names must be masked: %+v", tk.SandboxResult.Tests)
+		for i, tr := range tk.SandboxResult.Tests {
+			if tr.Name != fmt.Sprintf("hidden-%d", i+1) {
+				t.Fatalf("hidden test names must be masked at every index: %+v", tk.SandboxResult.Tests)
+			}
+		}
+		for _, name := range f.hidden[*tk.SkillTaskSlug] {
+			for _, tr := range tk.SandboxResult.Tests {
+				if tr.Name == name {
+					t.Fatalf("hidden name %q leaked", name)
+				}
+			}
 		}
 	}
 }
@@ -493,4 +503,119 @@ func TestNewVersion_ResetsConfidenceKeepsPrior(t *testing.T) {
 	if _, err := f.quals.Start(ctx, f.userID, "go"); err != nil {
 		t.Fatalf("a new run must be possible after the abort: %v", err)
 	}
+}
+
+// infraOut makes the run's current task end in infra_error.
+func (f *fx) infraOut(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	p, _ := f.claimAndSubmit(t)
+	f.fake.Err = errors.New("no docker")
+	if err := f.worker.RunProof(ctx, p.ID); err == nil {
+		t.Fatal("a sandbox failure must surface as a job error")
+	}
+	if err := f.worker.MarkInfraError(ctx, p.ID, "no docker"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRun_AllTasksExcludedAbortsWithoutRating(t *testing.T) {
+	f := setup(t)
+	f.operational(t)
+	f.version(t, "d1")
+	run := f.start(t, "go")
+	for i := 0; i < 6; i++ { // every task: infra error, one re-run, infra error again
+		f.infraOut(t)
+	}
+	got := f.get(t, run.ID)
+	if got.Status != "aborted" || got.Score != nil || got.RatingAfter != nil {
+		t.Fatalf("a run with nothing to score must abort: %+v", got)
+	}
+	rs, err := f.quals.RatingsFor(context.Background(), f.agentID)
+	if err != nil || len(rs) != 0 {
+		t.Fatalf("no rating expected: %v %v", rs, err)
+	}
+}
+
+// A task that expires after the connector claimed it scores 0 and the run goes on; only a task nobody
+// picked up (not_claimed) aborts the run.
+func TestRun_ClaimedTaskExpiryScoresZeroAndRunContinues(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	run := f.start(t, "go")
+	p, _, err := f.proofs.Claim(ctx, f.agentID)
+	if err != nil || p == nil {
+		t.Fatalf("claim: %v %v", err, p)
+	}
+	f.admin(t, `UPDATE proofs SET claimed_at = now() - interval '2 hours' WHERE id = $1`, p.ID)
+	ids, err := f.wproofs.ExpireStale(ctx)
+	if err != nil || len(ids) != 1 || ids[0] != p.ID {
+		t.Fatalf("expire: %v %v", ids, err)
+	}
+	if err := f.wquals.OnProofFinished(ctx, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.get(t, run.ID); got.Status != "running" || len(got.Tasks) != 2 || got.Tasks[0].FailureReason != "agent_timeout" {
+		t.Fatalf("the run must go on to task 2: %+v", got)
+	}
+	f.drive(t, 1)
+	f.drive(t, 1)
+	got := f.get(t, run.ID)
+	if got.Status != "scored" || got.Score == nil {
+		t.Fatalf("%+v", got)
+	}
+	var weighted, weights float64
+	for i, slug := range run.TaskSlugs {
+		d := float64(f.tasks[slug].Difficulty)
+		weights += d
+		if i > 0 {
+			weighted += d
+		}
+	}
+	want := math.Round(weighted/weights*1e4) / 1e4
+	if math.Abs(*got.Score-want) > 1e-9 {
+		t.Fatalf("score %v, want %v", *got.Score, want)
+	}
+}
+
+// A run that has been running far longer than its tasks could take is aborted by the sweep even when its
+// advance cannot succeed, and frees the slot.
+func TestSweepStalled_AbortsOverdueRun(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	run := f.start(t, "go")
+	p, _, err := f.proofs.Claim(ctx, f.agentID)
+	if err != nil || p == nil {
+		t.Fatalf("claim: %v %v", err, p)
+	}
+	f.admin(t, `UPDATE qualification_runs SET created_at = now() - interval '1 day' WHERE id = $1`, run.ID)
+	// Break the advance for good: its next task slug no longer exists.
+	f.admin(t, `UPDATE proofs SET status = 'failed', finished_at = now() - interval '2 minutes' WHERE id = $1`, p.ID)
+	f.admin(t, `UPDATE qualification_runs SET task_slugs = task_slugs[1:1] WHERE id = $1`, run.ID)
+	if n, err := f.wquals.SweepStalled(ctx); err != nil || n != 1 {
+		t.Fatalf("sweep: %d %v", n, err)
+	}
+	got := f.get(t, run.ID)
+	if got.Status != "aborted" || got.RatingAfter != nil {
+		t.Fatalf("%+v", got)
+	}
+	if _, err := f.quals.Start(ctx, f.userID, "go"); err != nil {
+		t.Fatalf("the slot must be free: %v", err)
+	}
+}
+
+func TestRun_SlotRefusesOtherProofKinds(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	f.start(t, "go")
+	_, err := f.proofs.CreateWithRepo(ctx, f.userID, "tanks-bot", []byte("x"))
+	problem(t, err, 409, "qualification_in_progress")
+	_, err = f.proofs.Retry(ctx, f.userID, "proof_seed")
+	problem(t, err, 409, "qualification_in_progress")
 }

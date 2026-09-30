@@ -427,10 +427,14 @@ func (w *Worker) finish(ctx context.Context, proofID, status, reason string, sr 
 	err := w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		// Only a proof this run moved to running_sandbox gets a verdict: if the
 		// stuck-proof sweep or a retry got there first, this run is stale.
-		tag, err := tx.Exec(ctx, `UPDATE proofs SET status = $2, failure_reason = $3, sandbox_result = $4, finished_at = now()
-			WHERE id = $1 AND status = 'running_sandbox'`,
-			proofID, status, reason, sr)
-		moved = err == nil && tag.RowsAffected() == 1
+		var kind string
+		err := tx.QueryRow(ctx, `UPDATE proofs SET status = $2, failure_reason = $3, sandbox_result = $4, finished_at = now()
+			WHERE id = $1 AND status = 'running_sandbox' RETURNING kind`,
+			proofID, status, reason, sr).Scan(&kind)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		moved = err == nil && kind == KindQualification
 		return err
 	})
 	if err == nil && moved {
@@ -447,9 +451,13 @@ func (w *Worker) MarkInfraError(ctx context.Context, proofID, reason string) err
 	metrics.ProofVerdicts.WithLabelValues(StatusInfraError).Inc()
 	var moved bool
 	err := w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE proofs SET status = 'infra_error', failure_reason = $2, finished_at = now()
-			WHERE id = $1 AND status = 'running_sandbox'`, proofID, reason)
-		moved = err == nil && tag.RowsAffected() == 1
+		var kind string
+		err := tx.QueryRow(ctx, `UPDATE proofs SET status = 'infra_error', failure_reason = $2, finished_at = now()
+			WHERE id = $1 AND status = 'running_sandbox' RETURNING kind`, proofID, reason).Scan(&kind)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		moved = err == nil && kind == KindQualification
 		return err
 	})
 	if err == nil && moved {

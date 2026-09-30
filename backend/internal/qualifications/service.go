@@ -94,6 +94,13 @@ func (s *Service) Start(ctx context.Context, userID, skill string) (Run, error) 
 		if versionID == nil {
 			return httpx.New(http.StatusConflict, "no_version", "The connector has not reported the agent version yet; update it and run `arena connect`")
 		}
+		var open bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM qualification_runs WHERE agent_id = $1 AND status = 'running')`, agentID).Scan(&open); err != nil {
+			return err
+		}
+		if open {
+			return httpx.New(http.StatusConflict, "qualification_in_progress", "A qualification run is already in progress")
+		}
 		var today int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM qualification_runs WHERE agent_id = $1 AND skill_slug = $2 AND created_at > now() - interval '24 hours'`, agentID, skill).Scan(&today); err != nil {
 			return err
