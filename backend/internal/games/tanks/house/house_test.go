@@ -11,10 +11,18 @@ import (
 // placements.
 func play(t *testing.T, seed int64, names ...string) []tanks.Placement {
 	t.Helper()
+	return playOnMap(t, "arena", seed, names...)
+}
 
-	m, ok := tanks.MapByName("arena")
+// playOnMap is play with an explicit map name, so a test can check
+// behaviour on maps other than "arena" (bunkers's wall layout in
+// particular).
+func playOnMap(t *testing.T, mapName string, seed int64, names ...string) []tanks.Placement {
+	t.Helper()
+
+	m, ok := tanks.MapByName(mapName)
 	if !ok {
-		t.Fatalf("map %q not found", "arena")
+		t.Fatalf("map %q not found", mapName)
 	}
 	g := tanks.New(tanks.DefaultRules(), m, len(names), seed)
 
@@ -59,10 +67,15 @@ func placeOf(t *testing.T, placements []tanks.Placement, slot int) int {
 }
 
 func TestHunterBeatsIdle(t *testing.T) {
-	for seed := int64(1); seed <= 10; seed++ {
-		placements := play(t, seed, "hunter", "idle")
-		if got := placeOf(t, placements, 0); got != 1 {
-			t.Errorf("seed %d: hunter place = %d, want 1 (placements %+v)", seed, got, placements)
+	// Every built-in map, bunkers included: hunter's wall avoidance must
+	// keep it from getting wedged against bunkers's per-spawn L-shaped
+	// cover, the case qualify.go's own comment calls out.
+	for _, m := range tanks.Maps() {
+		for seed := int64(1); seed <= 10; seed++ {
+			placements := playOnMap(t, m.Name, seed, "hunter", "idle")
+			if got := placeOf(t, placements, 0); got != 1 {
+				t.Errorf("map %s seed %d: hunter place = %d, want 1 (placements %+v)", m.Name, seed, got, placements)
+			}
 		}
 	}
 }
