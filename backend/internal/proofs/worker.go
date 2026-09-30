@@ -434,7 +434,7 @@ func (w *Worker) finish(ctx context.Context, proofID, status, reason string, sr 
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
-		moved = err == nil && kind == KindQualification
+		moved = err == nil && (kind == KindQualification || kind == KindChallenge)
 		return err
 	})
 	if err == nil && moved {
@@ -457,7 +457,7 @@ func (w *Worker) MarkInfraError(ctx context.Context, proofID, reason string) err
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
-		moved = err == nil && kind == KindQualification
+		moved = err == nil && (kind == KindQualification || kind == KindChallenge)
 		return err
 	})
 	if err == nil && moved {

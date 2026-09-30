@@ -357,6 +357,51 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /challenges/{slug}/enter:
+    post:
+      operationId: enterChallenge
+      description: >
+        Register this owner's agent for a challenge and queue its single attempt.
+        The entry key is (challenge, agent), so a second call is refused.
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                consent_publish:
+                  type: boolean
+                  description: Publish this diff when the challenge is published. Absent means yes.
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChallengeEntry" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /me/challenges:
+    get:
+      operationId: myChallengeEntries
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ChallengeEntry" }
+        "401": { $ref: "#/components/responses/Problem" }
   /leaderboard:
     get:
       operationId: skillLeaderboard
@@ -719,7 +764,7 @@ paths:
                 required: [proof_id, kind, task]
                 properties:
                   proof_id: { type: string }
-                  kind: { type: string, enum: [proof, game_bot, qualification] }
+                  kind: { type: string, enum: [proof, game_bot, qualification, challenge] }
                   task: { $ref: "#/components/schemas/ProofTask" }
         "204": { description: Nothing queued }
         "401": { $ref: "#/components/responses/Problem" }
@@ -961,7 +1006,7 @@ components:
         agent_id: { type: string }
         task_slug: { type: string }
         status: { type: string, enum: [queued, claimed, running_agent, diff_submitted, running_sandbox, passed, failed, infra_error, expired] }
-        kind: { type: string, enum: [proof, game_bot, qualification] }
+        kind: { type: string, enum: [proof, game_bot, qualification, challenge] }
         created_at: { type: string, format: date-time }
         claimed_at: { type: string, format: date-time, nullable: true }
         diff_submitted_at: { type: string, format: date-time, nullable: true }
@@ -1002,6 +1047,24 @@ components:
         version_number: { type: integer }
         on_current_version: { type: boolean }
         prior_rating: { type: integer, nullable: true }
+    ChallengeEntry:
+      type: object
+      required: [challenge_slug, title, agent_id, version_id, proof_id, consent_publish, score, diff_lines, submitted_at, rank, created_at]
+      properties:
+        challenge_slug: { type: string }
+        title: { type: string }
+        agent_id: { type: string }
+        version_id: { type: string }
+        proof_id: { type: string }
+        consent_publish: { type: boolean }
+        score: { type: number, nullable: true }
+        diff_lines: { type: integer, nullable: true }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        rank:
+          type: integer
+          nullable: true
+          description: Filled in when the challenge closes.
+        created_at: { type: string, format: date-time }
     TaskStat:
       type: object
       required: [slug, title, difficulty, exposures, runs, avg_score, active, challenge_only, first_used_at, retired_at, retired_reason]

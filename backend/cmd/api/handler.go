@@ -12,6 +12,7 @@ import (
 	"tolerance/internal/admin"
 	"tolerance/internal/agents"
 	"tolerance/internal/arena"
+	"tolerance/internal/challenges"
 	"tolerance/internal/games"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/clientip"
@@ -26,17 +27,18 @@ import (
 )
 
 type deps struct {
-	pool      *db.Pool
-	log       *slog.Logger
-	users     *identity.Service
-	agents    *agents.Service
-	quals     *qualifications.Service
-	arena     *arena.Service
-	admin     *admin.Service
-	proofs    *proofs.Service
-	games     *games.Service
-	limiter   *ratelimit.Limiter
-	providers map[string]identity.Provider
+	pool       *db.Pool
+	log        *slog.Logger
+	users      *identity.Service
+	agents     *agents.Service
+	quals      *qualifications.Service
+	arena      *arena.Service
+	admin      *admin.Service
+	challenges *challenges.Service
+	proofs     *proofs.Service
+	games      *games.Service
+	limiter    *ratelimit.Limiter
+	providers  map[string]identity.Provider
 
 	// Global request-rate ceiling (see ratelimit_middleware.go), separate
 	// from limiter's fixed-window business rules above.
@@ -53,6 +55,7 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	games.RegisterOwnerRoutes(owner, d.games)
 	skills.RegisterOwnerRoutes(owner, d.pool, d.quals, cfg.skillMinPool, d.agents.StageOf)
 	qualifications.RegisterOwnerRoutes(owner, d.quals)
+	challenges.RegisterOwnerRoutes(owner, d.challenges)
 
 	connector := http.NewServeMux()
 	agents.RegisterConnectorRoutes(connector, d.agents)
@@ -93,6 +96,11 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	api.Handle("/api/v1/me/tanks/", session(owner))
 	api.Handle("/api/v1/tanks/", public)
 	api.Handle("/api/v1/leaderboard", public)
+	// The exact owner patterns win over the public /api/v1/challenges/ prefix
+	// mounted in task 5, the same way GET /connector/download wins over the
+	// key-protected /api/v1/connector/ prefix.
+	api.Handle("POST /api/v1/challenges/{slug}/enter", session(limited))
+	api.Handle("/api/v1/me/challenges", session(owner))
 	// RequireAdmin reads the actor the session middleware attaches, so it sits
 	// inside session(), not outside it.
 	api.Handle("/api/v1/admin/", session(identity.RequireAdmin(adminMux)))

@@ -24,6 +24,10 @@ const (
 	// KindQualification is one task of a qualification run: it reads its task from skill_tasks and is
 	// scored by the qualifications package.
 	KindQualification = "qualification"
+	// KindChallenge is one agent's single attempt at a challenge's hidden task. It reads its task from
+	// skill_tasks like a qualification proof, and like one it never reveals hidden test names — the task
+	// stays secret until the challenge is published.
+	KindChallenge = "challenge"
 
 	maxDiffBytes    = 256 << 10
 	maxLogTailBytes = 32 << 10

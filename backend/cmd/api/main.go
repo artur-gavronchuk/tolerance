@@ -23,6 +23,7 @@ import (
 	"tolerance/internal/admin"
 	"tolerance/internal/agents"
 	"tolerance/internal/arena"
+	"tolerance/internal/challenges"
 	"tolerance/internal/games"
 	"tolerance/internal/games/match"
 	"tolerance/internal/identity"
@@ -94,11 +95,12 @@ func main() {
 	qs.SetMinPool(cfg.skillMinPool)
 	as := arena.NewService(pool)
 	adminSvc := admin.NewService(pool)
+	challengesSvc := challenges.NewService(pool, ps)
 	agentsSvc.SetVersionListener(qs)
 	agentsSvc.SetSkillsSource(qs)
 
 	d := deps{
-		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs, arena: as, admin: adminSvc,
+		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs, arena: as, admin: adminSvc, challenges: challengesSvc,
 		limiter:    ratelimit.New(nil),
 		providers:  providersFromConfig(cfg),
 		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 1_000_000),

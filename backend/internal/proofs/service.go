@@ -81,10 +81,11 @@ func qualificationOpen(ctx context.Context, tx pgx.Tx, agentID string) error {
 	return nil
 }
 
-// MaskHidden strips what a qualification proof must not reveal: hidden
-// test names and sandbox output. Proof-kind proofs are returned as is.
+// MaskHidden strips what a proof over a hidden task must not reveal: hidden test
+// names and sandbox output. Qualification and challenge proofs are masked;
+// proof-kind and game_bot proofs are returned as is.
 func (s *Service) MaskHidden(p Proof) Proof {
-	if p.Kind != KindQualification || p.SandboxResult == nil {
+	if (p.Kind != KindQualification && p.Kind != KindChallenge) || p.SandboxResult == nil {
 		return p
 	}
 	masked := *p.SandboxResult
@@ -113,6 +114,17 @@ func (s *Service) insertQualificationProof(ctx context.Context, tx pgx.Tx, agent
 	var p Proof
 	err := scanProof(tx.QueryRow(ctx, `INSERT INTO proofs (id, agent_id, kind, qualification_run_id, position, skill_task_slug, retried_infra)
 		VALUES ($1, $2, 'qualification', $3, $4, $5, $6) RETURNING `+proofCols, idgen.New("proof"), agentID, runID, position, taskSlug, retried), &p)
+	return p, err
+}
+
+// CreateChallengeProof queues an agent's single attempt at a challenge. Unlike a
+// qualification proof it records no exposure: a challenge task is not in the
+// qualification pool, and after the challenge is published it is open anyway.
+func (s *Service) CreateChallengeProof(ctx context.Context, tx pgx.Tx, agentID, challengeID, taskSlug string) (Proof, error) {
+	var p Proof
+	err := scanProof(tx.QueryRow(ctx, `INSERT INTO proofs (id, agent_id, kind, challenge_id, skill_task_slug)
+		VALUES ($1, $2, 'challenge', $3, $4) RETURNING `+proofCols,
+		idgen.New("proof"), agentID, challengeID, taskSlug), &p)
 	return p, err
 }
 
@@ -306,6 +318,9 @@ func (s *Service) Retry(ctx context.Context, userID, id string) (Proof, error) {
 		if kind == KindQualification {
 			return httpx.StateConflict("Qualification tasks are retried by the platform")
 		}
+		if kind == KindChallenge {
+			return httpx.StateConflict("A challenge gives each agent one attempt")
+		}
 		if err := qualificationOpen(ctx, tx, agentID); err != nil {
 			return err
 		}
@@ -356,7 +371,7 @@ type RunProofPayload struct {
 func (s *Service) taskFor(ctx context.Context, tx pgx.Tx, p Proof) (*Task, error) {
 	var t Task
 	var err error
-	if p.Kind == KindQualification {
+	if p.Kind == KindQualification || p.Kind == KindChallenge {
 		err = tx.QueryRow(ctx, `SELECT t.slug, t.title, s.language, s.image, s.run_cmd, t.agent_timeout_s, t.sandbox_timeout_s, 0, t.hidden_tests, t.task_md, t.repo_sha256
 			FROM skill_tasks t JOIN skills s ON s.slug = t.skill_slug WHERE t.slug = $1`, *p.SkillTaskSlug).
 			Scan(&t.Slug, &t.Title, &t.Language, &t.Image, &t.RunCmd, &t.AgentTimeoutS, &t.SandboxTimeoutS, &t.VisibleTests, &t.HiddenTests, &t.TaskMD, &t.RepoSHA256)
