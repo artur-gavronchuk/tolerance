@@ -1,0 +1,1 @@
+{"slug": "py-interval-merge", "title": "Interval merge drops touching ranges", "difficulty": 1, "agent_timeout_s": 900, "sandbox_timeout_s": 120, "hidden_tests": 5}

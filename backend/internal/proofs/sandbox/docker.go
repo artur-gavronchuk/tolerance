@@ -85,7 +85,7 @@ func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
 	start.Stdout, start.Stderr = buf, buf
 	err = start.Run()
 	res := Result{Output: tail(buf.buf.String(), maxOutput)}
-	res.Tests = ParseGoTestJSON([]byte(res.Output))
+	res.Tests = ParseOutput(req.Language, []byte(res.Output))
 	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 		res.TimedOut, res.ExitCode = true, -1
 		return res, nil

@@ -11,6 +11,7 @@ import (
 	"tolerance/internal/games"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/proofs"
+	"tolerance/internal/skills"
 )
 
 func main() {
@@ -42,6 +43,22 @@ func main() {
 			log.Fatalf("catalog: %v", err)
 		}
 		log.Printf("catalog: %d task(s) synced", len(tasks))
+	}
+
+	if dir := os.Getenv("ARENA_SKILLS_DIR"); dir != "" {
+		sk, tasks, err := skills.LoadCatalog(dir)
+		if err != nil {
+			log.Fatalf("skills: %v", err)
+		}
+		if len(sk) == 0 {
+			// An empty or unmounted directory must not deactivate the whole task pool.
+			log.Printf("skills: %s has no skills, catalog left as it is", dir)
+		} else {
+			if err := skills.SyncCatalog(context.Background(), pool, sk, tasks); err != nil {
+				log.Fatalf("skills: %v", err)
+			}
+			log.Printf("skills: %d skill(s), %d task(s) synced", len(sk), len(tasks))
+		}
 	}
 
 	if err := games.Sync(context.Background(), pool); err != nil {

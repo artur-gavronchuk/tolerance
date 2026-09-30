@@ -5,11 +5,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"tolerance/internal/proofs"
 	"tolerance/internal/proofs/sandbox"
+	"tolerance/internal/skills"
 )
 
 const fixture = "../../../fixtures/proofs/go-fix-retry"
@@ -123,4 +125,81 @@ func bytesIndex(b, sub []byte) int {
 		}
 	}
 	return -1
+}
+
+func TestDocker_SkillTasks(t *testing.T) {
+	requireDocker(t)
+	for _, img := range []struct{ tag, dir string }{{"arena-skill-go:1", "../../../fixtures/skills/go"}, {"arena-skill-python:1", "../../../fixtures/skills/python"}} {
+		if out, err := exec.Command("docker", "build", "-q", "-t", img.tag, img.dir).CombinedOutput(); err != nil {
+			t.Fatalf("build %s: %v\n%s", img.tag, err, out)
+		}
+	}
+	r := sandbox.NewDocker()
+	cases := []struct {
+		dir, image, run, language, file, find, replace string
+		hidden                                         int
+	}{
+		{"../../../fixtures/skills/python/interval-merge", "arena-skill-python:1", "python -m pytest -q -rA -p no:cacheprovider", "python",
+			"intervals.py", "    ranges.sort()\n", "    ranges = sorted(ranges)\n", 5},
+		{"../../../fixtures/skills/go/cursor-pagination", "arena-skill-go:1", "go test ./... -json -count=1", "go",
+			"page.go", "sorted[i].ID >= cursor", "sorted[i].ID > cursor", 5},
+	}
+	for _, c := range cases {
+		task, err := skills.LoadTask(c.dir, filepath.Base(filepath.Dir(c.dir)), c.language)
+		if err != nil {
+			t.Fatal(err)
+		}
+		names, err := proofs.HiddenTestNames(c.language, task.HiddenTar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		run := func(fix bool) (exit, hiddenPassed int, output string) {
+			dir := t.TempDir()
+			if err := proofs.Untar(task.RepoTar, dir); err != nil {
+				t.Fatal(err)
+			}
+			if fix {
+				src, err := os.ReadFile(filepath.Join(dir, c.file))
+				if err != nil {
+					t.Fatal(err)
+				}
+				fixed := strings.Replace(string(src), c.find, c.replace, 1)
+				if c.language == "python" {
+					fixed = strings.Replace(fixed, "start < out[-1][1]", "start <= out[-1][1]", 1)
+				}
+				if fixed == string(src) {
+					t.Fatalf("%s: reference fix did not change %s", c.dir, c.file)
+				}
+				if err := os.WriteFile(filepath.Join(dir, c.file), []byte(fixed), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := proofs.Untar(task.HiddenTar, dir); err != nil {
+				t.Fatal(err)
+			}
+			res, err := r.Run(context.Background(), sandbox.Request{WorkDir: dir, Image: c.image, RunCmd: c.run, Language: c.language, Timeout: 2 * time.Minute})
+			if err != nil {
+				t.Fatalf("%s: %v", c.dir, err)
+			}
+			passedByName := map[string]bool{}
+			for _, tr := range res.Tests {
+				if tr.Passed {
+					passedByName[tr.Name] = true
+				}
+			}
+			for _, n := range names {
+				if passedByName[n] {
+					hiddenPassed++
+				}
+			}
+			return res.ExitCode, hiddenPassed, res.Output
+		}
+		if exit, got, out := run(true); exit != 0 || got != c.hidden {
+			t.Fatalf("%s reference fix: exit %d hidden passed %d/%d\n%s", c.dir, exit, got, c.hidden, out)
+		}
+		// The untouched repo is broken: some hidden test must fail.
+		if exit, got, out := run(false); exit == 0 || got >= c.hidden {
+			t.Fatalf("%s no-op diff: exit %d hidden passed %d/%d\n%s", c.dir, exit, got, c.hidden, out)
+		}
+	}
 }

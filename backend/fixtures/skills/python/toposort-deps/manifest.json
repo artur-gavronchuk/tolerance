@@ -1,0 +1,1 @@
+{"slug": "py-toposort-deps", "title": "Topological sort misses cycles and isolated nodes", "difficulty": 3, "agent_timeout_s": 900, "sandbox_timeout_s": 120, "hidden_tests": 5}
