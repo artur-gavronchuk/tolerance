@@ -111,6 +111,49 @@ func TestJSStarterPlays(t *testing.T) {
 	assertStarterWins(t, "javascript", entry, dir)
 }
 
+// assertStarterWinsOnBunkers runs the given starter kit (as a real process) against house:idle on the
+// bunkers map, at the full 1200-tick match length, across ten seeds, and checks it wins at least 9 of
+// them -- proof the starter's wall-avoidance actually gets it unstuck instead of jamming against
+// bunkers's per-spawn L-shaped cover (the reason qualify.go's own check avoids that map).
+func assertStarterWinsOnBunkers(t *testing.T, lang, entry, dir string) {
+	t.Helper()
+	players := []Player{
+		{Name: "starter", Spec: Spec{Dir: dir, Language: lang, Entry: entry}},
+		{Name: "idle", Spec: Spec{House: "idle"}},
+	}
+
+	wins := 0
+	for seed := int64(1); seed <= 10; seed++ {
+		cfg := Config{Seed: seed, Map: "bunkers", Ticks: 1200}
+		res, err := Run(context.Background(), WithHouse(ProcessLauncher{}), cfg, players)
+		if err != nil {
+			t.Fatalf("seed %d: Run: %v", seed, err)
+		}
+		p := res.Players[0]
+		if p.Status != StatusOK {
+			t.Errorf("seed %d: status = %q, want %q (stderr: %s)", seed, p.Status, StatusOK, p.Stderr)
+		}
+		if p.Place == 1 {
+			wins++
+		}
+	}
+	if wins < 9 {
+		t.Errorf("%s starter beat house:idle on bunkers in %d/10 seeds, want >= 9", lang, wins)
+	}
+}
+
+func TestPythonStarterBeatsIdleOnBunkers(t *testing.T) {
+	requireInterpreter(t, "python3")
+	dir, entry := writeStarterKit(t, "python")
+	assertStarterWinsOnBunkers(t, "python", entry, dir)
+}
+
+func TestJSStarterBeatsIdleOnBunkers(t *testing.T) {
+	requireInterpreter(t, "node")
+	dir, entry := writeStarterKit(t, "javascript")
+	assertStarterWinsOnBunkers(t, "javascript", entry, dir)
+}
+
 // TestStdoutFlushWithoutExplicitFlush checks that ProcessLauncher runs Python with -u: a bot that prints
 // its ready reply without passing flush=True must still be seen promptly, because the interpreter's
 // stdout isn't block-buffered in the first place.
