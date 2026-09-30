@@ -2,7 +2,11 @@ package challenges_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,11 +18,14 @@ import (
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/proofs"
 	"tolerance/internal/skillrating"
+	"tolerance/internal/skills"
 )
 
 type fx struct {
 	d       *dbtest.DB
 	svc     *challenges.Service
+	proofs  *proofs.Service
+	hidden  map[string][]string // skill task slug -> hidden test names
 	adminID string
 	userID  string
 	agentID string
@@ -37,16 +44,11 @@ func (f *fx) exec(t *testing.T, sql string, args ...any) {
 	}
 }
 
-// addSkillTask seeds a task in the named skill's language. challengeOnly keeps it
-// out of the qualification pool.
-func (f *fx) addSkillTask(t *testing.T, skill, slug string, challengeOnly bool) string {
+// reserve marks a catalog task as challenge-only, which is how a challenge's task
+// is kept out of the qualification pool.
+func (f *fx) reserve(t *testing.T, slug string) string {
 	t.Helper()
-	lang := skill
-	f.exec(t, `INSERT INTO skills (slug, title, language, image, run_cmd)
-		VALUES ($1, $1, $2, 'arena-skill-' || $1 || ':1', 'go test -json ./...') ON CONFLICT DO NOTHING`, skill, lang)
-	f.exec(t, `INSERT INTO skill_tasks (slug, skill_slug, title, difficulty, agent_timeout_s, sandbox_timeout_s,
-		hidden_tests, task_md, repo_tar, hidden_tar, repo_sha256, challenge_only)
-		VALUES ($1, $2, $1, 2, 600, 120, 4, '# task', '\x00', '\x00', 'sha', $3)`, slug, skill, challengeOnly)
+	f.exec(t, `UPDATE skill_tasks SET challenge_only = true WHERE slug = $1`, slug)
 	return slug
 }
 
@@ -84,14 +86,34 @@ func (f *fx) newVersion(t *testing.T, agentID string) {
 	f.exec(t, `UPDATE agents SET current_version_id = $2 WHERE id = $1`, agentID, ver)
 }
 
+// Slugs from this repository's practice catalog (backend/fixtures/skills).
+const (
+	goTask     = "go-lru-cache-eviction"
+	goTask2    = "go-cursor-pagination"
+	pythonTask = "py-interval-merge"
+)
+
 func setup(t *testing.T, minTier, status string) *fx {
 	t.Helper()
 	d := dbtest.New(t)
-	f := &fx{d: d, svc: challenges.NewService(d.AppPool, proofs.NewService(d.AppPool))}
+	ps := proofs.NewService(d.AppPool)
+	f := &fx{d: d, svc: challenges.NewService(d.AppPool, ps), proofs: ps}
+	// The real catalog, so hidden test names are real: a challenge is scored by
+	// counting hidden tests by name, exactly as a qualification run is.
+	sk, tasks, err := skills.LoadCatalog(filepath.Join("..", "..", "fixtures", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := skills.SyncCatalog(context.Background(), d.AdminPool, sk, tasks); err != nil {
+		t.Fatal(err)
+	}
+	if f.hidden, err = skills.HiddenNamesByTask(sk, tasks); err != nil {
+		t.Fatal(err)
+	}
 	f.adminID = idgen.New("user")
 	f.exec(t, `INSERT INTO users (id, email, role) VALUES ($1, 'admin@example.com', 'admin')`, f.adminID)
 	f.userID, f.agentID = f.addAgent(t, "entrant")
-	f.task = f.addSkillTask(t, "go", "cup-task", true)
+	f.task = f.reserve(t, goTask)
 	f.slug = "autumn-cup"
 	f.exec(t, `INSERT INTO challenges (id, slug, title, skill_task_slug, min_tier, opens_at, closes_at, status, created_by)
 		VALUES ($1, $2, 'Autumn cup', $3, $4, now() - interval '1 hour', now() + interval '1 hour', $5, $6)`,
@@ -170,7 +192,7 @@ func TestEnterWhileAnotherProofIsOpenIsRefused(t *testing.T) {
 	if _, err := f.svc.Enter(ctx, f.userID, f.slug, true); err != nil {
 		t.Fatalf("enter: %v", err)
 	}
-	other := f.addSkillTask(t, "go", "second-cup-task", true)
+	other := f.reserve(t, goTask2)
 	f.exec(t, `INSERT INTO challenges (id, slug, title, skill_task_slug, min_tier, opens_at, closes_at, status, created_by)
 		VALUES ($1, 'winter-cup', 'Winter cup', $2, 'none', now() - interval '1 hour', now() + interval '1 hour', 'open', $3)`,
 		idgen.New("chal"), other, f.adminID)
@@ -252,7 +274,7 @@ func TestEnterQueuesAChallengeProofOverTheHiddenTask(t *testing.T) {
 func TestCreateRefusesPrizesWhereTheVerdictIsInProcess(t *testing.T) {
 	f := setup(t, "none", "open")
 	ctx := context.Background()
-	py := f.addSkillTask(t, "python", "python-cup-task", true)
+	py := f.reserve(t, pythonTask)
 	base := challenges.NewInput{Title: "Python cup", SkillTaskSlug: py,
 		OpensAt: time.Now().Add(time.Hour), ClosesAt: time.Now().Add(48 * time.Hour)}
 
@@ -296,3 +318,306 @@ func mustErr2(_ challenges.Challenge, err error) error { return err }
 
 // skillrating is imported for the tier thresholds the tests reason about.
 var _ = skillrating.TierVerified
+
+// enterAgent creates a fresh owner with an online agent and enters it.
+func (f *fx) enterAgent(t *testing.T, name string) string {
+	t.Helper()
+	return f.enterAgentWithConsent(t, name, true)
+}
+
+func (f *fx) enterAgentWithConsent(t *testing.T, name string, consent bool) string {
+	t.Helper()
+	userID, agentID := f.addAgent(t, name)
+	if _, err := f.svc.Enter(context.Background(), userID, f.slug, consent); err != nil {
+		t.Fatalf("enter as %s: %v", name, err)
+	}
+	return agentID
+}
+
+func (f *fx) openProofID(t *testing.T, agentID string) string {
+	t.Helper()
+	var id string
+	err := f.d.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT id FROM proofs WHERE agent_id = $1 AND kind = 'challenge' ORDER BY created_at DESC LIMIT 1`, agentID).Scan(&id)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func (f *fx) proofStatus(t *testing.T, agentID string) string {
+	t.Helper()
+	var st string
+	err := f.d.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status FROM proofs WHERE id = $1`, f.openProofID(t, agentID)).Scan(&st)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+// score plays the sandbox for this agent's entry: frac of the task's hidden tests
+// pass, the diff has diffLines changed lines, and the finish hook runs.
+func (f *fx) score(t *testing.T, agentID string, frac float64, diffLines int) {
+	t.Helper()
+	proofID := f.openProofID(t, agentID)
+	names := f.hidden[f.task]
+	if len(names) == 0 {
+		t.Fatalf("no hidden test names for %s", f.task)
+	}
+	n := int(float64(len(names))*frac + 0.5)
+	tests := make([]proofs.TestResult, 0, len(names)+1)
+	// A passing test outside the hidden set must never add to the score.
+	tests = append(tests, proofs.TestResult{Name: "visible_passes", Passed: true})
+	for i, name := range names {
+		tests = append(tests, proofs.TestResult{Name: name, Passed: i < n})
+	}
+	sr, err := json.Marshal(proofs.SandboxResult{Tests: tests})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	b.WriteString("diff --git a/x.go b/x.go\n--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n")
+	for i := 0; i < diffLines; i++ {
+		fmt.Fprintf(&b, "+line %d\n", i)
+	}
+	status := "passed"
+	if n < len(names) {
+		status = "failed"
+	}
+	f.exec(t, `UPDATE proofs SET status = $2, finished_at = now(), diff = $3, sandbox_result = $4 WHERE id = $1`,
+		proofID, status, b.String(), sr)
+	if err := f.svc.OnProofFinished(context.Background(), proofID); err != nil {
+		t.Fatalf("finish hook: %v", err)
+	}
+}
+
+func (f *fx) status(t *testing.T) string {
+	t.Helper()
+	var st string
+	err := f.d.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status FROM challenges WHERE slug = $1`, f.slug).Scan(&st)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+func (f *fx) setWindow(t *testing.T, opensIn, closesIn time.Duration) {
+	t.Helper()
+	f.exec(t, `UPDATE challenges SET opens_at = now() + make_interval(secs => $2), closes_at = now() + make_interval(secs => $3) WHERE slug = $1`,
+		f.slug, opensIn.Seconds(), closesIn.Seconds())
+}
+
+func TestCloseRanksEntriesAndKeepsTheirNames(t *testing.T) {
+	f := setup(t, "none", "open")
+	ctx := context.Background()
+	a := f.enterAgent(t, "winner")
+	b := f.enterAgent(t, "runnerup")
+	f.score(t, a, 1, 12)
+	f.score(t, b, 1, 80)
+
+	// The winner goes private after submitting.
+	f.exec(t, `UPDATE agents SET public = false WHERE id = $1`, a)
+
+	if err := f.svc.Close(ctx, f.adminID, f.slug); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	view, err := f.svc.Public(ctx, f.slug)
+	if err != nil {
+		t.Fatalf("public: %v", err)
+	}
+	if len(view.Standings) != 2 {
+		t.Fatalf("standings = %d entries, want 2: opting out of the arena tables does not erase a place in a finished competition", len(view.Standings))
+	}
+	if view.Standings[0].AgentName != "winner" || view.Standings[0].Rank != 1 {
+		t.Fatalf("first place = %s/%d, want winner/1", view.Standings[0].AgentName, view.Standings[0].Rank)
+	}
+	if view.Standings[1].Rank != 2 {
+		t.Errorf("second place rank = %d, want 2", view.Standings[1].Rank)
+	}
+}
+
+func TestCloseScoresAnUnfinishedEntryAsZero(t *testing.T) {
+	f := setup(t, "none", "open")
+	ctx := context.Background()
+	done := f.enterAgent(t, "done")
+	stuck := f.enterAgent(t, "stillrunning")
+	f.exec(t, `UPDATE proofs SET status = 'running_agent', claimed_at = now() WHERE agent_id = $1`, stuck)
+	f.score(t, done, 0.25, 5)
+
+	if err := f.svc.Close(ctx, f.adminID, f.slug); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	view, err := f.svc.Public(ctx, f.slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := view.Standings[len(view.Standings)-1]
+	if last.AgentName != "stillrunning" || last.Rank != 2 || last.Score != 0 {
+		t.Fatalf("unfinished entry = %+v, want stillrunning ranked last with score 0", last)
+	}
+	// Its proof must not be left open forever either: the deadline passed, so the
+	// attempt did not happen and the agent's slot is free again.
+	if st := f.proofStatus(t, stuck); st != "expired" {
+		t.Fatalf("proof of an unfinished entry = %q, want expired", st)
+	}
+}
+
+func TestTickOpensAndClosesOnTime(t *testing.T) {
+	f := setup(t, "none", "draft")
+	ctx := context.Background()
+	f.setWindow(t, -time.Hour, time.Hour)
+	if err := f.svc.Tick(ctx); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if st := f.status(t); st != "open" {
+		t.Fatalf("status = %q, want open", st)
+	}
+	f.setWindow(t, -2*time.Hour, -time.Hour)
+	if err := f.svc.Tick(ctx); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if st := f.status(t); st != "closed" {
+		t.Fatalf("status = %q, want closed", st)
+	}
+	// A tick with nothing to do is not an error.
+	if err := f.svc.Tick(ctx); err != nil {
+		t.Fatalf("idle tick: %v", err)
+	}
+}
+
+func TestPublicHidesTheTaskUntilPublished(t *testing.T) {
+	f := setup(t, "none", "open")
+	ctx := context.Background()
+	a := f.enterAgent(t, "solo")
+	f.score(t, a, 1, 9)
+
+	open, err := f.svc.Public(ctx, f.slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open.TaskMD != "" || len(open.HiddenTests) != 0 || len(open.Standings) != 0 {
+		t.Fatal("an open challenge must not leak the task, the test names or the standings")
+	}
+	if open.Entrants != 1 {
+		t.Errorf("entrants = %d, want 1", open.Entrants)
+	}
+
+	if err := f.svc.Close(ctx, f.adminID, f.slug); err != nil {
+		t.Fatal(err)
+	}
+	closed, err := f.svc.Public(ctx, f.slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closed.TaskMD != "" || len(closed.HiddenTests) != 0 {
+		t.Error("a closed but unpublished challenge still hides the task and the test names")
+	}
+	if len(closed.Standings) != 1 {
+		t.Fatal("a closed challenge shows its standings")
+	}
+	if closed.Standings[0].Diff != "" {
+		t.Error("a closed challenge does not publish diffs yet")
+	}
+
+	if err := f.svc.Publish(ctx, f.adminID, f.slug); err != nil {
+		t.Fatal(err)
+	}
+	pub, err := f.svc.Public(ctx, f.slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pub.TaskMD == "" || len(pub.HiddenTests) == 0 {
+		t.Errorf("a published challenge shows the task and the hidden test names: %+v", pub)
+	}
+	if pub.Standings[0].Diff == "" {
+		t.Error("a consenting entrant's diff is published")
+	}
+}
+
+func TestPublishWithholdsANonConsentingDiff(t *testing.T) {
+	f := setup(t, "none", "open")
+	ctx := context.Background()
+	a := f.enterAgentWithConsent(t, "shy", false)
+	f.score(t, a, 1, 9)
+	if err := f.svc.Close(ctx, f.adminID, f.slug); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Publish(ctx, f.adminID, f.slug); err != nil {
+		t.Fatal(err)
+	}
+	view, err := f.svc.Public(ctx, f.slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Standings[0].Diff != "" {
+		t.Fatal("a diff stays private without the entrant's consent")
+	}
+	if view.TaskMD == "" {
+		t.Error("the task itself is published regardless of any entrant's consent")
+	}
+}
+
+func TestCloseAndPublishGuardTheirOrder(t *testing.T) {
+	f := setup(t, "none", "open")
+	ctx := context.Background()
+	// Publishing before closing is refused; closing twice is refused.
+	problem(t, f.svc.Publish(ctx, f.adminID, f.slug), 409, "challenge_not_closed")
+	if err := f.svc.Close(ctx, f.adminID, f.slug); err != nil {
+		t.Fatal(err)
+	}
+	problem(t, f.svc.Close(ctx, f.adminID, f.slug), 409, "challenge_not_open")
+	if err := f.svc.Publish(ctx, f.adminID, f.slug); err != nil {
+		t.Fatal(err)
+	}
+	problem(t, f.svc.Publish(ctx, f.adminID, f.slug), 409, "challenge_not_closed")
+}
+
+func TestPublicRefusesADraft(t *testing.T) {
+	f := setup(t, "none", "draft")
+	_, err := f.svc.Public(context.Background(), f.slug)
+	problem(t, err, 404, "not_found")
+}
+
+func TestListGroupsOpenUpcomingAndPast(t *testing.T) {
+	f := setup(t, "none", "open")
+	ctx := context.Background()
+	upcoming := challenges.NewInput{Slug: "spring-cup", Title: "Spring cup", SkillTaskSlug: f.reserve(t, goTask2),
+		OpensAt: time.Now().Add(24 * time.Hour), ClosesAt: time.Now().Add(48 * time.Hour)}
+	if _, err := f.svc.Create(ctx, f.adminID, upcoming); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// A draft is nobody's business until it opens.
+	got, err := f.svc.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Open) != 1 || got.Open[0].Slug != f.slug {
+		t.Fatalf("open = %+v, want just %s", got.Open, f.slug)
+	}
+	if len(got.Upcoming) != 0 || len(got.Past) != 0 {
+		t.Fatalf("a draft must not be listed: upcoming = %+v past = %+v", got.Upcoming, got.Past)
+	}
+	if err := f.svc.Open(ctx, f.adminID, "spring-cup"); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if got, err = f.svc.List(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Upcoming) != 1 || got.Upcoming[0].Slug != "spring-cup" {
+		t.Fatalf("upcoming = %+v, want spring-cup (open but not yet started)", got.Upcoming)
+	}
+	if err := f.svc.Close(ctx, f.adminID, f.slug); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = f.svc.List(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Past) != 1 || got.Past[0].Slug != f.slug {
+		t.Fatalf("past = %+v, want %s", got.Past, f.slug)
+	}
+}

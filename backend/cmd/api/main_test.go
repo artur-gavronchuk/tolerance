@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/jackc/pgx/v5"
@@ -26,6 +27,7 @@ import (
 	"tolerance/internal/admin"
 	"tolerance/internal/agents"
 	"tolerance/internal/arena"
+	"tolerance/internal/challenges"
 	"tolerance/internal/games"
 	"tolerance/internal/games/match"
 	"tolerance/internal/games/tanks"
@@ -88,11 +90,13 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	// per skill; the production floor (skills.MinPool) is sized for the private
 	// rating catalog and would freeze every skill here.
 	qs.SetMinPool(3)
+	challengesSvc := challenges.NewService(d.AppPool, ps)
 	agentsSvc := agents.NewService(d.AppPool, ps)
 	agentsSvc.SetVersionListener(qs)
 	agentsSvc.SetSkillsSource(qs)
+	agentsSvc.SetChallengePlacesSource(challengesSvc)
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
-		agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs, arena: arena.NewService(d.AppPool), admin: admin.NewService(d.AppPool),
+		agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs, arena: arena.NewService(d.AppPool), admin: admin.NewService(d.AppPool), challenges: challengesSvc,
 		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 100),
 		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 100),
 		longPoll:   ratelimit.NewConcurrencyLimiter(2)}
@@ -115,7 +119,9 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: tests}}
 	worker := proofs.NewWorker(d.AppPool, fake, t.TempDir(), log)
 	worker.SetGameBotJudge(gamesSvc)
-	worker.SetFinishListener(qs)
+	// Both hooks, exactly as main.go wires them: a qualification proof advances
+	// its run, a challenge proof records its entry's result.
+	worker.SetFinishListener(finishBoth{qs, challengesSvc})
 	return &e2e{srv: srv, router: router, worker: worker, fake: fake, games: gamesSvc, db: d}
 }
 
@@ -1119,5 +1125,173 @@ func TestAdminRoutesRefuseANonAdmin(t *testing.T) {
 	if code := e.call(t, adminC, "POST", "/api/v1/admin/skill-tasks/go-lru-cache-eviction/retire", "",
 		map[string]any{"reason": "leaked on a forum"}, nil); code != 200 {
 		t.Error("an admin must be able to retire a task")
+	}
+}
+
+func TestEndToEnd_ChallengeLifecycle(t *testing.T) {
+	e := newE2E(t)
+	adminC := e.browser(t)
+	e.devLogin(t, adminC, "admin@arena.local")
+	owner := e.browser(t)
+	e.devLogin(t, owner, "cup@example.com")
+	plain := &http.Client{}
+
+	// The challenge's task is reserved: it must not also be handed out by the
+	// qualification pool.
+	if err := e.db.AdminPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE skill_tasks SET challenge_only = true WHERE slug = 'go-cursor-pagination'`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "Cupfighter"}, nil)
+	var keyResp struct {
+		Key string `json:"key"`
+	}
+	e.call(t, owner, "POST", "/api/v1/agent/keys", "", map[string]string{"name": "k"}, &keyResp)
+	hb := map[string]any{"connector_version": "0.2.0", "hostname": "h",
+		"version": map[string]string{"model": "claude-opus-5", "harness": "claude-code", "config_digest": "abc"}}
+	if code := e.call(t, plain, "POST", "/api/v1/connector/heartbeat", keyResp.Key, hb, nil); code != 200 {
+		t.Fatalf("heartbeat: %d", code)
+	}
+
+	body := map[string]any{"slug": "autumn-cup", "title": "Autumn cup", "skill_task_slug": "go-cursor-pagination",
+		"min_tier": "none", "opens_at": time.Now().Add(-time.Hour).UTC().Format(time.RFC3339),
+		"closes_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339), "prizes": "bragging rights"}
+	if code := e.call(t, adminC, "POST", "/api/v1/admin/challenges", "", body, nil); code != 201 {
+		t.Fatalf("create challenge: %d", code)
+	}
+	// A draft is nobody's business, and an owner cannot enter one.
+	if code := e.call(t, plain, "GET", "/api/v1/challenges/autumn-cup", "", nil, nil); code != 404 {
+		t.Fatalf("draft challenge is public: %d", code)
+	}
+	if code := e.call(t, owner, "POST", "/api/v1/challenges/autumn-cup/enter", "", nil, nil); code != 409 {
+		t.Fatalf("entering a draft: %d", code)
+	}
+
+	if code := e.call(t, adminC, "POST", "/api/v1/admin/challenges/autumn-cup/open", "", nil, nil); code != 200 {
+		t.Fatalf("open: %d", code)
+	}
+	var lists struct {
+		Open []struct{ Slug string } `json:"open"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/challenges", "", nil, &lists); code != 200 || len(lists.Open) != 1 {
+		t.Fatalf("index: %d %+v", code, lists.Open)
+	}
+
+	var entry struct {
+		ProofID string `json:"proof_id"`
+	}
+	if code := e.call(t, owner, "POST", "/api/v1/challenges/autumn-cup/enter", "", map[string]any{"consent_publish": true}, &entry); code != 201 {
+		t.Fatalf("enter: %d", code)
+	}
+	// One attempt: a second entry is refused even before the first finishes.
+	if code := e.call(t, owner, "POST", "/api/v1/challenges/autumn-cup/enter", "", nil, nil); code != 409 {
+		t.Fatalf("second entry: %d", code)
+	}
+
+	var next struct {
+		ProofID string `json:"proof_id"`
+		Kind    string `json:"kind"`
+		Task    struct {
+			Slug string `json:"slug"`
+		} `json:"task"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/connector/tasks/next?wait=1", keyResp.Key, nil, &next); code != 200 || next.Kind != "challenge" {
+		t.Fatalf("claim: %d %+v", code, next)
+	}
+	if next.ProofID != entry.ProofID || next.Task.Slug != "go-cursor-pagination" {
+		t.Fatalf("claimed the wrong task: %+v", next)
+	}
+	if code := e.call(t, plain, "POST", "/api/v1/connector/proofs/"+next.ProofID+"/result", keyResp.Key,
+		map[string]any{"diff": noteDiff}, nil); code >= 300 {
+		t.Fatalf("result: %d", code)
+	}
+	csk, ctasks, err := skills.LoadCatalog(filepath.Join("..", "..", "fixtures", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hidden, err := skills.HiddenNamesByTask(csk, ctasks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tests []sandbox.TestResult
+	for _, n := range hidden["go-cursor-pagination"] {
+		tests = append(tests, sandbox.TestResult{Name: n, Passed: true})
+	}
+	e.fake.Result = sandbox.Result{ExitCode: 0, Tests: tests}
+	if err := e.worker.RunProof(context.Background(), next.ProofID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Still open: the task must not leak to a reader while anyone could enter.
+	var view struct {
+		Status      string   `json:"status"`
+		TaskMD      string   `json:"task_md"`
+		HiddenTests []string `json:"hidden_tests"`
+		Entrants    int      `json:"entrants"`
+		Standings   []struct {
+			AgentName string  `json:"agent_name"`
+			Rank      int     `json:"rank"`
+			Score     float64 `json:"score"`
+			Diff      string  `json:"diff"`
+		} `json:"standings"`
+	}
+	e.call(t, plain, "GET", "/api/v1/challenges/autumn-cup", "", nil, &view)
+	if view.Status != "open" || view.TaskMD != "" || len(view.Standings) != 0 || view.Entrants != 1 {
+		t.Fatalf("open challenge leaks: %+v", view)
+	}
+
+	if code := e.call(t, adminC, "POST", "/api/v1/admin/challenges/autumn-cup/close", "", nil, nil); code != 200 {
+		t.Fatalf("close: %d", code)
+	}
+	e.call(t, plain, "GET", "/api/v1/challenges/autumn-cup", "", nil, &view)
+	if view.Status != "closed" || len(view.Standings) != 1 || view.Standings[0].Rank != 1 || view.Standings[0].Score != 1 {
+		t.Fatalf("closed challenge: %+v", view)
+	}
+	if view.TaskMD != "" || view.Standings[0].Diff != "" {
+		t.Fatal("a closed challenge still hides the task and the diffs")
+	}
+
+	if code := e.call(t, adminC, "POST", "/api/v1/admin/challenges/autumn-cup/publish", "", nil, nil); code != 200 {
+		t.Fatalf("publish: %d", code)
+	}
+	e.call(t, plain, "GET", "/api/v1/challenges/autumn-cup", "", nil, &view)
+	if view.Status != "published" || view.TaskMD == "" || len(view.HiddenTests) == 0 || view.Standings[0].Diff == "" {
+		t.Fatalf("published challenge: %+v", view)
+	}
+
+	// The place shows on the agent's public profile, and the rating did not move.
+	var profile struct {
+		Skills     []any `json:"skills"`
+		Challenges []struct {
+			Slug string `json:"slug"`
+			Rank int    `json:"rank"`
+			Of   int    `json:"of"`
+		} `json:"challenges"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/agents/Cupfighter", "", nil, &profile); code != 200 {
+		t.Fatalf("profile: %d", code)
+	}
+	if len(profile.Challenges) != 1 || profile.Challenges[0].Slug != "autumn-cup" ||
+		profile.Challenges[0].Rank != 1 || profile.Challenges[0].Of != 1 {
+		t.Fatalf("profile places: %+v", profile.Challenges)
+	}
+	if len(profile.Skills) != 0 {
+		t.Fatalf("a challenge must not produce a skill rating: %+v", profile.Skills)
+	}
+
+	var mine struct {
+		Items []struct {
+			ChallengeSlug string `json:"challenge_slug"`
+			Rank          *int   `json:"rank"`
+		} `json:"items"`
+	}
+	if code := e.call(t, owner, "GET", "/api/v1/me/challenges", "", nil, &mine); code != 200 || len(mine.Items) != 1 {
+		t.Fatalf("my entries: %d %+v", code, mine.Items)
+	}
+	if mine.Items[0].Rank == nil || *mine.Items[0].Rank != 1 {
+		t.Fatalf("my entry rank: %+v", mine.Items[0])
 	}
 }

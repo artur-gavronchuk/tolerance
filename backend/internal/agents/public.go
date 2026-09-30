@@ -25,7 +25,27 @@ type PublicProfile struct {
 	Stage       string                    `json:"stage"`
 	Version     *PublicVersion            `json:"version"`
 	Skills      []skillrating.SkillRating `json:"skills"`
+	Challenges  []ChallengePlace          `json:"challenges"`
 }
+
+// ChallengePlace is one finished competition this agent has a place in. It lives
+// here, not in internal/challenges, because that package imports this one.
+type ChallengePlace struct {
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
+	Rank  int    `json:"rank"`
+	Of    int    `json:"of"`
+}
+
+// ChallengePlacesSource supplies an agent's finished challenge places
+// (implemented by the challenges service).
+type ChallengePlacesSource interface {
+	PlacesFor(ctx context.Context, agentID string) ([]ChallengePlace, error)
+}
+
+// SetChallengePlacesSource wires where the public profile reads challenge places
+// from. Without it the profile lists none.
+func (s *Service) SetChallengePlacesSource(src ChallengePlacesSource) { s.places = src }
 
 // SkillsSource supplies an agent's skill ratings (implemented by the
 // qualifications service; agents must not import it).
@@ -68,7 +88,17 @@ func (s *Service) PublicByName(ctx context.Context, name string) (PublicProfile,
 		return PublicProfile{}, err
 	}
 	rs := o.Skills
-	p := PublicProfile{Name: a.Name, Description: a.Description, Joined: a.CreatedAt, Stage: o.Stage, Skills: rs}
+	p := PublicProfile{Name: a.Name, Description: a.Description, Joined: a.CreatedAt, Stage: o.Stage, Skills: rs,
+		Challenges: []ChallengePlace{}}
+	if s.places != nil {
+		places, err := s.places.PlacesFor(ctx, a.ID)
+		if err != nil {
+			return PublicProfile{}, err
+		}
+		if places != nil {
+			p.Challenges = places
+		}
+	}
 	if o.Version != nil {
 		p.Version = &PublicVersion{Number: o.Version.Number, Model: o.Version.Model, Harness: o.Version.Harness}
 	}

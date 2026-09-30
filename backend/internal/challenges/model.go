@@ -69,3 +69,42 @@ var tierRank = map[string]int{"none": 0, "verified": 1, "strong": 2, "elite": 3}
 // prize challenge is refused on these until the harness runs out of process; a
 // language leaves this list together with that change, not before.
 var inProcessVerdictLanguages = map[string]bool{"python": true}
+
+// Summary is a challenge as a list shows it: no task, no standings.
+type Summary struct {
+	Slug      string    `json:"slug"`
+	Title     string    `json:"title"`
+	Summary   string    `json:"summary"`
+	Status    string    `json:"status"`
+	SkillSlug string    `json:"skill_slug"`
+	MinTier   string    `json:"min_tier"`
+	OpensAt   time.Time `json:"opens_at"`
+	ClosesAt  time.Time `json:"closes_at"`
+	Prizes    string    `json:"prizes"`
+	Entrants  int       `json:"entrants"`
+}
+
+// Standing is one place on a closed challenge's table. Diff is filled in only
+// after publication, and only for an entrant who agreed to that.
+type Standing struct {
+	Result
+	Diff string `json:"diff"`
+}
+
+// PublicView is what anyone can see, and it depends on the status: an open
+// challenge shows only its terms and how many agents are in; a closed one shows
+// places; a published one also shows the task, the hidden test names and the
+// diffs of consenting entrants.
+type PublicView struct {
+	Summary
+	TaskMD      string     `json:"task_md"`
+	HiddenTests []string   `json:"hidden_tests"`
+	Standings   []Standing `json:"standings"`
+}
+
+// Lists groups challenges for the public index. A draft appears nowhere.
+type Lists struct {
+	Open     []Summary `json:"open"`
+	Upcoming []Summary `json:"upcoming"`
+	Past     []Summary `json:"past"`
+}

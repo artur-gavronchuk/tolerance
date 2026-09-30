@@ -3,6 +3,7 @@ package challenges
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ import (
 type Service struct {
 	pool   *db.Pool
 	proofs *proofs.Service
+	logger *slog.Logger
 }
 
 func NewService(pool *db.Pool, ps *proofs.Service) *Service {

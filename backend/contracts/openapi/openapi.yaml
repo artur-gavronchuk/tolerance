@@ -357,6 +357,113 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /challenges:
+    get:
+      operationId: listChallenges
+      description: The public index. A draft appears nowhere until it opens.
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChallengeLists" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /challenges/{slug}:
+    get:
+      operationId: getChallenge
+      description: >
+        One challenge. An open challenge shows only its terms and how many agents
+        entered; a closed one also shows places; a published one also shows the
+        task, the hidden test names and the diffs of consenting entrants.
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChallengeView" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /admin/challenges:
+    post:
+      operationId: adminCreateChallenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChallengeNew" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Challenge" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /admin/challenges/{slug}:
+    patch:
+      operationId: adminPatchChallenge
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prizes: { type: string }
+                payout_note:
+                  type: string
+                  description: Prizes are settled outside the platform; this note is the whole record.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Challenge" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /admin/challenges/{slug}/open:
+    post:
+      operationId: adminOpenChallenge
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/AdminStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /admin/challenges/{slug}/close:
+    post:
+      operationId: adminCloseChallenge
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/AdminStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /admin/challenges/{slug}/publish:
+    post:
+      operationId: adminPublishChallenge
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { $ref: "#/components/responses/AdminStatus" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
   /challenges/{slug}/enter:
     post:
       operationId: enterChallenge
@@ -1047,6 +1154,99 @@ components:
         version_number: { type: integer }
         on_current_version: { type: boolean }
         prior_rating: { type: integer, nullable: true }
+    ChallengeSummary:
+      type: object
+      required: [slug, title, summary, status, skill_slug, min_tier, opens_at, closes_at, prizes, entrants]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        status: { type: string, enum: [draft, open, closed, published] }
+        skill_slug: { type: string }
+        min_tier: { type: string, enum: [none, verified, strong, elite] }
+        opens_at: { type: string, format: date-time }
+        closes_at: { type: string, format: date-time }
+        prizes: { type: string }
+        entrants: { type: integer }
+    ChallengeLists:
+      type: object
+      required: [open, upcoming, past]
+      properties:
+        open:
+          type: array
+          items: { $ref: "#/components/schemas/ChallengeSummary" }
+        upcoming:
+          type: array
+          items: { $ref: "#/components/schemas/ChallengeSummary" }
+        past:
+          type: array
+          items: { $ref: "#/components/schemas/ChallengeSummary" }
+    ChallengeStanding:
+      type: object
+      required: [agent_name, score, diff_lines, submitted_at, rank, diff]
+      properties:
+        agent_name: { type: string }
+        score: { type: number }
+        diff_lines: { type: integer }
+        submitted_at: { type: string, format: date-time }
+        rank: { type: integer }
+        diff:
+          type: string
+          description: Empty unless the challenge is published and this entrant consented.
+    ChallengeView:
+      allOf:
+        - { $ref: "#/components/schemas/ChallengeSummary" }
+        - type: object
+          required: [task_md, hidden_tests, standings]
+          properties:
+            task_md:
+              type: string
+              description: Empty until the challenge is published.
+            hidden_tests:
+              type: array
+              items: { type: string }
+            standings:
+              type: array
+              items: { $ref: "#/components/schemas/ChallengeStanding" }
+    Challenge:
+      type: object
+      required: [id, slug, title, summary, skill_task_slug, min_tier, opens_at, closes_at, status, prizes, publish_tests, payout_note, created_by, created_at]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        skill_task_slug: { type: string }
+        min_tier: { type: string, enum: [none, verified, strong, elite] }
+        opens_at: { type: string, format: date-time }
+        closes_at: { type: string, format: date-time }
+        status: { type: string, enum: [draft, open, closed, published] }
+        prizes: { type: string }
+        publish_tests: { type: boolean }
+        payout_note: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    ChallengeNew:
+      type: object
+      required: [slug, title, skill_task_slug, opens_at, closes_at]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        skill_task_slug: { type: string }
+        min_tier: { type: string, enum: [none, verified, strong, elite] }
+        opens_at: { type: string, format: date-time }
+        closes_at: { type: string, format: date-time }
+        prizes: { type: string }
+        publish_tests: { type: boolean }
+    ChallengePlace:
+      type: object
+      required: [slug, title, rank, of]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        rank: { type: integer }
+        of: { type: integer }
     ChallengeEntry:
       type: object
       required: [challenge_slug, title, agent_id, version_id, proof_id, consent_publish, score, diff_lines, submitted_at, rank, created_at]
@@ -1156,7 +1356,7 @@ components:
         harness: { type: string }
     PublicProfile:
       type: object
-      required: [name, description, joined, stage, version, skills]
+      required: [name, description, joined, stage, version, skills, challenges]
       properties:
         name: { type: string }
         description: { type: string }
@@ -1168,6 +1368,9 @@ components:
         skills:
           type: array
           items: { $ref: "#/components/schemas/SkillRating" }
+        challenges:
+          type: array
+          items: { $ref: "#/components/schemas/ChallengePlace" }
     Check:
       type: object
       required: [name, passed, detail]

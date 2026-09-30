@@ -96,7 +96,9 @@ func main() {
 	as := arena.NewService(pool)
 	adminSvc := admin.NewService(pool)
 	challengesSvc := challenges.NewService(pool, ps)
+	challengesSvc.SetLogger(log)
 	agentsSvc.SetVersionListener(qs)
+	agentsSvc.SetChallengePlacesSource(challengesSvc)
 	agentsSvc.SetSkillsSource(qs)
 
 	d := deps{
@@ -125,7 +127,10 @@ func main() {
 		// Only roles that have a worker advance qualification runs: the finish hook (after each terminal
 		// proof transition) and the stalled-run sweep below both run as arena_worker there. Several
 		// replicas may sweep at once; OnProofFinished locks the run row and moves it only from its newest proof.
-		w.SetFinishListener(qs)
+		// Both hooks run after every terminal proof transition and each ignores
+		// the kinds that are not its own, so they compose: a qualification proof
+		// advances its run, a challenge proof records its entry's result.
+		w.SetFinishListener(finishBoth{qs, challengesSvc})
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -148,6 +153,10 @@ func main() {
 					}
 					if n > 0 {
 						log.Info("advanced stalled qualification runs", "count", n)
+					}
+					// Challenges open and close by the clock on the same tick.
+					if err := challengesSvc.Tick(ctx); err != nil {
+						log.Error("challenge tick", "err", err)
 					}
 				}
 			}
@@ -231,4 +240,19 @@ func checkSchema(ctx context.Context, pool *db.Pool) error {
 		return errors.New("database schema is out of date: user_identities is missing; recreate the database (make reset)")
 	}
 	return nil
+}
+
+// finishBoth fans a finished proof out to both listeners that care about one.
+// Each inspects the proof's kind and ignores what is not its own, so the order
+// does not matter; an error from either surfaces, and the worker logs it.
+type finishBoth struct {
+	quals      *qualifications.Service
+	challenges *challenges.Service
+}
+
+func (f finishBoth) OnProofFinished(ctx context.Context, proofID string) error {
+	if err := f.quals.OnProofFinished(ctx, proofID); err != nil {
+		return err
+	}
+	return f.challenges.OnProofFinished(ctx, proofID)
 }

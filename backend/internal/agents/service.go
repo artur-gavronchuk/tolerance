@@ -26,6 +26,7 @@ type Service struct {
 
 	versions VersionListener
 	skills   SkillsSource
+	places   ChallengePlacesSource
 }
 
 func NewService(pool *db.Pool, proofs ProofFactsSource) *Service {
