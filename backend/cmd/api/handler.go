@@ -58,7 +58,7 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 
 	public := http.NewServeMux()
 	games.RegisterPublicRoutes(public, d.games)
-	agents.RegisterPublicRoutes(public, d.agents, d.quals)
+	agents.RegisterPublicRoutes(public, d.agents)
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()

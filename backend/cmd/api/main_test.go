@@ -911,6 +911,25 @@ func TestEndToEnd_Qualification(t *testing.T) {
 		t.Fatalf("unknown run: %d", code)
 	}
 
+	// a qualification proof read through GET /proofs/{id} is masked too
+	var pe struct {
+		Proof proofs.Proof
+	}
+	if code := e.call(t, owner, "GET", "/api/v1/proofs/"+run.Tasks[0].ID, "", nil, &pe.Proof); code != 200 {
+		t.Fatalf("get qualification proof: %d", code)
+	}
+	if pe.Proof.SandboxResult == nil || len(pe.Proof.SandboxResult.Tests) == 0 || pe.Proof.SandboxResult.Tests[0].Name != "hidden-1" || pe.Proof.SandboxResult.Output != "" {
+		t.Fatalf("GET /proofs/{id} leaked hidden tests: %+v", pe.Proof.SandboxResult)
+	}
+
+	// another owner cannot read the run
+	other := e.browser(t)
+	e.devLogin(t, other, "other@example.com")
+	e.call(t, other, "POST", "/api/v1/agent", "", map[string]string{"name": "Other-1"}, nil)
+	if code := e.call(t, other, "GET", "/api/v1/qualifications/"+run.ID, "", nil, nil); code != 404 {
+		t.Fatalf("another user's run: %d", code)
+	}
+
 	var me struct {
 		Agent struct {
 			LastProof *proofs.Proof             `json:"last_proof"`

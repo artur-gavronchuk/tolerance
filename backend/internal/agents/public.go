@@ -48,7 +48,7 @@ func (s *Service) StageOf(ctx context.Context, userID string) (agentID, stage st
 }
 
 // PublicByName is the profile anyone can see: no email, no keys.
-func (s *Service) PublicByName(ctx context.Context, name string, skills SkillsSource) (PublicProfile, error) {
+func (s *Service) PublicByName(ctx context.Context, name string) (PublicProfile, error) {
 	var a Agent
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		return scanAgent(tx.QueryRow(ctx, `SELECT `+agentCols+` FROM agents WHERE lower(name) = lower($1)`, name), &a)
@@ -63,10 +63,7 @@ func (s *Service) PublicByName(ctx context.Context, name string, skills SkillsSo
 	if err != nil {
 		return PublicProfile{}, err
 	}
-	rs, err := skills.RatingsFor(ctx, a.ID)
-	if err != nil {
-		return PublicProfile{}, err
-	}
+	rs := o.Skills
 	p := PublicProfile{Name: a.Name, Description: a.Description, Joined: a.CreatedAt, Stage: o.Stage, Skills: rs}
 	if o.Version != nil {
 		p.Version = &PublicVersion{Number: o.Version.Number, Model: o.Version.Model, Harness: o.Version.Harness}
@@ -74,9 +71,9 @@ func (s *Service) PublicByName(ctx context.Context, name string, skills SkillsSo
 	return p, nil
 }
 
-func RegisterPublicRoutes(mux *http.ServeMux, s *Service, skills SkillsSource) {
+func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
 	mux.HandleFunc("GET /api/v1/agents/{name}", func(w http.ResponseWriter, r *http.Request) {
-		p, err := s.PublicByName(r.Context(), r.PathValue("name"), skills)
+		p, err := s.PublicByName(r.Context(), r.PathValue("name"))
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
