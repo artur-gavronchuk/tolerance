@@ -5,11 +5,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"tolerance/internal/proofs"
 	"tolerance/internal/proofs/sandbox"
+	"tolerance/internal/skills"
 )
 
 const fixture = "../../../fixtures/proofs/go-fix-retry"
@@ -123,4 +125,144 @@ func bytesIndex(b, sub []byte) int {
 		}
 	}
 	return -1
+}
+
+func TestDocker_SkillTasks(t *testing.T) {
+	requireDocker(t)
+	for _, img := range []struct{ tag, dir string }{{"arena-skill-go:1", "../../../fixtures/skills/go"}, {"arena-skill-python:1", "../../../fixtures/skills/python"}} {
+		if out, err := exec.Command("docker", "build", "-q", "-t", img.tag, img.dir).CombinedOutput(); err != nil {
+			t.Fatalf("build %s: %v\n%s", img.tag, err, out)
+		}
+	}
+	r := sandbox.NewDocker()
+	cases := []struct {
+		dir, image, run, language, file, find, replace string
+		hidden                                         int
+	}{
+		{"../../../fixtures/skills/python/interval-merge", "arena-skill-python:1", "python -P -m pytest -q -rA -p no:cacheprovider", "python",
+			"intervals.py", "    ranges.sort()\n", "    ranges = sorted(ranges)\n", 5},
+		{"../../../fixtures/skills/go/cursor-pagination", "arena-skill-go:1", "go test ./... -json -count=1", "go",
+			"page.go", "sorted[i].ID >= cursor", "sorted[i].ID > cursor", 5},
+	}
+	for _, c := range cases {
+		task, err := skills.LoadTask(c.dir, filepath.Base(filepath.Dir(c.dir)), c.language)
+		if err != nil {
+			t.Fatal(err)
+		}
+		names, err := proofs.HiddenTestNames(c.language, task.HiddenTar)
+		if err != nil {
+			t.Fatal(err)
+		}
+		run := func(fix bool) (exit, hiddenPassed int, output string) {
+			dir := t.TempDir()
+			if err := proofs.Untar(task.RepoTar, dir); err != nil {
+				t.Fatal(err)
+			}
+			if fix {
+				src, err := os.ReadFile(filepath.Join(dir, c.file))
+				if err != nil {
+					t.Fatal(err)
+				}
+				fixed := strings.Replace(string(src), c.find, c.replace, 1)
+				if c.language == "python" {
+					fixed = strings.Replace(fixed, "start < out[-1][1]", "start <= out[-1][1]", 1)
+				}
+				if fixed == string(src) {
+					t.Fatalf("%s: reference fix did not change %s", c.dir, c.file)
+				}
+				if err := os.WriteFile(filepath.Join(dir, c.file), []byte(fixed), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := proofs.Untar(task.HiddenTar, dir); err != nil {
+				t.Fatal(err)
+			}
+			res, err := r.Run(context.Background(), sandbox.Request{WorkDir: dir, Image: c.image, RunCmd: c.run, Language: c.language, Timeout: 2 * time.Minute})
+			if err != nil {
+				t.Fatalf("%s: %v", c.dir, err)
+			}
+			passedByName := map[string]bool{}
+			for _, tr := range res.Tests {
+				if tr.Passed {
+					passedByName[tr.Name] = true
+				}
+			}
+			for _, n := range names {
+				if passedByName[n] {
+					hiddenPassed++
+				}
+			}
+			return res.ExitCode, hiddenPassed, res.Output
+		}
+		if exit, got, out := run(true); exit != 0 || got != c.hidden {
+			t.Fatalf("%s reference fix: exit %d hidden passed %d/%d\n%s", c.dir, exit, got, c.hidden, out)
+		}
+		// The untouched repo is broken: some hidden test must fail.
+		if exit, got, out := run(false); exit == 0 || got >= c.hidden {
+			t.Fatalf("%s no-op diff: exit %d hidden passed %d/%d\n%s", c.dir, exit, got, c.hidden, out)
+		}
+	}
+}
+
+// TestDocker_PythonHarnessBypassesDoNotForcePass runs known pytest-hijack
+// payloads past TestFileTouched, straight into the sandbox, against the
+// unfixed interval-merge task: PYTEST_DISABLE_PLUGIN_AUTOLOAD, `python -P`
+// and the missing PYTHONPATH must keep every one of them from turning the
+// hidden tests green.
+func TestDocker_PythonHarnessBypassesDoNotForcePass(t *testing.T) {
+	requireDocker(t)
+	if out, err := exec.Command("docker", "build", "-q", "-t", "arena-skill-python:1", "../../../fixtures/skills/python").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	const plugin = "import pytest\n\n@pytest.hookimpl(hookwrapper=True)\ndef pytest_runtest_makereport(item, call):\n    outcome = yield\n    outcome.get_result().outcome = \"passed\"\n"
+	payloads := map[string]map[string]string{
+		"pytest_ini_addopts": {"forcepass.py": plugin, ".pytest.ini": "[pytest]\naddopts = -p forcepass\n"},
+		"dist_info_entry_point": {"forcepass.py": plugin, "forcepass-1.0.dist-info/METADATA": "Metadata-Version: 2.1\nName: forcepass\nVersion: 1.0\n",
+			"forcepass-1.0.dist-info/entry_points.txt": "[pytest11]\nforcepass = forcepass\n"},
+		"shadow_pytest_module": {"pytest.py": "raise SystemExit(0)\n"},
+	}
+	const runCmd = "python -P -m pytest -q -rA -p no:cacheprovider"
+	task, err := skills.LoadTask("../../../fixtures/skills/python/interval-merge", "python", "python")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, err := proofs.HiddenTestNames("python", task.HiddenTar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, files := range payloads {
+		dir := t.TempDir()
+		if err := proofs.Untar(task.RepoTar, dir); err != nil {
+			t.Fatal(err)
+		}
+		for f, body := range files {
+			full := filepath.Join(dir, f)
+			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := proofs.Untar(task.HiddenTar, dir); err != nil {
+			t.Fatal(err)
+		}
+		res, err := sandbox.NewDocker().Run(context.Background(), sandbox.Request{WorkDir: dir, Image: "arena-skill-python:1", RunCmd: runCmd, Language: "python", Timeout: 2 * time.Minute})
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		passed := map[string]bool{}
+		for _, tr := range res.Tests {
+			if tr.Passed {
+				passed[tr.Name] = true
+			}
+		}
+		all := true
+		for _, n := range names {
+			all = all && passed[n]
+		}
+		if all {
+			t.Errorf("%s forced every hidden test to pass\n%s", name, res.Output)
+		}
+	}
 }

@@ -1,0 +1,1 @@
+{"slug": "go-worker-pool-shutdown", "title": "Worker pool loses results on shutdown", "difficulty": 2, "agent_timeout_s": 900, "sandbox_timeout_s": 120, "hidden_tests": 4}

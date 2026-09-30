@@ -12,7 +12,7 @@ import (
 
 func TestMigrate_CreatesSliceTablesAndAppRoleCanUseThem(t *testing.T) {
 	d := dbtest.New(t)
-	for _, table := range []string{"users", "sessions", "agents", "api_keys", "agent_presence", "proof_tasks", "proofs", "jobs", "audit_events"} {
+	for _, table := range []string{"users", "sessions", "agents", "api_keys", "agent_presence", "proof_tasks", "proofs", "jobs", "audit_events", "agent_versions", "skills", "skill_tasks", "qualification_runs", "skill_ratings"} {
 		err := d.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, "SELECT 1 FROM "+table+" LIMIT 1")
 			return err
@@ -32,6 +32,7 @@ func TestMigrate_WorkerRoleCanReadItsOwnTables(t *testing.T) {
 	for _, table := range []string{
 		"jobs", "proofs", "proof_tasks",
 		"game_bots", "bot_versions", "matches", "match_players", "match_replays", "tanks_broadcasts",
+		"skills", "skill_tasks", "qualification_runs", "skill_ratings",
 	} {
 		err := d.WorkerPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, "SELECT 1 FROM "+table+" LIMIT 1")
@@ -49,6 +50,20 @@ func TestMigrate_WorkerRoleCanReadItsOwnTables(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("arena_worker cannot read agents(id, owner_user_id, name): %v", err)
+	}
+	// Qualification writes (00008_qualification.sql): the worker advances runs, upserts ratings and queues the
+	// next qualification proof. INSERT INTO ... SELECT WHERE false exercises the privilege without rows.
+	for _, q := range []string{
+		`INSERT INTO skill_ratings (agent_id, skill_slug, version_id, rating, uncertainty) SELECT 'a', 's', 'v', 0, 0 WHERE false`,
+		`UPDATE qualification_runs SET status = status WHERE false`,
+		`INSERT INTO proofs (id) SELECT 'x' WHERE false`,
+	} {
+		if err := d.WorkerPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, q)
+			return err
+		}); err != nil {
+			t.Fatalf("arena_worker cannot run %q: %v", q, err)
+		}
 	}
 	// audit_events is INSERT-only for the worker (it never reads the audit log back).
 	err = d.WorkerPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
@@ -74,6 +89,22 @@ func TestMigrate_WorkerRoleCannotReachUserSecrets(t *testing.T) {
 		})
 		if err == nil {
 			t.Fatalf("arena_worker must not be able to read %s", table)
+		}
+	}
+	for _, q := range []string{
+		"INSERT INTO qualification_runs (id) SELECT 'x' WHERE false",
+		"INSERT INTO skills (slug) SELECT 'x' WHERE false",
+		"INSERT INTO skill_tasks (slug) SELECT 'x' WHERE false",
+		"INSERT INTO agent_versions (id) SELECT 'x' WHERE false",
+		"SELECT 1 FROM agent_versions LIMIT 1", // no worker code reads versions
+		"SELECT current_version_id FROM agents LIMIT 1",
+		"DELETE FROM skill_ratings WHERE false",
+	} {
+		if err := d.WorkerPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, q)
+			return err
+		}); err == nil {
+			t.Fatalf("arena_worker must not be able to run %q", q)
 		}
 	}
 	err := d.WorkerPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {

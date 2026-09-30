@@ -9,10 +9,11 @@
 #
 #   pull <backend|web> <tag>       Pull image(s) from GHCR for this component.
 #                                   backend also opportunistically pulls the
-#                                   proof-go/bot-runtime images at the same
+#                                   proof-go/skill-go/skill-python/bot-runtime images at the same
 #                                   tag and re-tags them to the fixed local
 #                                   names internal/proofs and games/match
 #                                   expect (arena-proof-go:1,
+#                                   arena-skill-go:1, arena-skill-python:1,
 #                                   arena-bot-runtime:1) — see the module
 #                                   comment in cmd/api/main.go. Missing at
 #                                   this tag (unchanged this release) is not
@@ -85,6 +86,8 @@ BACKEND_IMAGE=ghcr.io/artur-gavronchuk/tolerance-backend
 WEB_IMAGE=ghcr.io/artur-gavronchuk/tolerance-web
 PROOF_IMAGE=ghcr.io/artur-gavronchuk/tolerance-proof-go
 BOT_IMAGE=ghcr.io/artur-gavronchuk/tolerance-bot-runtime
+SKILL_GO_IMAGE=ghcr.io/artur-gavronchuk/tolerance-skill-go
+SKILL_PY_IMAGE=ghcr.io/artur-gavronchuk/tolerance-skill-python
 
 log() { echo "[release] $*"; }
 die() {
@@ -173,6 +176,8 @@ cmd_pull() {
 	backend)
 		pull_required "$BACKEND_IMAGE:$tag"
 		pull_optional "$PROOF_IMAGE:$tag" arena-proof-go:1
+		pull_optional "$SKILL_GO_IMAGE:$tag" arena-skill-go:1
+		pull_optional "$SKILL_PY_IMAGE:$tag" arena-skill-python:1
 		pull_optional "$BOT_IMAGE:$tag" arena-bot-runtime:1
 		;;
 	web)

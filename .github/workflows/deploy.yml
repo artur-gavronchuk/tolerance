@@ -43,6 +43,8 @@ env:
   WEB_IMAGE: ghcr.io/artur-gavronchuk/tolerance-web
   PROOF_IMAGE: ghcr.io/artur-gavronchuk/tolerance-proof-go
   BOT_IMAGE: ghcr.io/artur-gavronchuk/tolerance-bot-runtime
+  SKILL_GO_IMAGE: ghcr.io/artur-gavronchuk/tolerance-skill-go
+  SKILL_PY_IMAGE: ghcr.io/artur-gavronchuk/tolerance-skill-python
   # CANARY_WINDOW/poll interval for the wait loop below; the thresholds
   # canary-check itself evaluates against live on the server (CANARY_WEIGHT,
   # CANARY_MAX_5XX_FLOOR, etc.) are read from deploy/release.sh's own
@@ -163,7 +165,7 @@ jobs:
               echo "changed since $base:"; echo "$changed"
               echo "$changed" | grep -qE '^backend/' && do_backend=true || true
               echo "$changed" | grep -qE '^frontend/' && do_web=true || true
-              if [ "$do_backend" = "true" ] && echo "$changed" | grep -qE '^(backend/fixtures/proofs/|backend/internal/games/match/runtime/)'; then
+              if [ "$do_backend" = "true" ] && echo "$changed" | grep -qE '^(backend/fixtures/proofs/|backend/fixtures/skills/|backend/internal/games/match/runtime/)'; then
                 do_proof_bot=true
               fi
               echo "$changed" | grep -qE '^(docker-compose\.yml|Caddyfile|Makefile)$|^deploy/' && ship_config=true || true
@@ -239,6 +241,30 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/artur-gavronchuk/tolerance
           cache-from: type=gha,scope=proof-go
           cache-to: type=gha,mode=max,scope=proof-go
+
+      - name: build & push skill-go image
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_proof_bot == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend/fixtures/skills/go
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.SKILL_GO_IMAGE }}:${{ steps.plan.outputs.sha }}
+          labels: org.opencontainers.image.source=https://github.com/artur-gavronchuk/tolerance
+          cache-from: type=gha,scope=skill-go
+          cache-to: type=gha,mode=max,scope=skill-go
+
+      - name: build & push skill-python image
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_proof_bot == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend/fixtures/skills/python
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.SKILL_PY_IMAGE }}:${{ steps.plan.outputs.sha }}
+          labels: org.opencontainers.image.source=https://github.com/artur-gavronchuk/tolerance
+          cache-from: type=gha,scope=skill-python
+          cache-to: type=gha,mode=max,scope=skill-python
 
       - name: build & push bot-runtime image
         if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_proof_bot == 'true'

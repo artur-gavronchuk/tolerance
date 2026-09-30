@@ -51,7 +51,7 @@ func connectorStatus(as *agents.Service, ps *proofs.Service) http.HandlerFunc {
 			return
 		}
 		httpx.Respond(w, http.StatusOK, map[string]any{
-			"agent":      map[string]any{"id": o.ID, "name": o.Name, "stage": o.Stage},
+			"agent":      map[string]any{"id": o.ID, "name": o.Name, "stage": o.Stage, "version": o.Version, "skills": o.Skills},
 			"last_proof": last,
 		})
 	}

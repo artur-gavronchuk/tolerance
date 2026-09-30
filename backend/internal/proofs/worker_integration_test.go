@@ -190,6 +190,21 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 		}
 	})
 
+	t.Run("a diff importing testing into non-test code is refused as harness tampering", func(t *testing.T) {
+		f := setup(t)
+		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}
+		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		tamper := "diff --git a/extra.go b/extra.go\nnew file mode 100644\n--- /dev/null\n+++ b/extra.go\n@@ -0,0 +1,3 @@\n+package retry\n+\n+import \"testing\"\n"
+		id := submitted(t, f, goodDiff+tamper)
+		if err := w.RunProof(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		p, _ := f.proofs.Get(ctx, f.userID, id)
+		if p.Status != proofs.StatusFailed || p.FailureReason != "harness_tampering" || len(fake.Calls) != 0 {
+			t.Fatalf("%+v calls=%d", p, len(fake.Calls))
+		}
+	})
+
 	t.Run("CRLF diff still applies", func(t *testing.T) {
 		f := setup(t)
 		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}
@@ -264,9 +279,9 @@ func TestExpireStale(t *testing.T) {
 		_, err := tx.Exec(ctx, `UPDATE proofs SET created_at = now() - interval '6 minutes' WHERE id = $1`, p.ID)
 		return err
 	})
-	n, err := f.proofs.ExpireStale(ctx)
-	if err != nil || n != 1 {
-		t.Fatalf("expire: %v %d", err, n)
+	ids, err := f.proofs.ExpireStale(ctx)
+	if err != nil || len(ids) != 1 || ids[0] != p.ID {
+		t.Fatalf("expire: %v %v", err, ids)
 	}
 	got, _ := f.proofs.Get(ctx, f.userID, p.ID)
 	if got.Status != proofs.StatusExpired || got.FailureReason != "not_claimed" {
@@ -279,8 +294,8 @@ func TestExpireStale(t *testing.T) {
 		_, err := tx.Exec(ctx, `UPDATE proofs SET claimed_at = now() - interval '20 minutes' WHERE id = $1`, p2.ID)
 		return err
 	})
-	if n, _ := f.proofs.ExpireStale(ctx); n != 1 {
-		t.Fatalf("expected the overdue claimed proof to expire, got %d", n)
+	if ids, err := f.proofs.ExpireStale(ctx); err != nil || len(ids) != 1 {
+		t.Fatalf("expected the overdue claimed proof to expire, got %v %v", ids, err)
 	}
 	got, _ = f.proofs.Get(ctx, f.userID, p2.ID)
 	if got.Status != proofs.StatusExpired || got.FailureReason != "agent_timeout" {
@@ -326,8 +341,8 @@ func TestExpireStale_StuckSandboxRunIsInfraError(t *testing.T) {
 
 	// Still queued behind a long backlog: not stuck, however old.
 	old()
-	if n, err := f.proofs.ExpireStale(ctx); err != nil || n != 0 {
-		t.Fatalf("a job still queued must not be swept, got n=%d err=%v", n, err)
+	if ids, err := f.proofs.ExpireStale(ctx); err != nil || len(ids) != 0 {
+		t.Fatalf("a job still queued must not be swept, got ids=%v err=%v", ids, err)
 	}
 
 	// Picked up and being worked (leased): still not stuck.
@@ -337,16 +352,16 @@ func TestExpireStale_StuckSandboxRunIsInfraError(t *testing.T) {
 		return err
 	})
 	old()
-	if n, err := f.proofs.ExpireStale(ctx); err != nil || n != 0 {
-		t.Fatalf("a leased (in-progress) job must not be swept, got n=%d err=%v", n, err)
+	if ids, err := f.proofs.ExpireStale(ctx); err != nil || len(ids) != 0 {
+		t.Fatalf("a leased (in-progress) job must not be swept, got ids=%v err=%v", ids, err)
 	}
 
 	// The job has exhausted its attempts (or the worker crashed before
 	// recording the verdict): genuinely dead, must be swept.
 	setJobState(t, f, id, "failed")
 	old()
-	if n, err := f.proofs.ExpireStale(ctx); err != nil || n != 1 {
-		t.Fatalf("sweep: %v %d", err, n)
+	if ids, err := f.proofs.ExpireStale(ctx); err != nil || len(ids) != 1 {
+		t.Fatalf("sweep: %v %v", err, ids)
 	}
 	p, _ := f.proofs.Get(ctx, f.userID, id)
 	if p.Status != proofs.StatusInfraError || p.FailureReason != "stuck" || p.FinishedAt == nil {
@@ -373,8 +388,8 @@ func TestExpireStale_NoJobAtAllIsAlsoStuck(t *testing.T) {
 		_, err := tx.Exec(ctx, `UPDATE proofs SET diff_submitted_at = now() - interval '2 hours' WHERE id = $1`, id)
 		return err
 	})
-	if n, err := f.proofs.ExpireStale(ctx); err != nil || n != 1 {
-		t.Fatalf("a proof with no job at all must be swept once past the floor: n=%d err=%v", n, err)
+	if ids, err := f.proofs.ExpireStale(ctx); err != nil || len(ids) != 1 {
+		t.Fatalf("a proof with no job at all must be swept once past the floor: ids=%v err=%v", ids, err)
 	}
 }
 
@@ -489,5 +504,42 @@ func TestGameBotProofWithoutJudgeIsInfra(t *testing.T) {
 	got, _ = f.proofs.Get(ctx, f.userID, p.ID)
 	if got.Status != proofs.StatusInfraError || got.FailureReason == "" {
 		t.Fatalf("%+v", got)
+	}
+}
+
+// A qualification proof has no proof_tasks row (task_slug is NULL); its agent timeout comes from
+// skill_tasks, and ExpireStale must still end it.
+func TestExpireStale_QualificationProof(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	err := f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		for _, q := range []string{
+			`INSERT INTO agent_versions (id, agent_id, number, config_digest) VALUES ('ver_x', '` + f.agent + `', 1, 'd')`,
+			`INSERT INTO skills (slug, title, language, image, run_cmd) VALUES ('sk', 'Sk', 'go', 'img', 'go test')`,
+			`INSERT INTO skill_tasks (slug, skill_slug, title, difficulty, agent_timeout_s, sandbox_timeout_s, hidden_tests, task_md, repo_tar, hidden_tar, repo_sha256)
+				VALUES ('sk-1', 'sk', 'T', 1, 60, 60, 1, 'md', '\x00', '\x00', 'sha')`,
+			`INSERT INTO qualification_runs (id, agent_id, version_id, skill_slug, task_slugs) VALUES ('qrun_x', '` + f.agent + `', 'ver_x', 'sk', '{sk-1}')`,
+			`INSERT INTO proofs (id, agent_id, kind, qualification_run_id, position, skill_task_slug, status, claimed_at)
+				VALUES ('proof_q', '` + f.agent + `', 'qualification', 'qrun_x', 1, 'sk-1', 'claimed', now() - interval '5 minutes')`,
+		} {
+			if _, err := tx.Exec(ctx, q); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := f.proofs.ExpireStale(ctx)
+	if err != nil || len(ids) != 1 || ids[0] != "proof_q" {
+		t.Fatalf("expire: %v %v", ids, err)
+	}
+	var status, reason string
+	err = f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status, failure_reason FROM proofs WHERE id = 'proof_q'`).Scan(&status, &reason)
+	})
+	if err != nil || status != proofs.StatusExpired || reason != "agent_timeout" {
+		t.Fatalf("%v %s %s", err, status, reason)
 	}
 }

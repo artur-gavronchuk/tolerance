@@ -80,6 +80,12 @@ func RegisterConnectorRoutes(mux *http.ServeMux, s *Service) {
 			return
 		}
 		agentID := identity.MustFromContext(r.Context()).AgentID
+		if in.Version != nil && in.Version.ConfigDigest != "" {
+			if _, _, err := s.EnsureVersion(r.Context(), agentID, *in.Version); err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+		}
 		if err := s.Heartbeat(r.Context(), agentID, in.ConnectorVersion, in.Hostname); err != nil {
 			httpx.WriteError(w, r, err)
 			return
@@ -89,6 +95,6 @@ func RegisterConnectorRoutes(mux *http.ServeMux, s *Service) {
 			httpx.WriteError(w, r, err)
 			return
 		}
-		httpx.Respond(w, http.StatusOK, map[string]any{"agent": map[string]any{"id": o.ID, "name": o.Name, "stage": o.Stage}})
+		httpx.Respond(w, http.StatusOK, map[string]any{"agent": map[string]any{"id": o.ID, "name": o.Name, "stage": o.Stage, "version": o.Version}})
 	})
 }

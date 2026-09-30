@@ -32,6 +32,9 @@ import (
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/proofs"
 	"tolerance/internal/proofs/sandbox"
+	"tolerance/internal/qualifications"
+	"tolerance/internal/skillrating"
+	"tolerance/internal/skills"
 )
 
 type e2e struct {
@@ -56,6 +59,13 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	if err := games.Sync(ctx, d.AdminPool); err != nil {
 		t.Fatal(err)
 	}
+	sk, stasks, err := skills.LoadCatalog(filepath.Join("..", "..", "fixtures", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := skills.SyncCatalog(ctx, d.AdminPool, sk, stasks); err != nil {
+		t.Fatal(err)
+	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake", devLogin: true}
 	// Effectively unlimited: the e2e test fires many requests back to back
@@ -69,8 +79,12 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	// worker itself is never started here: tests call ScheduleTick/RunMatch/Qualify directly to arrange
 	// their own fixtures deterministically.
 	gamesSvc := games.NewService(d.AppPool, ps, match.WithHouse(match.ProcessLauncher{}), log, games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
+	qs := qualifications.NewService(d.AppPool, ps)
+	agentsSvc := agents.NewService(d.AppPool, ps)
+	agentsSvc.SetVersionListener(qs)
+	agentsSvc.SetSkillsSource(qs)
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
-		agents: agents.NewService(d.AppPool, ps), proofs: ps, games: gamesSvc,
+		agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs,
 		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 100),
 		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 100),
 		longPoll:   ratelimit.NewConcurrencyLimiter(2)}
@@ -93,6 +107,7 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: tests}}
 	worker := proofs.NewWorker(d.AppPool, fake, t.TempDir(), log)
 	worker.SetGameBotJudge(gamesSvc)
+	worker.SetFinishListener(qs)
 	return &e2e{srv: srv, router: router, worker: worker, fake: fake, games: gamesSvc}
 }
 
@@ -174,6 +189,24 @@ func (e *e2e) call(t *testing.T, c *http.Client, method, path, key string, body 
 	}
 	return resp.StatusCode
 }
+
+// rawGet performs a GET without response validation and returns the body, for leak checks.
+func (e *e2e) rawGet(t *testing.T, c *http.Client, path string) string {
+	t.Helper()
+	resp, err := c.Get(e.srv.URL + path)
+	if err != nil {
+		t.Fatalf("GET %s: %v", path, err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(raw)
+}
+
+// noteDiff applies to any task repository: it adds a file no test reads.
+const noteDiff = "diff --git a/NOTES.md b/NOTES.md\nnew file mode 100644\n--- /dev/null\n+++ b/NOTES.md\n@@ -0,0 +1 @@\n+agent notes\n"
 
 func TestEndToEnd_SignInConnectProve(t *testing.T) {
 	e := newE2E(t)
@@ -768,5 +801,184 @@ func TestTanksConnectorUpload(t *testing.T) {
 	var v games.VersionView
 	if code := e.call(t, plain, "POST", "/api/v1/connector/tanks/versions", key.Key, map[string]string{"archive_base64": b64}, &v); code != 201 || v.Source != "upload" {
 		t.Fatalf("connector upload: %d %+v", code, v)
+	}
+}
+
+func TestEndToEnd_Qualification(t *testing.T) {
+	e := newE2E(t)
+	owner := e.browser(t)
+	plain := &http.Client{}
+	e.devLogin(t, owner, "q@example.com")
+	e.call(t, owner, "POST", "/api/v1/agent", "", map[string]string{"name": "Fixer-7"}, nil)
+	var keyResp struct {
+		Key string `json:"key"`
+	}
+	e.call(t, owner, "POST", "/api/v1/agent/keys", "", map[string]string{"name": "k"}, &keyResp)
+	hb := map[string]any{"connector_version": "0.2.0", "hostname": "h", "version": map[string]string{"model": "claude-opus-5-5", "harness": "claude-code", "config_digest": "abc"}}
+	if code := e.call(t, plain, "POST", "/api/v1/connector/heartbeat", keyResp.Key, hb, nil); code != 200 {
+		t.Fatalf("heartbeat: %d", code)
+	}
+
+	// skills are blocked until the basic proof passes
+	var sk struct {
+		Items []struct {
+			Slug          string `json:"slug"`
+			CanStart      bool   `json:"can_start"`
+			BlockedReason string `json:"blocked_reason"`
+		} `json:"items"`
+	}
+	e.call(t, owner, "GET", "/api/v1/skills", "", nil, &sk)
+	if len(sk.Items) != 2 || sk.Items[0].CanStart || sk.Items[0].BlockedReason != "not_operational" {
+		t.Fatalf("skills before proof: %+v", sk.Items)
+	}
+	if code := e.call(t, owner, "POST", "/api/v1/qualifications", "", map[string]string{"skill": "go"}, nil); code != 409 {
+		t.Fatalf("qualification before proof: %d", code)
+	}
+
+	// basic proof via the same path as slice 1
+	var proof proofs.Proof
+	e.call(t, owner, "POST", "/api/v1/proofs", "", map[string]string{"task_slug": "go-fix-retry"}, &proof)
+	if code := e.call(t, plain, "GET", "/api/v1/connector/tasks/next?wait=1", keyResp.Key, nil, nil); code != 200 {
+		t.Fatalf("claim basic proof: %d", code)
+	}
+	if code := e.call(t, plain, "POST", "/api/v1/connector/proofs/"+proof.ID+"/result", keyResp.Key, map[string]any{"diff": noteDiff}, nil); code >= 300 {
+		t.Fatalf("basic result: %d", code)
+	}
+	if err := e.worker.RunProof(context.Background(), proof.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	e.call(t, owner, "GET", "/api/v1/skills", "", nil, &sk)
+	if !sk.Items[0].CanStart {
+		t.Fatalf("skills after proof: %+v", sk.Items)
+	}
+	var run qualifications.Run
+	if code := e.call(t, owner, "POST", "/api/v1/qualifications", "", map[string]string{"skill": "go"}, &run); code != 201 || len(run.Tasks) != 1 {
+		t.Fatalf("start: %d %+v", code, run)
+	}
+	e.call(t, owner, "GET", "/api/v1/skills", "", nil, &sk)
+	if sk.Items[0].CanStart || sk.Items[0].BlockedReason != "in_progress" {
+		t.Fatalf("skills during a run: %+v", sk.Items)
+	}
+	csk, ctasks, err := skills.LoadCatalog(filepath.Join("..", "..", "fixtures", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hidden, err := skills.HiddenNamesByTask(csk, ctasks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		var next struct {
+			ProofID string `json:"proof_id"`
+			Kind    string `json:"kind"`
+			Task    struct {
+				Slug string `json:"slug"`
+			} `json:"task"`
+		}
+		if code := e.call(t, plain, "GET", "/api/v1/connector/tasks/next?wait=1", keyResp.Key, nil, &next); code != 200 || next.Kind != "qualification" {
+			t.Fatalf("task %d: %d %+v", i, code, next)
+		}
+		if code := e.call(t, owner, "POST", "/api/v1/proofs", "", map[string]string{"task_slug": "go-fix-retry"}, nil); code != 409 {
+			t.Fatalf("a proof during a qualification run: %d", code)
+		}
+		if code := e.call(t, plain, "POST", "/api/v1/connector/proofs/"+next.ProofID+"/result", keyResp.Key, map[string]any{"diff": noteDiff}, nil); code >= 300 {
+			t.Fatalf("result %d: %d", i, code)
+		}
+		var tests []sandbox.TestResult
+		for _, n := range hidden[next.Task.Slug] {
+			tests = append(tests, sandbox.TestResult{Name: n, Passed: true})
+		}
+		e.fake.Result = sandbox.Result{ExitCode: 0, Tests: tests}
+		if err := e.worker.RunProof(context.Background(), next.ProofID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.call(t, owner, "GET", "/api/v1/qualifications/"+run.ID, "", nil, &run)
+	if run.Status != "scored" || run.Score == nil || *run.Score != 1 || run.RatingAfter == nil || *run.RatingAfter != 2400 || len(run.Tasks) != 3 {
+		t.Fatalf("scored run: %+v", run)
+	}
+	if run.Tasks[0].SandboxResult == nil || len(run.Tasks[0].SandboxResult.Tests) == 0 || run.Tasks[0].SandboxResult.Tests[0].Name != "hidden-1" || run.Tasks[0].SandboxResult.Output != "" {
+		t.Fatalf("hidden tests leaked: %+v", run.Tasks[0].SandboxResult)
+	}
+	var list struct {
+		Items []qualifications.Run `json:"items"`
+	}
+	if code := e.call(t, owner, "GET", "/api/v1/qualifications", "", nil, &list); code != 200 || len(list.Items) != 1 || list.Items[0].ID != run.ID {
+		t.Fatalf("list: %d %+v", code, list.Items)
+	}
+	if code := e.call(t, owner, "GET", "/api/v1/qualifications/nope", "", nil, nil); code != 404 {
+		t.Fatalf("unknown run: %d", code)
+	}
+
+	// a qualification proof read through GET /proofs/{id} is masked too
+	var pe struct {
+		Proof proofs.Proof
+	}
+	if code := e.call(t, owner, "GET", "/api/v1/proofs/"+run.Tasks[0].ID, "", nil, &pe.Proof); code != 200 {
+		t.Fatalf("get qualification proof: %d", code)
+	}
+	if pe.Proof.SandboxResult == nil || len(pe.Proof.SandboxResult.Tests) == 0 || pe.Proof.SandboxResult.Tests[0].Name != "hidden-1" || pe.Proof.SandboxResult.Output != "" {
+		t.Fatalf("GET /proofs/{id} leaked hidden tests: %+v", pe.Proof.SandboxResult)
+	}
+
+	// another owner cannot read the run
+	other := e.browser(t)
+	e.devLogin(t, other, "other@example.com")
+	e.call(t, other, "POST", "/api/v1/agent", "", map[string]string{"name": "Other-1"}, nil)
+	if code := e.call(t, other, "GET", "/api/v1/qualifications/"+run.ID, "", nil, nil); code != 404 {
+		t.Fatalf("another user's run: %d", code)
+	}
+
+	var me struct {
+		Agent struct {
+			LastProof *proofs.Proof             `json:"last_proof"`
+			Version   *agents.Version           `json:"version"`
+			Skills    []skillrating.SkillRating `json:"skills"`
+		} `json:"agent"`
+	}
+	e.call(t, owner, "GET", "/api/v1/me", "", nil, &me)
+	if me.Agent.LastProof == nil || me.Agent.LastProof.ID != proof.ID || me.Agent.Version == nil || len(me.Agent.Skills) != 1 {
+		t.Fatalf("/me: last_proof stays the basic proof, version and skills are there: %+v", me.Agent)
+	}
+	var st struct {
+		Agent struct {
+			Version *struct {
+				Number int `json:"number"`
+			} `json:"version"`
+			Skills []skillrating.SkillRating `json:"skills"`
+		} `json:"agent"`
+	}
+	e.call(t, plain, "GET", "/api/v1/connector/status", keyResp.Key, nil, &st)
+	if st.Agent.Version == nil || st.Agent.Version.Number != 1 || len(st.Agent.Skills) != 1 {
+		t.Fatalf("/connector/status: %+v", st.Agent)
+	}
+
+	var prof struct {
+		Name    string                    `json:"name"`
+		Skills  []skillrating.SkillRating `json:"skills"`
+		Version *struct {
+			Number int `json:"number"`
+		} `json:"version"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/agents/fixer-7", "", nil, &prof); code != 200 || prof.Name != "Fixer-7" || len(prof.Skills) != 1 || !prof.Skills[0].Verified || prof.Skills[0].Tier != "strong" || prof.Version == nil || prof.Version.Number != 1 {
+		t.Fatalf("public profile: %d %+v", code, prof)
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/agents/nobody-here", "", nil, nil); code != 404 {
+		t.Fatalf("unknown profile: %d", code)
+	}
+	raw := e.rawGet(t, plain, "/api/v1/agents/fixer-7")
+	if strings.Contains(raw, "q@example.com") || strings.Contains(raw, keyResp.Key[:12]) {
+		t.Fatalf("profile leaks private data: %s", raw)
+	}
+
+	// version change: confidence resets, verified drops until a run on v2
+	hb["version"] = map[string]string{"model": "claude-sonnet-5", "harness": "claude-code", "config_digest": "def"}
+	if code := e.call(t, plain, "POST", "/api/v1/connector/heartbeat", keyResp.Key, hb, nil); code != 200 {
+		t.Fatalf("heartbeat v2: %d", code)
+	}
+	e.call(t, plain, "GET", "/api/v1/agents/fixer-7", "", nil, &prof)
+	if prof.Version == nil || prof.Version.Number != 2 || len(prof.Skills) != 1 || prof.Skills[0].Verified || prof.Skills[0].OnCurrentVersion || prof.Skills[0].Rating != 2400 {
+		t.Fatalf("after version change: %+v", prof)
 	}
 }

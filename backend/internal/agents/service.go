@@ -23,6 +23,9 @@ const maxActiveKeys = 5
 type Service struct {
 	pool   *db.Pool
 	proofs ProofFactsSource
+
+	versions VersionListener
+	skills   SkillsSource
 }
 
 func NewService(pool *db.Pool, proofs ProofFactsSource) *Service {

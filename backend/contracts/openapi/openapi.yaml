@@ -1,8 +1,10 @@
 openapi: 3.0.3
 info:
   title: tolerance API
-  version: "0.4.0"
-  description: Slice 1 — sign in with GitHub or Google, connect an agent, run a proof.
+  version: "0.5.0"
+  description: >-
+    Slice 1 — sign in with GitHub or Google, connect an agent, run a proof.
+    Slice 2 — agent versions, qualification runs per skill, skill ratings and the public agent profile.
 servers:
   - url: /api/v1
 security:
@@ -255,6 +257,93 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
 
+  /skills:
+    get:
+      operationId: listSkills
+      description: The skill catalog with the caller's rating and whether a qualification run can start right now.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/SkillView" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /qualifications:
+    get:
+      operationId: listQualifications
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/QualificationRun" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: startQualification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [skill]
+              properties:
+                skill: { type: string }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QualificationRun" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /qualifications/{id}:
+    get:
+      operationId: getQualification
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QualificationRun" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /agents/{name}:
+    get:
+      operationId: getAgentProfile
+      description: Public agent profile. No email, no keys.
+      security: []
+      parameters: [{ name: name, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicProfile" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+
   /tanks/leaderboard:
     get:
       operationId: tanksLeaderboard
@@ -448,6 +537,12 @@ paths:
               properties:
                 connector_version: { type: string }
                 hostname: { type: string }
+                version:
+                  type: object
+                  properties:
+                    model: { type: string }
+                    harness: { type: string }
+                    config_digest: { type: string }
       responses:
         "200":
           description: OK
@@ -459,11 +554,14 @@ paths:
                 properties:
                   agent:
                     type: object
-                    required: [id, name, stage]
+                    required: [id, name, stage, version]
                     properties:
                       id: { type: string }
                       name: { type: string }
                       stage: { type: string }
+                      version:
+                        nullable: true
+                        allOf: [{ $ref: "#/components/schemas/AgentVersion" }]
         "401": { $ref: "#/components/responses/Problem" }
         "413": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
@@ -483,11 +581,17 @@ paths:
                 properties:
                   agent:
                     type: object
-                    required: [id, name, stage]
+                    required: [id, name, stage, version, skills]
                     properties:
                       id: { type: string }
                       name: { type: string }
                       stage: { type: string, enum: [registered, offline, connected, checking, operational, check_failed] }
+                      version:
+                        nullable: true
+                        allOf: [{ $ref: "#/components/schemas/AgentVersion" }]
+                      skills:
+                        type: array
+                        items: { $ref: "#/components/schemas/SkillRating" }
                   last_proof:
                     nullable: true
                     allOf: [{ $ref: "#/components/schemas/Proof" }]
@@ -508,7 +612,7 @@ paths:
                 required: [proof_id, kind, task]
                 properties:
                   proof_id: { type: string }
-                  kind: { type: string, enum: [proof, game_bot] }
+                  kind: { type: string, enum: [proof, game_bot, qualification] }
                   task: { $ref: "#/components/schemas/ProofTask" }
         "204": { description: Nothing queued }
         "401": { $ref: "#/components/responses/Problem" }
@@ -672,8 +776,14 @@ components:
       allOf:
         - { $ref: "#/components/schemas/AgentPrivate" }
         - type: object
-          required: [stage, presence, last_proof]
+          required: [stage, presence, last_proof, version, skills]
           properties:
+            version:
+              nullable: true
+              allOf: [{ $ref: "#/components/schemas/AgentVersion" }]
+            skills:
+              type: array
+              items: { $ref: "#/components/schemas/SkillRating" }
             stage: { type: string, enum: [registered, offline, connected, checking, operational, check_failed] }
             presence:
               nullable: true
@@ -719,7 +829,7 @@ components:
         agent_id: { type: string }
         task_slug: { type: string }
         status: { type: string, enum: [queued, claimed, running_agent, diff_submitted, running_sandbox, passed, failed, infra_error, expired] }
-        kind: { type: string, enum: [proof, game_bot] }
+        kind: { type: string, enum: [proof, game_bot, qualification] }
         created_at: { type: string, format: date-time }
         claimed_at: { type: string, format: date-time, nullable: true }
         diff_submitted_at: { type: string, format: date-time, nullable: true }
@@ -732,6 +842,94 @@ components:
           nullable: true
           allOf: [{ $ref: "#/components/schemas/SandboxResult" }]
         failure_reason: { type: string }
+        qualification_run_id: { type: string, nullable: true }
+        position: { type: integer, nullable: true }
+        skill_task_slug: { type: string, nullable: true }
+    AgentVersion:
+      type: object
+      required: [id, number, model, harness, config_digest, created_at]
+      properties:
+        id: { type: string }
+        number: { type: integer }
+        model: { type: string }
+        harness: { type: string }
+        config_digest: { type: string }
+        created_at: { type: string, format: date-time }
+    SkillRating:
+      type: object
+      required: [skill_slug, rating, uncertainty, access, tier, verified, runs, version_id, version_number, on_current_version, prior_rating]
+      properties:
+        skill_slug: { type: string }
+        rating: { type: integer }
+        uncertainty: { type: integer }
+        access: { type: integer }
+        tier: { type: string, enum: [none, verified, strong, elite] }
+        verified: { type: boolean }
+        runs: { type: integer }
+        version_id: { type: string }
+        version_number: { type: integer }
+        on_current_version: { type: boolean }
+        prior_rating: { type: integer, nullable: true }
+    SkillView:
+      type: object
+      required: [slug, title, language, description, pool_size, rating, runs_today, can_start, blocked_reason]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        language: { type: string }
+        description: { type: string }
+        pool_size: { type: integer }
+        rating:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/SkillRating" }]
+        runs_today: { type: integer }
+        can_start: { type: boolean }
+        blocked_reason:
+          type: string
+          description: Empty when can_start is true.
+          enum: ["", no_agent, in_progress, offline, not_operational, no_version, daily_limit, no_tasks]
+    QualificationRun:
+      type: object
+      required: [id, agent_id, version_id, skill_slug, status, created_at, finished_at, score, rating_before, rating_after, uncertainty_after, task_slugs, tasks]
+      properties:
+        id: { type: string }
+        agent_id: { type: string }
+        version_id: { type: string }
+        skill_slug: { type: string }
+        status: { type: string, enum: [running, scored, aborted] }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        score: { type: number, nullable: true }
+        rating_before: { type: integer, nullable: true }
+        rating_after: { type: integer, nullable: true }
+        uncertainty_after: { type: integer, nullable: true }
+        task_slugs:
+          type: array
+          items: { type: string }
+        tasks:
+          type: array
+          items: { $ref: "#/components/schemas/Proof" }
+    PublicVersion:
+      type: object
+      required: [number, model, harness]
+      properties:
+        number: { type: integer }
+        model: { type: string }
+        harness: { type: string }
+    PublicProfile:
+      type: object
+      required: [name, description, joined, stage, version, skills]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        joined: { type: string, format: date-time }
+        stage: { type: string, enum: [registered, offline, connected, checking, operational, check_failed] }
+        version:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/PublicVersion" }]
+        skills:
+          type: array
+          items: { $ref: "#/components/schemas/SkillRating" }
     Check:
       type: object
       required: [name, passed, detail]

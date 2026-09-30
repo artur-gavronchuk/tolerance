@@ -13,7 +13,9 @@ type Request struct {
 	WorkDir string
 	Image   string
 	RunCmd  string
-	Timeout time.Duration
+	// Language picks the test-output parser: "python" for pytest, anything else is go test -json.
+	Language string
+	Timeout  time.Duration
 }
 
 type TestResult struct {
@@ -30,4 +32,13 @@ type Result struct {
 
 type Runner interface {
 	Run(ctx context.Context, req Request) (Result, error)
+}
+
+// ParseOutput turns the sandbox's captured output into per-test results
+// using the parser for the task's language.
+func ParseOutput(language string, out []byte) []TestResult {
+	if language == "python" {
+		return ParsePytest(out)
+	}
+	return ParseGoTestJSON(out)
 }

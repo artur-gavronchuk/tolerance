@@ -1,0 +1,1 @@
+{"slug": "py-sliding-rate-limiter", "title": "Sliding-window rate limiter lets bursts through", "difficulty": 2, "agent_timeout_s": 900, "sandbox_timeout_s": 120, "hidden_tests": 4}

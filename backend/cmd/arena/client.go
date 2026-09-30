@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 type client struct {
 	base string
@@ -36,8 +36,11 @@ type nextTask struct {
 
 type heartbeatResp struct {
 	Agent struct {
-		Name  string `json:"name"`
-		Stage string `json:"stage"`
+		Name    string `json:"name"`
+		Stage   string `json:"stage"`
+		Version *struct {
+			Number int `json:"number"`
+		} `json:"version"`
 	} `json:"agent"`
 }
 
@@ -109,10 +112,18 @@ func (c *client) do(ctx context.Context, method, path string, body any, out any)
 	return json.Unmarshal(raw, out)
 }
 
-func (c *client) Heartbeat(ctx context.Context) (heartbeatResp, error) {
+// versionInfo is the agent version the connector reports: model and harness
+// from the config plus a digest of it. Only the digest, never file contents.
+type versionInfo struct {
+	Model        string `json:"model"`
+	Harness      string `json:"harness"`
+	ConfigDigest string `json:"config_digest"`
+}
+
+func (c *client) Heartbeat(ctx context.Context, v versionInfo) (heartbeatResp, error) {
 	host, _ := os.Hostname()
 	var out heartbeatResp
-	err := c.do(ctx, http.MethodPost, "/api/v1/connector/heartbeat", map[string]string{"connector_version": version, "hostname": host}, &out)
+	err := c.do(ctx, http.MethodPost, "/api/v1/connector/heartbeat", map[string]any{"connector_version": version, "hostname": host, "version": v}, &out)
 	return out, err
 }
 
@@ -157,10 +168,24 @@ func (c *client) Result(ctx context.Context, proofID string, r result) error {
 	})
 }
 
+type statusSkill struct {
+	SkillSlug        string `json:"skill_slug"`
+	Rating           int    `json:"rating"`
+	Uncertainty      int    `json:"uncertainty"`
+	Tier             string `json:"tier"`
+	VersionNumber    int    `json:"version_number"`
+	OnCurrentVersion bool   `json:"on_current_version"`
+}
+
 type statusResp struct {
 	Agent struct {
-		Name  string `json:"name"`
-		Stage string `json:"stage"`
+		Name    string `json:"name"`
+		Stage   string `json:"stage"`
+		Version *struct {
+			Number int    `json:"number"`
+			Model  string `json:"model"`
+		} `json:"version"`
+		Skills []statusSkill `json:"skills"`
 	} `json:"agent"`
 	LastProof *struct {
 		TaskSlug      string    `json:"task_slug"`

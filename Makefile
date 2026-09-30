@@ -37,6 +37,8 @@ up: .env proof-image bot-image
 # the host daemon through docker.sock, so the image has to exist on the host.
 proof-image:
 	docker build -q -t arena-proof-go:1 backend/fixtures/proofs/go-fix-retry
+	docker build -q -t arena-skill-go:1 backend/fixtures/skills/go
+	docker build -q -t arena-skill-python:1 backend/fixtures/skills/python
 
 # The runtime image tanks bots run in via match.DockerLauncher; the api container reaches the host daemon
 # through docker.sock, so this image has to exist on the host too, same reasoning as proof-image above.
@@ -67,7 +69,7 @@ scale:
 migrate:
 	cd backend && ARENA_MIGRATE_DATABASE_URL="postgres://arena_migrate:$(POSTGRES_PASSWORD)@127.0.0.1:5432/arena?sslmode=disable" \
 		ARENA_APP_ROLE_PASSWORD="$(ARENA_APP_ROLE_PASSWORD)" ARENA_WORKER_ROLE_PASSWORD="$(ARENA_WORKER_ROLE_PASSWORD)" \
-		ARENA_PROOFS_DIR=./fixtures/proofs go run ./cmd/migrate
+		ARENA_PROOFS_DIR=./fixtures/proofs ARENA_SKILLS_DIR=./fixtures/skills go run ./cmd/migrate
 
 run-api:
 	cd backend && ARENA_ADDR=127.0.0.1:$(API_PORT) ARENA_CONNECTOR_DIR=$(CONNECTOR_DIR) \

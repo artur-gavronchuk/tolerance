@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"tolerance/internal/skillrating"
 )
 
 // Heartbeat records that the connector is alive. The row is rewritten at
@@ -53,6 +55,16 @@ func (s *Service) overview(ctx context.Context, a Agent) (Overview, error) {
 	if err != nil {
 		return Overview{}, err
 	}
+	ver, err := s.CurrentVersion(ctx, a.ID)
+	if err != nil {
+		return Overview{}, err
+	}
+	rs := []skillrating.SkillRating{}
+	if s.skills != nil {
+		if rs, err = s.skills.RatingsFor(ctx, a.ID); err != nil {
+			return Overview{}, err
+		}
+	}
 	facts, err := s.proofs.ProofFacts(ctx, a.ID)
 	if err != nil {
 		return Overview{}, err
@@ -61,7 +73,7 @@ func (s *Service) overview(ctx context.Context, a Agent) (Overview, error) {
 	if pr != nil {
 		seen = &pr.LastSeenAt
 	}
-	return Overview{Private: p, Presence: pr, Stage: ComputeStage(len(p.APIKeys) > 0, seen, time.Now(), facts)}, nil
+	return Overview{Private: p, Presence: pr, Version: ver, Skills: rs, Stage: ComputeStage(len(p.APIKeys) > 0, seen, time.Now(), facts)}, nil
 }
 
 // Overview returns nil, nil when the user has no agent yet.

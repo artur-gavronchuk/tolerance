@@ -24,3 +24,27 @@ func TestPassAll_ReportsEveryTestFunction(t *testing.T) {
 		t.Fatalf("%+v", res.Tests)
 	}
 }
+
+func TestPassAllPython(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"test_a.py":     "def test_one():\n    pass\n\ndef helper():\n    pass\n",
+		"pkg/test_b.py": "def test_two():\n    pass\n",
+		"lib.py":        "def test_not_collected():\n    pass\n",
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := PassAll{}.Run(context.Background(), Request{WorkDir: dir, Language: "python"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Tests) != 2 || res.Tests[0] != (TestResult{Name: "pkg/test_b.py::test_two", Passed: true}) || res.Tests[1] != (TestResult{Name: "test_a.py::test_one", Passed: true}) {
+		t.Fatalf("%+v", res.Tests)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -28,8 +29,10 @@ type Service struct {
 
 func NewService(pool *db.Pool) *Service { return &Service{pool: pool, notify: newNotifier()} }
 
-const proofCols = `id, agent_id, task_slug, status, created_at, claimed_at, diff_submitted_at, finished_at,
-	diff, agent_log_tail, agent_duration_ms, agent_exit_code, sandbox_result, failure_reason, kind`
+// task_slug is NULL on a qualification proof; Proof.TaskSlug then shows the slug of its skill task.
+const proofCols = `id, agent_id, coalesce(task_slug, skill_task_slug) AS task_slug, status, created_at, claimed_at, diff_submitted_at, finished_at,
+	diff, agent_log_tail, agent_duration_ms, agent_exit_code, sandbox_result, failure_reason, kind,
+	qualification_run_id, position, skill_task_slug`
 
 func utcp(t *time.Time) *time.Time {
 	if t == nil {
@@ -46,7 +49,8 @@ func normalizeProofTimes(p *Proof) {
 
 func scanProof(row interface{ Scan(...any) error }, p *Proof) error {
 	if err := row.Scan(&p.ID, &p.AgentID, &p.TaskSlug, &p.Status, &p.CreatedAt, &p.ClaimedAt, &p.DiffSubmittedAt, &p.FinishedAt,
-		&p.Diff, &p.AgentLogTail, &p.AgentDurationMS, &p.AgentExitCode, &p.SandboxResult, &p.FailureReason, &p.Kind); err != nil {
+		&p.Diff, &p.AgentLogTail, &p.AgentDurationMS, &p.AgentExitCode, &p.SandboxResult, &p.FailureReason, &p.Kind,
+		&p.QualificationRunID, &p.Position, &p.SkillTaskSlug); err != nil {
 		return err
 	}
 	normalizeProofTimes(p)
@@ -60,6 +64,64 @@ func (s *Service) agentOf(ctx context.Context, tx pgx.Tx, userID string) (string
 		return "", httpx.New(http.StatusNotFound, "no_agent", "Create an agent first")
 	}
 	return id, err
+}
+
+// qualificationOpen refuses a new proof while the agent's qualification run
+// is in progress: its tasks come one after another through the single
+// open-proof slot, and nothing else may take the slot between them. proofs
+// reads the table directly; importing qualifications would be a cycle.
+func qualificationOpen(ctx context.Context, tx pgx.Tx, agentID string) error {
+	var open bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM qualification_runs WHERE agent_id = $1 AND status = 'running')`, agentID).Scan(&open); err != nil {
+		return err
+	}
+	if open {
+		return httpx.New(http.StatusConflict, "qualification_in_progress", "A qualification run is in progress; wait for it to finish")
+	}
+	return nil
+}
+
+// MaskHidden strips what a qualification proof must not reveal: hidden
+// test names and sandbox output. Proof-kind proofs are returned as is.
+func (s *Service) MaskHidden(p Proof) Proof {
+	if p.Kind != KindQualification || p.SandboxResult == nil {
+		return p
+	}
+	masked := *p.SandboxResult
+	masked.Output = ""
+	masked.Tests = make([]TestResult, len(p.SandboxResult.Tests))
+	for i, t := range p.SandboxResult.Tests {
+		masked.Tests[i] = TestResult{Name: fmt.Sprintf("hidden-%d", i+1), Passed: t.Passed}
+	}
+	p.SandboxResult = &masked
+	return p
+}
+
+// CreateQualificationProof queues one task of a qualification run inside
+// the caller's transaction. The one-open-proof index guards the invariant.
+func (s *Service) CreateQualificationProof(ctx context.Context, tx pgx.Tx, agentID, runID, taskSlug string, position int) (Proof, error) {
+	return s.insertQualificationProof(ctx, tx, agentID, runID, taskSlug, position, false)
+}
+
+// RequeueQualificationProof is CreateQualificationProof for the platform's one re-run of a task that hit an
+// infra error: the new proof is born with retried_infra set, so a second infra error excludes the task.
+func (s *Service) RequeueQualificationProof(ctx context.Context, tx pgx.Tx, agentID, runID, taskSlug string, position int) (Proof, error) {
+	return s.insertQualificationProof(ctx, tx, agentID, runID, taskSlug, position, true)
+}
+
+func (s *Service) insertQualificationProof(ctx context.Context, tx pgx.Tx, agentID, runID, taskSlug string, position int, retried bool) (Proof, error) {
+	var p Proof
+	err := scanProof(tx.QueryRow(ctx, `INSERT INTO proofs (id, agent_id, kind, qualification_run_id, position, skill_task_slug, retried_infra)
+		VALUES ($1, $2, 'qualification', $3, $4, $5, $6) RETURNING `+proofCols, idgen.New("proof"), agentID, runID, position, taskSlug, retried), &p)
+	return p, err
+}
+
+// GetByIDTx reads a proof without an owner check; it is for server-internal
+// callers (the qualification advance) only.
+func (s *Service) GetByIDTx(ctx context.Context, tx pgx.Tx, id string) (Proof, error) {
+	var p Proof
+	err := scanProof(tx.QueryRow(ctx, `SELECT `+proofCols+` FROM proofs WHERE id = $1`, id), &p)
+	return p, err
 }
 
 // Tasks lists the catalog without tarballs. Only kind = 'proof' tasks are listed here; game_bot tasks
@@ -93,6 +155,9 @@ func (s *Service) checkCreatable(ctx context.Context, tx pgx.Tx, userID, slug, w
 	if err != nil {
 		return "", err
 	}
+	if err := qualificationOpen(ctx, tx, agentID); err != nil {
+		return "", err
+	}
 	var kind string
 	err = tx.QueryRow(ctx, `SELECT kind FROM proof_tasks WHERE slug = $1`, slug).Scan(&kind)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -105,14 +170,14 @@ func (s *Service) checkCreatable(ctx context.Context, tx pgx.Tx, userID, slug, w
 		return "", httpx.NotFound()
 	}
 	var online bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agent_presence WHERE agent_id = $1 AND last_seen_at > now() - interval '2 minutes')`, agentID).Scan(&online); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agent_presence WHERE agent_id = $1 AND last_seen_at > now() - make_interval(secs => $2))`, agentID, agents.PresenceTTL.Seconds()).Scan(&online); err != nil {
 		return "", err
 	}
 	if !online {
 		return "", httpx.New(http.StatusConflict, "agent_offline", "The connector is not online; run `arena connect` first")
 	}
 	var today int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM proofs WHERE agent_id = $1 AND created_at > now() - interval '24 hours'`, agentID).Scan(&today); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM proofs WHERE agent_id = $1 AND kind <> 'qualification' AND created_at > now() - interval '24 hours'`, agentID).Scan(&today); err != nil {
 		return "", err
 	}
 	if today >= dailyLimit {
@@ -222,7 +287,7 @@ func (s *Service) Get(ctx context.Context, userID, id string) (Proof, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Proof{}, httpx.NotFound()
 	}
-	return p, err
+	return s.MaskHidden(p), err
 }
 
 // Retry re-queues a proof that ended in infra_error or expired, clearing
@@ -230,12 +295,18 @@ func (s *Service) Get(ctx context.Context, userID, id string) (Proof, error) {
 func (s *Service) Retry(ctx context.Context, userID, id string) (Proof, error) {
 	var p Proof
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		var status string
-		err := tx.QueryRow(ctx, `SELECT status FROM proofs WHERE id = $1 AND agent_id = (SELECT id FROM agents WHERE owner_user_id = $2) FOR UPDATE`, id, userID).Scan(&status)
+		var status, kind, agentID string
+		err := tx.QueryRow(ctx, `SELECT status, kind, agent_id FROM proofs WHERE id = $1 AND agent_id = (SELECT id FROM agents WHERE owner_user_id = $2) FOR UPDATE`, id, userID).Scan(&status, &kind, &agentID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.NotFound()
 		}
 		if err != nil {
+			return err
+		}
+		if kind == KindQualification {
+			return httpx.StateConflict("Qualification tasks are retried by the platform")
+		}
+		if err := qualificationOpen(ctx, tx, agentID); err != nil {
 			return err
 		}
 		if status != StatusInfraError && status != StatusExpired {
@@ -280,9 +351,18 @@ type RunProofPayload struct {
 	ProofID string `json:"proof_id"`
 }
 
-func (s *Service) task(ctx context.Context, tx pgx.Tx, slug string) (*Task, error) {
+// taskFor reads the task a proof points at: skill_tasks for a qualification proof, proof_tasks for
+// the others. A per-proof repo override is applied by the caller.
+func (s *Service) taskFor(ctx context.Context, tx pgx.Tx, p Proof) (*Task, error) {
 	var t Task
-	err := tx.QueryRow(ctx, `SELECT slug, title, language, image, run_cmd, agent_timeout_s, sandbox_timeout_s, visible_tests, hidden_tests, task_md, repo_sha256 FROM proof_tasks WHERE slug = $1`, slug).
+	var err error
+	if p.Kind == KindQualification {
+		err = tx.QueryRow(ctx, `SELECT t.slug, t.title, s.language, s.image, s.run_cmd, t.agent_timeout_s, t.sandbox_timeout_s, 0, t.hidden_tests, t.task_md, t.repo_sha256
+			FROM skill_tasks t JOIN skills s ON s.slug = t.skill_slug WHERE t.slug = $1`, *p.SkillTaskSlug).
+			Scan(&t.Slug, &t.Title, &t.Language, &t.Image, &t.RunCmd, &t.AgentTimeoutS, &t.SandboxTimeoutS, &t.VisibleTests, &t.HiddenTests, &t.TaskMD, &t.RepoSHA256)
+		return &t, err
+	}
+	err = tx.QueryRow(ctx, `SELECT slug, title, language, image, run_cmd, agent_timeout_s, sandbox_timeout_s, visible_tests, hidden_tests, task_md, repo_sha256 FROM proof_tasks WHERE slug = $1`, p.TaskSlug).
 		Scan(&t.Slug, &t.Title, &t.Language, &t.Image, &t.RunCmd, &t.AgentTimeoutS, &t.SandboxTimeoutS, &t.VisibleTests, &t.HiddenTests, &t.TaskMD, &t.RepoSHA256)
 	return &t, err
 }
@@ -311,12 +391,13 @@ func (s *Service) Claim(ctx context.Context, agentID string) (*Proof, *Task, err
 			RETURNING `+proofCols+`, repo_tar, repo_sha256`, agentID).Scan(
 			&p.ID, &p.AgentID, &p.TaskSlug, &p.Status, &p.CreatedAt, &p.ClaimedAt, &p.DiffSubmittedAt, &p.FinishedAt,
 			&p.Diff, &p.AgentLogTail, &p.AgentDurationMS, &p.AgentExitCode, &p.SandboxResult, &p.FailureReason, &p.Kind,
+			&p.QualificationRunID, &p.Position, &p.SkillTaskSlug,
 			&repoTar, &repoSHA256)
 		if err != nil {
 			return err
 		}
 		normalizeProofTimes(&p)
-		t, err = s.task(ctx, tx, p.TaskSlug)
+		t, err = s.taskFor(ctx, tx, p)
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -337,7 +418,8 @@ func (s *Service) Claim(ctx context.Context, agentID string) (*Proof, *Task, err
 func (s *Service) RepoTar(ctx context.Context, agentID, proofID string) ([]byte, error) {
 	var tar []byte
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT coalesce(p.repo_tar, t.repo_tar) FROM proofs p JOIN proof_tasks t ON t.slug = p.task_slug
+		return tx.QueryRow(ctx, `SELECT coalesce(p.repo_tar, t.repo_tar, st.repo_tar) FROM proofs p LEFT JOIN proof_tasks t ON t.slug = p.task_slug
+			LEFT JOIN skill_tasks st ON st.slug = p.skill_task_slug
 			WHERE p.id = $1 AND p.agent_id = $2 AND p.status IN ('claimed', 'running_agent')`, proofID, agentID).Scan(&tar)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -364,7 +446,7 @@ func (s *Service) Started(ctx context.Context, agentID, proofID string) error {
 // (plus a minute of slack) has passed without a result. It also sweeps
 // proofs whose diff arrived but whose sandbox run never concluded into
 // infra_error (reason "stuck"): the agent did its part, the platform did
-// not.
+// not. It returns the ids it ended so the worker can tell its FinishListener.
 //
 // "Never concluded" is judged by the run_proof job's own state, not by how
 // long ago the diff was submitted: under launch load the job queue can be
@@ -378,30 +460,46 @@ func (s *Service) Started(ctx context.Context, agentID, proofID string) error {
 // job and recording the verdict, or the job's row is missing entirely. The
 // small time floor is just slack against the enqueue and the status update
 // landing in the same transaction (they always do), not the real signal.
-func (s *Service) ExpireStale(ctx context.Context) (int, error) {
-	var n int64
+func (s *Service) ExpireStale(ctx context.Context) ([]string, error) {
+	ids := []string{}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `
+		collect := func(rows pgx.Rows, err error) error {
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var id string
+				if err := rows.Scan(&id); err != nil {
+					return err
+				}
+				ids = append(ids, id)
+			}
+			return rows.Err()
+		}
+		// The agent timeout comes from the proof's task, whichever catalog it is in.
+		if err := collect(tx.Query(ctx, `
 			UPDATE proofs p SET status = 'expired', finished_at = now(),
 			  failure_reason = CASE WHEN p.status = 'queued' THEN 'not_claimed' ELSE 'agent_timeout' END
-			FROM proof_tasks t WHERE t.slug = p.task_slug AND (
+			FROM (SELECT o.id, coalesce(t.agent_timeout_s, st.agent_timeout_s) AS agent_timeout_s
+			      FROM proofs o LEFT JOIN proof_tasks t ON t.slug = o.task_slug LEFT JOIN skill_tasks st ON st.slug = o.skill_task_slug
+			      WHERE o.status IN ('queued', 'claimed', 'running_agent')) x
+			WHERE x.id = p.id AND (
 			  (p.status = 'queued' AND p.created_at < now() - interval '5 minutes') OR
-			  (p.status IN ('claimed', 'running_agent') AND p.claimed_at < now() - make_interval(secs => t.agent_timeout_s + 60)))`)
-		if err != nil {
+			  (p.status IN ('claimed', 'running_agent') AND p.claimed_at < now() - make_interval(secs => x.agent_timeout_s + 60)))
+			RETURNING p.id`)); err != nil {
 			return err
 		}
-		n = tag.RowsAffected()
-		tag, err = tx.Exec(ctx, `
+		return collect(tx.Query(ctx, `
 			UPDATE proofs p SET status = 'infra_error', finished_at = now(), failure_reason = 'stuck'
-			FROM proof_tasks t WHERE t.slug = p.task_slug AND p.status IN ('diff_submitted', 'running_sandbox')
+			WHERE p.status IN ('diff_submitted', 'running_sandbox')
 			  AND coalesce(p.diff_submitted_at, p.claimed_at, p.created_at) < now() - interval '5 minutes'
 			  AND NOT EXISTS (
 			    SELECT 1 FROM jobs j WHERE j.kind = 'run_proof' AND j.payload->>'proof_id' = p.id
-			      AND j.state IN ('queued', 'leased'))`)
-		n += tag.RowsAffected()
-		return err
+			      AND j.state IN ('queued', 'leased'))
+			RETURNING p.id`))
 	})
-	return int(n), err
+	return ids, err
 }
 
 var errDiffTooLarge = httpx.New(http.StatusRequestEntityTooLarge, "diff_too_large", "Diff exceeds 256 KiB")
