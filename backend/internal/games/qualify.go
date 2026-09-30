@@ -86,14 +86,14 @@ func (s *Service) Qualify(ctx context.Context, versionID string) (bool, []Check,
 
 	rng := rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), uint64(os.Getpid())))
 	seed := rng.Int64N(1 << 53)
-	// bunkers's per-spawn L-shaped walls can trap a bot that has no obstacle avoidance - just turning and
-	// driving straight at the target's angle, like both starter kits ship - so it never even reaches idle:
-	// measured against an unmodified starter kit, arena and crossroads resolved every one of 40 sampled
-	// seeds outright, while bunkers tied (never engaged at all) on all 40. A tie shares first place with
-	// idle and fails beats_idle, which would reject an otherwise perfectly competent bot purely for
-	// landing on this map. Nudge to the next map bucket instead (tanks.Maps() is [arena, crossroads,
-	// bunkers], so seed+1 always lands on arena from a bunkers seed). The ladder itself still plays
-	// bunkers - this only keeps it out of the qualification gate.
+	// bunkers's per-spawn L-shaped walls make a single trial match hinge more on spawn geometry than on
+	// the candidate's own play, even now that the starter kits and house hunter route around walls: a
+	// bot spawned behind cover with a bad line to idle can still tie (never engaging) or otherwise land
+	// on an outcome that says more about which corner it started in than whether it's competent. Keep
+	// bunkers out of this one-shot check for a deterministic, geometry-independent verdict. Nudge to the
+	// next map bucket instead (tanks.Maps() is [arena, crossroads, bunkers], so seed+1 always lands on
+	// arena from a bunkers seed). The ladder itself still plays bunkers - this only keeps it out of the
+	// qualification gate.
 	if tanks.PickMap(seed).Name == "bunkers" {
 		seed++
 	}
