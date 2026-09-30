@@ -88,7 +88,33 @@ CREATE TABLE skill_ratings (
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO arena_app;
 
+-- Least-privilege grants for arena_worker (see 00006_worker_role.go and 00007_worker_grants.sql; same rule:
+-- only the verbs its own code paths need, no ALTER DEFAULT PRIVILEGES). The worker process runs
+-- proofs.Worker.RunProof (reads skill_tasks/skills for a qualification proof), qualifications.OnProofFinished
+-- (after every terminal proof transition) and qualifications.SweepStalled (maintenance loop). Run creation
+-- (Start), version switching (agents.version.go, the VersionListener) and the public reads run in the api
+-- role as arena_app and need nothing here.
+-- The next task of a run is queued from the worker (CreateQualificationProof): proofs was SELECT, UPDATE.
+-- The run_proof job for it goes through jobs, which already has INSERT (00007).
+GRANT INSERT ON proofs TO arena_worker;
+-- The skills catalog is written only by cmd/migrate (as arena_migrate); the worker reads the task a
+-- qualification proof points at (repo/hidden tarballs, timeouts, run_cmd/image via skills) and scores by
+-- difficulty and skill.
+GRANT SELECT ON skills, skill_tasks TO arena_worker;
+-- A run is created by the API; the worker advances, scores, aborts and sweeps it, never inserts.
+GRANT SELECT, UPDATE ON qualification_runs TO arena_worker;
+-- Scoring reads the rating state and upserts it (INSERT ... ON CONFLICT DO UPDATE needs both verbs).
+GRANT SELECT, INSERT, UPDATE ON skill_ratings TO arena_worker;
+-- Versions are created only by the API's heartbeat path; the worker reads them to tell which version a run
+-- was played against.
+GRANT SELECT ON agent_versions TO arena_worker;
+-- One more agents column beside id, owner_user_id, name (00007): the version the agent currently runs.
+GRANT SELECT (current_version_id) ON agents TO arena_worker;
+
 -- +goose Down
+REVOKE SELECT (current_version_id) ON agents FROM arena_worker;
+REVOKE ALL ON agent_versions, skill_ratings, qualification_runs, skill_tasks, skills FROM arena_worker;
+REVOKE INSERT ON proofs FROM arena_worker;
 DROP TABLE skill_ratings;
 DELETE FROM proofs WHERE kind = 'qualification';
 ALTER TABLE proofs DROP CONSTRAINT proofs_task_ref;
