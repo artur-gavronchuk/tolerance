@@ -84,15 +84,15 @@ services:
       ARENA_MIGRATE_DATABASE_URL: postgres://arena_migrate:${POSTGRES_PASSWORD}@postgres:5432/arena?sslmode=disable
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
       ARENA_SKILLS_DIR: /opt/arena/skills
+      # Least-privilege role for the worker service below (see CLAUDE.md's proof-lifecycle section and
+      # migrations/00006_worker_role.go). Empty is fine: the migration then leaves arena_worker NOLOGIN and
+      # the worker service falls back to arena_app, so an .env from before this variable existed still works.
+      ARENA_WORKER_ROLE_PASSWORD: ${ARENA_WORKER_ROLE_PASSWORD:-}
     # The skills catalog holds hidden tests, so it is mounted, never baked
     # into the (public) backend image. Only this one-shot service reads it:
     # api and worker take tasks from the skill_tasks table.
     volumes:
       - ${ARENA_SKILLS_SOURCE:-./backend/fixtures/skills}:/opt/arena/skills:ro
-      # Least-privilege role for the worker service below (see CLAUDE.md's proof-lifecycle section and
-      # migrations/00006_worker_role.go). Empty is fine: the migration then leaves arena_worker NOLOGIN and
-      # the worker service falls back to arena_app, so an .env from before this variable existed still works.
-      ARENA_WORKER_ROLE_PASSWORD: ${ARENA_WORKER_ROLE_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy

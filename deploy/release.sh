@@ -212,6 +212,13 @@ backup_pre_deploy() {
 
 cmd_migrate() {
 	local tag=${1:?usage: release.sh migrate <tag>}
+	# migrate syncs the skills catalog into the database. Without
+	# ARENA_SKILLS_SOURCE docker-compose.yml falls back to the public practice
+	# tasks, whose hidden tests everyone can read, and production ratings would
+	# be computed on them. The workflow ships the private catalog to
+	# /opt/tolerance-tasks/skills before this runs.
+	[ -n "$(env_get ARENA_SKILLS_SOURCE)" ] ||
+		die "ARENA_SKILLS_SOURCE is empty in .env: set it to /opt/tolerance-tasks/skills (the private arena-tasks catalog); refusing to migrate against the public practice tasks"
 	backup_pre_deploy "$tag"
 	log "running migrate at tag $tag (api/worker stay on the current tag until promote)"
 	if ! API_TAG="$tag" dc run --rm migrate; then

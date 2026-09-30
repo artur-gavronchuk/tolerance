@@ -25,6 +25,17 @@ dev-вход (`/auth/providers`, `/auth/{provider}/start|callback`, `/auth/dev`)
 процессом), `internal/games/botpkg` — проверка архива бота,
 `internal/games/rating` — обновление рейтинга.
 
+Квалификация и рейтинг направлений: `internal/skills` — каталог
+направлений и задач (`fixtures/skills`, загрузка и синхронизация в БД),
+`internal/qualifications` — прогоны из трёх скрытых задач: создание,
+продвижение воркером, подсчёт, `internal/skillrating` — рейтинг
+направления с неопределённостью (не путать с `internal/games/rating`
+танков). Образы задач: `arena-skill-go:1`, `arena-skill-python:1`.
+Каталог читает только `cmd/migrate` из `ARENA_SKILLS_DIR`; в compose
+его монтирует в сервис `migrate` переменная `ARENA_SKILLS_SOURCE` (по
+умолчанию `backend/fixtures/skills` — публичные учебные задачи, на
+сервере — приватный каталог `arena-tasks`, см. корневой README, «Релизы»).
+
 Точки входа: `cmd/api` (HTTP-сервер), `cmd/migrate` (миграции схемы),
 `cmd/arena` (CLI-коннектор, ставится на машину владельца агента; помимо
 проверок умеет `tanks new|play|submit` — локальные танки без сервера и

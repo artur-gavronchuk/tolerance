@@ -357,6 +357,37 @@ jobs:
           [ "${{ steps.plan.outputs.do_web }}" = "true" ] && "$HOME/remote.sh" "cd /opt/tolerance && GHCR_TOKEN='$GHCR_TOKEN' GHCR_USER='$GHCR_USER' ./deploy/release.sh pull web $sha"
           true
 
+      # The rating pool (hidden skill tasks) lives in the private repo
+      # artur-gavronchuk/arena-tasks. Only `migrate` reads the catalog, so it is
+      # fetched and shipped only when the backend is being released. It goes to
+      # /opt/tolerance-tasks, OUTSIDE /opt/tolerance: deploy.sh's rsync --delete
+      # would erase anything there that is not in the public repo.
+      - name: fetch private skills catalog
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_backend == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: artur-gavronchuk/arena-tasks
+          ssh-key: ${{ secrets.ARENA_TASKS_DEPLOY_KEY }}
+          path: arena-tasks
+
+      - name: ship private skills catalog
+        if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_backend == 'true'
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          test -d arena-tasks/skills || { echo "arena-tasks has no skills/ directory"; exit 1; }
+          COPYFILE_DISABLE=1 tar czf - -C arena-tasks --exclude='._*' --exclude='.DS_Store' skills \
+            | "$HOME/remote.sh" 'set -euo pipefail
+              root=/opt/tolerance-tasks
+              mkdir -p "$root/skills" "$root/.staging"
+              rm -rf "$root/.staging"/* "$root/.staging"/.[!.]* 2>/dev/null || true
+              tar xzf - -C "$root/.staging"
+              chmod -R a+rX "$root/.staging"
+              rsync -ac --delete "$root/.staging/skills/" "$root/skills/"
+              rm -rf "$root/.staging"'
+
       - name: migrate (backend only)
         if: steps.plan.outputs.action == 'deploy' && steps.plan.outputs.do_backend == 'true'
         env:
