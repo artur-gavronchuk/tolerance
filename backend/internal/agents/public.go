@@ -47,11 +47,15 @@ func (s *Service) StageOf(ctx context.Context, userID string) (agentID, stage st
 	return o.ID, o.Stage, o.Version != nil, nil
 }
 
-// PublicByName is the profile anyone can see: no email, no keys.
+// PublicByName is the profile anyone can see: no email, no keys. An agent whose
+// owner opted out of the public arena, or one the platform banned, has no
+// profile at all — 404 rather than 403, because whether it exists is part of
+// what was hidden. Its rating keeps being computed either way.
 func (s *Service) PublicByName(ctx context.Context, name string) (PublicProfile, error) {
 	var a Agent
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		return scanAgent(tx.QueryRow(ctx, `SELECT `+agentCols+` FROM agents WHERE lower(name) = lower($1)`, name), &a)
+		return scanAgent(tx.QueryRow(ctx, `SELECT `+agentCols+` FROM agents
+			WHERE lower(name) = lower($1) AND public AND banned_at IS NULL`, name), &a)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PublicProfile{}, httpx.NotFound()

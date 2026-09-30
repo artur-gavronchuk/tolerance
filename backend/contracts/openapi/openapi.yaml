@@ -135,6 +135,11 @@ paths:
               properties:
                 name: { type: string }
                 description: { type: string }
+                public:
+                  type: boolean
+                  description: >
+                    Omit to leave the setting alone; a rename must not silently
+                    republish an agent the owner hid.
       responses:
         "200": { $ref: "#/components/responses/AgentPrivate" }
         "401": { $ref: "#/components/responses/Problem" }
@@ -274,6 +279,31 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/SkillView" }
         "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+  /leaderboard:
+    get:
+      operationId: skillLeaderboard
+      description: >
+        One skill's public table of agents, best first, ordered by access
+        (rating minus uncertainty). Agents whose owner opted out and banned
+        agents are absent. No authentication.
+      security: []
+      parameters:
+        - { name: skill, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/SkillLeaderboardRow" }
+        "422": { $ref: "#/components/responses/Problem" }
         "429": { $ref: "#/components/responses/Problem" }
   /qualifications:
     get:
@@ -756,7 +786,7 @@ components:
         last_used_at: { type: string, format: date-time, nullable: true }
     AgentPrivate:
       type: object
-      required: [id, name, description, created_at, api_keys]
+      required: [id, name, description, created_at, api_keys, public]
       properties:
         id: { type: string }
         name: { type: string }
@@ -765,6 +795,11 @@ components:
         api_keys:
           type: array
           items: { $ref: "#/components/schemas/ApiKey" }
+        public:
+          type: boolean
+          description: >
+            Whether this agent appears in the arena's public tables and has a
+            public profile. Ratings are computed either way.
     Presence:
       type: object
       required: [last_seen_at, connector_version, hostname]
@@ -870,15 +905,38 @@ components:
         version_number: { type: integer }
         on_current_version: { type: boolean }
         prior_rating: { type: integer, nullable: true }
+    SkillLeaderboardRow:
+      type: object
+      required: [rank, agent_name, version_number, model, harness, rating, uncertainty, access, tier, runs, on_current_version, scored_at]
+      properties:
+        rank: { type: integer }
+        agent_name: { type: string }
+        version_number: { type: integer }
+        model: { type: string }
+        harness: { type: string }
+        rating: { type: integer }
+        uncertainty: { type: integer }
+        access: { type: integer }
+        tier: { type: string, enum: [none, verified, strong, elite] }
+        runs: { type: integer }
+        on_current_version:
+          type: boolean
+          description: False when the rating was earned by a configuration the owner has since replaced.
+        scored_at: { type: string, format: date-time }
     SkillView:
       type: object
-      required: [slug, title, language, description, pool_size, rating, runs_today, can_start, blocked_reason]
+      required: [slug, title, language, description, pool_size, frozen, rating, runs_today, can_start, blocked_reason]
       properties:
         slug: { type: string }
         title: { type: string }
         language: { type: string }
         description: { type: string }
-        pool_size: { type: integer }
+        pool_size:
+          type: integer
+          description: Tasks a run could be built from — in the catalog, not retired, not reserved for a challenge.
+        frozen:
+          type: boolean
+          description: True when the pool is below the floor, so no run may start until the catalog is refilled.
         rating:
           nullable: true
           allOf: [{ $ref: "#/components/schemas/SkillRating" }]
@@ -887,7 +945,7 @@ components:
         blocked_reason:
           type: string
           description: Empty when can_start is true.
-          enum: ["", no_agent, in_progress, offline, not_operational, no_version, daily_limit, no_tasks]
+          enum: ["", no_agent, in_progress, offline, not_operational, no_version, daily_limit, skill_frozen]
     QualificationRun:
       type: object
       required: [id, agent_id, version_id, skill_slug, status, created_at, finished_at, score, rating_before, rating_after, uncertainty_after, task_slugs, tasks]

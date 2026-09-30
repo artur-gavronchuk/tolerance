@@ -23,6 +23,7 @@ import (
 
 	"tolerance/contracts/openapi"
 	"tolerance/internal/agents"
+	"tolerance/internal/arena"
 	"tolerance/internal/games"
 	"tolerance/internal/games/match"
 	"tolerance/internal/games/tanks"
@@ -67,7 +68,7 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake", devLogin: true}
+	cfg := config{addr: "127.0.0.1:0", adminEmails: []string{"admin@arena.local"}, sandbox: "fake", devLogin: true, skillMinPool: 3}
 	// Effectively unlimited: the e2e test fires many requests back to back
 	// from one IP, and the global rate limiter is not what this test is
 	// exercising.
@@ -88,7 +89,7 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	agentsSvc.SetVersionListener(qs)
 	agentsSvc.SetSkillsSource(qs)
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
-		agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs,
+		agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs, arena: arena.NewService(d.AppPool),
 		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 100),
 		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 100),
 		longPoll:   ratelimit.NewConcurrencyLimiter(2)}
@@ -984,5 +985,87 @@ func TestEndToEnd_Qualification(t *testing.T) {
 	e.call(t, plain, "GET", "/api/v1/agents/fixer-7", "", nil, &prof)
 	if prof.Version == nil || prof.Version.Number != 2 || len(prof.Skills) != 1 || prof.Skills[0].Verified || prof.Skills[0].OnCurrentVersion || prof.Skills[0].Rating != 2400 {
 		t.Fatalf("after version change: %+v", prof)
+	}
+}
+
+func TestArenaLeaderboardIsPublic(t *testing.T) {
+	e := newE2E(t)
+	// No session, no API key: a reader reaches the table straight from the landing page.
+	plain := &http.Client{}
+
+	var lb struct {
+		Items []arena.Row `json:"items"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/leaderboard?skill=go", "", nil, &lb); code != 200 {
+		t.Fatalf("leaderboard: %d", code)
+	}
+	if lb.Items == nil {
+		t.Fatal("items must be [] rather than null on an empty arena")
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/leaderboard", "", nil, nil); code != 422 {
+		t.Fatalf("leaderboard without a skill: %d, want 422", code)
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/leaderboard?skill=go&limit=0", "", nil, nil); code != 422 {
+		t.Fatalf("leaderboard with limit=0: %d, want 422", code)
+	}
+}
+
+func TestAgentPrivacyThroughTheAPI(t *testing.T) {
+	e := newE2E(t)
+	c := e.browser(t)
+	e.devLogin(t, c, "shy@example.com")
+	plain := &http.Client{}
+
+	var created struct {
+		Name   string `json:"name"`
+		Public bool   `json:"public"`
+	}
+	if code := e.call(t, c, "POST", "/api/v1/agent", "", map[string]any{"name": "shyagent"}, &created); code != 201 {
+		t.Fatalf("create agent: %d", code)
+	}
+	if !created.Public {
+		t.Fatal("a new agent is public by default")
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/agents/shyagent", "", nil, nil); code != 200 {
+		t.Fatalf("public profile: %d, want 200", code)
+	}
+
+	var patched struct {
+		Public bool `json:"public"`
+	}
+	if code := e.call(t, c, "PATCH", "/api/v1/agent", "", map[string]any{"public": false}, &patched); code != 200 {
+		t.Fatalf("patch: %d", code)
+	}
+	if patched.Public {
+		t.Fatal("patch must report public = false")
+	}
+	// 404, not 403: whether the agent exists is part of what the owner hid.
+	if code := e.call(t, plain, "GET", "/api/v1/agents/shyagent", "", nil, nil); code != 404 {
+		t.Fatalf("profile after opting out: %d, want 404", code)
+	}
+}
+
+func TestSkillsReportPoolHealth(t *testing.T) {
+	e := newE2E(t)
+	c := e.browser(t)
+	e.devLogin(t, c, "pool@example.com")
+	if code := e.call(t, c, "POST", "/api/v1/agent", "", map[string]any{"name": "poolagent"}, nil); code != 201 {
+		t.Fatal("create agent")
+	}
+	var body struct {
+		Items []skills.SkillView `json:"items"`
+	}
+	if code := e.call(t, c, "GET", "/api/v1/skills", "", nil, &body); code != 200 {
+		t.Fatalf("skills: %d", code)
+	}
+	if len(body.Items) == 0 {
+		t.Fatal("the practice catalog must expose at least one skill")
+	}
+	for _, it := range body.Items {
+		// The practice catalog holds three tasks per skill and the e2e floor is
+		// three, so nothing is frozen and the pool is fully issuable.
+		if it.PoolSize != 3 || it.Frozen {
+			t.Fatalf("skill %s: pool_size = %d frozen = %v, want 3 and false", it.Slug, it.PoolSize, it.Frozen)
+		}
 	}
 }

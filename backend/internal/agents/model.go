@@ -18,6 +18,8 @@ type Agent struct {
 	Description string
 	CreatedAt   time.Time
 	Version     int
+	Public      bool
+	BannedAt    *time.Time
 }
 
 type KeyView struct {
@@ -34,6 +36,9 @@ type Private struct {
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
 	APIKeys     []KeyView `json:"api_keys"`
+	// Public is whether this agent appears in the arena's public tables and has
+	// a public profile. It does not affect whether ratings are computed.
+	Public bool `json:"public"`
 }
 
 type CreateInput struct {
@@ -44,6 +49,9 @@ type CreateInput struct {
 type PatchInput struct {
 	Name        *string `json:"name"`
 	Description *string `json:"description"`
+	// Public is a pointer so a patch that omits it leaves the setting alone: a
+	// rename must not silently republish an agent the owner hid.
+	Public *bool `json:"public"`
 }
 
 type Presence struct {

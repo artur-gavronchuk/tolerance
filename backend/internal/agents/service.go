@@ -32,16 +32,20 @@ func NewService(pool *db.Pool, proofs ProofFactsSource) *Service {
 	return &Service{pool: pool, proofs: proofs}
 }
 
-const agentCols = `id, owner_user_id, name, description, created_at, version`
+const agentCols = `id, owner_user_id, name, description, created_at, version, public, banned_at`
 
 func scanAgent(row interface{ Scan(...any) error }, a *Agent) error {
 	// pgx decodes timestamptz into time.Local; normalize to UTC so every
 	// timestamp this package hands out is UTC in JSON regardless of the
 	// server process's local timezone.
-	if err := row.Scan(&a.ID, &a.OwnerUserID, &a.Name, &a.Description, &a.CreatedAt, &a.Version); err != nil {
+	if err := row.Scan(&a.ID, &a.OwnerUserID, &a.Name, &a.Description, &a.CreatedAt, &a.Version, &a.Public, &a.BannedAt); err != nil {
 		return err
 	}
 	a.CreatedAt = a.CreatedAt.UTC()
+	if a.BannedAt != nil {
+		t := a.BannedAt.UTC()
+		a.BannedAt = &t
+	}
 	return nil
 }
 
@@ -66,8 +70,10 @@ func (s *Service) Create(ctx context.Context, ownerID string, in CreateInput) (P
 	}
 	a := Agent{ID: idgen.New("agent"), OwnerUserID: ownerID, Name: in.Name, Description: in.Description, CreatedAt: time.Now().UTC(), Version: 1}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO agents (id, owner_user_id, name, description, created_at) VALUES ($1,$2,$3,$4,$5)`,
-			a.ID, a.OwnerUserID, a.Name, a.Description, a.CreatedAt); err != nil {
+		// RETURNING, not Exec: the row carries defaults this struct does not know
+		// (public), and a view built from the Go literal would contradict the row.
+		if err := scanAgent(tx.QueryRow(ctx, `INSERT INTO agents (id, owner_user_id, name, description, created_at)
+			VALUES ($1,$2,$3,$4,$5) RETURNING `+agentCols, a.ID, a.OwnerUserID, a.Name, a.Description, a.CreatedAt), &a); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{ActorID: ownerID, ActorKind: identity.KindUser, Action: "agent.created",
@@ -93,8 +99,9 @@ func (s *Service) Patch(ctx context.Context, ownerID string, in PatchInput) (Pri
 	}
 	var a Agent
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		if err := scanAgent(tx.QueryRow(ctx, `UPDATE agents SET name = coalesce($2, name), description = coalesce($3, description), version = version + 1
-			WHERE owner_user_id = $1 RETURNING `+agentCols, ownerID, in.Name, in.Description), &a); err != nil {
+		if err := scanAgent(tx.QueryRow(ctx, `UPDATE agents SET name = coalesce($2, name), description = coalesce($3, description),
+			public = coalesce($4, public), version = version + 1
+			WHERE owner_user_id = $1 RETURNING `+agentCols, ownerID, in.Name, in.Description, in.Public), &a); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{ActorID: ownerID, ActorKind: identity.KindUser, Action: "agent.updated",
@@ -113,7 +120,7 @@ func (s *Service) Patch(ctx context.Context, ownerID string, in PatchInput) (Pri
 }
 
 func (s *Service) private(ctx context.Context, a Agent) (Private, error) {
-	p := Private{ID: a.ID, Name: a.Name, Description: a.Description, CreatedAt: a.CreatedAt, APIKeys: []KeyView{}}
+	p := Private{ID: a.ID, Name: a.Name, Description: a.Description, CreatedAt: a.CreatedAt, APIKeys: []KeyView{}, Public: a.Public}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT id, prefix, name, created_at, last_used_at FROM api_keys WHERE agent_id = $1 AND revoked_at IS NULL ORDER BY created_at`, a.ID)
 		if err != nil {

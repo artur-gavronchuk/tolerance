@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"tolerance/internal/agents"
+	"tolerance/internal/arena"
 	"tolerance/internal/games"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/clientip"
@@ -29,6 +30,7 @@ type deps struct {
 	users     *identity.Service
 	agents    *agents.Service
 	quals     *qualifications.Service
+	arena     *arena.Service
 	proofs    *proofs.Service
 	games     *games.Service
 	limiter   *ratelimit.Limiter
@@ -47,7 +49,7 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	agents.RegisterOwnerRoutes(owner, d.agents)
 	proofs.RegisterOwnerRoutes(owner, d.proofs)
 	games.RegisterOwnerRoutes(owner, d.games)
-	skills.RegisterOwnerRoutes(owner, d.pool, d.quals, d.agents.StageOf)
+	skills.RegisterOwnerRoutes(owner, d.pool, d.quals, cfg.skillMinPool, d.agents.StageOf)
 	qualifications.RegisterOwnerRoutes(owner, d.quals)
 
 	connector := http.NewServeMux()
@@ -59,6 +61,7 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	public := http.NewServeMux()
 	games.RegisterPublicRoutes(public, d.games)
 	agents.RegisterPublicRoutes(public, d.agents)
+	arena.RegisterPublicRoutes(public, d.arena)
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
@@ -84,6 +87,7 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	api.Handle("/api/v1/me/tanks", session(owner))
 	api.Handle("/api/v1/me/tanks/", session(owner))
 	api.Handle("/api/v1/tanks/", public)
+	api.Handle("/api/v1/leaderboard", public)
 	api.Handle("/api/v1/connector/", identity.RequireAgent(d.agents)(connector))
 
 	top := http.NewServeMux()
