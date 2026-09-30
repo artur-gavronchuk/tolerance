@@ -72,7 +72,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 	t.Run("all tests pass", func(t *testing.T) {
 		f := setup(t)
 		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing(sandbox.TestResult{Name: "TestA", Passed: true})}}
-		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		w := proofs.NewWorker(f.d.WorkerPool, fake, t.TempDir(), log)
 		id := submitted(t, f, goodDiff)
 		if err := w.RunProof(ctx, id); err != nil {
 			t.Fatal(err)
@@ -97,7 +97,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 	t.Run("a hidden test fails", func(t *testing.T) {
 		f := setup(t)
 		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 1, Tests: []sandbox.TestResult{{Name: "TestA", Passed: true}, {Name: "TestHidden_X", Passed: false}}}}
-		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		w := proofs.NewWorker(f.d.WorkerPool, fake, t.TempDir(), log)
 		id := submitted(t, f, goodDiff)
 		_ = w.RunProof(ctx, id)
 		p, _ := f.proofs.Get(ctx, f.userID, id)
@@ -109,7 +109,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 	t.Run("diff does not apply", func(t *testing.T) {
 		f := setup(t)
 		fake := &sandbox.Fake{}
-		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		w := proofs.NewWorker(f.d.WorkerPool, fake, t.TempDir(), log)
 		id := submitted(t, f, "--- a/nope.go\n+++ b/nope.go\n@@ -1 +1 @@\n-x\n+y\n")
 		_ = w.RunProof(ctx, id)
 		p, _ := f.proofs.Get(ctx, f.userID, id)
@@ -122,7 +122,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 		f := setup(t)
 		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}
 		workDir := t.TempDir()
-		w := proofs.NewWorker(f.d.AppPool, fake, workDir, log)
+		w := proofs.NewWorker(f.d.WorkerPool, fake, workDir, log)
 		escapes := map[string]string{
 			"dotdot":  "diff --git a/../escape.txt b/../escape.txt\nnew file mode 100644\n--- /dev/null\n+++ b/../escape.txt\n@@ -0,0 +1 @@\n+pwned\n",
 			"plain":   "--- /dev/null\n+++ b/../../escape.txt\n@@ -0,0 +1 @@\n+pwned\n",
@@ -154,7 +154,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 		// Everything that ran passed, but only the visible tests ran.
 		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: []sandbox.TestResult{
 			{Name: "TestDo_SucceedsFirstTry", Passed: true}, {Name: "TestBackoff_Doubles", Passed: true}}}}
-		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		w := proofs.NewWorker(f.d.WorkerPool, fake, t.TempDir(), log)
 		id := submitted(t, f, goodDiff)
 		if err := w.RunProof(ctx, id); err != nil {
 			t.Fatal(err)
@@ -166,7 +166,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 		// One hidden test missing is enough.
 		f2 := setup(t)
 		fake2 := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()[1:]}}
-		w2 := proofs.NewWorker(f2.d.AppPool, fake2, t.TempDir(), log)
+		w2 := proofs.NewWorker(f2.d.WorkerPool, fake2, t.TempDir(), log)
 		id2 := submitted(t, f2, goodDiff)
 		_ = w2.RunProof(ctx, id2)
 		p, _ = f2.proofs.Get(ctx, f2.userID, id2)
@@ -178,7 +178,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 	t.Run("a diff touching a test file is refused", func(t *testing.T) {
 		f := setup(t)
 		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}
-		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		w := proofs.NewWorker(f.d.WorkerPool, fake, t.TempDir(), log)
 		testMain := "diff --git a/main_test.go b/main_test.go\nnew file mode 100644\n--- /dev/null\n+++ b/main_test.go\n@@ -0,0 +1,3 @@\n+package retry\n+\n+// TestMain here\n"
 		id := submitted(t, f, goodDiff+testMain)
 		if err := w.RunProof(ctx, id); err != nil {
@@ -193,7 +193,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 	t.Run("CRLF diff still applies", func(t *testing.T) {
 		f := setup(t)
 		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}
-		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		w := proofs.NewWorker(f.d.WorkerPool, fake, t.TempDir(), log)
 		crlf := ""
 		for _, line := range splitLines(goodDiff) {
 			crlf += line + "\r\n"
@@ -209,7 +209,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 	t.Run("sandbox timeout is a failure", func(t *testing.T) {
 		f := setup(t)
 		fake := &sandbox.Fake{Result: sandbox.Result{TimedOut: true, ExitCode: -1}}
-		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		w := proofs.NewWorker(f.d.WorkerPool, fake, t.TempDir(), log)
 		id := submitted(t, f, goodDiff)
 		_ = w.RunProof(ctx, id)
 		p, _ := f.proofs.Get(ctx, f.userID, id)
@@ -221,7 +221,7 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 	t.Run("runner error is infra_error after the job gives up", func(t *testing.T) {
 		f := setup(t)
 		fake := &sandbox.Fake{Err: errors.New("no docker")}
-		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		w := proofs.NewWorker(f.d.WorkerPool, fake, t.TempDir(), log)
 		id := submitted(t, f, goodDiff)
 		if err := w.RunProof(ctx, id); err == nil {
 			t.Fatalf("runner error must propagate so the job retries")
@@ -384,9 +384,9 @@ func TestRetry_ResubmitRunsAgain(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	q := jobs.New(f.d.AppPool)
+	q := jobs.New(f.d.WorkerPool)
 	fake := &sandbox.Fake{Err: errors.New("no docker")}
-	w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+	w := proofs.NewWorker(f.d.WorkerPool, fake, t.TempDir(), log)
 
 	id := submitted(t, f, goodDiff)
 	job, err := q.Claim(ctx, "test", []string{"run_proof"}, time.Minute)
@@ -474,7 +474,7 @@ func TestGameBotProofWithoutJudgeIsInfra(t *testing.T) {
 		t.Fatalf("submit: %v", err)
 	}
 
-	w := proofs.NewWorker(f.d.AppPool, sandbox.PassAll{}, t.TempDir(), log)
+	w := proofs.NewWorker(f.d.WorkerPool, sandbox.PassAll{}, t.TempDir(), log)
 	// No SetGameBotJudge call.
 	if err := w.RunProof(ctx, p.ID); err == nil {
 		t.Fatal("expected an error: no game bot judge is configured")

@@ -46,7 +46,11 @@ func setupMatch(t *testing.T) fixture {
 	ps := proofs.NewService(d.AppPool)
 	as := agents.NewService(d.AppPool, ps)
 	us := identity.NewService(d.AppPool, nil)
-	svc := games.NewService(d.AppPool, ps, match.WithHouse(match.ProcessLauncher{}), slog.Default(),
+	// games.Service's own pool is arena_worker: every method this fixture exercises (Qualify, RunMatch,
+	// ScheduleTick, JudgeProof's createVersion, SaveBot/UploadVersion, ...) is a worker-role code path or
+	// fits entirely within arena_worker's grants (see 00007_worker_grants.sql), so running it here for real
+	// is what actually proves the grants are sufficient - not just that arena_app (a superset) still works.
+	svc := games.NewService(d.WorkerPool, ps, match.WithHouse(match.ProcessLauncher{}), slog.Default(),
 		games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
 	u, _, err := us.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "o@example.com", Email: "o@example.com", EmailVerified: true})
 	if err != nil {
