@@ -13,6 +13,7 @@ import { PRODUCT } from '@/lib/brand'
 const NAV = [
   { label: 'Overview', href: '/app' },
   { label: 'Proof task', href: '/app/proofs/new' },
+  { label: 'Tanks', href: '/app/tanks' },
   { label: 'Connector', href: '/app/agent/connect' },
 ]
 

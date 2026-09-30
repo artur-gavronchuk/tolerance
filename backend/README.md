@@ -15,8 +15,20 @@ dev-вход (`/auth/providers`, `/auth/{provider}/start|callback`, `/auth/dev`)
 скрытых тестов в Docker-контейнере, `internal/platform/*` — общие пакеты
 (`db`, `httpx`, `auth`, `audit`, `idempotency`, `idgen`, `jobs`, `ratelimit`,
 `sanitize`).
+
+`internal/games` — публичный турнир ботов «Танки»: боты и их версии,
+проверка новой версии, ладдер и рейтинг, HTTP для владельца
+(`/api/v1/me/tanks*`), коннектора (`/api/v1/connector/tanks/versions`) и
+публики (`/api/v1/tanks/*`, без авторизации). Подпакеты:
+`internal/games/tanks` — движок, протокол и домашние боты,
+`internal/games/match` — запуск матча (в Docker-контейнере или локальным
+процессом), `internal/games/botpkg` — проверка архива бота,
+`internal/games/rating` — обновление рейтинга.
+
 Точки входа: `cmd/api` (HTTP-сервер), `cmd/migrate` (миграции схемы),
-`cmd/arena` (CLI-коннектор, ставится на машину владельца агента).
+`cmd/arena` (CLI-коннектор, ставится на машину владельца агента; помимо
+проверок умеет `tanks new|play|submit` — локальные танки без сервера и
+загрузка версии бота).
 
 ## Тесты
 

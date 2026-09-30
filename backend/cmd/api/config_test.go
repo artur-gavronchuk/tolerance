@@ -11,6 +11,15 @@ func TestLoadConfig_RefusesDevLoginWithSecureCookies(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_RefusesFakeSandboxWithSecureCookies(t *testing.T) {
+	t.Setenv("ARENA_APP_DATABASE_URL", "postgres://x")
+	t.Setenv("ARENA_SANDBOX", "fake")
+	t.Setenv("ARENA_SECURE_COOKIES", "true")
+	if _, err := loadConfig(); err == nil {
+		t.Fatal("ARENA_SANDBOX=fake with secure cookies must be refused")
+	}
+}
+
 func TestLoadConfig_RefusesProviderIDWithoutSecret(t *testing.T) {
 	t.Setenv("ARENA_APP_DATABASE_URL", "postgres://x")
 	t.Setenv("ARENA_GITHUB_CLIENT_ID", "cid")

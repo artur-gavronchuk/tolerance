@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"tolerance/internal/games/match"
@@ -47,13 +48,23 @@ func NewWorker(svc *Service, pool *db.Pool, cfg WorkerConfig, log *slog.Logger) 
 	}
 }
 
-// Run starts cfg.Concurrency job-claiming goroutines and blocks running the scheduler loop until ctx is
-// done. It never crashes the process on an error - every failure is logged and retried on the next tick.
+// Run starts cfg.Concurrency job-claiming goroutines and runs the scheduler loop until ctx is done. It
+// never crashes the process on an error - every failure is logged and retried on the next tick. Run does
+// not return until every claimLoop goroutine has also returned, so a caller that waits on Run (e.g. via a
+// sync.WaitGroup, as cmd/api/main.go does) knows no job is still mid-handle - and its deferred pool.Close()
+// - before Complete/Fail has written the job's outcome, given handle()'s own bounded grace period on top.
 func (w *Worker) Run(ctx context.Context) {
+	var wg sync.WaitGroup
 	for i := 0; i < w.cfg.Concurrency; i++ {
-		go w.claimLoop(ctx, fmt.Sprintf("%s-%d", w.owner, i))
+		wg.Add(1)
+		owner := fmt.Sprintf("%s-%d", w.owner, i)
+		go func() {
+			defer wg.Done()
+			w.claimLoop(ctx, owner)
+		}()
 	}
 	w.scheduleLoop(ctx)
+	wg.Wait()
 }
 
 // claimLoop repeatedly claims and runs one run_match or check_bot job at a time, polling every 2s when
@@ -81,16 +92,29 @@ func (w *Worker) claimLoop(ctx context.Context, owner string) {
 	}
 }
 
+// handleTimeout bounds the context.WithoutCancel(ctx) used for the queue update and the follow-up platform-
+// failure marking below: a leased job must be released (or its match/version unstuck) even when the
+// server is shutting down, but a wedged database still can't hang the goroutine forever.
+const handleTimeout = 30 * time.Second
+
 func (w *Worker) handle(ctx context.Context, job *jobs.Job) {
 	err := w.dispatch(ctx, job)
+
+	// Complete/Fail (and the platform-failure marking below) run on a context detached from ctx and bounded
+	// on its own: ctx is the caller's, cancelled the moment the server starts shutting down (SIGTERM), and
+	// a job whose work already finished - or whose retry bookkeeping still needs writing - must not be left
+	// leased for the rest of its 10-minute lease just because the process is on its way out.
+	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), handleTimeout)
+	defer cancel()
+
 	if err == nil {
-		if cerr := w.queue.Complete(ctx, job.ID); cerr != nil {
+		if cerr := w.queue.Complete(finishCtx, job.ID); cerr != nil {
 			w.log.Error("games: jobs complete", "err", cerr)
 		}
 		return
 	}
 	w.log.Error("games: job failed", "kind", job.Kind, "id", job.ID, "attempt", job.Attempts, "err", err)
-	final, ferr := w.queue.Fail(ctx, job.ID, err)
+	final, ferr := w.queue.Fail(finishCtx, job.ID, err)
 	if ferr != nil {
 		w.log.Error("games: jobs fail", "err", ferr)
 	}
@@ -101,7 +125,7 @@ func (w *Worker) handle(ctx context.Context, job *jobs.Job) {
 	case "check_bot":
 		var payload CheckBotPayload
 		if uerr := json.Unmarshal(job.Payload, &payload); uerr == nil {
-			if merr := w.svc.markCheckPlatformFailure(ctx, payload.VersionID); merr != nil {
+			if merr := w.svc.markCheckPlatformFailure(finishCtx, payload.VersionID); merr != nil {
 				w.log.Error("games: mark version rejected", "err", merr)
 			}
 		}
@@ -110,7 +134,7 @@ func (w *Worker) handle(ctx context.Context, job *jobs.Job) {
 			MatchID string `json:"match_id"`
 		}
 		if uerr := json.Unmarshal(job.Payload, &payload); uerr == nil {
-			if merr := w.svc.markMatchPlatformFailure(ctx, payload.MatchID); merr != nil {
+			if merr := w.svc.markMatchPlatformFailure(finishCtx, payload.MatchID); merr != nil {
 				w.log.Error("games: mark match infra_error", "err", merr)
 			}
 		}
@@ -165,6 +189,11 @@ func (w *Worker) scheduleLoop(ctx context.Context) {
 				w.log.Error("games: sweep stuck", "err", err)
 			} else if n > 0 {
 				w.log.Info("games: swept stuck matches", "count", n)
+			}
+			if n, err := w.svc.sweepFailedChecks(ctx); err != nil {
+				w.log.Error("games: sweep failed checks", "err", err)
+			} else if n > 0 {
+				w.log.Info("games: rejected versions with a failed check_bot job", "count", n)
 			}
 		case <-hourTick.C:
 			if n, err := w.svc.PruneReplays(ctx); err != nil {
