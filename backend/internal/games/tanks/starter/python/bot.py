@@ -45,7 +45,7 @@ class Hunter:
         me_pt = (me["x"], me["y"])
         target_pt = (target["x"], target["y"])
         line_clear = tanks.path_clear(self.start_msg, me_pt, target_pt)
-        heading = tanks.steer_around(self.start_msg, me_pt, target_pt)
+        heading = tanks.steer_around(self.start_msg, me_pt, target_pt, line_clear)
         hull_diff = tanks.angle_diff(heading, me["hull"])
         turn = max(-1.0, min(1.0, 3 * hull_diff))
         dist = tanks.distance(me["x"], me["y"], target["x"], target["y"])

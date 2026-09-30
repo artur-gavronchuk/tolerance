@@ -77,12 +77,12 @@ const STEER_MARGIN = 0.4; // extra clearance beyond the tank's own radius
 const STEER_LOOKAHEAD = 6.0; // how far ahead a candidate heading is checked, in units
 const STEER_OFFSETS_DEG = [30, 60, 90, 120]; // tried in order, nearest first
 
-// segmentClearsRect reports whether the segment (x1,y1)-(x2,y2) stays clear
-// of rect (an {x,y,w,h} object) inflated by pad on every side.
-// Liang-Barsky segment-vs-AABB clipping: walk the segment's parametric
-// range [0, 1] through each of the rect's four half-plane constraints -- it
-// only enters the rect if a non-empty sub-range survives all four.
-function segmentClearsRect(x1, y1, x2, y2, rect, pad) {
+// segmentEntersRect reports whether the segment (x1,y1)-(x2,y2) enters rect
+// (an {x,y,w,h} object) inflated by pad on every side. Liang-Barsky
+// segment-vs-AABB clipping: walk the segment's parametric range [0, 1]
+// through each of the rect's four half-plane constraints -- it only enters
+// the rect if a non-empty sub-range survives all four.
+function segmentEntersRect(x1, y1, x2, y2, rect, pad) {
   const rx0 = rect.x - pad;
   const ry0 = rect.y - pad;
   const rx1 = rect.x + rect.w + pad;
@@ -99,19 +99,47 @@ function segmentClearsRect(x1, y1, x2, y2, rect, pad) {
   ];
   for (const [p, q] of edges) {
     if (Math.abs(p) < 1e-9) {
-      if (q < 0) return true; // parallel to this edge and outside it: never enters
+      if (q < 0) return false; // parallel to this edge and outside it: never enters
       continue;
     }
-    const r = q / p;
+    const t = q / p;
     if (p < 0) {
-      if (r > t1) return true;
-      t0 = Math.max(t0, r);
+      if (t > t1) return false;
+      t0 = Math.max(t0, t);
     } else {
-      if (r < t0) return true;
-      t1 = Math.min(t1, r);
+      if (t < t0) return false;
+      t1 = Math.min(t1, t);
     }
   }
-  return t0 > t1; // empty surviving interval: the segment never enters the rect
+  return t0 <= t1; // non-empty surviving interval: the segment enters the rect
+}
+
+// distToRect returns the distance from (x, y) to rect's boundary, or 0 if
+// (x, y) is inside it.
+function distToRect(x, y, rect) {
+  const cx = Math.max(rect.x, Math.min(x, rect.x + rect.w));
+  const cy = Math.max(rect.y, Math.min(y, rect.y + rect.h));
+  return distance(x, y, cx, cy);
+}
+
+// segmentClearsRect reports whether the segment (x1,y1)-(x2,y2) stays clear
+// of rect inflated by pad on every side. A tank resting against a wall
+// sits at distance tank_radius from its face -- inside the padded margin
+// (tank_radius + STEER_MARGIN) the engine's own collision push-out leaves
+// it at. Treating that as "blocked" the ordinary way would call every
+// heading out of a wall it's already touching blocked too, direct heading
+// included, so: when the segment starts inside rect's padded margin, this
+// rect only blocks a heading that either actually enters the solid
+// (unpadded) rect, or ends up no farther from it than the start -- any
+// heading that gets strictly farther away is let through. A segment
+// starting outside the padded margin is checked the ordinary way.
+function segmentClearsRect(x1, y1, x2, y2, rect, pad) {
+  const startDist = distToRect(x1, y1, rect);
+  if (pad > 0 && startDist < pad) {
+    if (segmentEntersRect(x1, y1, x2, y2, rect, 0)) return false; // actually enters the solid wall: always blocks
+    if (distToRect(x2, y2, rect) >= startDist) return true; // already touching this wall, headed no closer: not blocked
+  }
+  return !segmentEntersRect(x1, y1, x2, y2, rect, pad);
 }
 
 // pathClear reports whether a straight line from `from` to `to` (each an
@@ -126,15 +154,19 @@ function pathClear(start, from, to) {
 
 // steerAround returns the heading (radians) to drive from me toward target
 // (each an {x, y} object), routing around walls: the direct heading if
-// that line is clear, otherwise the first clear heading among the
+// directClear is true, otherwise the first clear heading among the
 // +-30/60/90/120 degree offsets in STEER_OFFSETS_DEG, checked
 // STEER_LOOKAHEAD units ahead and preferring whichever side of a given
 // offset closes more distance to target. Falls back to the direct heading
 // if every offset is blocked, so a boxed-in tank still pushes toward its
-// target rather than freezing.
-function steerAround(start, me, target) {
+// target rather than freezing. Pass the directClear you already computed
+// with pathClear(start, me, target) for something else (e.g. gating fire)
+// to skip recomputing it here; omit it to have steerAround compute it
+// itself.
+function steerAround(start, me, target, directClear) {
   const direct = angleTo(me.x, me.y, target.x, target.y);
-  if (pathClear(start, me, target)) return direct;
+  if (directClear === undefined) directClear = pathClear(start, me, target);
+  if (directClear) return direct;
 
   for (const deg of STEER_OFFSETS_DEG) {
     let best = direct;

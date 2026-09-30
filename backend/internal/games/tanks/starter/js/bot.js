@@ -43,7 +43,7 @@ class Hunter {
     // off at close range, or pick a target by lowest HP instead of
     // nearest.
     const lineClear = tanks.pathClear(this.startMsg, me, target);
-    const heading = tanks.steerAround(this.startMsg, me, target);
+    const heading = tanks.steerAround(this.startMsg, me, target, lineClear);
     const hullDiff = tanks.angleDiff(heading, me.hull);
     const turn = Math.max(-1, Math.min(1, 3 * hullDiff));
     const dist = tanks.distance(me.x, me.y, target.x, target.y);

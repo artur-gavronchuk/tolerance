@@ -146,14 +146,14 @@ const (
 // tried in order when the direct path is blocked, nearest first.
 var steerOffsetsDeg = []float64{30, 60, 90, 120}
 
-// segmentClearsRect reports whether the segment (x1,y1)-(x2,y2) stays clear
-// of rect inflated by pad on every side, using the standard Liang-Barsky
+// segmentEntersRect reports whether the segment (x1,y1)-(x2,y2) enters rect
+// inflated by pad on every side, using the standard Liang-Barsky
 // segment-vs-AABB clipping test: it walks the segment's parametric range
 // [0,1] through each of the rect's four half-plane constraints, and the
 // segment only enters the rect if a non-empty sub-range survives all four.
-func segmentClearsRect(x1, y1, x2, y2 float64, r tanks.Rect, pad float64) bool {
-	rx0, ry0 := r.X-pad, r.Y-pad
-	rx1, ry1 := r.X+r.W+pad, r.Y+r.H+pad
+func segmentEntersRect(x1, y1, x2, y2 float64, rect tanks.Rect, pad float64) bool {
+	rx0, ry0 := rect.X-pad, rect.Y-pad
+	rx1, ry1 := rect.X+rect.W+pad, rect.Y+rect.H+pad
 	dx, dy := x2-x1, y2-y1
 	t0, t1 := 0.0, 1.0
 	edges := [4][2]float64{
@@ -166,28 +166,62 @@ func segmentClearsRect(x1, y1, x2, y2 float64, r tanks.Rect, pad float64) bool {
 		p, q := e[0], e[1]
 		if math.Abs(p) < 1e-9 {
 			if q < 0 {
-				return true // parallel to this edge and outside it: never enters
+				return false // parallel to this edge and outside it: never enters
 			}
 			continue
 		}
-		r := q / p
+		t := q / p
 		if p < 0 {
-			if r > t1 {
-				return true
+			if t > t1 {
+				return false
 			}
-			if r > t0 {
-				t0 = r
+			if t > t0 {
+				t0 = t
 			}
 		} else {
-			if r < t0 {
-				return true
+			if t < t0 {
+				return false
 			}
-			if r < t1 {
-				t1 = r
+			if t < t1 {
+				t1 = t
 			}
 		}
 	}
-	return t0 > t1 // empty surviving interval: the segment never enters the rect
+	return t0 <= t1 // non-empty surviving interval: the segment enters the rect
+}
+
+// distToRect returns the distance from (x,y) to rect's boundary, or 0 if
+// (x,y) is inside it.
+func distToRect(x, y float64, rect tanks.Rect) float64 {
+	cx := math.Max(rect.X, math.Min(x, rect.X+rect.W))
+	cy := math.Max(rect.Y, math.Min(y, rect.Y+rect.H))
+	return distance(x, y, cx, cy)
+}
+
+// segmentClearsRect reports whether the segment (x1,y1)-(x2,y2) stays clear
+// of rect inflated by pad on every side. A tank resting against a wall sits
+// at distance TankRadius from its face -- inside the padded margin
+// (TankRadius + steerMargin) the engine's own collision push-out leaves it
+// at. Treating that as "blocked" the ordinary way would call every heading
+// out of a wall it's already touching blocked too, direct heading included,
+// leaving steerAround with nothing but its direct-heading fallback and
+// recovery riding entirely on the stuck timer. So: when the segment starts
+// inside rect's padded margin, this rect only blocks a heading that either
+// actually enters the solid (unpadded) rect, or ends up no farther from it
+// than the start -- any heading that gets strictly farther away is let
+// through. A segment starting outside the padded margin is checked the
+// ordinary way, and every other rect the segment doesn't start inside of is
+// unaffected.
+func segmentClearsRect(x1, y1, x2, y2 float64, rect tanks.Rect, pad float64) bool {
+	if startDist := distToRect(x1, y1, rect); pad > 0 && startDist < pad {
+		if segmentEntersRect(x1, y1, x2, y2, rect, 0) {
+			return false // actually enters the solid wall: always blocks
+		}
+		if distToRect(x2, y2, rect) >= startDist {
+			return true // already touching this wall, and headed no closer: not blocked by it
+		}
+	}
+	return !segmentEntersRect(x1, y1, x2, y2, rect, pad)
 }
 
 // pathClear reports whether a straight line from `from` to `to` stays clear
@@ -202,15 +236,17 @@ func pathClear(walls []tanks.Rect, from, to tanks.Point, pad float64) bool {
 }
 
 // steerAround returns the heading (radians) to drive from me toward target,
-// routing around walls: the direct heading if that line is clear, otherwise
-// the first clear heading among the +-30/60/90/120 degree offsets in
-// steerOffsetsDeg, checked steerLookahead units ahead and preferring
-// whichever side of a given offset closes more distance to target. Falls
-// back to the direct heading if every offset is blocked, so a boxed-in tank
-// still pushes toward its target rather than freezing.
-func steerAround(walls []tanks.Rect, pad float64, me, target tanks.Point) float64 {
+// routing around walls: the direct heading if directClear (the caller
+// already knows whether the direct line is clear, typically because it
+// needed that same answer for something else, such as gating fire) is
+// true, otherwise the first clear heading among the +-30/60/90/120 degree
+// offsets in steerOffsetsDeg, checked steerLookahead units ahead and
+// preferring whichever side of a given offset closes more distance to
+// target. Falls back to the direct heading if every offset is blocked, so
+// a boxed-in tank still pushes toward its target rather than freezing.
+func steerAround(walls []tanks.Rect, pad float64, me, target tanks.Point, directClear bool) float64 {
 	direct := angleTo(me.X, me.Y, target.X, target.Y)
-	if pathClear(walls, me, target, pad) {
+	if directClear {
 		return direct
 	}
 

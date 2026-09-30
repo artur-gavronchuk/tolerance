@@ -57,7 +57,7 @@ func (s *hunterStrategy) Decide(t tanks.TickMsg) tanks.CommandMsg {
 
 	// Steer the hull toward the target, routing around any wall in
 	// between instead of driving straight into it.
-	heading := steerAround(s.walls, s.pad, mePt, targetPt)
+	heading := steerAround(s.walls, s.pad, mePt, targetPt, lineClear)
 	hullDiff := angleDiff(heading, me.Hull)
 	cmd.Turn = clamp1(3 * hullDiff)
 

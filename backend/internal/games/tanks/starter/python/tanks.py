@@ -90,8 +90,8 @@ STEER_LOOKAHEAD = 6.0  # how far ahead a candidate heading is checked, in units
 STEER_OFFSETS_DEG = (30, 60, 90, 120)  # tried in order, nearest first
 
 
-def _segment_clears_rect(x1, y1, x2, y2, rect, pad):
-    """True if the segment (x1,y1)-(x2,y2) stays clear of rect (a
+def _segment_enters_rect(x1, y1, x2, y2, rect, pad):
+    """True if the segment (x1,y1)-(x2,y2) enters rect (a
     {"x","y","w","h"} dict) inflated by pad on every side. Liang-Barsky
     segment-vs-AABB clipping: walk the segment's parametric range [0, 1]
     through each of the rect's four half-plane constraints -- it only enters
@@ -106,18 +106,46 @@ def _segment_clears_rect(x1, y1, x2, y2, rect, pad):
     for p, q in ((-dx, x1 - rx0), (dx, rx1 - x1), (-dy, y1 - ry0), (dy, ry1 - y1)):
         if abs(p) < 1e-9:
             if q < 0:
-                return True  # parallel to this edge and outside it: never enters
+                return False  # parallel to this edge and outside it: never enters
             continue
-        r = q / p
+        t = q / p
         if p < 0:
-            if r > t1:
-                return True
-            t0 = max(t0, r)
+            if t > t1:
+                return False
+            t0 = max(t0, t)
         else:
-            if r < t0:
-                return True
-            t1 = min(t1, r)
-    return t0 > t1  # empty surviving interval: the segment never enters the rect
+            if t < t0:
+                return False
+            t1 = min(t1, t)
+    return t0 <= t1  # non-empty surviving interval: the segment enters the rect
+
+
+def _dist_to_rect(x, y, rect):
+    """Distance from (x, y) to rect's boundary, or 0 if (x, y) is inside it."""
+    cx = max(rect["x"], min(x, rect["x"] + rect["w"]))
+    cy = max(rect["y"], min(y, rect["y"] + rect["h"]))
+    return distance(x, y, cx, cy)
+
+
+def _segment_clears_rect(x1, y1, x2, y2, rect, pad):
+    """True if the segment (x1,y1)-(x2,y2) stays clear of rect inflated by
+    pad on every side. A tank resting against a wall sits at distance
+    tank_radius from its face -- inside the padded margin (tank_radius +
+    STEER_MARGIN) the engine's own collision push-out leaves it at. Treating
+    that as "blocked" the ordinary way would call every heading out of a
+    wall it's already touching blocked too, direct heading included, so:
+    when the segment starts inside rect's padded margin, this rect only
+    blocks a heading that either actually enters the solid (unpadded) rect,
+    or ends up no farther from it than the start -- any heading that gets
+    strictly farther away is let through. A segment starting outside the
+    padded margin is checked the ordinary way."""
+    start_dist = _dist_to_rect(x1, y1, rect)
+    if pad > 0 and start_dist < pad:
+        if _segment_enters_rect(x1, y1, x2, y2, rect, 0):
+            return False  # actually enters the solid wall: always blocks
+        if _dist_to_rect(x2, y2, rect) >= start_dist:
+            return True  # already touching this wall, and headed no closer: not blocked by it
+    return not _segment_enters_rect(x1, y1, x2, y2, rect, pad)
 
 
 def path_clear(start, from_point, to_point):
@@ -132,18 +160,22 @@ def path_clear(start, from_point, to_point):
     return all(_segment_clears_rect(x1, y1, x2, y2, wall, pad) for wall in start["walls"])
 
 
-def steer_around(start, me, target):
+def steer_around(start, me, target, direct_clear=None):
     """Heading (radians) to drive from me toward target (each an (x, y)
     pair), routing around walls: the direct heading if that line is clear,
     otherwise the first clear heading among the +-30/60/90/120 degree
     offsets in STEER_OFFSETS_DEG, checked STEER_LOOKAHEAD units ahead and
     preferring whichever side of a given offset closes more distance to
     target. Falls back to the direct heading if every offset is blocked, so
-    a boxed-in tank still pushes toward its target rather than freezing."""
+    a boxed-in tank still pushes toward its target rather than freezing.
+    Pass direct_clear if you already called path_clear(start, me, target)
+    for something else (e.g. gating fire), to skip recomputing it here."""
     mx, my = me
     tx, ty = target
     direct = angle_to(mx, my, tx, ty)
-    if path_clear(start, me, target):
+    if direct_clear is None:
+        direct_clear = path_clear(start, me, target)
+    if direct_clear:
         return direct
 
     for deg in STEER_OFFSETS_DEG:
