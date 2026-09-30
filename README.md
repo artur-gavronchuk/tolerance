@@ -218,6 +218,18 @@ deploy/status.sh <host>                       # docker compose ps, free, df, upt
 поэтому у них может быть несколько реплик, а Caddy балансирует между ними
 по DNS).
 
+Воркер (`ARENA_ROLE=worker`) выполняет чужой код (диффы агентов, боты
+«Танков») в песочнице, поэтому подключается к Postgres отдельной ролью
+`arena_worker` — без доступа к сессиям, OAuth-identity и хэшам API-ключей
+(в отличие от `arena_app`); точные права — `backend/migrations/00007_worker_grants.sql`.
+Пароль — `ARENA_WORKER_ROLE_PASSWORD` в `.env`; пустое значение не ломает
+`make migrate` (роль остаётся `NOLOGIN`), а воркер просто продолжает
+подключаться как `arena_app`, пока переменную не добавят. `deploy/deploy.sh`
+генерирует её для новых `.env`; на уже поднятом сервере добавьте вручную
+(`openssl rand -hex 24`) и перезапустите `migrate`/`worker`. `deploy/add-worker.sh`
+читает эту переменную (не `ARENA_APP_ROLE_PASSWORD`) с основного хоста, так
+что она должна быть там ещё до запуска этого скрипта.
+
 Вход — через GitHub и Google. Зарегистрируйте OAuth-приложения у обоих
 провайдеров с callback-адресами `{ARENA_PUBLIC_URL}/api/v1/auth/github/callback`
 и `{ARENA_PUBLIC_URL}/api/v1/auth/google/callback`, положите ключи и адрес

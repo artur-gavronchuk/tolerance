@@ -2,7 +2,8 @@
 # shellcheck disable=SC2087,SC2029
 # Add a remote sandbox-worker-only host: bootstraps it, ships the repo,
 # builds the backend + proof images there, writes a worker-only .env
-# pointing at the main host's Postgres over a private network, brings up
+# pointing at the main host's Postgres over a private network (as arena_worker,
+# never arena_app - see backend/migrations/00007_worker_grants.sql), brings up
 # deploy/compose.worker.yml, and registers its metrics with the main host's
 # Prometheus via file_sd.
 #
@@ -16,6 +17,9 @@
 #     private network (not 127.0.0.1) and PG_ALLOW_CIDR set to the private
 #     subnet, and deploy/cf-origin-lock.sh must have been run there so
 #     5432/3100 are reachable from the new host but not the public internet.
+#   - the main host's .env must also have ARENA_WORKER_ROLE_PASSWORD set (see
+#     .env.example) and have had `make migrate` (or an equivalent restart of
+#     the migrate service) run since, so arena_worker actually has a password.
 set -euo pipefail
 
 new_host="${1:?usage: deploy/add-worker.sh <new-ssh-host> <main-ssh-host> [concurrency]}"
@@ -40,7 +44,11 @@ ssh "${ssh_opts[@]}" "$new_host" "chmod +x /tmp/bootstrap.sh && sudo /tmp/bootst
 # --- 2. read what we need from the main host's .env --------------------------
 log "reading Postgres connection details from $main_host:$main_remote_dir/.env"
 pg_bind=$(ssh "${ssh_opts[@]}" "$main_host" "grep -E '^PG_BIND=' $main_remote_dir/.env | cut -d= -f2")
-app_role_password=$(ssh "${ssh_opts[@]}" "$main_host" "grep -E '^ARENA_APP_ROLE_PASSWORD=' $main_remote_dir/.env | cut -d= -f2")
+# arena_worker (least privilege: no sessions/OAuth identities/API key hashes - see
+# backend/migrations/00007_worker_grants.sql), never arena_app: a remote worker host is exactly the sandbox
+# that CLAUDE.md's proof-lifecycle section worries about escaping, so it must never hold full application
+# credentials in the first place.
+worker_role_password=$(ssh "${ssh_opts[@]}" "$main_host" "grep -E '^ARENA_WORKER_ROLE_PASSWORD=' $main_remote_dir/.env | cut -d= -f2")
 db_pool_max=$(ssh "${ssh_opts[@]}" "$main_host" "grep -E '^ARENA_DB_POOL_MAX=' $main_remote_dir/.env | cut -d= -f2" || true)
 db_pool_max="${db_pool_max:-20}"
 
@@ -51,8 +59,10 @@ if [ -z "$pg_bind" ] || [ "$pg_bind" = "127.0.0.1" ]; then
 	echo "  (make up), and re-run this script." >&2
 	exit 1
 fi
-if [ -z "$app_role_password" ]; then
-	echo "[add-worker] ERROR: couldn't read ARENA_APP_ROLE_PASSWORD from $main_host's .env" >&2
+if [ -z "$worker_role_password" ]; then
+	echo "[add-worker] ERROR: couldn't read ARENA_WORKER_ROLE_PASSWORD from $main_host's .env" >&2
+	echo "  Add it there first (openssl rand -hex 24), re-run \`make migrate\` (or restart" >&2
+	echo "  the migrate service) so arena_worker gets a real password, then re-run this script." >&2
 	exit 1
 fi
 
@@ -100,7 +110,7 @@ else
 	cat >.env <<ENV
 # Written by deploy/add-worker.sh. Worker-only host: no api/web/postgres
 # here, see deploy/compose.worker.yml.
-ARENA_APP_ROLE_PASSWORD=$app_role_password
+ARENA_WORKER_ROLE_PASSWORD=$worker_role_password
 MAIN_PG_HOST=$pg_bind
 ARENA_DB_POOL_MAX=$db_pool_max
 ARENA_WORKER_CONCURRENCY=$concurrency

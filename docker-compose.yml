@@ -89,6 +89,10 @@ services:
     # api and worker take tasks from the skill_tasks table.
     volumes:
       - ${ARENA_SKILLS_SOURCE:-./backend/fixtures/skills}:/opt/arena/skills:ro
+      # Least-privilege role for the worker service below (see CLAUDE.md's proof-lifecycle section and
+      # migrations/00006_worker_role.go). Empty is fine: the migration then leaves arena_worker NOLOGIN and
+      # the worker service falls back to arena_app, so an .env from before this variable existed still works.
+      ARENA_WORKER_ROLE_PASSWORD: ${ARENA_WORKER_ROLE_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -157,8 +161,15 @@ services:
       ARENA_ROLE: worker
       ARENA_TRACK: ${ARENA_TRACK:-stable}
       ARENA_VERSION: ${API_TAG:-local}
+      # Fallback: used only when ARENA_WORKER_DATABASE_URL below is empty, i.e. ARENA_WORKER_ROLE_PASSWORD
+      # isn't set in .env yet. Kept unconditionally so an existing production .env (which doesn't have that
+      # variable yet) keeps starting the worker exactly as before.
       ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
+      # Least-privilege DSN (see migrations/00007_worker_grants.sql): only set - and only then used by
+      # cmd/api (see loadConfig/main.go) - once ARENA_WORKER_ROLE_PASSWORD is in .env; empty otherwise, so
+      # cmd/api falls back to ARENA_APP_DATABASE_URL above without any code change needed on this host.
+      ARENA_WORKER_DATABASE_URL: ${ARENA_WORKER_ROLE_PASSWORD:+postgres://arena_worker:${ARENA_WORKER_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}}
       ARENA_WORKER_CONCURRENCY: ${ARENA_WORKER_CONCURRENCY:-1}
       # Tanks bot matches: the runtime image `make up`/`bot-image` builds
       # (see Makefile), how often the games worker schedules a tick, and how
