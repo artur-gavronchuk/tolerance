@@ -31,6 +31,25 @@ type Worker struct {
 	log          *slog.Logger
 	owner        string
 	gameBotJudge GameBotJudge
+	onFinish     FinishListener
+}
+
+// FinishListener hears about every proof the worker moves to a terminal status (a verdict, an
+// infra_error, an expiry). The qualifications package uses it to advance a run. It must be idempotent.
+type FinishListener interface {
+	OnProofFinished(ctx context.Context, proofID string) error
+}
+
+// SetFinishListener wires in the hook called after each terminal transition the worker makes.
+func (w *Worker) SetFinishListener(l FinishListener) { w.onFinish = l }
+
+func (w *Worker) notify(ctx context.Context, proofID string) {
+	if w.onFinish == nil {
+		return
+	}
+	if err := w.onFinish.OnProofFinished(ctx, proofID); err != nil {
+		w.log.Error("proof finished hook", "proof", proofID, "err", err)
+	}
 }
 
 func NewWorker(pool *db.Pool, runner sandbox.Runner, workDir string, log *slog.Logger) *Worker {
@@ -162,10 +181,16 @@ func (w *Worker) runMaintenance(ctx context.Context) {
 	if _, err := w.queue.Reclaim(ctx); err != nil {
 		w.log.Error("jobs reclaim", "err", err)
 	}
-	if n, err := w.svc.ExpireStale(ctx); err != nil {
+	ids, err := w.svc.ExpireStale(ctx)
+	if err != nil {
 		w.log.Error("expire proofs", "err", err)
-	} else if n > 0 {
-		w.log.Info("swept stale proofs", "count", n)
+		return
+	}
+	if len(ids) > 0 {
+		w.log.Info("swept stale proofs", "count", len(ids))
+	}
+	for _, id := range ids {
+		w.notify(ctx, id)
 	}
 }
 
@@ -217,10 +242,13 @@ func (w *Worker) RunProof(ctx context.Context, proofID string) error {
 	var in runInput
 	err := w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
-			UPDATE proofs p SET status = 'running_sandbox' FROM proof_tasks t
-			WHERE p.id = $1 AND p.status IN ('diff_submitted', 'running_sandbox') AND t.slug = p.task_slug
-			RETURNING p.diff, p.kind, p.agent_id, t.slug, t.image, t.run_cmd, t.sandbox_timeout_s,
-				coalesce(p.repo_tar, t.repo_tar), t.hidden_tar, t.language`, proofID).
+			UPDATE proofs p SET status = 'running_sandbox'
+			FROM proofs x LEFT JOIN proof_tasks t ON t.slug = x.task_slug
+			  LEFT JOIN skill_tasks st ON st.slug = x.skill_task_slug LEFT JOIN skills s ON s.slug = st.skill_slug
+			WHERE p.id = $1 AND x.id = p.id AND p.status IN ('diff_submitted', 'running_sandbox')
+			RETURNING p.diff, p.kind, p.agent_id, coalesce(t.slug, st.slug), coalesce(t.image, s.image), coalesce(t.run_cmd, s.run_cmd),
+				coalesce(t.sandbox_timeout_s, st.sandbox_timeout_s),
+				coalesce(p.repo_tar, t.repo_tar, st.repo_tar), coalesce(t.hidden_tar, st.hidden_tar), coalesce(t.language, s.language)`, proofID).
 			Scan(&in.diff, &in.kind, &in.agentID, &in.task.Slug, &in.task.Image, &in.task.RunCmd, &in.task.SandboxTimeoutS,
 				&in.repoTar, &in.hiddenTr, &in.task.Language)
 	})
@@ -395,14 +423,20 @@ func hasSymlink(dir string) bool {
 
 func (w *Worker) finish(ctx context.Context, proofID, status, reason string, sr *SandboxResult) error {
 	metrics.ProofVerdicts.WithLabelValues(status).Inc()
-	return w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+	var moved bool
+	err := w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		// Only a proof this run moved to running_sandbox gets a verdict: if the
 		// stuck-proof sweep or a retry got there first, this run is stale.
-		_, err := tx.Exec(ctx, `UPDATE proofs SET status = $2, failure_reason = $3, sandbox_result = $4, finished_at = now()
+		tag, err := tx.Exec(ctx, `UPDATE proofs SET status = $2, failure_reason = $3, sandbox_result = $4, finished_at = now()
 			WHERE id = $1 AND status = 'running_sandbox'`,
 			proofID, status, reason, sr)
+		moved = err == nil && tag.RowsAffected() == 1
 		return err
 	})
+	if err == nil && moved {
+		w.notify(ctx, proofID)
+	}
+	return err
 }
 
 // MarkInfraError is called when the job has used every attempt.
@@ -411,9 +445,15 @@ func (w *Worker) MarkInfraError(ctx context.Context, proofID, reason string) err
 		reason = reason[:500]
 	}
 	metrics.ProofVerdicts.WithLabelValues(StatusInfraError).Inc()
-	return w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE proofs SET status = 'infra_error', failure_reason = $2, finished_at = now()
+	var moved bool
+	err := w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE proofs SET status = 'infra_error', failure_reason = $2, finished_at = now()
 			WHERE id = $1 AND status = 'running_sandbox'`, proofID, reason)
+		moved = err == nil && tag.RowsAffected() == 1
 		return err
 	})
+	if err == nil && moved {
+		w.notify(ctx, proofID)
+	}
+	return err
 }

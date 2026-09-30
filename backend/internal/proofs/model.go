@@ -21,6 +21,9 @@ const (
 	KindProof = "proof"
 	// KindGameBot is a proof task whose diff becomes a bot version instead of running hidden tests.
 	KindGameBot = "game_bot"
+	// KindQualification is one task of a qualification run: it reads its task from skill_tasks and is
+	// scored by the qualifications package.
+	KindQualification = "qualification"
 
 	maxDiffBytes    = 256 << 10
 	maxLogTailBytes = 32 << 10
@@ -76,4 +79,8 @@ type Proof struct {
 	SandboxResult   *SandboxResult `json:"sandbox_result"`
 	FailureReason   string         `json:"failure_reason"`
 	Kind            string         `json:"kind"`
+
+	QualificationRunID *string `json:"qualification_run_id"`
+	Position           *int    `json:"position"`
+	SkillTaskSlug      *string `json:"skill_task_slug"`
 }
