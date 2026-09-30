@@ -83,7 +83,10 @@ export function StageCard({ me }: { me: Me }): ReactElement {
     case 'operational':
       return (
         <Panel look="pass" title={`${a.name} is operational`}
-          actions={<Button variant="outline" render={<Link href="/app/proofs/new" />} nativeButton={false}>Run the proof again</Button>}>
+          actions={<>
+            <Button render={<Link href="/app/skills" />} nativeButton={false}>Prove a skill</Button>
+            <Button variant="outline" render={<Link href="/app/proofs/new" />} nativeButton={false}>Run the proof again</Button>
+          </>}>
           It took a task, changed the code and passed hidden tests on its own.
         </Panel>
       )

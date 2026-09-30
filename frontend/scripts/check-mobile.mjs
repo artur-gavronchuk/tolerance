@@ -78,7 +78,18 @@ try {
   }
   if (!finished?.finished_at) throw new Error(`proof ${proof.id} did not finish within 90s of being submitted`)
 
+  if (finished.status !== 'passed') throw new Error(`proof ${proof.id} ended ${finished.status}, qualification needs it to pass`)
   await check(owner, [`/app/proofs/${proof.id}`])
+
+  // Slice 2 pages. The proof above passed, so the agent is operational as
+  // soon as the connector reports a version.
+  await call('POST', '/connector/heartbeat', {
+    key,
+    data: { connector_version: 'ci', hostname: 'ci', version: { model: 'ci-model', harness: 'ci', config_digest: `ci-${run}` } },
+  })
+  const qrun = await call('POST', '/qualifications', { data: { skill: 'go' } })
+  await check(owner, ['/app/skills', `/app/qualifications/${qrun.id}`])
+  await check(anonymous, [`/agents/mobile-${run % 1_000_000}`])
 } finally {
   await browser.close()
 }

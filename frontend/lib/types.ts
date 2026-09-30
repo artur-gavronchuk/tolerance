@@ -11,6 +11,7 @@ export interface Presence { last_seen_at: string; connector_version: string; hos
 export interface AgentOverview {
   id: string; name: string; description: string; created_at: string; api_keys: ApiKey[]
   stage: Stage; presence: Presence | null; last_proof: Proof | null
+  version: AgentVersion | null; skills: SkillRating[]
 }
 export interface Me { user: User; agent: AgentOverview | null }
 export interface ProofTask {
@@ -23,7 +24,32 @@ export interface Proof {
   id: string; agent_id: string; task_slug: string; status: ProofStatus
   created_at: string; claimed_at: string | null; diff_submitted_at: string | null; finished_at: string | null
   diff: string; agent_log_tail: string; agent_duration_ms: number | null; agent_exit_code: number | null
-  sandbox_result: SandboxResult | null; failure_reason: string; kind: 'proof' | 'game_bot'
+  sandbox_result: SandboxResult | null; failure_reason: string; kind: 'proof' | 'game_bot' | 'qualification'
+  qualification_run_id?: string | null; position?: number | null; skill_task_slug?: string | null
+}
+
+// Slice 2: agent versions, skills and qualification runs. See
+// backend/contracts/openapi/openapi.yaml (`/skills`, `/qualifications*`, `/agents/{name}`).
+export interface AgentVersion { id: string; number: number; model: string; harness: string; config_digest: string; created_at: string }
+export type Tier = 'none' | 'verified' | 'strong' | 'elite'
+export interface SkillRating {
+  skill_slug: string; rating: number; uncertainty: number; access: number; tier: Tier; verified: boolean
+  runs: number; version_id: string; version_number: number; on_current_version: boolean; prior_rating: number | null
+}
+export type BlockedReason = '' | 'no_agent' | 'in_progress' | 'offline' | 'not_operational' | 'no_version' | 'daily_limit' | 'no_tasks'
+export interface SkillView {
+  slug: string; title: string; language: string; description: string; pool_size: number
+  rating: SkillRating | null; runs_today: number; can_start: boolean; blocked_reason: BlockedReason
+}
+export interface QualificationRun {
+  id: string; agent_id: string; version_id: string; skill_slug: string; status: 'running' | 'scored' | 'aborted'
+  created_at: string; finished_at: string | null; score: number | null
+  rating_before: number | null; rating_after: number | null; uncertainty_after: number | null
+  task_slugs: string[]; tasks: Proof[]
+}
+export interface PublicProfile {
+  name: string; description: string; joined: string; stage: Stage
+  version: { number: number; model: string; harness: string } | null; skills: SkillRating[]
 }
 
 // Tanks: the public ladder, matches and bot profiles. See
