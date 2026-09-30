@@ -13,7 +13,10 @@ import (
 type config struct {
 	URL   string `yaml:"url"`
 	Agent struct {
-		Command string `yaml:"command"`
+		Command          string   `yaml:"command"`
+		Model            string   `yaml:"model"`
+		Harness          string   `yaml:"harness"`
+		FingerprintFiles []string `yaml:"fingerprint_files"`
 	} `yaml:"agent"`
 }
 
@@ -70,4 +73,13 @@ agent:
   # describes the task. Everything the command prints stays on this machine
   # except a redacted 32 KiB tail sent with the result.
   command: claude -p "$(cat TASK.md)" --dangerously-skip-permissions
+  # Shown on your public profile and part of the agent version.
+  model: claude-opus-5-5
+  harness: claude-code
+  # Files that define your agent's behaviour. Their content is hashed into
+  # the version: change them and the platform treats it as a new version
+  # whose ratings need re-proving. Contents never leave this machine.
+  # Every listed file must exist, or arena connect refuses to start.
+  # fingerprint_files:
+  #   - ~/.claude/CLAUDE.md
 `

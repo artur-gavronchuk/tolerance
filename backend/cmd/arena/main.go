@@ -132,17 +132,35 @@ func cmdStatus() error {
 // formatStatus renders what `arena status` prints.
 func formatStatus(st statusResp, now time.Time) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s: %s\n", st.Agent.Name, st.Agent.Stage)
-	p := st.LastProof
-	if p == nil {
+	fmt.Fprintf(&b, "%s: %s", st.Agent.Name, st.Agent.Stage)
+	if v := st.Agent.Version; v != nil {
+		fmt.Fprintf(&b, " · v%d · model %s", v.Number, v.Model)
+	}
+	b.WriteString("\n")
+	if p := st.LastProof; p == nil {
 		b.WriteString("last proof: none yet\n")
-		return b.String()
+	} else {
+		fmt.Fprintf(&b, "last proof: %s %s", p.TaskSlug, p.Status)
+		if p.FailureReason != "" {
+			fmt.Fprintf(&b, " (%s)", p.FailureReason)
+		}
+		fmt.Fprintf(&b, ", started %s ago\n", now.Sub(p.CreatedAt).Round(time.Second))
 	}
-	fmt.Fprintf(&b, "last proof: %s %s", p.TaskSlug, p.Status)
-	if p.FailureReason != "" {
-		fmt.Fprintf(&b, " (%s)", p.FailureReason)
+	current := 0
+	if v := st.Agent.Version; v != nil {
+		current = v.Number
 	}
-	fmt.Fprintf(&b, ", started %s ago\n", now.Sub(p.CreatedAt).Round(time.Second))
+	for _, s := range st.Agent.Skills {
+		fmt.Fprintf(&b, "%s: %d ± %d · ", s.SkillSlug, s.Rating, s.Uncertainty)
+		switch {
+		case !s.OnCurrentVersion:
+			fmt.Fprintf(&b, "on v%d, not proven on v%d\n", s.VersionNumber, current)
+		case s.Tier == "none":
+			b.WriteString("not verified\n")
+		default:
+			b.WriteString(s.Tier + "\n")
+		}
+	}
 	return b.String()
 }
 
@@ -153,11 +171,20 @@ func cmdConnect() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	hb, err := c.Heartbeat(ctx)
+	digest, err := configDigest(cfg, os.ReadFile)
+	if err != nil {
+		return err
+	}
+	vi := versionInfo{Model: cfg.Agent.Model, Harness: cfg.Agent.Harness, ConfigDigest: digest}
+	hb, err := c.Heartbeat(ctx, vi)
 	if err != nil {
 		return fmt.Errorf("heartbeat: %w", err)
 	}
-	fmt.Printf("%s is online (%s). Waiting for tasks; Ctrl-C to stop.\n", hb.Agent.Name, hb.Agent.Stage)
+	if hb.Agent.Version != nil {
+		fmt.Printf("%s is online (%s, v%d). Waiting for tasks; Ctrl-C to stop.\n", hb.Agent.Name, hb.Agent.Stage, hb.Agent.Version.Number)
+	} else {
+		fmt.Printf("%s is online (%s). Waiting for tasks; Ctrl-C to stop.\n", hb.Agent.Name, hb.Agent.Stage)
+	}
 
 	go func() {
 		t := time.NewTicker(30 * time.Second)
@@ -167,7 +194,7 @@ func cmdConnect() error {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				if _, err := c.Heartbeat(ctx); err != nil {
+				if _, err := c.Heartbeat(ctx, vi); err != nil {
 					fmt.Fprintln(os.Stderr, "heartbeat:", err)
 				}
 			}
