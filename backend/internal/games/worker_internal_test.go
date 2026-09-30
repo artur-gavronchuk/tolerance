@@ -97,8 +97,8 @@ func TestWorkerFinalRunMatchFailureMarksInfraError(t *testing.T) {
 	if err := Sync(ctx, d.AdminPool); err != nil {
 		t.Fatal(err)
 	}
-	svc := NewService(d.AppPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
-	w := NewWorker(svc, d.AppPool, WorkerConfig{}, slog.Default())
+	svc := NewService(d.WorkerPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
+	w := NewWorker(svc, d.WorkerPool, WorkerConfig{}, slog.Default())
 
 	matchID, err := svc.ScheduleTick(ctx, 5, 0)
 	if err != nil {
@@ -146,8 +146,8 @@ func TestWorkerFinalCheckBotFailureRejectsVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	us := identity.NewService(d.AppPool, nil)
-	svc := NewService(d.AppPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
-	w := NewWorker(svc, d.AppPool, WorkerConfig{}, slog.Default())
+	svc := NewService(d.WorkerPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
+	w := NewWorker(svc, d.WorkerPool, WorkerConfig{}, slog.Default())
 
 	u, _, err := us.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "worker-test@example.com", Email: "worker-test@example.com", EmailVerified: true})
 	if err != nil {
@@ -193,7 +193,7 @@ func TestSweepFailedChecksRejectsPendingVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	us := identity.NewService(d.AppPool, nil)
-	svc := NewService(d.AppPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
+	svc := NewService(d.WorkerPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
 
 	u, _, err := us.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "sweep-test@example.com", Email: "sweep-test@example.com", EmailVerified: true})
 	if err != nil {
@@ -256,7 +256,7 @@ func TestFinishMatchStoresPlayedTicks(t *testing.T) {
 	if err := Sync(ctx, d.AdminPool); err != nil {
 		t.Fatal(err)
 	}
-	svc := NewService(d.AppPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
+	svc := NewService(d.WorkerPool, proofs.NewService(d.AppPool), alwaysFailLauncher{}, slog.Default(), Config{WorkDir: t.TempDir()})
 
 	matchID := idgen.New("match")
 	if err := d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
@@ -339,8 +339,8 @@ func TestWorkerRunWaitsForInFlightJob(t *testing.T) {
 	}
 
 	launcher := &blockingLauncher{launched: make(chan struct{}, 1), release: make(chan struct{})}
-	svc := NewService(d.AppPool, proofs.NewService(d.AppPool), launcher, slog.Default(), Config{WorkDir: t.TempDir()})
-	w := NewWorker(svc, d.AppPool, WorkerConfig{Concurrency: 1}, slog.Default())
+	svc := NewService(d.WorkerPool, proofs.NewService(d.AppPool), launcher, slog.Default(), Config{WorkDir: t.TempDir()})
+	w := NewWorker(svc, d.WorkerPool, WorkerConfig{Concurrency: 1}, slog.Default())
 
 	matchID, err := svc.ScheduleTick(ctx, 5, 0)
 	if err != nil {

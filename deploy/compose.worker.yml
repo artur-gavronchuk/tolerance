@@ -19,8 +19,14 @@ services:
     logging: *default-logging
     environment:
       ARENA_ROLE: worker
+      # Fallback, same as the main host's docker-compose.yml worker service: used only when
+      # ARENA_WORKER_DATABASE_URL below is empty (ARENA_WORKER_ROLE_PASSWORD not set by add-worker.sh, e.g.
+      # a worker-only .env written before this variable existed).
       ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@${MAIN_PG_HOST}:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
+      # Least-privilege DSN (see backend/migrations/00007_worker_grants.sql); deploy/add-worker.sh writes
+      # ARENA_WORKER_ROLE_PASSWORD into this host's .env, read from the main host's own .env.
+      ARENA_WORKER_DATABASE_URL: ${ARENA_WORKER_ROLE_PASSWORD:+postgres://arena_worker:${ARENA_WORKER_ROLE_PASSWORD}@${MAIN_PG_HOST}:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}}
       ARENA_WORK_DIR: /var/lib/arena/work
       ARENA_SANDBOX: docker
       ARENA_WORKER_CONCURRENCY: ${ARENA_WORKER_CONCURRENCY:-1}

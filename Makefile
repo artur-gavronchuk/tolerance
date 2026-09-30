@@ -66,7 +66,8 @@ scale:
 # Native development (postgres from compose, api and web on the host).
 migrate:
 	cd backend && ARENA_MIGRATE_DATABASE_URL="postgres://arena_migrate:$(POSTGRES_PASSWORD)@127.0.0.1:5432/arena?sslmode=disable" \
-		ARENA_APP_ROLE_PASSWORD="$(ARENA_APP_ROLE_PASSWORD)" ARENA_PROOFS_DIR=./fixtures/proofs go run ./cmd/migrate
+		ARENA_APP_ROLE_PASSWORD="$(ARENA_APP_ROLE_PASSWORD)" ARENA_WORKER_ROLE_PASSWORD="$(ARENA_WORKER_ROLE_PASSWORD)" \
+		ARENA_PROOFS_DIR=./fixtures/proofs go run ./cmd/migrate
 
 run-api:
 	cd backend && ARENA_ADDR=127.0.0.1:$(API_PORT) ARENA_CONNECTOR_DIR=$(CONNECTOR_DIR) \

@@ -95,8 +95,11 @@ services:
       ARENA_ROLE: worker
       ARENA_TRACK: canary
       ARENA_VERSION: ${API_CANARY_TAG:-local}
+      # Same fallback/least-privilege pattern as the stable worker in ../docker-compose.yml: an old canary
+      # image (or a host without ARENA_WORKER_ROLE_PASSWORD yet) keeps connecting as arena_app.
       ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
+      ARENA_WORKER_DATABASE_URL: ${ARENA_WORKER_ROLE_PASSWORD:+postgres://arena_worker:${ARENA_WORKER_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}}
       # Same queue as stable's worker — a canary proof/match run is a real
       # run against real hidden tests, just on the new binary; verdicts are
       # what canary-check's infra_error-rate comparison is watching for.

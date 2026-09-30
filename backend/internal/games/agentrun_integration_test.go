@@ -271,7 +271,7 @@ func TestGameBotProofEndToEnd(t *testing.T) {
 		t.Fatalf("submit: %v", err)
 	}
 
-	w := proofs.NewWorker(f.d.AppPool, sandbox.PassAll{}, t.TempDir(), log)
+	w := proofs.NewWorker(f.d.WorkerPool, sandbox.PassAll{}, t.TempDir(), log)
 	w.SetGameBotJudge(f.svc)
 	if err := w.RunProof(ctx, p.ID); err != nil {
 		t.Fatalf("RunProof: %v", err)
@@ -332,7 +332,7 @@ func TestGameBotProofBrokenBot(t *testing.T) {
 		t.Fatalf("submit: %v", err)
 	}
 
-	w := proofs.NewWorker(f.d.AppPool, sandbox.PassAll{}, t.TempDir(), log)
+	w := proofs.NewWorker(f.d.WorkerPool, sandbox.PassAll{}, t.TempDir(), log)
 	w.SetGameBotJudge(f.svc)
 	if err := w.RunProof(ctx, p.ID); err != nil {
 		t.Fatalf("RunProof: %v", err)
@@ -378,7 +378,7 @@ func TestGameBotProofDeletesManifest(t *testing.T) {
 		t.Fatalf("submit: %v", err)
 	}
 
-	w := proofs.NewWorker(f.d.AppPool, sandbox.PassAll{}, t.TempDir(), log)
+	w := proofs.NewWorker(f.d.WorkerPool, sandbox.PassAll{}, t.TempDir(), log)
 	w.SetGameBotJudge(f.svc)
 	if err := w.RunProof(ctx, p.ID); err != nil {
 		t.Fatalf("RunProof: %v", err)
@@ -412,7 +412,7 @@ func setupAgentRunWithLauncher(t *testing.T, l match.Launcher) (fixture, string)
 	ps := proofs.NewService(d.AppPool)
 	as := agents.NewService(d.AppPool, ps)
 	us := identity.NewService(d.AppPool, nil)
-	svc := games.NewService(d.AppPool, ps, match.WithHouse(l), slog.Default(), games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
+	svc := games.NewService(d.WorkerPool, ps, match.WithHouse(l), slog.Default(), games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
 	u, _, err := us.SignIn(ctx, identity.Identity{Provider: "dev", Subject: "o@example.com", Email: "o@example.com", EmailVerified: true})
 	if err != nil {
 		t.Fatal(err)
@@ -477,7 +477,7 @@ func TestJudgeProofRetrySafeAfterQualifyFails(t *testing.T) {
 		t.Fatalf("submit: %v", err)
 	}
 
-	w := proofs.NewWorker(f.d.AppPool, sandbox.PassAll{}, t.TempDir(), log)
+	w := proofs.NewWorker(f.d.WorkerPool, sandbox.PassAll{}, t.TempDir(), log)
 	w.SetGameBotJudge(f.svc)
 
 	// First attempt: Qualify's own check match fails to even launch the candidate bot - a platform

@@ -1,7 +1,7 @@
 // Package dbtest starts a disposable PostgreSQL container, applies the real
-// migrations against it, and hands integration tests both an admin
-// connection (for arranging fixtures) and the same arena_app connection the
-// running service uses.
+// migrations against it, and hands integration tests an admin connection
+// (for arranging fixtures), the same arena_app connection the api/all roles
+// use, and the arena_worker connection the worker role uses.
 package dbtest
 
 import (
@@ -18,14 +18,17 @@ import (
 	"tolerance/internal/platform/db"
 )
 
-const appTestPassword = "arena_app_test_password" // ephemeral per-container, not a real secret
+const appTestPassword = "arena_app_test_password"       // ephemeral per-container, not a real secret
+const workerTestPassword = "arena_worker_test_password" // ephemeral per-container, not a real secret
 
-// DB is a fully migrated, disposable database plus both roles' pools.
+// DB is a fully migrated, disposable database plus every role's pool.
 type DB struct {
-	AdminPool *db.Pool // migration/owner role, for arranging fixtures and asserting things
-	AppPool   *db.Pool // arena_app; exactly what cmd/api connects as
-	AdminDSN  string
-	AppDSN    string
+	AdminPool  *db.Pool // migration/owner role, for arranging fixtures and asserting things
+	AppPool    *db.Pool // arena_app; exactly what cmd/api connects as for every role but worker
+	WorkerPool *db.Pool // arena_worker; exactly what cmd/api connects as with ARENA_ROLE=worker
+	AdminDSN   string
+	AppDSN     string
+	WorkerDSN  string
 }
 
 // New starts a container, migrates it, and returns ready-to-use pools. It
@@ -60,6 +63,7 @@ func New(t *testing.T) *DB {
 	}
 
 	t.Setenv("ARENA_APP_ROLE_PASSWORD", appTestPassword)
+	t.Setenv("ARENA_WORKER_ROLE_PASSWORD", workerTestPassword)
 	if err := db.Migrate(adminDSN); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -73,6 +77,7 @@ func New(t *testing.T) *DB {
 		t.Fatalf("mapped port: %v", err)
 	}
 	appDSN := fmt.Sprintf("postgres://arena_app:%s@%s:%s/arena?sslmode=disable", appTestPassword, host, port.Port())
+	workerDSN := fmt.Sprintf("postgres://arena_worker:%s@%s:%s/arena?sslmode=disable", workerTestPassword, host, port.Port())
 
 	adminPool, err := db.Open(ctx, adminDSN)
 	if err != nil {
@@ -86,5 +91,14 @@ func New(t *testing.T) *DB {
 	}
 	t.Cleanup(appPool.Close)
 
-	return &DB{AdminPool: adminPool, AppPool: appPool, AdminDSN: adminDSN, AppDSN: appDSN}
+	workerPool, err := db.Open(ctx, workerDSN)
+	if err != nil {
+		t.Fatalf("open worker pool: %v", err)
+	}
+	t.Cleanup(workerPool.Close)
+
+	return &DB{
+		AdminPool: adminPool, AppPool: appPool, WorkerPool: workerPool,
+		AdminDSN: adminDSN, AppDSN: appDSN, WorkerDSN: workerDSN,
+	}
 }

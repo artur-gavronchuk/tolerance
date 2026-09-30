@@ -48,7 +48,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := db.Open(ctx, cfg.databaseURL)
+	// The sandbox worker connects as arena_worker (least privilege: it never needs sessions, OAuth
+	// identities or API key hashes) when ARENA_WORKER_DATABASE_URL is set; every other role, and a worker
+	// whose host hasn't been given that variable yet, connects as arena_app exactly as before.
+	dbURL := cfg.databaseURL
+	if scale.role == "worker" && cfg.workerDatabaseURL != "" {
+		dbURL = cfg.workerDatabaseURL
+	}
+	pool, err := db.Open(ctx, dbURL)
 	if err != nil {
 		log.Error("open database", "err", err)
 		os.Exit(1)

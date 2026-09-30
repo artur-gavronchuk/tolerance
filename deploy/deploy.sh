@@ -183,6 +183,7 @@ ARENA_DOMAIN=tolerance.cc
 ARENA_SECURE_COOKIES=true
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 ARENA_APP_ROLE_PASSWORD=$(openssl rand -hex 24)
+ARENA_WORKER_ROLE_PASSWORD=$(openssl rand -hex 24)
 ARENA_ADMIN_EMAILS=
 ARENA_CONTACT_EMAIL=hello@tolerance.cc
 WEB_PORT=3000
