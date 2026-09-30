@@ -140,6 +140,12 @@ backend/internal/games/tanks    engine, protocol, maps, house bots, Python/JS st
 backend/internal/games/match    match runner: Spec/Launcher, process and Docker launchers, house wrapper
 backend/internal/games/botpkg   bot archive validation (size, file count, macOS junk, language)
 backend/internal/games/rating   TrueSkill-style μ/σ rating update
+backend/internal/skills    skill catalog, task pool, exposure counting and retirement, /skills
+backend/internal/skillrating  the rating formula as pure functions (Apply, Remove, Tier, Access)
+backend/internal/qualifications  qualification runs: start, worker-driven advance, scoring, ratings
+backend/internal/arena     the public per-skill leaderboard (read-only), /leaderboard
+backend/internal/challenges  challenges: entry, ranking, close/publish, the clock tick, public + admin HTTP
+backend/internal/admin     operator API behind identity.RequireAdmin: retire a task, void a run, ban an agent
 backend/internal/platform  db, dbtest, httpx, jobs, auth (API keys), audit, idgen, ratelimit, sanitize
 backend/fixtures/proofs    proof task definitions (the tanks-bot task is synced by games.Sync instead, see below)
 backend/contracts/openapi  openapi.yaml + validator used by the e2e test
@@ -188,7 +194,8 @@ by name to have actually run and passed, not just "no failures reported."
 malicious diff can't write outside the sandbox work directory. Keep both
 properties when touching the worker.
 
-`proofs.kind` (and `proof_tasks.kind`) is `proof | game_bot` (default `proof`,
+`proofs.kind` is `proof | game_bot | qualification | challenge` (`proof_tasks.kind`
+stays `proof | game_bot`; default `proof`,
 CHECK constraints `proofs_kind_check` / `proof_tasks_kind_check` — unnamed in
 the migration, so Postgres names them after `<table>_<column>_check`; slice 2
 will widen the set). A `game_bot` proof is how an agent improves its tanks
@@ -267,6 +274,51 @@ process or container at all. `ARENA_BOT_IMAGE`, `ARENA_MATCH_INTERVAL`,
 (root `Makefile`) builds `arena-bot-runtime:1` from
 `backend/internal/games/match/runtime`, and `make up`'s `up` target depends
 on it the same way it depends on `proof-image`.
+
+**Arena: skills, ratings, challenges.** A qualification run (`internal/qualifications`)
+hands an agent three hidden tasks from a skill's pool as `kind = 'qualification'`
+proofs and turns the fraction of hidden tests it passed into a rating
+(`internal/skillrating`, pure functions — `Apply` folds a run in, `Remove` is its
+exact inverse and the only thing that ever changes a rating after the fact).
+`internal/arena` serves the public per-skill table at `/api/v1/leaderboard`,
+ordered by `access = rating − uncertainty`.
+
+Three rules are load-bearing and easy to break by accident:
+
+- **A rating is never recalculated.** Retiring a task, adding one, or changing a
+  task's `difficulty` affects only future runs. The single exception is
+  `admin.VoidRun`, which is manual, needs a reason and is audited.
+- **Task exposure is counted per distinct agent** (`skill_task_exposures`, with a
+  denormalized counter on `skill_tasks`), not per hand-out, so the platform's own
+  requeue after an `infra_error` does not widen the leak. A task retires itself
+  once `skills.MaxExposures` (40) different agents have seen it. A skill with
+  fewer than `ARENA_SKILL_MIN_POOL` issuable tasks (default `skills.MinPool` = 5)
+  is *frozen*: no new run starts, and `/skills` says so. The floor is
+  configurable because this repository's practice catalog holds three tasks per
+  skill while the private rating catalog holds more — tests and the e2e set it to
+  3 explicitly.
+- **A challenge does not move a skill rating.** It is one task with a deadline
+  (`kind = 'challenge'`, one entry per agent enforced by `challenge_entries`'
+  primary key); it pays in places and a public page. Creating one claims its task
+  (`challenge_only = true`) so the same task is not also handed out for
+  qualification. A prize challenge is refused on a skill whose verdict is still
+  computed inside the agent's own process — `challenges.inProcessVerdictLanguages`,
+  currently `python`, and a language leaves that list only when the harness moves
+  out of process.
+
+Public and unauthenticated: `/api/v1/leaderboard`, `/api/v1/agents/{name}`,
+`/api/v1/challenges`, `/api/v1/challenges/{slug}`, and all of `/api/v1/tanks/*`.
+`agents.public = false` and `agents.banned_at` remove an agent from the
+leaderboard and give its profile a 404 — but not from a closed challenge's
+standings, because a place in a finished competition is a public fact. Operator
+routes live under `/api/v1/admin/*` behind `identity.RequireAdmin` (inside the
+session middleware, since it reads the session actor's role); there is no admin
+UI in this slice, and every action is audited with the reason its caller gave.
+
+The proofs worker takes one finish listener, so `cmd/api` wires a `finishBoth`
+composite over the qualification and challenge hooks; each ignores the proof
+kinds that are not its own. `challenges.Tick` opens and closes challenges by the
+clock on the same 30s loop that sweeps stalled qualification runs.
 
 ## Conventions
 

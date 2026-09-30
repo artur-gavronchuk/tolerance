@@ -116,6 +116,7 @@ services:
       ARENA_APP_DATABASE_URL: postgres://arena_app:${ARENA_APP_ROLE_PASSWORD}@postgres:5432/arena?sslmode=disable&pool_max_conns=${ARENA_DB_POOL_MAX:-20}
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
       ARENA_ADMIN_EMAILS: ${ARENA_ADMIN_EMAILS:-}
+      ARENA_SKILL_MIN_POOL: ${ARENA_SKILL_MIN_POOL:-5}
       ARENA_SECURE_COOKIES: ${ARENA_SECURE_COOKIES:-false}
       # Trust X-Real-IP set by Caddy (itself derived from Cloudflare/proxy
       # headers via trusted_proxies in the Caddyfile) instead of the socket
