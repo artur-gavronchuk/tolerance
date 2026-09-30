@@ -20,6 +20,7 @@ import (
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/proofs"
 	"tolerance/internal/qualifications"
+	"tolerance/internal/skills"
 )
 
 type deps struct {
@@ -46,6 +47,8 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	agents.RegisterOwnerRoutes(owner, d.agents)
 	proofs.RegisterOwnerRoutes(owner, d.proofs)
 	games.RegisterOwnerRoutes(owner, d.games)
+	skills.RegisterOwnerRoutes(owner, d.pool, d.quals, d.agents.StageOf)
+	qualifications.RegisterOwnerRoutes(owner, d.quals)
 
 	connector := http.NewServeMux()
 	agents.RegisterConnectorRoutes(connector, d.agents)
@@ -55,6 +58,7 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 
 	public := http.NewServeMux()
 	games.RegisterPublicRoutes(public, d.games)
+	agents.RegisterPublicRoutes(public, d.agents, d.quals)
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
@@ -73,6 +77,10 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	api.Handle("/api/v1/proof-tasks", session(owner))
 	api.Handle("/api/v1/proofs", session(limited))
 	api.Handle("/api/v1/proofs/", session(limited))
+	api.Handle("/api/v1/skills", session(owner))
+	api.Handle("/api/v1/qualifications", session(owner))
+	api.Handle("/api/v1/qualifications/", session(owner))
+	api.Handle("/api/v1/agents/", public)
 	api.Handle("/api/v1/me/tanks", session(owner))
 	api.Handle("/api/v1/me/tanks/", session(owner))
 	api.Handle("/api/v1/tanks/", public)

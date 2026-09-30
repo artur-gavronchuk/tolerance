@@ -90,6 +90,7 @@ func main() {
 	agentsSvc := agents.NewService(pool, ps)
 	qs := qualifications.NewService(pool, ps)
 	agentsSvc.SetVersionListener(qs)
+	agentsSvc.SetSkillsSource(qs)
 
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs,
