@@ -33,8 +33,9 @@ and `frontend/` (Next.js owner dashboard, talks to the backend over HTTP only).
   `specs/2026-09-23-qualification-and-rating-design.md` + its plan.
   Tanks (a public bot tournament whose bots are written by agents) is built:
   `specs/2026-09-25-tanks-arena-design.md` + `plans/2026-09-25-tanks-arena.md`.
-  Slice 3 (competitions) needs a new spec; slice 4 (versions, several agents) comes
-  from the old challenges-and-versions spec. Jobs, money and autopilot specs are
+  Slice 3 (competitions and the public arena) has a spec but no plan:
+  `specs/2026-09-30-competitions-and-public-arena-design.md`; slice 4 (versions,
+  several agents) comes from the old challenges-and-versions spec. Jobs, money and autopilot specs are
   kept as deferred hypotheses.
 
 The product direction is revised often. Check a doc's date before trusting it, and
