@@ -3,33 +3,48 @@ package sandbox
 import (
 	"bufio"
 	"bytes"
+	"regexp"
 	"strings"
 )
 
 // ParsePytest reads the `-rA` short summary pytest prints at the end of a
 // run: "PASSED path::name", "FAILED path::name - reason", "ERROR path::name
 // - reason", and "ERROR path - reason" for a module that failed to import.
-// Only lines after the first summary header count, so what a test prints
-// into its captured output cannot pose as a result, and a test reported as
-// failed anywhere after that header stays failed whatever else claims it
-// passed. A module-level ERROR fails every test of that module the summary
-// names. Code under test runs in the same process and could still forge
-// output (monkeypatching _pytest's report classes, or printing a fake go
-// test stream). That is a known risk, mitigated for now by the worker's
-// harness_tampering check (proofs.HarnessTampered); an out-of-process
-// harness is the follow-up. This parser only closes the cheap tricks.
+// With -rA pytest also prints the captured stdout of passing tests before
+// the real summary, so a test (or the code under test) can print a fake
+// header and fake PASSED lines. Only the window between the LAST
+// "short test summary info" header and the final stats line ("N passed in
+// 0.03s") counts; everything before the last header or after the stats line
+// is ignored, and a hidden test missing from the real summary is simply not
+// passed. Within the window a test reported as failed stays failed whatever
+// else claims it passed, and a module-level ERROR fails every test of that
+// module the summary names. Code under test runs in the same process and
+// could still forge output that comes last (monkeypatching _pytest's report
+// classes, an atexit hook printing a complete fake summary). That is a known
+// risk, mitigated by --show-capture=no in the skill's run_cmd and by the
+// worker's harness_tampering check (proofs.HarnessTampered); an
+// out-of-process harness is the follow-up. This parser closes the cheap tricks.
 func ParsePytest(out []byte) []TestResult {
 	var res []TestResult
 	index := map[string]int{}
 	var broken []string
-	inSummary := false
+	var lines []string
+	last := -1
 	sc := bufio.NewScanner(bytes.NewReader(out))
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
 	for sc.Scan() {
 		line := sc.Text()
-		if !inSummary {
-			inSummary = strings.HasPrefix(line, "=") && strings.Contains(line, " short test summary info ")
-			continue
+		if strings.HasPrefix(line, "=") && strings.Contains(line, " short test summary info ") {
+			last = len(lines)
+		}
+		lines = append(lines, line)
+	}
+	if last < 0 {
+		return nil
+	}
+	for _, line := range lines[last+1:] {
+		if isPytestStats(line) {
+			break
 		}
 		var passed bool
 		var rest string
@@ -72,4 +87,12 @@ func ParsePytest(out []byte) []TestResult {
 		}
 	}
 	return res
+}
+
+// statsRe matches pytest's closing line: "3 passed in 0.02s",
+// "1 failed, 2 passed, 2 errors in 0.03s (0:00:00)", optionally in "=== ===".
+var statsRe = regexp.MustCompile(`^(=+ )?(\d+ [a-z ]+(, )?)+ in \d+(\.\d+)?s( \(.*\))?( =+)?$`)
+
+func isPytestStats(line string) bool {
+	return statsRe.MatchString(line)
 }
