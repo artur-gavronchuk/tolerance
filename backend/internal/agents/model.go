@@ -54,9 +54,11 @@ type Overview struct {
 	Private
 	Stage    string    `json:"stage"`
 	Presence *Presence `json:"presence"`
+	Version  *Version  `json:"version"`
 }
 
 type heartbeatInput struct {
-	ConnectorVersion string `json:"connector_version"`
-	Hostname         string `json:"hostname"`
+	ConnectorVersion string        `json:"connector_version"`
+	Hostname         string        `json:"hostname"`
+	Version          *VersionInput `json:"version"`
 }

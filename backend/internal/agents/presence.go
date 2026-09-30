@@ -53,6 +53,10 @@ func (s *Service) overview(ctx context.Context, a Agent) (Overview, error) {
 	if err != nil {
 		return Overview{}, err
 	}
+	ver, err := s.CurrentVersion(ctx, a.ID)
+	if err != nil {
+		return Overview{}, err
+	}
 	facts, err := s.proofs.ProofFacts(ctx, a.ID)
 	if err != nil {
 		return Overview{}, err
@@ -61,7 +65,7 @@ func (s *Service) overview(ctx context.Context, a Agent) (Overview, error) {
 	if pr != nil {
 		seen = &pr.LastSeenAt
 	}
-	return Overview{Private: p, Presence: pr, Stage: ComputeStage(len(p.APIKeys) > 0, seen, time.Now(), facts)}, nil
+	return Overview{Private: p, Presence: pr, Version: ver, Stage: ComputeStage(len(p.APIKeys) > 0, seen, time.Now(), facts)}, nil
 }
 
 // Overview returns nil, nil when the user has no agent yet.

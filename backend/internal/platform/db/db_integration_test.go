@@ -12,7 +12,7 @@ import (
 
 func TestMigrate_CreatesSliceTablesAndAppRoleCanUseThem(t *testing.T) {
 	d := dbtest.New(t)
-	for _, table := range []string{"users", "sessions", "agents", "api_keys", "agent_presence", "proof_tasks", "proofs", "jobs", "audit_events"} {
+	for _, table := range []string{"users", "sessions", "agents", "api_keys", "agent_presence", "proof_tasks", "proofs", "jobs", "audit_events", "agent_versions", "skills", "skill_tasks", "qualification_runs", "skill_ratings"} {
 		err := d.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, "SELECT 1 FROM "+table+" LIMIT 1")
 			return err
