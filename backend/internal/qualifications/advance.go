@@ -67,7 +67,7 @@ func (s *Service) advance(ctx context.Context, proofID string) (bool, error) {
 			}
 			if !retried {
 				moved = true
-				_, err := s.proofs.RequeueQualificationProof(ctx, tx, run.AgentID, run.ID, *p.SkillTaskSlug, *p.Position)
+				_, err := s.handOut(ctx, tx, run.AgentID, run.ID, *p.SkillTaskSlug, *p.Position, true)
 				return err
 			}
 		}
@@ -77,7 +77,7 @@ func (s *Service) advance(ctx context.Context, proofID string) (bool, error) {
 				return fmt.Errorf("qualifications: run %s has no task at position %d", run.ID, next)
 			}
 			moved = true
-			_, err := s.proofs.CreateQualificationProof(ctx, tx, run.AgentID, run.ID, run.TaskSlugs[next-1], next)
+			_, err := s.handOut(ctx, tx, run.AgentID, run.ID, run.TaskSlugs[next-1], next, false)
 			return err
 		}
 		moved = true

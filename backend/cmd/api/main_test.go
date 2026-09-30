@@ -80,6 +80,10 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	// their own fixtures deterministically.
 	gamesSvc := games.NewService(d.AppPool, ps, match.WithHouse(match.ProcessLauncher{}), log, games.Config{CheckTicks: 200, WorkDir: t.TempDir()})
 	qs := qualifications.NewService(d.AppPool, ps)
+	// The e2e runs on this repository's practice catalog, which holds three tasks
+	// per skill; the production floor (skills.MinPool) is sized for the private
+	// rating catalog and would freeze every skill here.
+	qs.SetMinPool(3)
 	agentsSvc := agents.NewService(d.AppPool, ps)
 	agentsSvc.SetVersionListener(qs)
 	agentsSvc.SetSkillsSource(qs)

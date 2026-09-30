@@ -56,6 +56,9 @@ func passing(names []string) []sandbox.TestResult {
 
 func logger() *slog.Logger { return slog.New(slog.NewTextHandler(os.Stderr, nil)) }
 
+// fixturePool is how many tasks backend/fixtures/skills holds per skill.
+const fixturePool = 3
+
 func setup(t *testing.T) *fx {
 	t.Helper()
 	d := dbtest.New(t)
@@ -85,11 +88,17 @@ func setup(t *testing.T) *fx {
 
 	ps := proofs.NewService(d.AppPool)
 	qs := qualifications.NewService(d.AppPool, ps)
+	// This repository's practice catalog holds fixturePool tasks per skill; the
+	// production floor (skills.MinPool) is meant for the larger private rating
+	// catalog and would freeze every skill here. Tests that need the freeze raise
+	// the floor themselves.
+	qs.SetMinPool(fixturePool)
 	as := agents.NewService(d.AppPool, ps)
 	as.SetVersionListener(qs)
 
 	wps := proofs.NewService(d.WorkerPool)
 	wqs := qualifications.NewService(d.WorkerPool, wps)
+	wqs.SetMinPool(fixturePool)
 	fake := &sandbox.Fake{}
 	w := proofs.NewWorker(d.WorkerPool, fake, t.TempDir(), logger())
 	w.SetFinishListener(wqs)
@@ -618,4 +627,63 @@ func TestRun_SlotRefusesOtherProofKinds(t *testing.T) {
 	problem(t, err, 409, "qualification_in_progress")
 	_, err = f.proofs.Retry(ctx, f.userID, "proof_seed")
 	problem(t, err, 409, "qualification_in_progress")
+}
+
+// exposures reads how many distinct agents the task has been handed to.
+func (f *fx) exposures(t *testing.T, slug string) int {
+	t.Helper()
+	var n int
+	err := f.d.AppPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT exposures FROM skill_tasks WHERE slug = $1`, slug).Scan(&n)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+func TestStart_FrozenSkillRefuses(t *testing.T) {
+	f := setup(t)
+	f.operational(t)
+	f.version(t, "d1")
+	// One task more than the catalog holds: the pool is below the floor.
+	f.quals.SetMinPool(fixturePool + 1)
+	_, err := f.quals.Start(context.Background(), f.userID, "go")
+	problem(t, err, 409, "skill_frozen")
+}
+
+func TestRun_InfraRequeueDoesNotWidenExposure(t *testing.T) {
+	f := setup(t)
+	f.operational(t)
+	f.version(t, "d1")
+	run := f.start(t, "go")
+	first := run.TaskSlugs[0]
+	if got := f.exposures(t, first); got != 1 {
+		t.Fatalf("exposures after handing the task out once = %d, want 1", got)
+	}
+	// The platform's own re-run hands the same task to the same agent again.
+	f.infraOut(t)
+	if got := f.exposures(t, first); got != 1 {
+		t.Fatalf("exposures after a requeue to the same agent = %d, want 1: a retry by the platform does not widen the leak", got)
+	}
+}
+
+func TestRun_FinishesOnTasksRetiredMidRun(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	f.operational(t)
+	f.version(t, "d1")
+	run := f.start(t, "go")
+	// Every task of the skill leaves the pool while the run is in flight.
+	f.admin(t, `UPDATE skill_tasks SET retired_at = now(), retired_reason = 'test' WHERE skill_slug = 'go'`)
+	f.drive(t, 1)
+	f.drive(t, 1)
+	f.drive(t, 1)
+	got := f.get(t, run.ID)
+	if got.Status != "scored" || got.Score == nil || *got.Score != 1 {
+		t.Fatalf("a run already in flight must finish on tasks that retired under it: %+v", got)
+	}
+	// But no new run may start on the emptied pool.
+	_, err := f.quals.Start(ctx, f.userID, "go")
+	problem(t, err, 409, "skill_frozen")
 }

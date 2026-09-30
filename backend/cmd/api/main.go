@@ -89,6 +89,7 @@ func main() {
 	// version is served by "api" (and "all"), so the listener must be wired wherever agents.Service is.
 	agentsSvc := agents.NewService(pool, ps)
 	qs := qualifications.NewService(pool, ps)
+	qs.SetMinPool(cfg.skillMinPool)
 	agentsSvc.SetVersionListener(qs)
 	agentsSvc.SetSkillsSource(qs)
 

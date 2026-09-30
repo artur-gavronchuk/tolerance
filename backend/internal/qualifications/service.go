@@ -21,13 +21,45 @@ import (
 )
 
 type Service struct {
-	pool   *db.Pool
-	proofs *proofs.Service
-	rnd    *rand.Rand
+	pool    *db.Pool
+	proofs  *proofs.Service
+	rnd     *rand.Rand
+	minPool int
 }
 
 func NewService(pool *db.Pool, ps *proofs.Service) *Service {
-	return &Service{pool: pool, proofs: ps, rnd: rand.New(rand.NewSource(time.Now().UnixNano()))}
+	return &Service{pool: pool, proofs: ps, rnd: rand.New(rand.NewSource(time.Now().UnixNano())), minPool: skills.MinPool}
+}
+
+// SetMinPool overrides how many issuable tasks a skill needs before a run may
+// start (ARENA_SKILL_MIN_POOL). It exists because the public practice catalog in
+// this repository holds three tasks per skill while the private rating catalog
+// the production server mounts holds more: a floor that is right for production
+// would freeze every skill in a local run. Zero never freezes.
+func (s *Service) SetMinPool(n int) { s.minPool = n }
+
+// handOut queues one task of a run and records the exposure in the same
+// transaction: the task's repository leaves the platform the moment the proof is
+// claimable. Every path that hands a task to an agent goes through here, so the
+// count cannot drift from what actually left. Exposure counts distinct agents,
+// so the platform's own requeue after an infra error adds nothing.
+func (s *Service) handOut(ctx context.Context, tx pgx.Tx, agentID, runID, taskSlug string, position int, requeue bool) (proofs.Proof, error) {
+	var (
+		p   proofs.Proof
+		err error
+	)
+	if requeue {
+		p, err = s.proofs.RequeueQualificationProof(ctx, tx, agentID, runID, taskSlug, position)
+	} else {
+		p, err = s.proofs.CreateQualificationProof(ctx, tx, agentID, runID, taskSlug, position)
+	}
+	if err != nil {
+		return proofs.Proof{}, err
+	}
+	if _, err := skills.RecordExposure(ctx, tx, taskSlug, agentID); err != nil {
+		return proofs.Proof{}, err
+	}
+	return p, nil
 }
 
 const runCols = `id, agent_id, version_id, skill_slug, status, created_at, finished_at, score, rating_before, rating_after, uncertainty_after, task_slugs`
@@ -108,22 +140,14 @@ func (s *Service) Start(ctx context.Context, userID, skill string) (Run, error) 
 		if today >= dailyLimit {
 			return httpx.New(http.StatusTooManyRequests, "daily_limit", "At most 3 qualification runs per skill per day")
 		}
-		rows, err := tx.Query(ctx, `SELECT slug FROM skill_tasks WHERE skill_slug = $1 AND active ORDER BY slug`, skill)
+		pool, err := skills.Pool(ctx, tx, skill)
 		if err != nil {
 			return err
 		}
-		var pool []string
-		for rows.Next() {
-			var slug string
-			if err := rows.Scan(&slug); err != nil {
-				rows.Close()
-				return err
-			}
-			pool = append(pool, slug)
-		}
-		rows.Close()
-		if len(pool) == 0 {
-			return httpx.New(http.StatusConflict, "no_tasks", "This skill has no tasks yet")
+		// An empty pool is the same answer as a nearly-exhausted one: the skill is
+		// being refilled. One code instead of two.
+		if skills.Frozen(len(pool), s.minPool) {
+			return skills.ErrFrozen()
 		}
 		var recent []string
 		if err := tx.QueryRow(ctx, `SELECT coalesce(array_agg(t), '{}') FROM (SELECT unnest(task_slugs) t FROM qualification_runs
@@ -135,7 +159,7 @@ func (s *Service) Start(ctx context.Context, userID, skill string) (Run, error) 
 			idgen.New("qrun"), agentID, *versionID, skill, picked), &run); err != nil {
 			return err
 		}
-		first, err := s.proofs.CreateQualificationProof(ctx, tx, agentID, run.ID, picked[0], 1)
+		first, err := s.handOut(ctx, tx, agentID, run.ID, picked[0], 1, false)
 		if err != nil {
 			return err
 		}
