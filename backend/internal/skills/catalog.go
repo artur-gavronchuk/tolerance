@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -60,8 +61,9 @@ func LoadCatalog(dir string) ([]Skill, []Task, error) {
 	}
 	var skills []Skill
 	var tasks []Task
+	seenTask := map[string]bool{}
 	for _, e := range entries {
-		if !e.IsDir() {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
 		sdir := filepath.Join(dir, e.Name())
@@ -93,6 +95,10 @@ func LoadCatalog(dir string) ([]Skill, []Task, error) {
 			if err != nil {
 				return nil, nil, err
 			}
+			if seenTask[t.Slug] {
+				return nil, nil, fmt.Errorf("skills: duplicate task slug %q (%s)", t.Slug, tdir)
+			}
+			seenTask[t.Slug] = true
 			tasks = append(tasks, t)
 		}
 	}
@@ -142,6 +148,10 @@ func LoadTask(dir, skill, language string) (Task, error) {
 }
 
 func SyncCatalog(ctx context.Context, pool *db.Pool, skills []Skill, tasks []Task) error {
+	if len(tasks) == 0 {
+		// Syncing nothing would deactivate the whole pool.
+		return fmt.Errorf("skills: catalog has no tasks, refusing to deactivate every task")
+	}
 	slugs := make([]string, 0, len(tasks))
 	return pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		for _, s := range skills {

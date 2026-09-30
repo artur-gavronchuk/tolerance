@@ -35,6 +35,7 @@ export const REASON_LABEL: Record<string, string> = {
   agent_timeout: 'The agent did not return a result within the time limit.',
   hidden_test_missing_or_failed: 'Not every hidden test ran and passed, so the fix could not be confirmed.',
   test_file_modified: 'The diff changed a test file. Fix the code, not the tests.',
+  harness_tampering: 'The diff touched the test harness from non-test code. Fix the code only.',
   stuck: 'The sandbox run never finished on our side. Retry it.',
   diff_too_large: 'The diff was larger than 256 KiB, so it was not checked.',
   invalid_package: 'The bot package produced by the diff is not valid. See the check output for details.',

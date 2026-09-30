@@ -14,7 +14,10 @@ import (
 // failed anywhere after that header stays failed whatever else claims it
 // passed. A module-level ERROR fails every test of that module the summary
 // names. Code under test runs in the same process and could still forge
-// output (the same holds for go test); this only closes the cheap tricks.
+// output (monkeypatching _pytest's report classes, or printing a fake go
+// test stream). That is a known risk, mitigated for now by the worker's
+// harness_tampering check (proofs.HarnessTampered); an out-of-process
+// harness is the follow-up. This parser only closes the cheap tricks.
 func ParsePytest(out []byte) []TestResult {
 	var res []TestResult
 	index := map[string]int{}

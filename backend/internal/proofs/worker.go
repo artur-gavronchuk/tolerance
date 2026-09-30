@@ -264,6 +264,9 @@ func (w *Worker) RunProof(ctx context.Context, proofID string) error {
 	if TestFileTouched(in.task.Language, in.diff) {
 		return w.finish(ctx, proofID, StatusFailed, "test_file_modified", nil)
 	}
+	if HarnessTampered(in.task.Language, in.diff) {
+		return w.finish(ctx, proofID, StatusFailed, "harness_tampering", nil)
+	}
 	if reason := applyDiff(ctx, dir, in.diff); reason != "" {
 		return w.finish(ctx, proofID, StatusFailed, reason, nil)
 	}

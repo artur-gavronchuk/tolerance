@@ -190,6 +190,21 @@ func TestRunProof_PassedFailedAndInfraError(t *testing.T) {
 		}
 	})
 
+	t.Run("a diff importing testing into non-test code is refused as harness tampering", func(t *testing.T) {
+		f := setup(t)
+		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}
+		w := proofs.NewWorker(f.d.AppPool, fake, t.TempDir(), log)
+		tamper := "diff --git a/extra.go b/extra.go\nnew file mode 100644\n--- /dev/null\n+++ b/extra.go\n@@ -0,0 +1,3 @@\n+package retry\n+\n+import \"testing\"\n"
+		id := submitted(t, f, goodDiff+tamper)
+		if err := w.RunProof(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		p, _ := f.proofs.Get(ctx, f.userID, id)
+		if p.Status != proofs.StatusFailed || p.FailureReason != "harness_tampering" || len(fake.Calls) != 0 {
+			t.Fatalf("%+v calls=%d", p, len(fake.Calls))
+		}
+	})
+
 	t.Run("CRLF diff still applies", func(t *testing.T) {
 		f := setup(t)
 		fake := &sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}

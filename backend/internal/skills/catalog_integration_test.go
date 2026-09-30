@@ -48,3 +48,12 @@ func TestSyncCatalog_DeactivatesTasksGoneFromCatalog(t *testing.T) {
 		t.Fatalf("reactivated: %d %v", n, err)
 	}
 }
+
+func TestSyncCatalog_RefusesEmptyTaskList(t *testing.T) {
+	env := dbtest.New(t)
+	ctx := context.Background()
+	sk := []skills.Skill{{Slug: "go", Title: "Go", Language: "go", Image: "i:1", RunCmd: "go test"}}
+	if err := skills.SyncCatalog(ctx, env.AdminPool, sk, nil); err == nil {
+		t.Fatal("zero tasks must be refused")
+	}
+}
