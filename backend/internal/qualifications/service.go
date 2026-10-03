@@ -122,12 +122,12 @@ func (s *Service) Start(ctx context.Context, userID, skill string) (Run, error) 
 			pool = append(pool, slug)
 		}
 		rows.Close()
-		if len(pool) == 0 {
-			return httpx.New(http.StatusConflict, "no_tasks", "This skill has no tasks yet")
+		if len(pool) < tasksPerRun {
+			return httpx.New(http.StatusConflict, "no_tasks", "This skill does not have enough tasks yet")
 		}
 		var recent []string
-		if err := tx.QueryRow(ctx, `SELECT coalesce(array_agg(t), '{}') FROM (SELECT unnest(task_slugs) t FROM qualification_runs
-			WHERE agent_id = $1 AND skill_slug = $2 ORDER BY created_at DESC LIMIT $3) x`, agentID, skill, recentRuns).Scan(&recent); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT coalesce(array_agg(t), '{}') FROM (SELECT unnest(task_slugs) t FROM
+			(SELECT task_slugs FROM qualification_runs WHERE agent_id = $1 AND skill_slug = $2 ORDER BY created_at DESC LIMIT $3) r) x`, agentID, skill, recentRuns).Scan(&recent); err != nil {
 			return err
 		}
 		picked := skills.Pick(pool, recent, tasksPerRun, s.rnd)

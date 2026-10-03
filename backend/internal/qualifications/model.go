@@ -5,6 +5,7 @@ import (
 
 	"tolerance/internal/proofs"
 	"tolerance/internal/skillrating"
+	"tolerance/internal/skills"
 )
 
 const (
@@ -12,7 +13,7 @@ const (
 	StatusScored  = "scored"
 	StatusAborted = "aborted"
 
-	tasksPerRun = 3
+	tasksPerRun = skills.TasksPerRun
 	dailyLimit  = 3
 	recentRuns  = 2
 )

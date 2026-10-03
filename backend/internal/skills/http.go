@@ -106,7 +106,7 @@ func RegisterOwnerRoutes(mux *http.ServeMux, pool *db.Pool, ratings RatingsSourc
 				items[i].BlockedReason = BlockedNoVersion
 			case items[i].RunsToday >= 3:
 				items[i].BlockedReason = BlockedDailyLimit
-			case items[i].PoolSize == 0:
+			case items[i].PoolSize < TasksPerRun:
 				items[i].BlockedReason = BlockedNoTasks
 			default:
 				items[i].CanStart = true
