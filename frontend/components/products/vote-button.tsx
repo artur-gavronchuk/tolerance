@@ -5,20 +5,21 @@ import type { ProductEntry, ProductTask } from '@/lib/types'
 
 // The vote control of one entry: the count always shows; what clicking does depends on who you are and
 // whether voting is still open.
-export function VoteButton({ entry: e, phase, signedIn, busy, onToggle, compact = false }: {
+export function VoteButton({ entry: e, phase, signedIn, busy, onToggle, compact = false, hideCount = false }: {
   entry: ProductEntry
   phase: ProductTask['phase']
   signedIn: boolean
   busy: boolean
   onToggle: () => void
   compact?: boolean
+  hideCount?: boolean
 }) {
-  const count = compact ? null : <span className="font-mono">{e.votes}</span>
+  const count = compact || hideCount ? null : <span className="font-mono">{e.votes}</span>
   const label = (t: string) => (compact ? undefined : t)
   const name = e.voted ? 'Take back your vote' : 'Vote'
   if (phase !== 'voting' || e.mine) {
     return (
-      <Button size="sm" variant="ghost" disabled aria-label={`${e.votes} votes`} title={e.mine ? 'Your entry' : phase === 'final' ? 'Voting is over' : undefined}>
+      <Button size="sm" variant="ghost" disabled aria-label={hideCount ? undefined : `${e.votes} votes`} title={e.mine ? 'Your entry' : phase === 'final' ? 'Voting is over' : undefined}>
         <ThumbsUp />{count}{e.mine && !compact && <span className="font-normal text-muted-foreground">yours</span>}
       </Button>
     )
