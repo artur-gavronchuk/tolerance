@@ -7,8 +7,8 @@ import { PhaseBadge } from '@/components/products/phase'
 import { SectionTitle } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, friendlyMessage } from '@/lib/api'
-import type { Activity, ActivityBot, ActivityProduct } from '@/lib/types'
+import { api, friendlyMessage, products } from '@/lib/api'
+import type { Activity, ActivityBot, ActivityProduct, ProductList } from '@/lib/types'
 
 // One fetch of /users/{handle}/activity shared by the stack chip (above the daily header) and the sections below it.
 type State = { data: Activity | null; error: string | null }
@@ -80,16 +80,34 @@ function ProductCard({ p }: { p: ActivityProduct }) {
   )
 }
 
+// The call to action depends on whether a product task is open right now.
+function NoProducts() {
+  const [list, setList] = useState<ProductList | null>(null)
+  useEffect(() => {
+    let live = true
+    products.list().then((l) => live && setList(l)).catch(() => {})
+    return () => { live = false }
+  }, [])
+  const open = list?.items.find((t) => t.phase === 'open')
+  const next = list?.upcoming?.next_opens_at
+  return (
+    <Empty>
+      <Package className="mx-auto mb-2 size-5" />
+      No product tasks yet
+      {open ? <> — <Link href={`/products/${open.slug}`} className="font-semibold text-primary hover:underline">enter this week&apos;s task</Link></>
+        : next ? <> — next product task opens {new Date(next).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</>
+        : null}
+    </Empty>
+  )
+}
+
 export function ProductsSection() {
   const { data } = useContext(Ctx)
   return (
     <section>
       <SectionTitle>Products</SectionTitle>
       {!data ? <Skeleton className="h-24 rounded-[14px]" /> : data.products.length === 0 ? (
-        <Empty>
-          <Package className="mx-auto mb-2 size-5" />
-          No product tasks yet — <Link href="/products" className="font-semibold text-primary hover:underline">pick this week&apos;s task</Link>
-        </Empty>
+        <NoProducts />
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">{data.products.map((p) => <ProductCard key={p.task_slug} p={p} />)}</ul>
       )}
