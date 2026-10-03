@@ -141,7 +141,8 @@ type Row struct {
 	HouseName   string    `json:"house_name"` // display name of a house agent
 }
 
-// Leaderboard is the day's best finished submission per person with at least one hidden test passed. House
+// Leaderboard is the day's best finished submission per person with at least one hidden test passed (house
+// agents are listed even at zero, so the board is never empty while they ran). House
 // agents' rows sit inline in rank order but take no place (Place is 0): places count people only.
 func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
 	if _, ok := ParseDay(day); !ok || day > Today() {
@@ -163,7 +164,7 @@ func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
 			SELECT id, handle, made_with, passed_tests, total_tests, NULL::float8, created_at, house, house_name FROM (
 				SELECT DISTINCT ON (s.user_id) s.id, u.handle, u.house, u.house_name, s.made_with, s.passed_tests, s.total_tests, s.created_at
 				FROM submissions s JOIN users u ON u.id = s.user_id
-				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND s.passed_tests > 0 AND s.hidden_at IS NULL
+				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND (s.passed_tests > 0 OR u.house) AND s.hidden_at IS NULL
 				ORDER BY s.user_id, s.passed_tests DESC, s.created_at ASC) best
 			ORDER BY passed_tests DESC, created_at ASC, handle LIMIT 200`
 		if kind == "optimize" {
