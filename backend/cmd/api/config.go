@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -87,6 +88,12 @@ func loadConfig() (config, error) {
 	if cfg.sandbox != "docker" && cfg.sandbox != "fake" {
 		return config{}, errors.New("ARENA_SANDBOX must be docker or fake")
 	}
+	if cfg.devLogin || cfg.noLimits {
+		// Dev login makes every user an admin: never next to a public origin.
+		if u, err := url.Parse(cfg.publicURL); cfg.publicURL != "" && (err != nil || !isLocalHost(u.Hostname())) {
+			return config{}, errors.New("ARENA_DEV_LOGIN and ARENA_NO_LIMITS are for local runs; ARENA_PUBLIC_URL must be localhost, 127.0.0.1 or *.localhost")
+		}
+	}
 	if cfg.devLogin && cfg.secureCookies {
 		return config{}, errors.New("ARENA_DEV_LOGIN is for local runs and CI; it cannot be on with ARENA_SECURE_COOKIES=true")
 	}
@@ -124,4 +131,8 @@ func env(name, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func isLocalHost(h string) bool {
+	return h == "localhost" || strings.HasSuffix(h, ".localhost") || net.ParseIP(h).IsLoopback()
 }

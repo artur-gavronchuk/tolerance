@@ -82,7 +82,8 @@ func RegisterPublicRoutes(mux *http.ServeMux, pool *db.Pool) {
 		var tarball []byte
 		var taskMD string
 		err := pool.Tx(r.Context(), func(ctx context.Context, tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT repo_tar, task_md FROM tasks WHERE slug = $1`, r.PathValue("slug")).Scan(&tarball, &taskMD)
+			return tx.QueryRow(ctx, `SELECT repo_tar, task_md FROM tasks WHERE slug = $1
+				AND EXISTS (SELECT 1 FROM daily_tasks d WHERE d.task_slug = tasks.slug AND d.day <= (now() AT TIME ZONE 'UTC')::date)`, r.PathValue("slug")).Scan(&tarball, &taskMD)
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			httpx.WriteError(w, r, httpx.NotFound())

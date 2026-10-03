@@ -33,6 +33,9 @@ func invalid(msg string) error {
 
 // Create validates an upload, stores it as a queued submission and enqueues its run. An upload for the
 // task of the current day counts for the day (attempt-limited); any other task is practice (day = null).
+// maxPracticePerDay bounds uploads against past tasks (they never count toward the daily attempts).
+const maxPracticePerDay = 20
+
 func (s *Service) Create(ctx context.Context, userID, taskSlug, filename string, data []byte, madeWith string) (Submission, error) {
 	today := daily.Today()
 	todaySlug, err := s.daily.TaskFor(ctx, today)
@@ -44,7 +47,9 @@ func (s *Service) Create(ctx context.Context, userID, taskSlug, filename string,
 	}
 	var repoTar []byte
 	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT repo_tar FROM tasks WHERE slug = $1`, taskSlug).Scan(&repoTar)
+		// Only tasks already served as a day's task can be practiced; a future task stays unseen.
+		return tx.QueryRow(ctx, `SELECT repo_tar FROM tasks WHERE slug = $1
+			AND EXISTS (SELECT 1 FROM daily_tasks d WHERE d.task_slug = tasks.slug AND d.day <= $2::date)`, taskSlug, today).Scan(&repoTar)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Submission{}, httpx.WithField(http.StatusUnprocessableEntity, "invalid_task", "Unknown task", "task_slug", "invalid")
@@ -83,6 +88,16 @@ func (s *Service) Create(ctx context.Context, userID, taskSlug, filename string,
 	id := idgen.New("sub")
 	var out Submission
 	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if day == nil {
+			var practiced int
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM submissions WHERE user_id = $1 AND day IS NULL AND created_at > now() - interval '24 hours'`,
+				userID).Scan(&practiced); err != nil {
+				return err
+			}
+			if practiced >= limits.Cap(maxPracticePerDay) {
+				return httpx.New(http.StatusTooManyRequests, "attempts_exhausted", "Too many practice uploads today, try again tomorrow")
+			}
+		}
 		if day != nil {
 			// Serialize a person's uploads so two parallel requests cannot both take the last attempt.
 			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('submissions:' || $1))`, userID); err != nil {
