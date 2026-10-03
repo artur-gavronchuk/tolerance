@@ -345,6 +345,8 @@ func TestZipUploadBecomesApplyingDiff(t *testing.T) {
 		t.Fatal("test fixture: bug line not found")
 	}
 	files["retry.go"] = []byte(fixed)
+	// The downloaded zip carries TASK.md (tasks.RepoZip); an edited copy never reaches the diff.
+	files["TASK.md"] = []byte("my agent's notes")
 
 	// Both a zip with the files at the root and one wrapped in a single folder produce the same applying diff.
 	for _, prefix := range []string{"", "retry-task/"} {
@@ -361,7 +363,7 @@ func TestZipUploadBecomesApplyingDiff(t *testing.T) {
 		}
 	}
 
-	// An unchanged repo is an invalid upload.
+	// An unchanged repo is an invalid upload, even with TASK.md edited.
 	files["retry.go"] = []byte(orig)
 	var p *httpx.Problem
 	if _, err := f.svc.Create(ctx, f.userID, "", "same.zip", makeZip(t, "", files), ""); !errors.As(err, &p) || p.Code != "invalid_upload" {

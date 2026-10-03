@@ -41,11 +41,18 @@ func Get(ctx context.Context, pool *db.Pool, slug string) (Summary, error) {
 	return s, err
 }
 
-// RepoZip builds the zip a person downloads: the task's repo files at the zip root.
-func RepoZip(repoTar []byte) ([]byte, error) {
+// TaskFile is the task statement added at the root of the downloaded repo zip.
+const TaskFile = "TASK.md"
+
+// RepoZip builds the zip a person downloads: the task's repo files at the zip root, plus TASK.md when the
+// repo does not carry its own.
+func RepoZip(repoTar []byte, taskMD string) ([]byte, error) {
 	files, err := ReadTar(repoTar)
 	if err != nil {
 		return nil, err
+	}
+	if _, ok := files[TaskFile]; !ok && taskMD != "" {
+		files[TaskFile] = []byte(taskMD)
 	}
 	names := make([]string, 0, len(files))
 	for n := range files {
@@ -73,8 +80,9 @@ func RepoZip(repoTar []byte) ([]byte, error) {
 func RegisterPublicRoutes(mux *http.ServeMux, pool *db.Pool) {
 	mux.HandleFunc("GET /api/v1/tasks/{slug}/repo.zip", func(w http.ResponseWriter, r *http.Request) {
 		var tarball []byte
+		var taskMD string
 		err := pool.Tx(r.Context(), func(ctx context.Context, tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT repo_tar FROM tasks WHERE slug = $1`, r.PathValue("slug")).Scan(&tarball)
+			return tx.QueryRow(ctx, `SELECT repo_tar, task_md FROM tasks WHERE slug = $1`, r.PathValue("slug")).Scan(&tarball, &taskMD)
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			httpx.WriteError(w, r, httpx.NotFound())
@@ -82,7 +90,7 @@ func RegisterPublicRoutes(mux *http.ServeMux, pool *db.Pool) {
 		}
 		if err == nil {
 			var z []byte
-			if z, err = RepoZip(tarball); err == nil {
+			if z, err = RepoZip(tarball, taskMD); err == nil {
 				w.Header().Set("Content-Type", "application/zip")
 				w.Header().Set("Content-Disposition", `attachment; filename="`+r.PathValue("slug")+`.zip"`)
 				_, _ = w.Write(z)

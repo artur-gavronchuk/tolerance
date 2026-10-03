@@ -155,6 +155,11 @@ func ZipToDiff(ctx context.Context, repoTar, zipData []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// The downloaded zip carries TASK.md next to the repo (tasks.RepoZip); it is not part of the repo,
+	// so whatever the upload does with it never reaches the diff.
+	if _, inRepo := orig[tasks.TaskFile]; !inRepo {
+		delete(mod, tasks.TaskFile)
+	}
 	tmp, err := os.MkdirTemp("", "diff-")
 	if err != nil {
 		return "", err
