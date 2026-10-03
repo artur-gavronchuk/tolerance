@@ -31,3 +31,8 @@ func (PassAll) Run(_ context.Context, req sandbox.Request) (sandbox.Result, erro
 	body, err := json.Marshal(rs)
 	return sandbox.Result{Output: resultsMarker + string(body) + "\n"}, err
 }
+
+// RunOptimize is never used for product runs; it only completes sandbox.Runner.
+func (PassAll) RunOptimize(ctx context.Context, req sandbox.OptimizeRequest) (sandbox.OptimizeResult, error) {
+	return sandbox.PassAll{}.RunOptimize(ctx, req)
+}
