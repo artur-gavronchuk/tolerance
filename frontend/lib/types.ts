@@ -27,7 +27,8 @@ export interface Daily {
   day: string; closes_at: string; is_open: boolean
   task: TaskSummary
   attempts_per_day: number
-  my: null | { attempts_used: number; best: Submission | null; submissions: Submission[] }
+  // practice: closed days only, own uploads against this task after it closed (never counted).
+  my: null | { attempts_used: number; best: Submission | null; submissions: Submission[]; practice?: Submission[] }
   house: HouseResult[]
 }
 

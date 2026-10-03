@@ -102,7 +102,7 @@ export function DailyView({ day }: { day?: string }) {
   // One refresh loop for the whole page: it picks up uploads an agent made through the API, follows queued →
   // running → verdict, and refreshes attempts, the board and stats. Fast while something is being checked,
   // slow otherwise, paused while the tab is hidden and run at once when it becomes visible again.
-  const busy = [...local, ...(daily?.my?.submissions ?? [])].some((s) => ACTIVE.includes(s.status))
+  const busy = [...local, ...(daily?.my?.submissions ?? []), ...(daily?.my?.practice ?? [])].some((s) => ACTIVE.includes(s.status))
   useEffect(() => {
     const tick = () => { if (!document.hidden) void load() }
     const timer = setInterval(tick, busy ? 3000 : 20000)
@@ -114,7 +114,7 @@ export function DailyView({ day }: { day?: string }) {
   // When a submission of mine reaches a verdict, the streak in the header may change.
   const activeIds = useRef<Set<string>>(new Set())
   useEffect(() => {
-    const now = new Set((daily?.my?.submissions ?? []).filter((s) => ACTIVE.includes(s.status)).map((s) => s.id))
+    const now = new Set([...(daily?.my?.submissions ?? []), ...(daily?.my?.practice ?? [])].filter((s) => ACTIVE.includes(s.status)).map((s) => s.id))
     const finished = [...activeIds.current].some((id) => !now.has(id))
     activeIds.current = now
     if (finished) void refreshMe()
@@ -146,11 +146,13 @@ export function DailyView({ day }: { day?: string }) {
   const signedOut = !meLoading && !me
   const loginHref = `/login?next=${encodeURIComponent(day ? `/day/${day}` : '/')}`
   const attemptsLeft = practice || !daily.my ? undefined : Math.max(0, daily.attempts_per_day - daily.my.attempts_used)
-  const serverIds = new Set(daily.my?.submissions.map((s) => s.id))
+  // On a closed day the list is my practice on this task; on today it is my scored submissions.
+  const server = (practice ? daily.my?.practice : daily.my?.submissions) ?? []
+  const serverIds = new Set(server.map((s) => s.id))
   // The server's copy wins: it carries the latest status. Local entries fill the gap until the next refresh.
   const subs = [
-    ...local.filter((s) => !serverIds.has(s.id)),
-    ...(daily.my?.submissions ?? []),
+    ...local.filter((s) => !serverIds.has(s.id) && s.task_slug === task.slug),
+    ...server,
   ]
   const share = shareText({ day: daily.day, title: task.title, subs, streak: daily.is_open ? me?.streak.current ?? 0 : 0, scoreWord: t('shareScore'), house: houseShareLine(daily.house ?? [], t) })
 

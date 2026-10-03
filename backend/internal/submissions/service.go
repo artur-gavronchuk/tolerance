@@ -154,18 +154,44 @@ func (s *Service) Get(ctx context.Context, userID, id string) (Submission, error
 	return out, err
 }
 
-// My is the daily response's "my" block for one day.
+// My is the daily response's "my" block for one day. Practice is filled only for a closed day: the person's
+// own uploads against that day's task made after it closed (day IS NULL), newest first. They never count
+// toward attempts, points or the streak and are not part of Submissions.
 type My struct {
 	AttemptsUsed int          `json:"attempts_used"`
 	Best         *Submission  `json:"best"`
 	Submissions  []Submission `json:"submissions"`
+	Practice     []Submission `json:"practice"`
 }
+
+// practiceHistory bounds how much practice history a closed day returns.
+const practiceHistory = 20
 
 // MyDay builds the signed-in person's block for a day; it satisfies daily.MyFunc.
 func (s *Service) MyDay(ctx context.Context, userID, day string) (any, error) {
-	my := My{Submissions: []Submission{}}
+	my := My{Submissions: []Submission{}, Practice: []Submission{}}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT `+cols+` FROM submissions s WHERE s.user_id = $1 AND s.day = $2::date ORDER BY s.created_at DESC`, userID, day)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			sub, err := scan(rows)
+			if err != nil {
+				rows.Close()
+				return err
+			}
+			my.Submissions = append(my.Submissions, sub)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil || day >= daily.Today() {
+			return err
+		}
+		// A task is a daily task on exactly one day, so its slug identifies this day's practice.
+		rows, err = tx.Query(ctx, `SELECT `+cols+` FROM submissions s
+			WHERE s.user_id = $1 AND s.day IS NULL
+			  AND s.task_slug = (SELECT task_slug FROM daily_tasks WHERE day = $2::date)
+			ORDER BY s.created_at DESC LIMIT $3`, userID, day, practiceHistory)
 		if err != nil {
 			return err
 		}
@@ -175,7 +201,7 @@ func (s *Service) MyDay(ctx context.Context, userID, day string) (any, error) {
 			if err != nil {
 				return err
 			}
-			my.Submissions = append(my.Submissions, sub)
+			my.Practice = append(my.Practice, sub)
 		}
 		return rows.Err()
 	})
