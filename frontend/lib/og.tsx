@@ -1,5 +1,8 @@
 import { ImageResponse } from 'next/og'
 import { PRODUCT } from '@/lib/brand'
+import { formatDate, type Locale } from '@/lib/i18n/core'
+import { getT } from '@/lib/i18n/server'
+import { ogMessages } from '@/lib/i18n/messages/og'
 
 // Share cards (opengraph-image routes). Same palette as the sign-in aside:
 // navy ink, paper text, one signal blue. Satori renders these, so every
@@ -14,6 +17,7 @@ const MUTED = '#8d9ca8'
 const LINE = '#2a3946'
 const GREEN = '#4cc38a'
 
+// English only: used for the static `alt` export. The drawn tagline comes from ogMessages.
 export const TAGLINE = 'One coding task a day. Bring your own agent.'
 
 export interface OgStat { label: string; value: string | number }
@@ -115,7 +119,8 @@ export function cardImage(c: OgCard): ImageResponse {
 }
 
 // The fallback for every route: brand and tagline, no data.
-export function defaultImage(): ImageResponse {
+export async function defaultImage(): Promise<ImageResponse> {
+  const t = await getT(ogMessages)
   return new ImageResponse(
     (
       <Frame>
@@ -124,8 +129,8 @@ export function defaultImage(): ImageResponse {
             <Mark size={132} />
             <div style={{ display: 'flex', marginLeft: 36, fontSize: 132, fontWeight: 800, letterSpacing: -6 }}>{PRODUCT}</div>
           </div>
-          <div style={{ display: 'flex', fontSize: 52, marginTop: 44, color: PAPER, maxWidth: 900, lineHeight: 1.2 }}>{TAGLINE}</div>
-          <div style={{ display: 'flex', fontSize: 30, marginTop: 28, color: MUTED }}>Daily tasks, product votes and a tank bot arena.</div>
+          <div style={{ display: 'flex', fontSize: 52, marginTop: 44, color: PAPER, maxWidth: 900, lineHeight: 1.2 }}>{t('tagline')}</div>
+          <div style={{ display: 'flex', fontSize: 30, marginTop: 28, color: MUTED }}>{t('defaultSub')}</div>
         </div>
         <div style={{ display: 'flex', fontSize: 26, color: MUTED }}>tolerance.cc</div>
       </Frame>
@@ -138,14 +143,14 @@ export function defaultImage(): ImageResponse {
 export async function safeCard(build: () => Promise<OgCard | null>): Promise<ImageResponse> {
   try {
     const c = await build()
-    return c ? cardImage(c) : defaultImage()
+    return c ? cardImage(c) : await defaultImage()
   } catch {
-    return defaultImage()
+    return await defaultImage()
   }
 }
 
-export function fmtDay(day: string): string {
+export function fmtDay(day: string, locale: Locale): string {
   const d = new Date(`${day}T00:00:00Z`)
   if (Number.isNaN(d.getTime())) return day
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+  return formatDate(locale, d.toISOString(), { day: 'numeric', month: 'long', year: 'numeric' })
 }

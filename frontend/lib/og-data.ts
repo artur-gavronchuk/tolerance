@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { PRODUCT } from '@/lib/brand'
 import { clip, fmtDay, type OgCard, type OgStat } from '@/lib/og'
 import { serverApi } from '@/lib/server-api'
+import { getT } from '@/lib/i18n/server'
+import { ogMessages } from '@/lib/i18n/messages/og'
 import type {
   BotProfile, Daily, DailyRow, DayStats, MatchView, Profile, ProductResults, SeasonDetail, TournamentView,
 } from '@/lib/types'
@@ -24,20 +26,18 @@ export function shareMeta(title: string, description: string, path?: string): Me
   }
 }
 
-export const DEFAULT_DESCRIPTION = 'One coding task every day. Give it to your own coding agent, upload the result, and hidden tests decide.'
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 const LANG: Record<string, string> = { go: 'Go', python: 'Python' }
 
 export async function dayShare(day: string): Promise<Share | null> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null
   const d = await serverApi<Daily>(`/daily/${day}`)
   if (!d) return null
+  const t = await getT(ogMessages)
   const [stats, board] = await Promise.all([
     serverApi<DayStats>(`/daily/${day}/stats`),
     d.task.kind === 'optimize' ? serverApi<{ items: DailyRow[] }>(`/daily/${day}/leaderboard`) : Promise.resolve(null),
   ])
-  const when = fmtDay(d.day)
+  const when = fmtDay(d.day, t.locale)
   const lang = LANG[d.task.language] ?? d.task.language
   const optimize = d.task.kind === 'optimize'
   const players = stats?.participants ?? 0
@@ -50,22 +50,22 @@ export async function dayShare(day: string): Promise<Share | null> {
   const stat = stats == null
     ? []
     : optimize
-      ? [{ label: 'Players', value: players }, { label: d.task.direction === 'min' ? 'Best (lowest)' : 'Best score', value: best }, { label: 'Attempts', value: attempts }]
-      : [{ label: 'Players', value: players }, { label: 'Solved', value: stats.solvers }, { label: 'Attempts', value: attempts }]
+      ? [{ label: t('statPlayers'), value: players }, { label: d.task.direction === 'min' ? t('statBestLowest') : t('statBestScore'), value: best }, { label: t('statAttempts'), value: attempts }]
+      : [{ label: t('statPlayers'), value: players }, { label: t('statSolved'), value: stats.solvers }, { label: t('statAttempts'), value: attempts }]
   const summary = stats == null
-    ? `${lang} ${optimize ? 'optimization' : 'bugfix'} task.`
+    ? t(optimize ? 'langOptimizationTask' : 'langBugfixTask', { lang })
     : optimize
-      ? `${plural(players, 'player')} tried it with their own agents${best === '–' ? '' : `, best score ${best}`}.`
-      : `${plural(players, 'player')} tried it with their own agents, ${stats.solvers} solved it.`
+      ? t('triedBest', { n: players, players: t.plural('players', players), best: best === '–' ? '' : t('triedBestPart', { best }) })
+      : t('triedSolved', { n: players, players: t.plural('players', players), solved: stats.solvers })
   return {
     title: `${d.task.title} · ${when}`,
-    description: `The coding task for ${when}: ${d.task.title}. ${summary} Can your agent beat the hidden tests?`,
+    description: t('dayDescription', { when, title: d.task.title, summary }),
     card: {
-      kicker: `Task of the day · ${when}`,
+      kicker: t('kickerDay', { when }),
       title: d.task.title,
-      subtitle: `${lang} · ${optimize ? 'optimize' : 'fix the bug'} · ${d.is_open ? 'open now' : 'closed'}`,
+      subtitle: `${lang} · ${optimize ? t('optimize') : t('fixBug')} · ${d.is_open ? t('openNow') : t('closed')}`,
       stats: stat,
-      badge: { text: d.is_open ? 'Open now' : 'Closed', live: d.is_open },
+      badge: { text: d.is_open ? t('badgeOpenNow') : t('badgeClosed'), live: d.is_open },
     },
   }
 }
@@ -73,48 +73,50 @@ export async function dayShare(day: string): Promise<Share | null> {
 export async function profileShare(handle: string): Promise<Share | null> {
   const p = await serverApi<Profile>(`/users/${encodeURIComponent(handle)}`)
   if (!p) return null
+  const t = await getT(ogMessages)
   const place = p.place == null ? '–' : `#${p.place}`
   const bits = [
-    p.place != null ? `ranked ${place}` : null,
-    p.streak.current > 0 ? `${p.streak.current}-day streak` : null,
-    `${plural(p.solved_days, 'day')} solved`,
+    p.place != null ? t('ranked', { place }) : null,
+    p.streak.current > 0 ? t('streakBit', { n: p.streak.current }) : null,
+    t('solvedBit', { days: t.plural('days', p.solved_days) }),
   ].filter(Boolean)
   return {
     title: p.handle,
-    description: `${p.handle} on ${PRODUCT}: ${bits.join(', ')}. One coding task a day, solved by their own agent.`,
+    description: t('profileDescription', { handle: p.handle, product: PRODUCT, bits: bits.join(', ') }),
     card: {
-      kicker: 'Player',
+      kicker: t('kickerPlayer'),
       title: p.handle,
-      subtitle: p.tools.length > 0 ? `Plays with ${p.tools.slice(0, 3).join(', ')}` : `${plural(p.played_days, 'day')} played`,
+      subtitle: p.tools.length > 0 ? t('playsWith', { tools: p.tools.slice(0, 3).join(', ') }) : t('daysPlayed', { days: t.plural('days', p.played_days) }),
       stats: [
-        { label: 'Place', value: place },
-        { label: 'Streak', value: p.streak.current },
-        { label: 'Days solved', value: p.solved_days },
-        { label: 'Best streak', value: p.streak.best },
+        { label: t('statPlace'), value: place },
+        { label: t('statStreak'), value: p.streak.current },
+        { label: t('statDaysSolved'), value: p.solved_days },
+        { label: t('statBestStreak'), value: p.streak.best },
       ],
     },
   }
 }
 
 export async function tournamentShare(id: string): Promise<Share | null> {
-  const t = await serverApi<TournamentView>(`/tanks/tournaments/${encodeURIComponent(id)}`)
-  if (!t) return null
-  const live = t.status === 'running'
-  const state = t.status === 'finished' ? 'Finished' : t.status === 'cancelled' ? 'Cancelled' : live ? 'Live now' : 'Scheduled'
-  const champ = t.champion ? `${t.champion.name}${t.champion.owner ? ` by ${t.champion.owner}` : ''}` : null
+  const tv = await serverApi<TournamentView>(`/tanks/tournaments/${encodeURIComponent(id)}`)
+  if (!tv) return null
+  const t = await getT(ogMessages)
+  const live = tv.status === 'running'
+  const state = tv.status === 'finished' ? t('stFinished') : tv.status === 'cancelled' ? t('stCancelled') : live ? t('stLive') : t('stScheduled')
+  const champ = tv.champion ? (tv.champion.owner ? t('byOwner', { name: tv.champion.name, owner: tv.champion.owner }) : tv.champion.name) : null
   return {
-    title: t.name,
+    title: tv.name,
     description: champ
-      ? `${t.name}: bot tournament won by ${champ}. ${t.size} bots, single elimination, best of ${t.best_of}.`
-      : `${t.name}: ${t.size}-bot single elimination tournament of bots written by coding agents.${live ? ' Live now, watch the matches.' : ''}`,
+      ? t('tourWon', { name: tv.name, champ, size: tv.size, bestOf: tv.best_of })
+      : t('tourPlain', { name: tv.name, size: tv.size }) + (live ? t('tourLive') : ''),
     card: {
-      kicker: 'Tanks tournament',
-      title: t.name,
-      subtitle: champ ? `Champion: ${champ}` : live ? 'Bots written by coding agents are fighting right now' : 'Bots written by coding agents, single elimination',
+      kicker: t('kickerTournament'),
+      title: tv.name,
+      subtitle: champ ? t('champion', { champ }) : live ? t('tourFighting') : t('tourSub'),
       stats: [
-        { label: 'Bracket', value: t.size },
-        ...(t.rounds > 0 ? [{ label: 'Rounds', value: t.rounds }] : []),
-        { label: 'Best of', value: t.best_of },
+        { label: t('statBracket'), value: tv.size },
+        ...(tv.rounds > 0 ? [{ label: t('statRounds'), value: tv.rounds }] : []),
+        { label: t('statBestOf'), value: tv.best_of },
       ],
       badge: { text: state, live },
     },
@@ -124,18 +126,23 @@ export async function tournamentShare(id: string): Promise<Share | null> {
 export async function productShare(slug: string): Promise<Share | null> {
   const r = await serverApi<ProductResults>(`/products/${encodeURIComponent(slug)}/results`)
   if (!r) return null
+  const t = await getT(ogMessages)
   const { task, entries } = r
   const votes = entries.reduce((n, e) => n + e.votes, 0)
   const leader = entries[0] // the results come ranked by the task kind's rule
-  const phase = task.phase === 'open' ? 'Open' : task.phase === 'voting' ? 'Voting' : 'Final'
-  const stats: OgStat[] = [{ label: 'Entries', value: task.entry_count }]
-  if (task.phase !== 'open' && !(task.kind === 'site' && task.phase === 'voting')) stats.push({ label: 'Votes', value: votes }) // site votes are blind until voting ends
-  if (task.phase !== 'open' && leader?.handle) stats.push({ label: task.phase === 'final' ? 'Winner' : 'Leading', value: clip(leader.handle, 14) })
+  const phase = task.phase === 'open' ? t('phaseOpen') : task.phase === 'voting' ? t('phaseVoting') : t('phaseFinal')
+  const stats: OgStat[] = [{ label: t('statEntries'), value: task.entry_count }]
+  if (task.phase !== 'open' && !(task.kind === 'site' && task.phase === 'voting')) stats.push({ label: t('statVotes'), value: votes }) // site votes are blind until voting ends
+  if (task.phase !== 'open' && leader?.handle) stats.push({ label: task.phase === 'final' ? t('statWinner') : t('statLeading'), value: clip(leader.handle, 14) })
   return {
     title: task.title,
-    description: `${task.summary || task.title} Product of the week: ${plural(task.entry_count, 'entry', 'entries')}${task.phase === 'voting' ? ', voting is open' : task.phase === 'final' ? ', final results' : ', open for entries'}.`,
+    description: t('productDescription', {
+      summary: task.summary || task.title,
+      entries: t.plural('entries', task.entry_count),
+      state: task.phase === 'voting' ? t('stateVoting') : task.phase === 'final' ? t('stateFinal') : t('stateOpen'),
+    }),
     card: {
-      kicker: `Product of the week · ${task.kind === 'site' ? 'website' : 'command line'}`,
+      kicker: t('kickerProduct', { kind: task.kind === 'site' ? t('kindSite') : t('kindCli') }),
       title: task.title,
       subtitle: task.summary || undefined,
       stats,
@@ -147,28 +154,31 @@ export async function productShare(slug: string): Promise<Share | null> {
 export async function botShare(id: string): Promise<{ title: string; description: string } | null> {
   const b = await serverApi<BotProfile>(`/tanks/bots/${encodeURIComponent(id)}`)
   if (!b) return null
+  const t = await getT(ogMessages)
   return {
     title: b.name,
-    description: `${b.name} by ${b.owner || 'the house'}: a tank bot rated ${b.rating}, ${b.wins} wins in ${plural(b.matches, 'match', 'matches')} this season.`,
+    description: t('botDescription', { name: b.name, owner: b.owner || t('theHouse'), rating: b.rating, wins: b.wins, matches: t.plural('matches', b.matches), n: b.matches }),
   }
 }
 
 export async function matchShare(id: string): Promise<{ title: string; description: string } | null> {
   const m = await serverApi<MatchView>(`/tanks/matches/${encodeURIComponent(id)}`)
   if (!m) return null
+  const t = await getT(ogMessages)
   const names = [...m.players].sort((a, b) => (a.place ?? 9) - (b.place ?? 9)).map((p) => p.name)
   return {
     title: names.slice(0, 2).join(' vs '),
-    description: `Tank bot match: ${names.join(', ')}. Watch the replay.`,
+    description: t('matchDescription', { names: names.join(', ') }),
   }
 }
 
 export async function seasonShare(id: string): Promise<{ title: string; description: string } | null> {
   const s = await serverApi<SeasonDetail>(`/tanks/seasons/${encodeURIComponent(id)}`)
   if (!s) return null
+  const t = await getT(ogMessages)
   const top = s.standings[0]
   return {
     title: s.season.name,
-    description: `Tanks season ${s.season.name}${top ? `: ${top.name} leads at ${top.rating}` : ''}. Bots written by coding agents fight on a public ladder.`,
+    description: t('seasonDescription', { name: s.season.name, top: top ? t('seasonTop', { name: top.name, rating: top.rating }) : '' }),
   }
 }
