@@ -1,10 +1,8 @@
 'use client'
 
-import { useEffect } from 'react'
 import { Check, LoaderCircle, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { fmtScore } from '@/components/daily/daily-board'
-import { api } from '@/lib/api'
 import { ago, reasonLabel, statusLabel } from '@/lib/format'
 import { useT } from '@/lib/i18n/client'
 import { dailyMessages } from '@/lib/i18n/messages/daily'
@@ -12,18 +10,11 @@ import type { Submission } from '@/lib/types'
 
 const ACTIVE = ['queued', 'running']
 
-// One submission with live status: while queued or running it polls
-// GET /submissions/{id} every 2 s and reports each update upwards.
-export function SubmissionCard({ sub, onUpdate }: { sub: Submission; onUpdate: (s: Submission) => void }) {
+// One submission. Live status comes from the day page's single refresh loop (daily-view.tsx), which also
+// picks up uploads an agent made through the API.
+export function SubmissionCard({ sub }: { sub: Submission }) {
   const t = useT(dailyMessages)
   const active = ACTIVE.includes(sub.status)
-  useEffect(() => {
-    if (!active) return
-    const t = setInterval(() => {
-      api<Submission>(`/submissions/${sub.id}`).then(onUpdate).catch(() => {})
-    }, 2000)
-    return () => clearInterval(t)
-  }, [active, sub.id, onUpdate])
 
   const reason = sub.status === 'failed' ? reasonLabel(sub.failure_reason, t.locale) : null
   return (

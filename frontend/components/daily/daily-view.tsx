@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Download } from 'lucide-react'
@@ -38,6 +38,8 @@ When you are done, the repository should build and the tests should pass.`
 // The task of the day (`day` omitted) or a past day (`day` = YYYY-MM-DD).
 const BOARD_PAGE = 200
 
+const ACTIVE = ['queued', 'running']
+
 // Past days accept practice uploads: they do not count for the leaderboards.
 export function DailyView({ day }: { day?: string }) {
   const t = useT(dailyMessages)
@@ -54,13 +56,15 @@ export function DailyView({ day }: { day?: string }) {
   // Submissions made or polled in this session, kept apart from the server's list.
   const [local, setLocal] = useState<Submission[]>([])
 
+  // How many board rows are shown, so a background refresh keeps the pages "show more" already opened.
+  const shownRef = useRef(BOARD_PAGE)
   const load = useCallback(async () => {
     try {
       const d = await api<Daily>(day ? `/daily/${day}` : '/daily')
       setDaily(d)
       setError(null)
       const [lb, st] = await Promise.all([
-        api<{ items: DailyRow[]; total: number }>(`/daily/${d.day}/leaderboard?limit=${BOARD_PAGE}`),
+        api<{ items: DailyRow[]; total: number }>(`/daily/${d.day}/leaderboard?limit=${Math.min(500, Math.max(BOARD_PAGE, shownRef.current))}`),
         api<DayStats>(`/daily/${d.day}/stats`),
       ])
       setRows(lb.items)
@@ -80,6 +84,7 @@ export function DailyView({ day }: { day?: string }) {
     try {
       const lb = await api<{ items: DailyRow[]; total: number }>(`/daily/${daily.day}/leaderboard?offset=${rows.length}&limit=${BOARD_PAGE}`)
       setRows([...rows, ...lb.items])
+      shownRef.current = rows.length + lb.items.length
       setTotal(lb.total)
     } catch (e) {
       setError(errorText(e, t.locale))
@@ -88,16 +93,32 @@ export function DailyView({ day }: { day?: string }) {
     }
   }
 
+  // A just-uploaded submission shows at once; the refresh loop below then takes over its status.
   const update = useCallback((s: Submission) => {
-    setLocal((cur) => {
-      const prev = cur.find((x) => x.id === s.id)
-      if (prev && ['queued', 'running'].includes(prev.status) && !['queued', 'running'].includes(s.status)) {
-        void load()
-        void refreshMe()
-      }
-      return prev ? cur.map((x) => (x.id === s.id ? s : x)) : [s, ...cur]
-    })
-  }, [load, refreshMe])
+    setLocal((cur) => (cur.some((x) => x.id === s.id) ? cur : [s, ...cur]))
+    void load()
+  }, [load])
+
+  // One refresh loop for the whole page: it picks up uploads an agent made through the API, follows queued →
+  // running → verdict, and refreshes attempts, the board and stats. Fast while something is being checked,
+  // slow otherwise, paused while the tab is hidden and run at once when it becomes visible again.
+  const busy = [...local, ...(daily?.my?.submissions ?? [])].some((s) => ACTIVE.includes(s.status))
+  useEffect(() => {
+    const tick = () => { if (!document.hidden) void load() }
+    const timer = setInterval(tick, busy ? 3000 : 20000)
+    const onVisible = () => { if (!document.hidden) void load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible) }
+  }, [busy, load])
+
+  // When a submission of mine reaches a verdict, the streak in the header may change.
+  const activeIds = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const now = new Set((daily?.my?.submissions ?? []).filter((s) => ACTIVE.includes(s.status)).map((s) => s.id))
+    const finished = [...activeIds.current].some((id) => !now.has(id))
+    activeIds.current = now
+    if (finished) void refreshMe()
+  }, [daily, refreshMe])
 
   if (missing) notFound()
   if (poolEmpty) {
@@ -126,10 +147,10 @@ export function DailyView({ day }: { day?: string }) {
   const loginHref = `/login?next=${encodeURIComponent(day ? `/day/${day}` : '/')}`
   const attemptsLeft = practice || !daily.my ? undefined : Math.max(0, daily.attempts_per_day - daily.my.attempts_used)
   const serverIds = new Set(daily.my?.submissions.map((s) => s.id))
-  const localById = new Map(local.map((s) => [s.id, s]))
+  // The server's copy wins: it carries the latest status. Local entries fill the gap until the next refresh.
   const subs = [
     ...local.filter((s) => !serverIds.has(s.id)),
-    ...(daily.my?.submissions ?? []).map((s) => localById.get(s.id) ?? s),
+    ...(daily.my?.submissions ?? []),
   ]
   const share = shareText({ day: daily.day, title: task.title, subs, streak: daily.is_open ? me?.streak.current ?? 0 : 0, scoreWord: t('shareScore'), house: houseShareLine(daily.house ?? [], t) })
 
@@ -209,7 +230,7 @@ export function DailyView({ day }: { day?: string }) {
             <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('nothingYet')}</p>
           ) : (
             <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
-              {subs.map((s) => <SubmissionCard key={s.id} sub={s} onUpdate={update} />)}
+              {subs.map((s) => <SubmissionCard key={s.id} sub={s} />)}
             </ul>
           )}
         </section>
