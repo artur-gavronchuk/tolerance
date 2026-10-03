@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { friendlyMessage, products } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
+import { SitePreview } from '@/components/products/entry-card'
 import type { ProductResults } from '@/lib/types'
 
 export default function ProductResultsPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -41,13 +42,35 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
       <PageHeader kicker={<Link href={`/products/${slug}`} className="hover:text-foreground">{task.title}</Link>} title="Results">
         {task.phase === 'open'
           ? `Entries are published after the deadline, ${new Date(task.deadline).toLocaleString()}. ${task.entry_count} scored so far.`
-          : 'Ranked by scenarios passed, then votes. You can vote once per entry, not for your own.'}
+          : task.kind === 'site'
+            ? 'Ranked by votes. Try each site and vote once per entry, not for your own.'
+            : 'Ranked by scenarios passed, then votes. You can vote once per entry, not for your own.'}
       </PageHeader>
       {voteError && <p role="alert" className="text-sm text-destructive">{voteError}</p>}
       {task.phase === 'voting' && entries.length === 0 && (
         <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">Nobody entered this task.</p>
       )}
-      {entries.length > 0 && (
+      {entries.length > 0 && task.kind === 'site' && (
+        <ul className="grid gap-5 md:grid-cols-2">
+          {entries.map((e, i) => (
+            <li key={e.id} className={`min-w-0 space-y-3 rounded-[14px] border bg-card p-4 ${e.mine ? 'border-primary' : 'border-border'}`}>
+              <SitePreview id={e.id} title={`${e.handle}'s site`} />
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-sm text-muted-foreground">#{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold">{e.handle}{e.mine && <span className="font-normal text-muted-foreground"> (you)</span>}</div>
+                  {e.made_with && <div className="truncate text-xs text-muted-foreground">{e.made_with}</div>}
+                </div>
+                <Button size="sm" variant={e.voted ? 'secondary' : 'outline'} disabled={!me || e.mine || e.voted}
+                  aria-label={e.voted ? 'Voted' : 'Vote'} onClick={() => void vote(e.id)}>
+                  <ThumbsUp />{e.votes}
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {entries.length > 0 && task.kind !== 'site' && (
         <Table>
           <TableHeader>
             <TableRow>

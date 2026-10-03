@@ -25,6 +25,9 @@ const (
 	maxLogTail     = 8 << 10
 	stuckAfter     = 15 * time.Minute
 
+	KindCLI  = "cli"  // a command-line tool scored by I/O scenarios in the sandbox
+	KindSite = "site" // a static site judged by votes only
+
 	PhaseOpen   = "open"   // before the deadline: uploads allowed, entries hidden
 	PhaseVoting = "voting" // after the deadline: uploads closed, entries public, voting open
 )

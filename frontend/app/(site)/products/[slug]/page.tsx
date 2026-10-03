@@ -60,10 +60,10 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
         {open && !meLoading && !me && (
           <p className="text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" href="/login">Sign in</Link> to upload your solution.</p>
         )}
-        {open && me && <UploadForm slug={slug} disabled={task.attempts < 1000 && left <= 0} onDone={refresh} />}
+        {open && me && <UploadForm slug={slug} site={task.kind === 'site'} disabled={task.attempts < 1000 && left <= 0} onDone={refresh} />}
         {task.mine.length > 0 && (
           <div className="mt-6 space-y-3">
-            {task.mine.map((e) => <EntryCard key={e.id} entry={e} />)}
+            {task.mine.map((e) => <EntryCard key={e.id} entry={e} site={task.kind === 'site'} />)}
           </div>
         )}
       </section>
@@ -71,7 +71,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
   )
 }
 
-function UploadForm({ slug, disabled, onDone }: { slug: string; disabled: boolean; onDone: () => void }) {
+function UploadForm({ slug, site, disabled, onDone }: { slug: string; site: boolean; disabled: boolean; onDone: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [madeWith, setMadeWith] = useState('')
@@ -105,9 +105,11 @@ function UploadForm({ slug, disabled, onDone }: { slug: string; disabled: boolea
   return (
     <form onSubmit={(e) => void submit(e)} className="max-w-xl space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="product-file">Your project</Label>
+        <Label htmlFor="product-file">{site ? 'Your site' : 'Your project'}</Label>
         <Input id="product-file" ref={fileRef} type="file" accept=".zip" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <p className="text-xs text-muted-foreground">A .zip with the files at its root, up to 5 MB.</p>
+        <p className="text-xs text-muted-foreground">
+          {site ? 'A .zip of the static site with index.html at its root, up to 5 MB. Use relative paths for assets.' : 'A .zip with the files at its root, up to 5 MB.'}
+        </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="product-made-with">Made with <span className="font-normal text-muted-foreground">(optional)</span></Label>

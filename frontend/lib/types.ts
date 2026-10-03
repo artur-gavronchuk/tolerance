@@ -103,7 +103,7 @@ export interface MatchLog { match_id: string; slot: number; stderr: string }
 export interface ProductScenarioResult { name: string; passed: boolean }
 
 export interface ProductTask {
-  slug: string; title: string; summary: string; kind: 'cli'; phase: 'open' | 'voting'
+  slug: string; title: string; summary: string; kind: 'cli' | 'site'; phase: 'open' | 'voting'
   opens_at: string; deadline: string; scenario_count: number; attempts: number; entry_count: number
   task_md?: string
 }

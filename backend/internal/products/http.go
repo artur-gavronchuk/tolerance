@@ -3,7 +3,10 @@ package products
 import (
 	"errors"
 	"io"
+	"mime"
 	"net/http"
+	"path"
+	"strings"
 
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/httpx"
@@ -35,6 +38,7 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service, viewer func(r *http.Re
 		}
 		httpx.Respond(w, http.StatusOK, res)
 	})
+	mux.HandleFunc("GET /api/v1/product-entries/{id}/site/{path...}", serveSite(s, viewer))
 	mux.HandleFunc("GET /api/v1/product-entries/{id}/zip", func(w http.ResponseWriter, r *http.Request) {
 		data, err := s.Zip(r.Context(), r.PathValue("id"))
 		if err != nil {
@@ -45,6 +49,41 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service, viewer func(r *http.Re
 		w.Header().Set("Content-Disposition", `attachment; filename="`+r.PathValue("id")+`.zip"`)
 		_, _ = w.Write(data)
 	})
+}
+
+// siteCSP serves uploaded sites as an opaque origin: their scripts run but can't read the session cookie
+// or call the API as the viewer (cmd/api also refuses non-GET requests with Origin: null).
+const siteCSP = "sandbox allow-scripts allow-forms allow-popups allow-modals"
+
+func serveSite(s *Service, viewer func(r *http.Request) string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", siteCSP)
+		files, err := s.SiteFiles(r.Context(), r.PathValue("id"), viewer(r))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		raw := r.PathValue("path")
+		p := strings.TrimPrefix(path.Clean("/"+raw), "/")
+		if p == "" || strings.HasSuffix(raw, "/") {
+			p = path.Join(p, "index.html")
+		}
+		body, ok := files[p]
+		if !ok {
+			p = path.Join(p, "index.html")
+			body, ok = files[p]
+		}
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		ct := mime.TypeByExtension(path.Ext(p))
+		if ct == "" {
+			ct = http.DetectContentType(body)
+		}
+		w.Header().Set("Content-Type", ct)
+		_, _ = w.Write(body)
+	}
 }
 
 // RegisterOwnerRoutes mounts the session-protected routes.

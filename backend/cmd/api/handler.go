@@ -67,6 +67,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("POST /api/v1/products/{slug}/entries", session(owner))
 	api.Handle("POST /api/v1/product-entries/{id}/vote", session(owner))
 	api.Handle("GET /api/v1/product-entries/{id}/zip", public)
+	api.Handle("GET /api/v1/product-entries/{id}/site/{path...}", public)
 	api.Handle("/api/v1/daily", public)
 	api.Handle("/api/v1/daily/", public)
 	api.Handle("/api/v1/days", public)
@@ -113,6 +114,11 @@ func withMiddleware(next http.Handler, log *slog.Logger, trustProxy bool) http.H
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Cache-Control", "no-store")
+		}
+		// Uploaded sites run as an opaque origin (see products.siteCSP); never let them change state.
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("Origin") == "null" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
 		}
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		actorLog := &identity.ActorLog{}

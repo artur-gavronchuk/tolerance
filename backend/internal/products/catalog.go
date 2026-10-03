@@ -51,8 +51,18 @@ func Sync(ctx context.Context, pool *db.Pool, dir string) (int, error) {
 		if err := json.Unmarshal(raw, &l.m); err != nil {
 			return 0, fmt.Errorf("products: %s: %w", mf, err)
 		}
-		if l.m.Slug == "" || l.m.Slug != filepath.Base(base) || l.m.Kind != "cli" || l.m.Image == "" || l.m.Command == "" || l.m.TimeoutS <= 0 {
-			return 0, fmt.Errorf("products: %s: slug (must equal the directory), kind=cli, image, command and timeout_s are required", mf)
+		if l.m.Slug == "" || l.m.Slug != filepath.Base(base) {
+			return 0, fmt.Errorf("products: %s: slug must equal the directory", mf)
+		}
+		switch l.m.Kind {
+		case KindCLI:
+			if l.m.Image == "" || l.m.Command == "" || l.m.TimeoutS <= 0 {
+				return 0, fmt.Errorf("products: %s: a cli task needs image, command and timeout_s", mf)
+			}
+		case KindSite:
+			// A site is judged by votes only: nothing runs in the sandbox.
+		default:
+			return 0, fmt.Errorf("products: %s: kind must be cli or site", mf)
 		}
 		if l.m.Days <= 0 {
 			l.m.Days = 7
@@ -62,6 +72,11 @@ func Sync(ctx context.Context, pool *db.Pool, dir string) (int, error) {
 			return 0, err
 		}
 		l.md = string(md)
+		if l.m.Kind == KindSite {
+			l.scenarios = []byte("[]")
+			all = append(all, l)
+			continue
+		}
 		if l.scenarios, err = os.ReadFile(filepath.Join(base, "scenarios.json")); err != nil {
 			return 0, err
 		}

@@ -17,8 +17,8 @@ export default function ProductsPage() {
   return (
     <div className="space-y-8">
       <PageHeader title="Product tasks">
-        A weekly product to build with your own agent. Upload the result before the deadline; it is scored by automated
-        scenarios, then everyone votes on the published entries.
+        A weekly product to build with your own agent. Upload the result before the deadline; tools are scored by automated
+        scenarios, sites are shown to everyone, and after the deadline everyone votes on the published entries.
       </PageHeader>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!items && !error && <Skeleton className="h-40 rounded-[14px]" />}
@@ -31,7 +31,7 @@ export default function ProductsPage() {
             className="block min-w-0 rounded-[14px] border border-border bg-card p-5 transition-colors hover:bg-muted/50">
             <div className="flex items-center gap-2">
               <Badge variant={t.phase === 'open' ? 'default' : 'secondary'}>{t.phase === 'open' ? 'Open' : 'Voting'}</Badge>
-              <span className="text-xs text-muted-foreground">{t.scenario_count} scenarios · {t.entry_count} entries</span>
+              <span className="text-xs text-muted-foreground">{t.kind === 'site' ? 'Website' : `${t.scenario_count} scenarios`} · {t.entry_count} entries</span>
             </div>
             <h2 className="heading mt-3 text-lg break-words">{t.title}</h2>
             <p className="mt-1.5 text-sm text-muted-foreground">{t.summary}</p>

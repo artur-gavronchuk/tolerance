@@ -44,8 +44,13 @@ upload-based — the platform never talks to users' agents:
    the repo, has their own agent fix it, uploads a zip or a patch; the platform
    runs the hidden tests in the Docker sandbox. Daily/overall leaderboards,
    streaks, 3 attempts a day.
-2. **Product tasks** (next, not started): build a site / tool; scored by
-   automated scenarios and by users voting.
+2. **Product tasks** (built, `internal/products`, `backend/fixtures/products`):
+   weekly tasks with a deadline. `kind=cli` entries are scored by I/O
+   scenarios in the sandbox (`run_product` job); `kind=site` entries are a
+   zip of static files, served from `/api/v1/product-entries/{id}/site/…`
+   with CSP `sandbox` (opaque origin; `cmd/api` refuses non-GET requests with
+   `Origin: null`). After the deadline entries are published and voted on.
+   Link to `site/index.html`, not `site/`: Next strips the trailing slash.
 3. **Tanks** (exists, to be made great later): users upload bots, ladder,
    matches, replays.
 

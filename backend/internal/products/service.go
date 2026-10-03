@@ -138,8 +138,9 @@ func (s *Service) Create(ctx context.Context, userID, slug, filename string, dat
 		}
 		var deadline time.Time
 		var total int
-		err := tx.QueryRow(ctx, `SELECT deadline, jsonb_array_length(scenarios) FROM product_tasks WHERE slug = $1 AND active AND opens_at <= now()`, slug).
-			Scan(&deadline, &total)
+		var kind string
+		err := tx.QueryRow(ctx, `SELECT deadline, jsonb_array_length(scenarios), kind FROM product_tasks WHERE slug = $1 AND active AND opens_at <= now()`, slug).
+			Scan(&deadline, &total, &kind)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.NotFound()
 		}
@@ -157,12 +158,23 @@ func (s *Service) Create(ctx context.Context, userID, slug, filename string, dat
 		if used >= limits.Cap(AttemptsPerTask) {
 			return httpx.New(http.StatusTooManyRequests, "attempts_exhausted", "All attempts for this task are used")
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO product_entries (id, task_slug, user_id, zip, made_with, total) VALUES ($1,$2,$3,$4,$5,$6)`,
-			id, slug, userID, data, madeWith, total); err != nil {
-			return err
-		}
-		if _, err := jobs.Enqueue(ctx, tx, JobKind, RunPayload{EntryID: id}, ""); err != nil {
-			return err
+		if kind == KindSite {
+			// Nothing to run: a site is done once its zip holds an index.html, and votes decide.
+			if _, ok := files["index.html"]; !ok {
+				return invalid("The zip needs an index.html at its root (or inside a single top-level folder)")
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO product_entries (id, task_slug, user_id, zip, made_with, status, finished_at)
+				VALUES ($1,$2,$3,$4,$5,'done',now())`, id, slug, userID, data, madeWith); err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.Exec(ctx, `INSERT INTO product_entries (id, task_slug, user_id, zip, made_with, total) VALUES ($1,$2,$3,$4,$5,$6)`,
+				id, slug, userID, data, madeWith, total); err != nil {
+				return err
+			}
+			if _, err := jobs.Enqueue(ctx, tx, JobKind, RunPayload{EntryID: id}, ""); err != nil {
+				return err
+			}
 		}
 		if err := audit.Record(ctx, tx, audit.Event{ActorID: userID, Action: "product_entry.created", AggregateKind: "product_entry", AggregateID: id,
 			RequestID: httpx.RequestID(ctx)}); err != nil {
@@ -189,10 +201,15 @@ func (s *Service) Results(ctx context.Context, slug, userID string) (Results, er
 		if err != nil || r.Task.Phase != PhaseVoting {
 			return err
 		}
+		// A cli entry counts by its best score (earliest on ties); a site by the latest upload.
+		pick := "passed DESC, created_at"
+		if r.Task.Kind == KindSite {
+			pick = "created_at DESC"
+		}
 		rows, err := tx.Query(ctx, `
 			SELECT `+entryCols+` FROM (
 				SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $2 AND status = 'done'
-				ORDER BY user_id, passed DESC, created_at) e
+				ORDER BY user_id, `+pick+`) e
 			JOIN users u ON u.id = e.user_id
 			ORDER BY e.passed DESC, 11 DESC, e.created_at`, userID, slug)
 		if err != nil {
@@ -267,4 +284,29 @@ func (s *Service) Zip(ctx context.Context, entryID string) ([]byte, error) {
 		return nil, httpx.NotFound()
 	}
 	return data, err
+}
+
+// SiteFiles returns a site entry's files when the viewer may see them: its owner any time, everyone else
+// once the deadline has passed.
+func (s *Service) SiteFiles(ctx context.Context, entryID, viewerID string) (map[string][]byte, error) {
+	var data []byte
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		var deadline time.Time
+		var owner string
+		if err := tx.QueryRow(ctx, `SELECT e.zip, e.user_id, t.deadline FROM product_entries e JOIN product_tasks t ON t.slug = e.task_slug
+			WHERE e.id = $1 AND e.status = 'done' AND t.kind = 'site'`, entryID).Scan(&data, &owner, &deadline); err != nil {
+			return err
+		}
+		if owner != viewerID && phaseOf(deadline) != PhaseVoting {
+			return httpx.NotFound()
+		}
+		return nil
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, httpx.NotFound()
+	}
+	if err != nil {
+		return nil, err
+	}
+	return submissions.ReadZip(data)
 }
