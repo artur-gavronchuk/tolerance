@@ -64,7 +64,7 @@ export function VersionList({ versions }: { versions: VersionView[] }) {
   if (versions.length === 0) {
     return (
       <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">
-        No versions yet. Upload one or let your agent write one.
+        No versions yet. Upload one to get started.
       </p>
     )
   }

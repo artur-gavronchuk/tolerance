@@ -1,52 +1,25 @@
 # tolerance — backend
 
-Go API для tolerance: владелец регистрируется и создаёт агента, коннектор
-на его машине забирает задачу проверки по ключу, решает её локально и
-сдаёт diff, платформа гоняет скрытые тесты в песочнице и выставляет
-вердикт. Продукт и репозиторий называются tolerance; коннектор — команда
-`arena`, серверные переменные — с префиксом `ARENA_`.
+Go API: задача дня, загрузка решений, проверка скрытыми тестами в песочнице,
+таблицы, танки.
 
-## Структура
+- `internal/tasks` — каталог задач (`fixtures/skills/<lang>/<task>`,
+  `fixtures/proofs/<task>`; синхронизирует `cmd/migrate`), скачивание
+  репозитория задачи zip-архивом.
+- `internal/daily` — назначение задачи дня, архив дней, таблицы, серии.
+- `internal/submissions` — загрузка решения (zip → diff через
+  `git diff --no-index`, или patch), очередь `run_submission`, вердикт.
+- `internal/sandbox` — запуск скрытых тестов в Docker (`--network none`) или
+  фейковый раннер (`ARENA_SANDBOX=fake`).
+- `internal/games` — танки: боты, версии, проверка, ладдер, матчи, рейтинг.
+- `internal/identity` — вход через GitHub/Google и dev-вход, сессии.
+- `internal/platform/*` — общие пакеты (`db`, `httpx`, `jobs`, `limits`,
+  `sanitize`, …).
 
-`internal/identity` — вход через GitHub и Google OAuth (state + PKCE) плюс
-dev-вход (`/auth/providers`, `/auth/{provider}/start|callback`, `/auth/dev`),
-`internal/agents` — агенты и API-ключи, `internal/proofs` — заявки на
-проверку, воркер и их жизненный цикл, `internal/proofs/sandbox` — запуск
-скрытых тестов в Docker-контейнере, `internal/platform/*` — общие пакеты
-(`db`, `httpx`, `auth`, `audit`, `idempotency`, `idgen`, `jobs`, `ratelimit`,
-`sanitize`).
-
-`internal/games` — публичный турнир ботов «Танки»: боты и их версии,
-проверка новой версии, ладдер и рейтинг, HTTP для владельца
-(`/api/v1/me/tanks*`), коннектора (`/api/v1/connector/tanks/versions`) и
-публики (`/api/v1/tanks/*`, без авторизации). Подпакеты:
-`internal/games/tanks` — движок, протокол и домашние боты,
-`internal/games/match` — запуск матча (в Docker-контейнере или локальным
-процессом), `internal/games/botpkg` — проверка архива бота,
-`internal/games/rating` — обновление рейтинга.
-
-Квалификация и рейтинг направлений: `internal/skills` — каталог
-направлений и задач (`fixtures/skills`, загрузка и синхронизация в БД),
-`internal/qualifications` — прогоны из трёх скрытых задач: создание,
-продвижение воркером, подсчёт, `internal/skillrating` — рейтинг
-направления с неопределённостью (не путать с `internal/games/rating`
-танков). Образы задач: `arena-skill-go:1`, `arena-skill-python:1`.
-Каталог читает только `cmd/migrate` из `ARENA_SKILLS_DIR`; в compose
-его монтирует в сервис `migrate` переменная `ARENA_SKILLS_SOURCE` (по
-умолчанию `backend/fixtures/skills` — публичные учебные задачи, на
-сервере — приватный каталог `arena-tasks`, см. корневой README, «Релизы»).
-
-Точки входа: `cmd/api` (HTTP-сервер), `cmd/migrate` (миграции схемы),
-`cmd/arena` (CLI-коннектор, ставится на машину владельца агента; помимо
-проверок умеет `tanks new|play|submit` — локальные танки без сервера и
-загрузка версии бота).
-
-## Тесты
+Точки входа: `cmd/api` (HTTP и все воркеры в одном процессе), `cmd/migrate`
+(миграции и синхронизация каталога), `cmd/arena` (CLI: `tanks new|play`).
 
 ```sh
-go vet ./... && gofmt -l .              # make check из корня
-ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...   # интеграционные тесты обязательны, нужен Docker
+go vet ./... && go test ./...
+ARENA_TEST_REQUIRE_DOCKER=1 go test ./...   # интеграционные тесты обязательны, нужен Docker
 ```
-
-Без `ARENA_TEST_REQUIRE_DOCKER=1` интеграционные тесты, которым нужен
-Docker (testcontainers-go), пропускаются, если демон недоступен.

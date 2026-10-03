@@ -1,5 +1,4 @@
-// Package limits switches off the per-agent and per-owner quotas (daily
-// proof/qualification/upload caps, hourly create caps) for local runs, where
+// Package limits switches off the per-person quotas (daily submission attempts, bot upload caps) for local runs, where
 // they only get in the way of trying things. cmd/api calls Disable when
 // ARENA_NO_LIMITS=true; every quota check goes through Cap or Disabled.
 package limits
@@ -10,6 +9,9 @@ var off atomic.Bool
 
 // Disable turns every quota off for the life of the process.
 func Disable() { off.Store(true) }
+
+// Enable turns quotas back on (tests that toggle them).
+func Enable() { off.Store(false) }
 
 // Disabled reports whether quotas are off.
 func Disabled() bool { return off.Load() }

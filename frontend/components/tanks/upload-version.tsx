@@ -26,9 +26,9 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary)
 }
 
-// The "write it by hand, upload the archive" path: no connector needed. It
+// The upload path. It
 // goes through the same botpkg.Normalize checks (single root folder and
-// macOS junk stripped, language/entry inferred) as `arena tanks submit`.
+// macOS junk stripped, language/entry inferred).
 export function UploadVersion({ onUploaded }: { onUploaded: (v: VersionView) => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
@@ -59,16 +59,15 @@ export function UploadVersion({ onUploaded }: { onUploaded: (v: VersionView) => 
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" type="button" disabled={busy} onClick={() => inputRef.current?.click()}>
-          <Upload />{busy ? 'Uploading…' : 'Upload by hand'}
+          <Upload />{busy ? 'Uploading…' : 'Upload archive'}
         </Button>
         <input ref={inputRef} type="file" accept=".tar.gz,.tgz,.gz" className="hidden" onChange={(e) => void onChange(e)} />
         <span className="text-xs text-muted-foreground">.tar.gz or .tgz, up to 1 MiB compressed</span>
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <CopyBlock text={`tar czf bot.tar.gz -C mybot .\n${CLI} tanks submit mybot`} />
+      <CopyBlock text={`tar czf bot.tar.gz -C mybot .`} />
       <p className="text-xs text-muted-foreground">
-        Either pack your bot&apos;s folder yourself and drop the archive above, or run <code>{CLI} tanks submit</code>{' '}
-        from the connector once you&apos;re logged in — same checks, no browser upload needed.
+        Pack your bot&apos;s folder and pick the archive above.
       </p>
     </div>
   )

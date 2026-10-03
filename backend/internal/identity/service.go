@@ -3,6 +3,8 @@ package identity
 import (
 	"context"
 	"errors"
+	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 type User struct {
 	ID        string    `json:"id"`
 	Email     string    `json:"email"`
+	Handle    string    `json:"handle"`
 	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -39,10 +42,10 @@ func NewService(pool *db.Pool, adminEmails []string) *Service {
 // NormalizeEmail trims and lower-cases; the database stores this form only.
 func NormalizeEmail(e string) string { return strings.ToLower(strings.TrimSpace(e)) }
 
-const userColumns = `id, email, role, created_at`
+const userColumns = `id, email, handle, role, created_at`
 
 func scanUser(row interface{ Scan(...any) error }, u *User) error {
-	if err := row.Scan(&u.ID, &u.Email, &u.Role, &u.CreatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.Handle, &u.Role, &u.CreatedAt); err != nil {
 		return err
 	}
 	u.CreatedAt = u.CreatedAt.UTC()
@@ -128,8 +131,12 @@ func (s *Service) attachIdentity(ctx context.Context, tx pgx.Tx, id Identity, em
 	if !id.EmailVerified || email == "" {
 		return "", ErrEmailUnverified
 	}
-	created, err := tx.Exec(ctx, `INSERT INTO users (id, email, role) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`,
-		idgen.New("user"), email, s.roleFor(email))
+	handle, err := freeHandle(ctx, tx, id.Login, email)
+	if err != nil {
+		return "", err
+	}
+	created, err := tx.Exec(ctx, `INSERT INTO users (id, email, handle, role) VALUES ($1, $2, $3, $4) ON CONFLICT (email) DO NOTHING`,
+		idgen.New("user"), email, handle, s.roleFor(email))
 	if err != nil {
 		return "", err
 	}
@@ -189,10 +196,48 @@ func (s *Service) UserBySession(ctx context.Context, token string) (User, error)
 		return scanUser(tx.QueryRow(ctx, `
 			UPDATE sessions s SET last_seen_at = CASE WHEN s.last_seen_at < now() - interval '1 hour' THEN now() ELSE s.last_seen_at END
 			FROM users u WHERE s.id = $1 AND s.user_id = u.id AND s.expires_at > now()
-			RETURNING u.id, u.email, u.role, u.created_at`, sessionID(token)), &u)
+			RETURNING u.id, u.email, u.handle, u.role, u.created_at`, sessionID(token)), &u)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrNoSession
 	}
 	return u, err
+}
+
+var handleJunk = regexp.MustCompile(`[^A-Za-z0-9_-]+`)
+
+// handleBase turns a login or an email local part into the shape handles have: letters, digits, "_" and
+// "-", starting with a letter or digit, at most 32 characters.
+func handleBase(login, email string) string {
+	for _, cand := range []string{login, strings.SplitN(email, "@", 2)[0]} {
+		b := strings.Trim(handleJunk.ReplaceAllString(cand, "-"), "-_")
+		if len(b) > 28 {
+			b = strings.Trim(b[:28], "-_")
+		}
+		if b != "" {
+			return b
+		}
+	}
+	return "user"
+}
+
+// freeHandle picks the first unused handle: the base, then base-2, base-3, ... Handles are unique
+// case-insensitively. A transaction-scoped advisory lock serializes sign-ups so two new users cannot both
+// take the same free name.
+func freeHandle(ctx context.Context, tx pgx.Tx, login, email string) (string, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('users:handle'))`); err != nil {
+		return "", err
+	}
+	base := handleBase(login, email)
+	cand := base
+	for n := 2; ; n++ {
+		var taken bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE lower(handle) = lower($1))`, cand).Scan(&taken); err != nil {
+			return "", err
+		}
+		if !taken {
+			return cand, nil
+		}
+		cand = fmt.Sprintf("%s-%d", base, n)
+	}
 }

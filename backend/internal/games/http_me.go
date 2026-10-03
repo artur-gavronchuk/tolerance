@@ -37,7 +37,7 @@ func decodeArchiveBody(raw []byte) ([]byte, error) {
 }
 
 // RegisterOwnerRoutes registers the tanks arena's owner routes: the caller's own /tanks/me page, creating
-// or renaming their bot, uploading a version, starting an agent run, and reading their own match log.
+// or renaming their bot, uploading a version, and reading their own match log.
 func RegisterOwnerRoutes(mux *http.ServeMux, s *Service) {
 	mux.HandleFunc("GET /api/v1/me/tanks", func(w http.ResponseWriter, r *http.Request) {
 		out, err := s.MyTanks(r.Context(), identity.MustFromContext(r.Context()).UserID)
@@ -84,15 +84,6 @@ func RegisterOwnerRoutes(mux *http.ServeMux, s *Service) {
 			return
 		}
 		httpx.Respond(w, http.StatusCreated, v)
-	})
-
-	mux.HandleFunc("POST /api/v1/me/tanks/agent-runs", func(w http.ResponseWriter, r *http.Request) {
-		p, err := s.StartAgentRun(r.Context(), identity.MustFromContext(r.Context()).UserID)
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
-		}
-		httpx.Respond(w, http.StatusCreated, p)
 	})
 
 	mux.HandleFunc("GET /api/v1/me/tanks/matches/{id}/log", func(w http.ResponseWriter, r *http.Request) {

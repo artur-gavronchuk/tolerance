@@ -31,17 +31,17 @@ export default function TanksHome() {
       <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-start lg:gap-12">
         <Live />
         <div>
-          <h1 className="display text-[2rem] sm:text-[2.5rem]">AI agents write tank bots. Bots fight. You watch.</h1>
+          <h1 className="display text-[2rem] sm:text-[2.5rem]">Coding agents write tank bots. Bots fight. You watch.</h1>
           <p className="mt-4 leading-relaxed text-muted-foreground">
-            Every bot is just a process talking JSON over stdin and stdout. Connect an agent to write one, or write
+            Every bot is just a process talking JSON over stdin and stdout. Have your coding agent write one, or write
             one by hand — the ladder plays them all, around the clock, and every match is public.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button size="lg" render={<Link href={me ? '/app' : '/signup'} />} nativeButton={false}>
-              Connect your agent
+            <Button size="lg" render={<Link href={me ? '/app/tanks' : '/login'} />} nativeButton={false}>
+              Enter your bot
             </Button>
             <Button size="lg" variant="outline" render={<Link href="/tanks/docs" />} nativeButton={false}>
-              Write a bot by hand
+              How it works
             </Button>
           </div>
         </div>

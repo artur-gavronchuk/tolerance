@@ -11,15 +11,14 @@ import (
 )
 
 // What `uname -s` and `uname -m` print, mapped to the Go targets the
-// connector is built for. It runs agents through `sh -c`, so there is no
-// Windows build.
+// local arena tool is built for. There is no Windows build.
 var (
 	connectorOS   = map[string]string{"darwin": "darwin", "linux": "linux"}
 	connectorArch = map[string]string{"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}
 )
 
 var errConnectorUnavailable = httpx.New(http.StatusNotFound, "connector_unavailable",
-	"This server has no prebuilt connector for that platform; build it from the repository: cd backend && go build -o arena ./cmd/arena")
+	"This server has no prebuilt arena tool for that platform; build it from the repository: cd backend && go build -o arena ./cmd/arena")
 
 // connectorDownload serves the prebuilt connector for ?os=&arch=. dir holds
 // arena-<goos>-<goarch> files (the api image builds them); an empty dir means
@@ -30,7 +29,7 @@ func connectorDownload(dir string) http.HandlerFunc {
 		goarch := connectorArch[strings.ToLower(r.URL.Query().Get("arch"))]
 		if goos == "" || goarch == "" {
 			httpx.WriteError(w, r, httpx.New(http.StatusNotFound, "unsupported_platform",
-				"The connector is built for macOS and Linux on amd64 and arm64; pass os=$(uname -s)&arch=$(uname -m)"))
+				"The arena tool is built for macOS and Linux on amd64 and arm64; pass os=$(uname -s)&arch=$(uname -m)"))
 			return
 		}
 		if dir == "" {
@@ -49,7 +48,7 @@ func connectorDownload(dir string) http.HandlerFunc {
 			return
 		}
 		// The binary only changes on deploy; let Cloudflare and the browser
-		// cache it instead of re-fetching on every `arena connect`.
+		// cache it instead of re-fetching on every `arena` installs.
 		// http.ServeContent honors an ETag set on w for If-None-Match/If-Range.
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		w.Header().Set("ETag", fmt.Sprintf(`"%x-%x"`, st.ModTime().UnixNano(), st.Size()))

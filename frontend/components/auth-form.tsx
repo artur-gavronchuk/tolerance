@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Brand } from '@/components/brand'
-import { ProofTicket } from '@/components/public/proof-ticket'
 import { api, post, ApiError } from '@/lib/api'
 import type { AuthProviders } from '@/lib/types'
 
@@ -39,7 +38,7 @@ function ProviderIcon({ id }: { id: 'github' | 'google' }) {
   )
 }
 
-export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
+export function AuthForm() {
   const router = useRouter()
   const [options, setOptions] = useState<AuthProviders | null>(null)
   const [providersFailed, setProvidersFailed] = useState(false)
@@ -65,7 +64,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
     setError(null)
     try {
       await post('/auth/dev', { email })
-      router.replace('/app')
+      router.replace('/')
     } catch (err) {
       const a = err as ApiError
       setError(a.status === 429 ? errors.rate_limited : a.message)
@@ -74,21 +73,20 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
     }
   }
 
-  const signup = mode === 'signup'
   const nothing = options && options.providers.length === 0 && !options.dev_login && !providersFailed
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1fr_1.05fr]">
       <div className="flex flex-col px-4 py-6 sm:px-10">
         <Brand />
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">
-          <h1 className="display text-[2.2rem]">{signup ? 'Create your account' : 'Sign in'}</h1>
+          <h1 className="display text-[2.2rem]">Sign in</h1>
           <p className="mt-2 text-muted-foreground">
-            {signup ? 'Then create your agent and connect it. It takes about five minutes.' : 'Welcome back. Your agent is where you left it.'}
+            Welcome back. Today’s task is waiting.
           </p>
           <div className="mt-8 flex min-h-24 flex-col gap-3">
             {options?.providers.map((p) => (
               <Button key={p} size="lg" variant="outline" className="gap-2.5"
-                render={<a href={`/api/v1/auth/${p}/start?next=/app`} />} nativeButton={false}>
+                render={<a href={`/api/v1/auth/${p}/start?next=/`} />} nativeButton={false}>
                 <ProviderIcon id={p} />
                 {labels[p]}
               </Button>
@@ -109,19 +107,14 @@ export function AuthForm({ mode }: { mode: 'login' | 'signup' }) {
             By continuing you accept the <Link className="font-semibold text-foreground underline underline-offset-2" href="/terms">terms and fair play rules</Link>.
           </p>
           <p className="mt-6 text-sm text-muted-foreground">
-            {signup ? (
-              <>Already have an account? <Link className="font-semibold text-primary hover:underline" href="/login">Sign in</Link></>
-            ) : (
-              <>New here? The same buttons create your account.</>
-            )}
+            New here? The same buttons create your account.
           </p>
           <p className="mt-2 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/tanks">Watch the tanks arena</Link></p>
         </div>
       </div>
       <aside className="relative hidden overflow-hidden bg-[#15212b] lg:flex lg:flex-col lg:justify-center lg:px-14">
-        <p className="display max-w-md text-[2rem] text-[#eef2f5]">A verdict you can trust, because nobody can help.</p>
-        <p className="mt-4 max-w-md text-[#eef2f5]/70">Once a proof starts, your agent works alone. Hidden tests decide.</p>
-        <ProofTicket className="mt-10 w-full max-w-md [&_figcaption]:text-[#eef2f5]/50" />
+        <p className="display max-w-md text-[2rem] text-[#eef2f5]">One task a day. Hidden tests decide.</p>
+        <p className="mt-4 max-w-md text-[#eef2f5]/70">Give the repository to your coding agent, upload what it wrote, and see how many hidden tests pass.</p>
       </aside>
     </main>
   )

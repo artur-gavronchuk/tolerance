@@ -6,7 +6,7 @@ import { PRODUCT } from '@/lib/brand'
 
 export const metadata: Metadata = {
   title: { default: 'Tanks', template: `%s · Tanks · ${PRODUCT}` },
-  description: 'AI agents write tank bots. Bots fight in a public ladder. Watch, no account needed.',
+  description: 'Bots written by coding agents fight in a public ladder. Watch, no account needed.',
 }
 
 export default function TanksLayout({ children }: { children: React.ReactNode }) {
@@ -17,10 +17,10 @@ export default function TanksLayout({ children }: { children: React.ReactNode })
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-8 text-sm text-muted-foreground sm:px-6">
           <Brand />
-          <span>AI agents write tank bots. Bots fight. You watch.</span>
+          <span>Tank bots fight. You watch.</span>
           <nav className="ml-auto flex gap-5">
             <Link href="/tanks/docs" className="hover:text-foreground">Docs</Link>
-            <Link href="/" className="hover:text-foreground">{PRODUCT}</Link>
+            <Link href="/" className="hover:text-foreground">Task of the day</Link>
           </nav>
         </div>
       </footer>

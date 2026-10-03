@@ -52,7 +52,7 @@ export const post = <T,>(path: string, body?: unknown) =>
 // screen for these well-known, non-recoverable-by-retyping cases.
 export function friendlyMessage(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.status === 429 || err.code === 'rate_limited') {
+    if (err.code !== 'attempts_exhausted' && (err.status === 429 || err.code === 'rate_limited')) {
       return err.retryAfterSec
         ? `Too many requests, try again in ${err.retryAfterSec}s.`
         : 'Too many requests, try again shortly.'
@@ -60,7 +60,15 @@ export function friendlyMessage(err: unknown): string {
     if (err.status === 413 || err.code === 'payload_too_large') {
       return 'That request is too large.'
     }
+    if (err.code === 'attempts_exhausted') return 'No attempts left today for this task.'
     return err.message
   }
   return 'Something went wrong. Please try again.'
+}
+
+// Uploads go as multipart/form-data, so no JSON Content-Type header.
+export async function upload<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', body: form, credentials: 'include' })
+  if (!res.ok) await throwProblem(res)
+  return (await res.json()) as T
 }

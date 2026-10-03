@@ -4,18 +4,16 @@ import "context"
 
 const (
 	KindUser   = "user"
-	KindAgent  = "agent"
 	KindSystem = "system"
 )
 
 // Actor is who is making the request. ID is the audit/idempotency actor id
-// (user_… or agent_…). For an agent actor UserID is the owner.
+// (user_…).
 type Actor struct {
-	Kind    string
-	ID      string
-	UserID  string
-	AgentID string
-	Role    string // "user" | "admin" for users; "" for agents
+	Kind   string
+	ID     string
+	UserID string
+	Role   string // "user" | "admin"
 }
 
 // System is the actor for scheduler and worker writes.
@@ -47,7 +45,7 @@ func MustFromContext(ctx context.Context) Actor {
 
 // ActorLog is a small mutable holder an outer HTTP middleware (the request
 // logger) places into the context before calling into the auth middleware
-// chain. RequireSession/RequireAgent fill in the id they resolve as the
+// chain. RequireSession fills in the id they resolve as the
 // request passes through. This exists because r.WithContext returns a new
 // *http.Request; the outer middleware's own r value never sees a context
 // value attached deeper in the chain, so FromContext there would always
@@ -55,8 +53,7 @@ func MustFromContext(ctx context.Context) Actor {
 // mutating *ActorLog through it is visible to whoever holds the pointer,
 // context copies notwithstanding.
 type ActorLog struct {
-	UserID  string
-	AgentID string
+	UserID string
 }
 
 type actorLogKey struct{}

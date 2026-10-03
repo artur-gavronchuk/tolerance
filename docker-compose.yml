@@ -1,7 +1,7 @@
 # Local stack: `make up` (or `docker compose up --build`) → site on
 # :${WEB_PORT}, api on :${API_PORT}. `migrate` runs goose + catalog sync once
 # and exits; `api` is one process serving HTTP and running
-# the proof, qualification and tanks workers, so it needs docker.sock for the
+# the submissions and tanks workers, so it needs docker.sock for the
 # sandbox and bot containers.
 #
 # The production stack (Caddy, canary, monitoring, backups, deploy scripts)
@@ -34,6 +34,8 @@ services:
     environment:
       ARENA_MIGRATE_DATABASE_URL: postgres://arena_migrate:${POSTGRES_PASSWORD}@postgres:5432/arena?sslmode=disable
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
+      # The image carries fixtures/proofs (ARENA_PROOFS_DIR); the language catalog is mounted here, and
+      # ARENA_SKILLS_SOURCE can point it at the private arena-tasks repo.
       ARENA_SKILLS_DIR: /opt/arena/skills
     volumes:
       - ${ARENA_SKILLS_SOURCE:-./backend/fixtures/skills}:/opt/arena/skills:ro
@@ -52,7 +54,6 @@ services:
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
       ARENA_SANDBOX: ${ARENA_SANDBOX:-docker}
       ARENA_ADMIN_EMAILS: ${ARENA_ADMIN_EMAILS:-}
-      ARENA_SKILL_MIN_POOL: ${ARENA_SKILL_MIN_POOL:-3}
       ARENA_DEV_LOGIN: ${ARENA_DEV_LOGIN:-true}
       ARENA_NO_LIMITS: ${ARENA_NO_LIMITS:-true}
       ARENA_PUBLIC_URL: ${ARENA_PUBLIC_URL:-http://localhost:3000}

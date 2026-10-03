@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"tolerance/internal/identity"
-	"tolerance/internal/skills"
 )
 
 type config struct {
@@ -33,7 +32,6 @@ type config struct {
 	matchInterval    time.Duration
 	matchConcurrency int
 	botImage         string
-	skillMinPool     int
 }
 
 func loadConfig() (config, error) {
@@ -56,7 +54,6 @@ func loadConfig() (config, error) {
 		matchInterval:    20 * time.Second,
 		matchConcurrency: 1,
 		botImage:         env("ARENA_BOT_IMAGE", "arena-bot-runtime:1"),
-		skillMinPool:     skills.MinPool,
 	}
 	if v := os.Getenv("ARENA_MATCH_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
@@ -71,16 +68,6 @@ func loadConfig() (config, error) {
 			return config{}, errors.New("ARENA_MATCH_CONCURRENCY must be an integer >= 1")
 		}
 		cfg.matchConcurrency = n
-	}
-	// How many issuable tasks a skill needs before a qualification run may start.
-	// The default suits the private rating catalog; a local run on this
-	// repository's three-task practice catalog sets it lower. Zero never freezes.
-	if v := os.Getenv("ARENA_SKILL_MIN_POOL"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 0 {
-			return config{}, errors.New("ARENA_SKILL_MIN_POOL must be an integer >= 0")
-		}
-		cfg.skillMinPool = n
 	}
 	for _, e := range strings.Split(os.Getenv("ARENA_ADMIN_EMAILS"), ",") {
 		if e = strings.TrimSpace(e); e != "" {

@@ -6,98 +6,34 @@ export function ago(iso: string, now = Date.now()) {
   return `${Math.round(s / 86400)}d ago`
 }
 
-export function duration(ms: number | null) {
-  if (ms == null) return '—'
-  const s = Math.round(ms / 1000)
-  if (s < 60) return `${s}s`
-  return s % 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s / 60}m`
+// Why a submission failed, in words. Keys are the backend's failure_reason values.
+export const REASON_LABEL: Record<string, string> = {
+  diff_does_not_apply: 'Your patch does not apply to a clean copy of the repository.',
+  touches_test_files: 'The change touches test files. Fix the code, not the tests.',
+  hidden_tests_failed: 'Some hidden tests failed.',
+  tests_did_not_run: 'The tests did not run. Does the code still build?',
+  timeout: 'The tests ran out of time in the sandbox.',
+}
+
+export function reasonLabel(reason: string | null) {
+  if (!reason) return null
+  return REASON_LABEL[reason] ?? reason.replace(/_/g, ' ')
 }
 
 export const STATUS_LABEL: Record<string, string> = {
-  queued: 'Waiting for the connector',
-  claimed: 'Connector picked it up',
-  running_agent: 'Your agent is working',
-  diff_submitted: 'Diff received',
-  running_sandbox: 'Running hidden tests',
-  passed: 'Passed',
-  failed: 'Failed',
-  infra_error: 'Platform error',
-  expired: 'Expired',
-}
-
-export const REASON_LABEL: Record<string, string> = {
-  diff_not_applicable: 'The diff did not apply to a clean copy of the repository.',
-  empty_diff: 'The agent changed nothing.',
-  build_failed: 'The code did not compile in the sandbox.',
-  tests_failed: 'One or more hidden tests failed.',
-  timeout: 'The tests ran out of time in the sandbox.',
-  not_claimed: 'No connector picked the task up within 5 minutes. Is `arena connect` running?',
-  agent_timeout: 'The agent did not return a result within the time limit.',
-  hidden_test_missing_or_failed: 'Not every hidden test ran and passed, so the fix could not be confirmed.',
-  test_file_modified: 'The diff changed a test file. Fix the code, not the tests.',
-  harness_tampering: 'The diff touched the test harness from non-test code. Fix the code only.',
-  stuck: 'The sandbox run never finished on our side. Retry it.',
-  diff_too_large: 'The diff was larger than 256 KiB, so it was not checked.',
-  invalid_package: 'The bot package produced by the diff is not valid. See the check output for details.',
-  run_aborted: 'The qualification run was stopped before this task finished.',
-  bot_rejected: 'The bot did not pass every check. See the checks below for details.',
-}
-
-// Local wall-clock time of an event, e.g. "14:03:27".
-export function clock(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-
-// How long passed between two moments; `to` is an ISO string or epoch ms.
-export function between(fromIso: string, to: string | number) {
-  const end = typeof to === 'number' ? to : new Date(to).getTime()
-  return duration(Math.max(0, end - new Date(fromIso).getTime()))
-}
-
-export type Tone = 'pass' | 'fail' | 'error' | 'live'
-
-// How a proof status reads at a glance. infra_error and expired are the
-// platform's problem, never the agent's, so they get their own tone.
-export function tone(status: string): Tone {
-  if (status === 'passed') return 'pass'
-  if (status === 'failed') return 'fail'
-  if (status === 'infra_error' || status === 'expired') return 'error'
-  return 'live'
-}
-
-export const SHORT_STATUS: Record<string, string> = {
   queued: 'Queued',
-  claimed: 'Picked up',
-  running_agent: 'Agent working',
-  diff_submitted: 'Diff received',
-  running_sandbox: 'Testing',
+  running: 'Running hidden tests',
   passed: 'Passed',
   failed: 'Failed',
-  infra_error: 'Platform error',
-  expired: 'Expired',
+  infra_error: 'Platform error, not counted against you',
 }
 
-export const TIER_LABEL: Record<string, string> = { none: 'Unverified', verified: 'Verified', strong: 'Strong', elite: 'Elite' }
+export const DIFFICULTY_LABEL = ['', 'Easy', 'Medium', 'Hard']
 
-// Why a qualification run cannot start right now: every blocked_reason the
-// API can return for GET /skills.
-export const BLOCKED_LABEL: Record<string, string> = {
-  no_agent: 'Create an agent first.',
-  offline: 'Your agent is offline. Run `arena connect` on its machine.',
-  not_operational: 'Pass the basic proof first.',
-  in_progress: 'A proof or qualification is already running.',
-  no_version: 'Update the connector and run `arena connect` so it reports your agent version.',
-  daily_limit: 'Daily limit reached (3 per skill). Try tomorrow.',
-  skill_frozen: 'This skill is being refilled with fresh tasks.',
+// "05:12:09" until `iso`, or "closed" once it has passed.
+export function countdown(iso: string, now = Date.now()) {
+  const s = Math.floor((new Date(iso).getTime() - now) / 1000)
+  if (s <= 0) return 'closed'
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`
 }
-
-// Why a qualification run ended without a score. A `run_aborted: <reason>`
-// failure_reason on its proofs carries the same reason.
-export const ABORT_LABEL: Record<string, string> = {
-  task_expired: 'The connector did not pick a task up in time.',
-  timed_out: 'The run took too long and was stopped.',
-  version_changed: 'Your agent version changed while the run was going.',
-  no_scored_tasks: 'No task could be scored, because of platform errors.',
-}
-
-export function pct(x: number | null) { return x == null ? '—' : `${Math.round(x * 100)}%` }

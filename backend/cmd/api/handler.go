@@ -9,10 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"tolerance/internal/admin"
-	"tolerance/internal/agents"
-	"tolerance/internal/arena"
-	"tolerance/internal/challenges"
+	"tolerance/internal/daily"
 	"tolerance/internal/games"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/clientip"
@@ -20,86 +17,53 @@ import (
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/platform/ratelimit"
-	"tolerance/internal/proofs"
-	"tolerance/internal/qualifications"
-	"tolerance/internal/skills"
+	"tolerance/internal/submissions"
+	"tolerance/internal/tasks"
 )
 
 type deps struct {
-	pool       *db.Pool
-	log        *slog.Logger
-	users      *identity.Service
-	agents     *agents.Service
-	quals      *qualifications.Service
-	arena      *arena.Service
-	admin      *admin.Service
-	challenges *challenges.Service
-	proofs     *proofs.Service
-	games      *games.Service
-	limiter    *ratelimit.Limiter
-	providers  map[string]identity.Provider
+	pool        *db.Pool
+	log         *slog.Logger
+	users       *identity.Service
+	daily       *daily.Service
+	submissions *submissions.Service
+	games       *games.Service
+	limiter     *ratelimit.Limiter
+	providers   map[string]identity.Provider
 }
 
 func newHandler(cfg config, d deps) http.Handler {
 	owner := http.NewServeMux()
-	identity.RegisterMeRoute(owner, d.users, meAgent(d.agents, d.proofs))
-	agents.RegisterOwnerRoutes(owner, d.agents)
-	proofs.RegisterOwnerRoutes(owner, d.proofs)
+	identity.RegisterMeRoute(owner, d.users, func(ctx context.Context, userID string) (map[string]any, error) {
+		st, err := d.daily.StreakOf(ctx, userID)
+		return map[string]any{"streak": st}, err
+	})
+	submissions.RegisterOwnerRoutes(owner, d.submissions)
 	games.RegisterOwnerRoutes(owner, d.games)
-	skills.RegisterOwnerRoutes(owner, d.pool, d.quals, cfg.skillMinPool, d.agents.StageOf)
-	qualifications.RegisterOwnerRoutes(owner, d.quals)
-	challenges.RegisterOwnerRoutes(owner, d.challenges)
-
-	connector := http.NewServeMux()
-	agents.RegisterConnectorRoutes(connector, d.agents)
-	proofs.RegisterConnectorRoutes(connector, d.proofs)
-	games.RegisterConnectorRoutes(connector, d.games)
-	connector.HandleFunc("GET /api/v1/connector/status", connectorStatus(d.agents, d.proofs))
 
 	public := http.NewServeMux()
+	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
+	tasks.RegisterPublicRoutes(public, d.pool)
 	games.RegisterPublicRoutes(public, d.games)
-	agents.RegisterPublicRoutes(public, d.agents)
-	arena.RegisterPublicRoutes(public, d.arena)
-	challenges.RegisterPublicRoutes(public, d.challenges)
-
-	adminMux := http.NewServeMux()
-	admin.RegisterRoutes(adminMux, d.admin)
-	challenges.RegisterAdminRoutes(adminMux, d.challenges)
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
 	identity.RegisterAuthRoutes(api, d.users, d.limiter, identity.AuthConfig{
 		Providers: d.providers, PublicURL: cfg.publicURL, DevLogin: cfg.devLogin, Secure: cfg.secureCookies, TrustProxy: cfg.trustProxy,
 	})
-	// Public: the owner downloads the connector before having it set up.
-	// The exact GET pattern wins over the key-protected /api/v1/connector/ prefix.
+	// Public: the local `arena tanks new|play` tool is downloadable without an account.
 	api.HandleFunc("GET /api/v1/connector/download", connectorDownload(cfg.connectorDir))
 	api.Handle("/api/v1/me", session(owner))
-	api.Handle("/api/v1/agent", session(owner))
-	api.Handle("/api/v1/agent/", session(owner))
-	api.Handle("/api/v1/proof-tasks", session(owner))
-	api.Handle("/api/v1/proofs", session(owner))
-	api.Handle("/api/v1/proofs/", session(owner))
-	api.Handle("/api/v1/skills", session(owner))
-	api.Handle("/api/v1/qualifications", session(owner))
-	api.Handle("/api/v1/qualifications/", session(owner))
-	api.Handle("/api/v1/agents/", public)
 	api.Handle("/api/v1/me/tanks", session(owner))
 	api.Handle("/api/v1/me/tanks/", session(owner))
-	api.Handle("/api/v1/tanks/", public)
+	api.Handle("/api/v1/submissions", session(owner))
+	api.Handle("/api/v1/submissions/", session(owner))
+	api.Handle("/api/v1/daily", public)
+	api.Handle("/api/v1/daily/", public)
+	api.Handle("/api/v1/days", public)
 	api.Handle("/api/v1/leaderboard", public)
-	api.Handle("/api/v1/arena/", public)
-	// The exact owner patterns win over the public /api/v1/challenges/ prefix
-	// mounted in task 5, the same way GET /connector/download wins over the
-	// key-protected /api/v1/connector/ prefix.
-	api.Handle("/api/v1/challenges", public)
-	api.Handle("/api/v1/challenges/", public)
-	api.Handle("POST /api/v1/challenges/{slug}/enter", session(owner))
-	api.Handle("/api/v1/me/challenges", session(owner))
-	// RequireAdmin reads the actor the session middleware attaches, so it sits
-	// inside session(), not outside it.
-	api.Handle("/api/v1/admin/", session(identity.RequireAdmin(adminMux)))
-	api.Handle("/api/v1/connector/", identity.RequireAgent(d.agents)(connector))
+	api.Handle("/api/v1/tasks/", public)
+	api.Handle("/api/v1/tanks/", public)
 
 	top := http.NewServeMux()
 	top.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -123,18 +87,11 @@ type statusWriter struct {
 
 func (s *statusWriter) WriteHeader(code int) { s.status = code; s.ResponseWriter.WriteHeader(code) }
 
-// isLongPollRoute matches the connector's long-poll route by its matched
-// pattern (not a raw path prefix, so it only fires once routing actually
-// resolved to that handler).
-func isLongPollRoute(route string) bool {
-	return strings.HasSuffix(route, "/connector/tasks/next")
-}
-
 // withMiddleware adds request-id, security headers and one structured log
 // line per request. The line never includes query strings, headers,
-// cookies, Authorization, or any request/response body content (diffs and
-// API keys included) — only routing and identity metadata. user_id/agent_id
-// are read from a holder that RequireSession/RequireAgent fill in as the
+// cookies, Authorization, or any request/response body content (uploads
+// included) — only routing and identity metadata. user_id
+// is read from a holder that RequireSession fills in as the
 // request is authenticated further down the chain (see identity.ActorLog):
 // this handler's own r is a different *http.Request value than the one
 // those middlewares attach the actor to, so FromContext here would always
@@ -164,19 +121,8 @@ func withMiddleware(next http.Handler, log *slog.Logger, trustProxy bool) http.H
 		if actorLog.UserID != "" {
 			fields = append(fields, "user_id", actorLog.UserID)
 		}
-		if actorLog.AgentID != "" {
-			fields = append(fields, "agent_id", actorLog.AgentID)
-		}
 		if sw.status >= 500 {
 			log.Error("request failed", fields...)
-			return
-		}
-		// The long-poll route is hit by every connected connector roughly
-		// once per fallback interval; at thousands of connectors that is
-		// thousands of lines/minute of routine, uninteresting traffic. Only
-		// log it when something is actually worth looking at.
-		if isLongPollRoute(route) && sw.status < 400 && ms <= 30000 {
-			log.Debug("request", fields...)
 			return
 		}
 		log.Info("request", fields...)

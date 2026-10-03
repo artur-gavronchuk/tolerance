@@ -1,7 +1,5 @@
 // Package games is the tanks tournament: bots and their versions, the ladder of matches between them, and
-// the sync job that keeps the house bots and the tanks-bot proof task up to date. It imports proofs (an
-// agent improves its bot the same way it improves a proof: by solving the tanks-bot task and submitting a
-// diff), never the other way around.
+// the sync job that keeps the house bots up to date. Owners upload bot archives; there is no agent path.
 package games
 
 import (
@@ -11,7 +9,6 @@ import (
 
 	"tolerance/internal/games/match"
 	"tolerance/internal/platform/db"
-	"tolerance/internal/proofs"
 )
 
 // Game is the only game this platform runs today.
@@ -41,7 +38,6 @@ type VersionView struct {
 	Checks       []Check   `json:"checks"`
 	CheckLog     string    `json:"check_log"`
 	CheckMatchID *string   `json:"check_match_id"`
-	ProofID      *string   `json:"proof_id"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -59,10 +55,9 @@ type MyBot struct {
 
 // MyTanks is the whole /tanks/me page in one call.
 type MyTanks struct {
-	Bot       *MyBot         `json:"bot"`
-	Versions  []VersionView  `json:"versions"`   // newest first, up to 20
-	AgentRuns []proofs.Proof `json:"agent_runs"` // kind=game_bot proofs of the caller's agent, newest first, up to 10, without diff or log
-	Matches   []MatchView    `json:"matches"`    // filled by Task 10; an empty, non-nil slice until then
+	Bot      *MyBot        `json:"bot"`
+	Versions []VersionView `json:"versions"` // newest first, up to 20
+	Matches  []MatchView   `json:"matches"`  // filled by Task 10; an empty, non-nil slice until then
 }
 
 // MatchPlayerView is one match_players row as shown alongside its match.
@@ -165,15 +160,14 @@ func withDefaults(cfg Config) Config {
 
 // Service is the tanks tournament: bots, versions, matches and the sync job.
 type Service struct {
-	pool   *db.Pool
-	proofs *proofs.Service
-	l      match.Launcher
-	log    *slog.Logger
-	cfg    Config
+	pool *db.Pool
+	l    match.Launcher
+	log  *slog.Logger
+	cfg  Config
 }
 
-func NewService(pool *db.Pool, ps *proofs.Service, l match.Launcher, log *slog.Logger, cfg Config) *Service {
-	return &Service{pool: pool, proofs: ps, l: l, log: log, cfg: withDefaults(cfg)}
+func NewService(pool *db.Pool, l match.Launcher, log *slog.Logger, cfg Config) *Service {
+	return &Service{pool: pool, l: l, log: log, cfg: withDefaults(cfg)}
 }
 
 // CheckBotPayload is the check_bot job's payload: the pending version to validate.

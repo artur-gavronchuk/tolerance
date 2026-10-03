@@ -7,21 +7,17 @@ import (
 	"strings"
 )
 
-// starterFS embeds GAME.md, AGENT_TASK.md and every starter kit under
+// starterFS embeds GAME.md and every starter kit under
 // starter/. Files directly under starter/<lang> must not start with "." or
 // "_" — Go's embed directive skips those.
 //
-//go:embed GAME.md AGENT_TASK.md starter
+//go:embed GAME.md starter
 var starterFS embed.FS
 
 // GameMD is the contents of GAME.md: the tanks rules and protocol,
-// shared by the starter kits, the tanks-bot agent task and the site's
+// shared by the starter kits and the site's
 // /tanks/docs page.
 var GameMD = mustReadStarterFile("GAME.md")
-
-// AgentTaskMD is the contents of AGENT_TASK.md: the TASK.md text handed to
-// an agent improving its bot through the tanks-bot proof.
-var AgentTaskMD = mustReadStarterFile("AGENT_TASK.md")
 
 func mustReadStarterFile(name string) string {
 	data, err := starterFS.ReadFile(name)

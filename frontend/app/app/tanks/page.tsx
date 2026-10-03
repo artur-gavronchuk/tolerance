@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ExternalLink } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/page-header'
-import { AgentRunCard } from '@/components/tanks/agent-run-card'
+import { BotGuideCard } from '@/components/tanks/bot-guide-card'
 import { BotNameForm } from '@/components/tanks/bot-name-form'
 import { MyMatches } from '@/components/tanks/my-matches'
 import { UploadVersion } from '@/components/tanks/upload-version'
@@ -14,16 +14,11 @@ import { api, friendlyMessage } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import type { MyTanks } from '@/lib/types'
 
-const OPEN_PROOF_STATUSES = ['queued', 'claimed', 'running_agent', 'diff_submitted', 'running_sandbox']
-
 // Whether anything on this page is still moving: a version's check hasn't
-// resolved yet, or an agent run is open. Polling stops the moment neither is
-// true, so a finished page sits still instead of hitting the API forever.
+// resolved yet. Polling stops the moment it has, so a finished page sits still
+// instead of hitting the API forever.
 function needsPoll(data: MyTanks | null): boolean {
-  if (!data) return false
-  if (data.versions.some((v) => v.status === 'pending')) return true
-  if (data.agent_runs.some((p) => OPEN_PROOF_STATUSES.includes(p.status))) return true
-  return false
+  return !!data && data.versions.some((v) => v.status === 'pending')
 }
 
 export default function TanksPage() {
@@ -53,8 +48,8 @@ export default function TanksPage() {
   return (
     <div className="space-y-10">
       <PageHeader kicker="Your bot on the ladder" title="Tanks">
-        Write it by hand, upload an archive, or let your agent do it — every version goes through the same checks
-        before it can join the ladder.
+        Have your coding agent write a bot, or write it by hand, then upload the archive — every version goes through
+        the same checks before it can join the ladder.
       </PageHeader>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!data ? (
@@ -93,11 +88,11 @@ export default function TanksPage() {
                 <>
                   <h2 className="heading text-xl">No bot yet</h2>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Upload a version or let your agent write one below, and a bot is created for you automatically.
+                    Upload a version and a bot is created for you automatically.
                     Pick a name now, or rename it later.
                   </p>
                   <div className="mt-4">
-                    <BotNameForm suggestedName={me.agent?.name} onSaved={() => void load()} />
+                    <BotNameForm suggestedName={me.user.handle} onSaved={() => void load()} />
                   </div>
                 </>
               )}
@@ -117,9 +112,9 @@ export default function TanksPage() {
           </div>
 
           <aside className="space-y-8">
-            <AgentRunCard agent={me.agent} runs={data.agent_runs} onStarted={() => void load()} />
+            <BotGuideCard />
             <section className="rounded-[14px] border border-border bg-card p-5">
-              <h2 className="heading">Upload by hand</h2>
+              <h2 className="heading">Upload a version</h2>
               <div className="mt-3">
                 <UploadVersion onUploaded={() => void load()} />
               </div>

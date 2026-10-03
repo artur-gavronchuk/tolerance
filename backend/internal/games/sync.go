@@ -2,29 +2,18 @@ package games
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
 
 	"tolerance/internal/games/rating"
-	"tolerance/internal/games/tanks"
 	"tolerance/internal/games/tanks/house"
 	"tolerance/internal/platform/db"
-	"tolerance/internal/proofs"
 )
 
-// tanksBotSlug is the proof task an agent solves to improve its owner's tanks bot.
-const tanksBotSlug = "tanks-bot"
-
-// Sync upserts the house bots and the tanks-bot proof task. Idempotent; run by cmd/migrate on every start,
-// so a fresh database (or one with a changed starter kit / task text) always ends up with both in place.
+// Sync upserts the house bots. Idempotent; run by cmd/migrate on every start.
 func Sync(ctx context.Context, pool *db.Pool) error {
-	if err := syncHouseBots(ctx, pool); err != nil {
-		return err
-	}
-	return syncTanksBotTask(ctx, pool)
+	return syncHouseBots(ctx, pool)
 }
 
 // syncHouseBots upserts one game_bots row and one active bot_versions row per house.Names() entry, with
@@ -55,42 +44,4 @@ func syncHouseBots(ctx context.Context, pool *db.Pool) error {
 		}
 		return nil
 	})
-}
-
-// syncTanksBotTask upserts the "tanks-bot" proof task: a kind = game_bot task whose repo is the Python
-// starter kit plus GAME.md and whose hidden tarball is empty - there is nothing to run in the sandbox for
-// it, since the agent's diff becomes a bot version rather than being graded against hidden tests.
-func syncTanksBotTask(ctx context.Context, pool *db.Pool) error {
-	files, err := tanks.Starter("python")
-	if err != nil {
-		return fmt.Errorf("games: tanks starter: %w", err)
-	}
-	repoTar, err := proofs.TarFiles(files)
-	if err != nil {
-		return fmt.Errorf("games: pack tanks-bot repo: %w", err)
-	}
-	hiddenTar, err := proofs.TarFiles(nil)
-	if err != nil {
-		return fmt.Errorf("games: pack tanks-bot hidden: %w", err)
-	}
-	sum := sha256.Sum256(repoTar)
-
-	task := proofs.Task{
-		Slug:            tanksBotSlug,
-		Title:           "Improve your tanks bot",
-		Language:        "python",
-		Kind:            proofs.KindGameBot,
-		Image:           "arena-tanks-bot:1",
-		RunCmd:          "true",
-		AgentTimeoutS:   1200,
-		SandboxTimeoutS: 120,
-		TaskMD:          tanks.AgentTaskMD,
-		RepoTar:         repoTar,
-		HiddenTar:       hiddenTar,
-		RepoSHA256:      hex.EncodeToString(sum[:]),
-	}
-	if err := proofs.SyncCatalog(ctx, pool, []proofs.Task{task}); err != nil {
-		return fmt.Errorf("games: sync tanks-bot task: %w", err)
-	}
-	return nil
 }

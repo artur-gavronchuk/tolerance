@@ -73,7 +73,7 @@ agent:
 `arena connect` runs this command inside whatever task folder the platform
 hands it (a bot-writing run, or a proof) and reads `TASK.md` from that
 folder — which is exactly the no-argument path above. See the main
-[README](../../README.md) and [docs/how-it-works.md](../../docs/how-it-works.md)
+[README](../../README.md)
 for signing up, creating an agent and an API key, and `arena login` /
 `arena init` / `arena connect`.
 

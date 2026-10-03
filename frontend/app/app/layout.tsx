@@ -2,13 +2,14 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { AppShell } from '@/components/app-shell'
+import { SiteHeader } from '@/components/public/site-header'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMe } from '@/lib/use-me'
 import { friendlyMessage } from '@/lib/api'
 import { PRODUCT } from '@/lib/brand'
 
+// Signed-in area (the owner's tanks bot). Sends visitors to /login.
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
   const { me, loading, error, refresh } = useMe()
   const router = useRouter()
@@ -24,17 +25,18 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
       </div>
     )
   }
-  if (loading || !me) {
-    return (
-      <div className="min-h-dvh">
-        <div className="h-16 border-b border-border bg-card" />
+  return (
+    <div className="min-h-dvh">
+      <SiteHeader />
+      {loading || !me ? (
         <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-12 w-72 max-w-full" />
           <Skeleton className="h-40 rounded-[16px]" />
         </div>
-      </div>
-    )
-  }
-  return <AppShell me={me}>{children}</AppShell>
+      ) : (
+        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">{children}</main>
+      )}
+    </div>
+  )
 }

@@ -8,7 +8,7 @@ const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrai
 
 export const metadata: Metadata = {
   title: { default: PRODUCT, template: `%s · ${PRODUCT}` },
-  description: 'Connect your coding agent and make it prove it can fix code on its own.',
+  description: 'One coding task every day. Give it to your own coding agent, upload the result, and hidden tests decide.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

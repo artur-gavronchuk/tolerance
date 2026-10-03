@@ -45,7 +45,7 @@ func TestJobs_TwoWorkersNeverShareAJob(t *testing.T) {
 	q := jobs.New(d.AppPool)
 	want := map[string]bool{}
 	for i := 0; i < 20; i++ {
-		want[enqueue(t, d, "run_proof", "")] = true
+		want[enqueue(t, d, "run_submission", "")] = true
 	}
 
 	var mu sync.Mutex
@@ -56,7 +56,7 @@ func TestJobs_TwoWorkersNeverShareAJob(t *testing.T) {
 		go func(owner string) {
 			defer wg.Done()
 			for {
-				j, err := q.Claim(context.Background(), owner, []string{"run_proof"}, time.Minute)
+				j, err := q.Claim(context.Background(), owner, []string{"run_submission"}, time.Minute)
 				if err != nil {
 					t.Errorf("claim: %v", err)
 					return
@@ -84,13 +84,13 @@ func TestJobs_TwoWorkersNeverShareAJob(t *testing.T) {
 
 func TestJobs_DedupeKey(t *testing.T) {
 	d := dbtest.New(t)
-	a := enqueue(t, d, "run_proof", "run:run_1")
-	b := enqueue(t, d, "run_proof", "run:run_1")
+	a := enqueue(t, d, "run_submission", "run:run_1")
+	b := enqueue(t, d, "run_submission", "run:run_1")
 	if a != b {
 		t.Fatalf("same dedupe key must return the existing job: %s vs %s", a, b)
 	}
-	c := enqueue(t, d, "run_proof", "")
-	e := enqueue(t, d, "run_proof", "")
+	c := enqueue(t, d, "run_submission", "")
+	e := enqueue(t, d, "run_submission", "")
 	if c == e {
 		t.Fatal("jobs without a dedupe key must all be distinct")
 	}
@@ -107,11 +107,11 @@ func TestJobs_FailSchedule(t *testing.T) {
 	d := dbtest.New(t)
 	q := jobs.New(d.AppPool)
 	ctx := context.Background()
-	id := enqueue(t, d, "run_proof", "")
+	id := enqueue(t, d, "run_submission", "")
 
 	delays := []time.Duration{30 * time.Second, 2 * time.Minute}
 	for i, want := range delays {
-		j, err := q.Claim(ctx, "w", []string{"run_proof"}, time.Minute)
+		j, err := q.Claim(ctx, "w", []string{"run_submission"}, time.Minute)
 		if err != nil || j == nil {
 			t.Fatalf("attempt %d: claim: %v %v", i+1, j, err)
 		}
@@ -122,7 +122,7 @@ func TestJobs_FailSchedule(t *testing.T) {
 		if err != nil || final {
 			t.Fatalf("attempt %d must not be final: %v %v", i+1, final, err)
 		}
-		if again, _ := q.Claim(ctx, "w", []string{"run_proof"}, time.Minute); again != nil {
+		if again, _ := q.Claim(ctx, "w", []string{"run_submission"}, time.Minute); again != nil {
 			t.Fatalf("attempt %d: job must wait for its backoff", i+1)
 		}
 		var wait time.Duration
@@ -138,7 +138,7 @@ func TestJobs_FailSchedule(t *testing.T) {
 		pastRunAfter(t, d, id)
 	}
 
-	if j, _ := q.Claim(ctx, "w", []string{"run_proof"}, time.Minute); j == nil {
+	if j, _ := q.Claim(ctx, "w", []string{"run_submission"}, time.Minute); j == nil {
 		t.Fatal("third attempt must be claimable")
 	}
 	final, err := q.Fail(ctx, id, errors.New("boom again"))
@@ -155,16 +155,16 @@ func TestJobs_ReclaimExpiredLease(t *testing.T) {
 	d := dbtest.New(t)
 	q := jobs.New(d.AppPool)
 	ctx := context.Background()
-	enqueue(t, d, "run_proof", "")
+	enqueue(t, d, "run_submission", "")
 
-	if j, err := q.Claim(ctx, "crashed-worker", []string{"run_proof"}, time.Millisecond); err != nil || j == nil {
+	if j, err := q.Claim(ctx, "crashed-worker", []string{"run_submission"}, time.Millisecond); err != nil || j == nil {
 		t.Fatalf("claim: %v %v", j, err)
 	}
 	time.Sleep(20 * time.Millisecond)
 	if n, err := q.Reclaim(ctx); err != nil || n != 1 {
 		t.Fatalf("reclaim: %d %v", n, err)
 	}
-	j, err := q.Claim(ctx, "healthy-worker", []string{"run_proof"}, time.Minute)
+	j, err := q.Claim(ctx, "healthy-worker", []string{"run_submission"}, time.Minute)
 	if err != nil || j == nil {
 		t.Fatalf("reclaimed job must be claimable again: %v %v", j, err)
 	}
@@ -180,9 +180,9 @@ func TestJobs_ReclaimGivesUpAfterMaxAttempts(t *testing.T) {
 	d := dbtest.New(t)
 	q := jobs.New(d.AppPool)
 	ctx := context.Background()
-	id := enqueue(t, d, "run_proof", "")
+	id := enqueue(t, d, "run_submission", "")
 	for i := 0; i < 3; i++ {
-		if j, err := q.Claim(ctx, "w", []string{"run_proof"}, time.Millisecond); err != nil || j == nil {
+		if j, err := q.Claim(ctx, "w", []string{"run_submission"}, time.Millisecond); err != nil || j == nil {
 			t.Fatalf("claim %d: %v %v", i+1, j, err)
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -190,7 +190,7 @@ func TestJobs_ReclaimGivesUpAfterMaxAttempts(t *testing.T) {
 			t.Fatalf("reclaim %d: %d %v", i+1, n, err)
 		}
 	}
-	if j, _ := q.Claim(ctx, "w", []string{"run_proof"}, time.Minute); j != nil {
+	if j, _ := q.Claim(ctx, "w", []string{"run_submission"}, time.Minute); j != nil {
 		t.Fatal("a job that always loses its lease must end up failed, not loop forever")
 	}
 	failed, _ := q.List(ctx, "failed")
@@ -203,7 +203,7 @@ func TestJobs_CompleteAndRetry(t *testing.T) {
 	d := dbtest.New(t)
 	q := jobs.New(d.AppPool)
 	ctx := context.Background()
-	id := enqueue(t, d, "run_proof", "")
+	id := enqueue(t, d, "run_submission", "")
 
 	if err := q.Retry(ctx, id); err == nil {
 		t.Fatal("only failed jobs may be retried")
@@ -213,13 +213,13 @@ func TestJobs_CompleteAndRetry(t *testing.T) {
 			t.Fatalf("want state_conflict, got %v", err)
 		}
 	}
-	if j, _ := q.Claim(ctx, "w", []string{"run_proof"}, time.Minute); j == nil {
+	if j, _ := q.Claim(ctx, "w", []string{"run_submission"}, time.Minute); j == nil {
 		t.Fatal("claim")
 	}
 	if err := q.Complete(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	if j, _ := q.Claim(ctx, "w", []string{"run_proof"}, time.Minute); j != nil {
+	if j, _ := q.Claim(ctx, "w", []string{"run_submission"}, time.Minute); j != nil {
 		t.Fatal("a completed job must not be claimed again")
 	}
 	if err := q.Retry(ctx, "job_missing"); err == nil {
@@ -231,10 +231,10 @@ func TestJobs_CompleteAndRetry(t *testing.T) {
 		}
 	}
 
-	failedID := enqueue(t, d, "run_proof", "")
+	failedID := enqueue(t, d, "run_submission", "")
 	for i := 0; i < 3; i++ {
 		pastRunAfter(t, d, failedID)
-		if j, _ := q.Claim(ctx, "w", []string{"run_proof"}, time.Minute); j == nil {
+		if j, _ := q.Claim(ctx, "w", []string{"run_submission"}, time.Minute); j == nil {
 			t.Fatalf("claim %d", i+1)
 		}
 		if _, err := q.Fail(ctx, failedID, errors.New("x")); err != nil {
@@ -244,7 +244,7 @@ func TestJobs_CompleteAndRetry(t *testing.T) {
 	if err := q.Retry(ctx, failedID); err != nil {
 		t.Fatalf("retry of a failed job: %v", err)
 	}
-	j, err := q.Claim(ctx, "w", []string{"run_proof"}, time.Minute)
+	j, err := q.Claim(ctx, "w", []string{"run_submission"}, time.Minute)
 	if err != nil || j == nil || j.Attempts != 1 {
 		t.Fatalf("a retried job starts counting from zero: %+v %v", j, err)
 	}
@@ -254,8 +254,8 @@ func TestJobs_TxVariantsShareTheCallersTransaction(t *testing.T) {
 	d := dbtest.New(t)
 	q := jobs.New(d.AppPool)
 	ctx := context.Background()
-	id := enqueue(t, d, "run_proof", "")
-	if j, _ := q.Claim(ctx, "w", []string{"run_proof"}, time.Minute); j == nil {
+	id := enqueue(t, d, "run_submission", "")
+	if j, _ := q.Claim(ctx, "w", []string{"run_submission"}, time.Minute); j == nil {
 		t.Fatal("claim")
 	}
 
@@ -279,7 +279,7 @@ func TestJobs_TxVariantsShareTheCallersTransaction(t *testing.T) {
 
 	err = d.AppPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		j, err := jobs.GetTx(ctx, tx, id)
-		if err != nil || j.Kind != "run_proof" || j.State != "leased" || j.Attempts != 1 {
+		if err != nil || j.Kind != "run_submission" || j.State != "leased" || j.Attempts != 1 {
 			t.Errorf("GetTx: %+v %v", j, err)
 		}
 		final, err := jobs.FailTx(ctx, tx, id, errors.New("boom"))

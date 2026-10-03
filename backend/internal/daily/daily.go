@@ -1,0 +1,316 @@
+// Package daily is the task of the day: one coding task per UTC day, assigned lazily on the first request,
+// plus the day's leaderboard, the archive of past days, the overall leaderboard and streaks.
+package daily
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"sort"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"tolerance/internal/platform/db"
+	"tolerance/internal/platform/httpx"
+	"tolerance/internal/tasks"
+)
+
+// AttemptsPerDay is how many graded attempts a person gets at the daily task.
+const AttemptsPerDay = 3
+
+const dayLayout = "2006-01-02"
+
+// Today is the current UTC day, YYYY-MM-DD.
+func Today() string { return time.Now().UTC().Format(dayLayout) }
+
+// ParseDay validates a YYYY-MM-DD day.
+func ParseDay(s string) (time.Time, bool) {
+	t, err := time.Parse(dayLayout, s)
+	return t, err == nil
+}
+
+type Service struct{ pool *db.Pool }
+
+func NewService(pool *db.Pool) *Service { return &Service{pool: pool} }
+
+// ErrNoTasks means the catalog has no active task to assign.
+var ErrNoTasks = httpx.New(http.StatusServiceUnavailable, "no_tasks", "No task is available today")
+
+// TaskFor returns the slug of the task assigned to day, assigning one when day is today and none is set
+// yet. For any other day without a task it returns pgx.ErrNoRows.
+//
+// Assignment picks the active task used least recently (never-used first, then the oldest last day, ties
+// by slug). INSERT ... ON CONFLICT DO NOTHING followed by a re-read makes two simultaneous first requests
+// of the day converge on the same task.
+func (s *Service) TaskFor(ctx context.Context, day string) (string, error) {
+	var slug string
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT task_slug FROM daily_tasks WHERE day = $1`, day).Scan(&slug)
+		if err == nil || !errors.Is(err, pgx.ErrNoRows) || day != Today() {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO daily_tasks (day, task_slug)
+			SELECT $1::date, t.slug FROM tasks t WHERE t.active
+			ORDER BY (SELECT max(d.day) FROM daily_tasks d WHERE d.task_slug = t.slug) ASC NULLS FIRST, t.slug
+			LIMIT 1
+			ON CONFLICT (day) DO NOTHING`, day); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT task_slug FROM daily_tasks WHERE day = $1`, day).Scan(&slug)
+	})
+	if errors.Is(err, pgx.ErrNoRows) && day == Today() {
+		return "", ErrNoTasks
+	}
+	return slug, err
+}
+
+// Daily is the GET /daily response. My is filled by the caller-supplied MyFunc when a session is present.
+type Daily struct {
+	Day            string        `json:"day"`
+	ClosesAt       time.Time     `json:"closes_at"`
+	IsOpen         bool          `json:"is_open"`
+	Task           tasks.Summary `json:"task"`
+	AttemptsPerDay int           `json:"attempts_per_day"`
+	My             any           `json:"my"`
+}
+
+// MyFunc builds the signed-in person's block for a day. It lives outside this package (it needs the
+// submission type) and is injected.
+type MyFunc func(ctx context.Context, userID, day string) (any, error)
+
+func (s *Service) Get(ctx context.Context, day, userID string, my MyFunc) (Daily, error) {
+	t, ok := ParseDay(day)
+	if !ok || day > Today() {
+		return Daily{}, httpx.NotFound()
+	}
+	slug, err := s.TaskFor(ctx, day)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Daily{}, httpx.NotFound()
+	}
+	if err != nil {
+		return Daily{}, err
+	}
+	task, err := tasks.Get(ctx, s.pool, slug)
+	if err != nil {
+		return Daily{}, err
+	}
+	d := Daily{Day: day, ClosesAt: t.Add(24 * time.Hour).UTC(), IsOpen: day == Today(), Task: task, AttemptsPerDay: AttemptsPerDay}
+	if userID != "" && my != nil {
+		if d.My, err = my(ctx, userID, day); err != nil {
+			return Daily{}, err
+		}
+	}
+	return d, nil
+}
+
+type Row struct {
+	Place       int       `json:"place"`
+	Handle      string    `json:"handle"`
+	MadeWith    string    `json:"made_with"`
+	PassedTests int       `json:"passed_tests"`
+	TotalTests  int       `json:"total_tests"`
+	SubmittedAt time.Time `json:"submitted_at"`
+}
+
+// Leaderboard is the day's best finished submission per person with at least one hidden test passed.
+func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
+	if _, ok := ParseDay(day); !ok || day > Today() {
+		return nil, httpx.NotFound()
+	}
+	out := []Row{}
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT handle, made_with, passed_tests, total_tests, created_at FROM (
+				SELECT DISTINCT ON (s.user_id) u.handle, s.made_with, s.passed_tests, s.total_tests, s.created_at
+				FROM submissions s JOIN users u ON u.id = s.user_id
+				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND s.passed_tests > 0
+				ORDER BY s.user_id, s.passed_tests DESC, s.created_at ASC) best
+			ORDER BY passed_tests DESC, created_at ASC, handle LIMIT 200`, day)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var r Row
+			if err := rows.Scan(&r.Handle, &r.MadeWith, &r.PassedTests, &r.TotalTests, &r.SubmittedAt); err != nil {
+				return err
+			}
+			r.SubmittedAt = r.SubmittedAt.UTC()
+			r.Place = len(out) + 1
+			out = append(out, r)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+type DayTask struct {
+	Slug       string `json:"slug"`
+	Title      string `json:"title"`
+	Language   string `json:"language"`
+	Difficulty int    `json:"difficulty"`
+}
+
+type DayItem struct {
+	Day     string  `json:"day"`
+	Task    DayTask `json:"task"`
+	Solvers int     `json:"solvers"`
+}
+
+// Days lists past days, newest first, up to 60. solvers = people with a fully passed submission that day.
+func (s *Service) Days(ctx context.Context) ([]DayItem, error) {
+	out := []DayItem{}
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT d.day::text, t.slug, t.title, t.language, t.difficulty,
+			       (SELECT count(DISTINCT s.user_id) FROM submissions s WHERE s.day = d.day AND s.status = 'passed')
+			FROM daily_tasks d JOIN tasks t ON t.slug = d.task_slug
+			WHERE d.day < $1::date ORDER BY d.day DESC LIMIT 60`, Today())
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var it DayItem
+			if err := rows.Scan(&it.Day, &it.Task.Slug, &it.Task.Title, &it.Task.Language, &it.Task.Difficulty, &it.Solvers); err != nil {
+				return err
+			}
+			out = append(out, it)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+type Streak struct {
+	Current int `json:"current"`
+	Best    int `json:"best"`
+}
+
+// streakOf computes the current and best runs from the set of solved days (YYYY-MM-DD). The current run
+// is the consecutive days ending today, or yesterday when today is not solved yet.
+func streakOf(days []string, today time.Time) Streak {
+	set := make(map[string]bool, len(days))
+	for _, d := range days {
+		set[d] = true
+	}
+	sorted := append([]string(nil), days...)
+	sort.Strings(sorted)
+	var st Streak
+	run := 0
+	var prev time.Time
+	for _, d := range sorted {
+		t, _ := ParseDay(d)
+		if run > 0 && t.Equal(prev.AddDate(0, 0, 1)) {
+			run++
+		} else {
+			run = 1
+		}
+		prev = t
+		if run > st.Best {
+			st.Best = run
+		}
+	}
+	cur := today
+	if !set[cur.Format(dayLayout)] {
+		cur = cur.AddDate(0, 0, -1)
+	}
+	for set[cur.Format(dayLayout)] {
+		st.Current++
+		cur = cur.AddDate(0, 0, -1)
+	}
+	return st
+}
+
+func solvedDays(ctx context.Context, tx pgx.Tx, where string, args ...any) (map[string][]string, error) {
+	rows, err := tx.Query(ctx, `SELECT DISTINCT user_id, day::text FROM submissions WHERE day IS NOT NULL AND status = 'passed' `+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var u, d string
+		if err := rows.Scan(&u, &d); err != nil {
+			return nil, err
+		}
+		out[u] = append(out[u], d)
+	}
+	return out, rows.Err()
+}
+
+// StreakOf is the signed-in person's streak.
+func (s *Service) StreakOf(ctx context.Context, userID string) (Streak, error) {
+	var st Streak
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		m, err := solvedDays(ctx, tx, `AND user_id = $1`, userID)
+		if err != nil {
+			return err
+		}
+		st = streakOf(m[userID], time.Now().UTC().Truncate(24*time.Hour))
+		return nil
+	})
+	return st, err
+}
+
+type OverallRow struct {
+	Place         int    `json:"place"`
+	Handle        string `json:"handle"`
+	SolvedDays    int    `json:"solved_days"`
+	CurrentStreak int    `json:"current_streak"`
+}
+
+// Overall ranks people by days fully solved, then current streak, then handle.
+func (s *Service) Overall(ctx context.Context) ([]OverallRow, error) {
+	out := []OverallRow{}
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		m, err := solvedDays(ctx, tx, ``)
+		if err != nil {
+			return err
+		}
+		handles, err := tx.Query(ctx, `SELECT id, handle FROM users WHERE id = ANY($1)`, keys(m))
+		if err != nil {
+			return err
+		}
+		defer handles.Close()
+		today := time.Now().UTC().Truncate(24 * time.Hour)
+		for handles.Next() {
+			var id, h string
+			if err := handles.Scan(&id, &h); err != nil {
+				return err
+			}
+			out = append(out, OverallRow{Handle: h, SolvedDays: len(m[id]), CurrentStreak: streakOf(m[id], today).Current})
+		}
+		return handles.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.SolvedDays != b.SolvedDays {
+			return a.SolvedDays > b.SolvedDays
+		}
+		if a.CurrentStreak != b.CurrentStreak {
+			return a.CurrentStreak > b.CurrentStreak
+		}
+		return a.Handle < b.Handle
+	})
+	if len(out) > 100 {
+		out = out[:100]
+	}
+	for i := range out {
+		out[i].Place = i + 1
+	}
+	return out, nil
+}
+
+func keys(m map[string][]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}

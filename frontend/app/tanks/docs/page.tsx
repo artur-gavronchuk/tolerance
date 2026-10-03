@@ -60,30 +60,26 @@ export default function TanksDocsPage() {
       </PageHeader>
 
       <Section id="quick-start" title="Quick start">
-        <p>Three ways to get a bot into the ladder — pick whichever fits.</p>
-        <p className="font-semibold text-foreground">1. Let your agent write it</p>
+        <p>Two ways to get a bot into the ladder, then upload it.</p>
+        <p className="font-semibold text-foreground">1. Let your coding agent write it</p>
+        <CopyBlock text={`${CLI} tanks new mybot --lang python`} />
         <p>
-          Create an account, add an agent, and run the connector: <code>{CLI} login</code>, <code>{CLI} init</code>,{' '}
-          <code>{CLI} connect</code>. In the <Link className="text-primary hover:underline" href="/app">dashboard</Link>&apos;s
-          Tanks page, press &ldquo;Let my agent write the bot&rdquo;. Your agent gets a folder with the current bot, the rules
-          below (<code>GAME.md</code>) and its match history, and can run <code>{CLI} tanks play</code> itself to
-          check its own work before sending back a diff. The platform builds it, runs the checks in{' '}
-          <a className="text-primary hover:underline" href="#qualifying">Joining the tournament</a>, and puts it in the
-          ladder marked &ldquo;written by agent&rdquo;.
+          Open <code>mybot</code> in Claude Code, Cursor, Codex or any agent, and ask it to write the bot following{' '}
+          <code>GAME.md</code>: keep <code>bot.json</code> valid, use only the standard library, test with{' '}
+          <code>{CLI} tanks play</code> against the house bots over several seeds, and aim to beat them. The prompt is on
+          the <Link className="text-primary hover:underline" href="/app/tanks">My bot</Link> page.
         </p>
         <p className="font-semibold text-foreground">2. Write one by hand</p>
-        <CopyBlock text={`${CLI} tanks new mybot --lang python\n${CLI} tanks play mybot house:hunter house:sniper\n${CLI} tanks submit mybot`} />
+        <CopyBlock text={`${CLI} tanks new mybot --lang python\n${CLI} tanks play mybot house:hunter house:sniper`} />
         <p>
           <code>{CLI} tanks new</code> scaffolds a starter bot (Python or JavaScript). <code>{CLI} tanks play</code>{' '}
           runs a match on your own machine in seconds and writes a replay file — open it at{' '}
           <Link className="text-primary hover:underline" href="/tanks/replay">/tanks/replay</Link>. Both work without an
-          account or network access. <code>{CLI} tanks submit</code> needs <code>{CLI} login</code> first, and marks
-          the bot &ldquo;upload&rdquo; rather than &ldquo;agent&rdquo;.
+          account or network access.
         </p>
-        <p className="font-semibold text-foreground">3. Upload an archive</p>
+        <p className="font-semibold text-foreground">Then upload it</p>
         <p>
-          Pack your bot&apos;s folder as a <code>tar.gz</code> and upload it from the dashboard&apos;s Tanks page — no
-          connector needed. It goes through the same checks as any other version.
+          Pack your bot&apos;s folder as a <code>tar.gz</code> and upload it from the <Link className="text-primary hover:underline" href="/app/tanks">My bot</Link> page. It goes through the same checks as any other version.
         </p>
       </Section>
 
@@ -212,12 +208,11 @@ export default function TanksDocsPage() {
           <li>Only the standard library — the run image is <code>python:3.12-slim</code> plus Node 22, no installed third-party packages.</li>
           <li><code>GAME.md</code> and <code>RESULTS.md</code>, if present, are stripped before packing.</li>
           <li>20 version uploads per day per bot.</li>
-          <li>Running an agent to write a bot follows the same limits as a proof: your agent must be online, one open run at a time, 10 per day, with a 1200-second timeout.</li>
         </ul>
       </Section>
 
       <Section id="qualifying" title="Joining the tournament">
-        <p>Every uploaded or agent-written version goes through a check before it can play in the ladder:</p>
+        <p>Every uploaded version goes through a check before it can play in the ladder:</p>
         <ul className="flex list-disc flex-col gap-1.5 pl-5">
           <li><span className="font-medium text-foreground">package</span> — the archive is well-formed, <code>bot.json</code> parses, and <code>entry</code> exists.</li>
           <li><span className="font-medium text-foreground">starts</span> — the bot answers <code>ready</code> within 5 seconds.</li>
@@ -250,7 +245,7 @@ export default function TanksDocsPage() {
       </Section>
 
       <Section id="local" title="Playing locally">
-        <p>The connector plays matches on your own machine, using the exact same engine as the server:</p>
+        <p>The <code>{CLI}</code> command plays matches on your own machine, using the exact same engine as the server:</p>
         <CopyBlock text={`${CLI} tanks new mybot --lang python     # scaffold a starter bot\n${CLI} tanks play mybot house:hunter house:sniper --seed 1\n${CLI} tanks play mybot house:hunter house:sniper --seed 2`} />
         <p>
           Each run prints a results table (place, kills, damage, status, and the stderr tail of anyone who crashed)

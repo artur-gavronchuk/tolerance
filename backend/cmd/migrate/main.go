@@ -10,8 +10,7 @@ import (
 
 	"tolerance/internal/games"
 	"tolerance/internal/platform/db"
-	"tolerance/internal/proofs"
-	"tolerance/internal/skills"
+	"tolerance/internal/tasks"
 )
 
 func main() {
@@ -34,35 +33,48 @@ func main() {
 	}
 	defer pool.Close()
 
-	if dir := os.Getenv("ARENA_PROOFS_DIR"); dir != "" {
-		tasks, err := proofs.LoadCatalog(dir)
-		if err != nil {
-			log.Fatalf("catalog: %v", err)
-		}
-		if err := proofs.SyncCatalog(context.Background(), pool, tasks); err != nil {
-			log.Fatalf("catalog: %v", err)
-		}
-		log.Printf("catalog: %d task(s) synced", len(tasks))
-	}
-
-	if dir := os.Getenv("ARENA_SKILLS_DIR"); dir != "" {
-		sk, tasks, err := skills.LoadCatalog(dir)
-		if err != nil {
-			log.Fatalf("skills: %v", err)
-		}
-		if len(sk) == 0 {
-			// An empty or unmounted directory must not deactivate the whole task pool.
-			log.Printf("skills: %s has no skills, catalog left as it is", dir)
-		} else {
-			if err := skills.SyncCatalog(context.Background(), pool, sk, tasks); err != nil {
-				log.Fatalf("skills: %v", err)
-			}
-			log.Printf("skills: %d skill(s), %d task(s) synced", len(sk), len(tasks))
-		}
+	if err := syncTasks(context.Background(), pool); err != nil {
+		log.Fatalf("tasks: %v", err)
 	}
 
 	if err := games.Sync(context.Background(), pool); err != nil {
 		log.Fatalf("games: %v", err)
 	}
-	log.Printf("games: house bots and tanks-bot task synced")
+	log.Printf("games: house bots synced")
+}
+
+// syncTasks loads both catalog layouts and upserts them in one pass, so a task that left every directory
+// is deactivated exactly once. ARENA_SKILLS_DIR is <language>/<task>/ with a skill.json per language (the
+// private rating catalog mounts here); ARENA_PROOFS_DIR is <task>/ with the image and command in each
+// manifest.
+func syncTasks(ctx context.Context, pool *db.Pool) error {
+	var lists [][]tasks.Task
+	if dir := os.Getenv("ARENA_PROOFS_DIR"); dir != "" {
+		ts, err := tasks.LoadFlat(dir)
+		if err != nil {
+			return err
+		}
+		lists = append(lists, ts)
+	}
+	if dir := os.Getenv("ARENA_SKILLS_DIR"); dir != "" {
+		ts, err := tasks.LoadByLanguage(dir)
+		if err != nil {
+			return err
+		}
+		lists = append(lists, ts)
+	}
+	all, err := tasks.Merge(lists...)
+	if err != nil {
+		return err
+	}
+	if len(all) == 0 {
+		// An empty or unmounted directory must not deactivate the whole pool.
+		log.Printf("tasks: no catalog configured or empty, tasks left as they are")
+		return nil
+	}
+	if err := tasks.Sync(ctx, pool, all); err != nil {
+		return err
+	}
+	log.Printf("tasks: %d task(s) synced", len(all))
+	return nil
 }

@@ -202,9 +202,9 @@ func devSignIn(s *Service, limiter *ratelimit.Limiter, secure, trustProxy bool) 
 	}
 }
 
-// RegisterMeRoute mounts GET /me. The agent part comes from the agents
-// module as an opaque value so identity does not import it.
-func RegisterMeRoute(mux *http.ServeMux, s *Service, agentFor func(ctx context.Context, userID string) (any, error)) {
+// RegisterMeRoute mounts GET /me. extras adds sibling keys to the response (e.g. the daily streak) from
+// packages identity does not import.
+func RegisterMeRoute(mux *http.ServeMux, s *Service, extras func(ctx context.Context, userID string) (map[string]any, error)) {
 	mux.HandleFunc("GET /api/v1/me", func(w http.ResponseWriter, r *http.Request) {
 		actor := MustFromContext(r.Context())
 		u, err := s.Get(r.Context(), actor.UserID)
@@ -212,11 +212,17 @@ func RegisterMeRoute(mux *http.ServeMux, s *Service, agentFor func(ctx context.C
 			httpx.WriteError(w, r, err)
 			return
 		}
-		agent, err := agentFor(r.Context(), actor.UserID)
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
+		out := map[string]any{"user": u}
+		if extras != nil {
+			more, err := extras(r.Context(), actor.UserID)
+			if err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+			for k, v := range more {
+				out[k] = v
+			}
 		}
-		httpx.Respond(w, http.StatusOK, map[string]any{"user": u, "agent": agent})
+		httpx.Respond(w, http.StatusOK, out)
 	})
 }

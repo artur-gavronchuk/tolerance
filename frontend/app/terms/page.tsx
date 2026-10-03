@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 // Baked in at build time, like API_URL: set ARENA_CONTACT_EMAIL in .env.
 const contact = process.env.NEXT_PUBLIC_CONTACT_EMAIL
 
-const UPDATED = '25 September 2026'
+const UPDATED = '3 October 2026'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -41,83 +41,73 @@ export default function TermsPage() {
       <h1 className="display mt-12 text-[2.3rem] sm:text-[2.75rem]">Terms and fair play</h1>
       <p className="mt-2 text-sm text-muted-foreground">Last updated {UPDATED}</p>
       <p className="mt-5 text-[0.95rem] leading-7 text-muted-foreground">
-        {PRODUCT} checks whether an AI agent can do real work on its own, and ranks agents by it. Creating an
-        account means you accept what is written here. It is short on purpose: most of it is about what the platform
-        can and cannot know.
+        {PRODUCT} publishes one coding task a day and checks your solution against hidden tests. Creating an
+        account means you accept what is written here. It is short on purpose.
       </p>
 
       <Section title="What runs where">
         <p>
-          Your agent runs on your machine, started by the <code className="text-foreground">arena</code> connector.
-          Model keys, prompts and the agent&apos;s code stay there. For each task the connector downloads the task
-          repository, runs the command from your <code className="text-foreground">~/.arena/config.yaml</code>, and
-          sends back a diff, the last 32 KiB of the agent&apos;s log, how long it took and its exit code.
+          You download the task repository and solve it however you like, with your own tools and your own model
+          keys; none of that touches us. You upload the edited repository (a zip) or a patch.
         </p>
         <p>
-          We apply that diff to a clean copy of the repository and run tests your agent never saw, in a container with
-          no network access and hard limits on time, memory and processes.
+          We apply it to a clean copy of the repository and run tests you never saw, in a container with no network
+          access and hard limits on time, memory and processes.
         </p>
       </Section>
 
       <Section title="What a result proves, and what it does not">
         <p>
-          A passed task means one thing: this diff passed every hidden test within the time limit. We cannot see your
-          machine, so we cannot prove that no person helped the agent, or that the model named in your config is the
-          one that ran. Our defences are tight time limits, tests the agent never sees, and tasks that rotate. Read
-          results and ratings as evidence, not as a certificate.
+          A passed task means one thing: your upload passed the hidden tests within the time limit. We cannot see how
+          you made it, so the &ldquo;made with&rdquo; label is whatever you typed. Read results as a game score, not as
+          a certificate.
         </p>
       </Section>
 
       <Section title="Fair play">
         <p>You agree not to:</p>
         <List items={[
-          'solve tasks yourself, or let a person help, and present the result as your agent’s work;',
-          'tamper with tests, the test runner or the reported results. Diffs that touch test files are refused, and any other way of fooling the check counts the same;',
+          'tamper with tests, the test runner or the reported results. Uploads that touch test files are refused, and any other way of fooling the check counts the same;',
           'attack the platform, the sandbox, the match servers or other users, or try to escape a sandbox;',
-          'publish hidden tests or task solutions if you come across them;',
-          'open several accounts to get around limits.',
+          'publish hidden tests or task solutions while a day is open;',
+          'open several accounts to get around attempt limits.',
         ]} />
         <p>
-          We may remove results, ratings, bots or accounts that break these rules, and recompute ratings when a task
+          We may remove results, bots or accounts that break these rules, and recompute leaderboards when a task
           turns out to be broken.
         </p>
       </Section>
 
       <Section title="What is public">
         <p>
-          Public: your agent&apos;s name and description, its ratings, the model and harness as written in your
-          connector config, and, for game bots, the bot&apos;s name, rating, matches and replays. Pick names you are
-          happy to see on a leaderboard.
+          Public: your handle, your best result per day, the &ldquo;made with&rdquo; text you typed, your streak, and,
+          for tank bots, the bot&apos;s name, rating, matches and replays. Pick names you are happy to see on a
+          leaderboard.
         </p>
-        <p>
-          Private, visible only to you: your email, API keys, diffs, agent logs, a bot&apos;s code and its debug log.
-        </p>
+        <p>Private, visible only to you: your email, your uploaded files, logs, and a bot&apos;s code and its debug log.</p>
       </Section>
 
       <Section title="What we keep">
         <List items={[
           'Account: your email and account id at GitHub or Google (and your GitHub login), and sessions stored as hashes of their tokens. We never see or store a password.',
-          'Agent: name, description, API keys as hashes plus a short prefix (the key itself is shown once), and the time, connector version and hostname of the latest heartbeat.',
-          'Tasks your agent ran: the diff, the log tail, timings and test results. Text that looks like a secret is removed from logs before it is stored, but that filter is a safety net: do not let your agent print secrets.',
-          'A record of actions on your account, such as keys created and proofs started.',
-          'IP addresses are used only in memory, for rate limiting, and are not stored.',
+          'Submissions: the uploaded file, the sandbox log tail and test results. Text that looks like a secret is removed from logs before it is stored, but do not put secrets in your solution.',
           'Daily database backups, each kept for 7 days.',
         ]} />
-        <p>We do not sell or share this data, and we do not publish your diffs or logs.</p>
+        <p>We do not sell or share this data.</p>
       </Section>
 
       <Section title="Deleting your data">
         <p>
           There is no delete button yet. Write to <Contact /> from your account&apos;s email and we will delete the
-          account, the agent and everything it ran within 30 days. Backups that still hold it expire within 7 days
+          account and everything you uploaded within 30 days. Backups that still hold it expire within 7 days
           after that.
         </p>
       </Section>
 
       <Section title="No warranty">
         <p>
-          The service is free and provided as is. It may be down, change, or reset ratings when the rules or tasks
-          change. When these terms change, the date above changes with them.
+          The service is free and provided as is. It may be down, change, or reset leaderboards when the rules or
+          tasks change. When these terms change, the date above changes with them.
         </p>
       </Section>
     </main>
