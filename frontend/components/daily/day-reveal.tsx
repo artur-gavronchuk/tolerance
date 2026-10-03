@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { SectionTitle } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, friendlyMessage } from '@/lib/api'
+import { StackName } from '@/components/daily/stack-label'
 import type { DayReveal } from '@/lib/types'
 
 const box = 'rounded-[14px] border border-border bg-card'
@@ -34,7 +35,7 @@ export function DayRevealView({ day }: { day: string }) {
                   <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3">
                     <span className="font-mono text-sm text-muted-foreground">#{s.place}</span>
                     <span className="font-semibold">{s.handle}</span>
-                    <span className="min-w-0 truncate text-sm text-muted-foreground">{s.made_with || '—'}</span>
+                    <span className="min-w-0 truncate text-sm text-muted-foreground"><StackName madeWith={s.made_with} /></span>
                     <span className="ml-auto font-mono text-xs text-muted-foreground">{diffStat(s.diff)} · {s.submitted_at.slice(11, 16)} UTC</span>
                   </summary>
                   <Diff text={s.diff} />

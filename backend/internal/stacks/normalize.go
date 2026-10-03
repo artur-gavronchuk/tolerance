@@ -35,6 +35,8 @@ var toolRules = rules(
 	[2]string{"Windsurf", `windsurf|\bcascade\b`},
 	[2]string{"OpenHands", `open[ -]?hands|opendevin`},
 	[2]string{"Custom", `\bcustom\b|own agent|my agent|my own|\bscripts?\b|home[ -]?(made|grown)|self[ -]?(made|written)|\bby hand\b|\bmanual(ly)?\b|\bnone\b|\bno ai\b|\bno agent\b`},
+	// Last resort: a bare "Claude ..." or a "subagent" is a Claude Code run.
+	[2]string{"Claude Code", `\bclaude\b|sub-?agents?`},
 )
 
 var modelRules = rules(
