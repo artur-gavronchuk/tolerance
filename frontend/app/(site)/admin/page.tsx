@@ -63,7 +63,7 @@ export default function AdminPage() {
   const allowed = !!me?.can_admin
   const { pulse, recent, error, at } = useAdminData(allowed)
 
-  if (loading) return <Skeleton className="h-40 rounded-[14px]" />
+  if (loading) return <Skeleton className="h-40 rounded-xl" />
   if (!allowed) return <NotFoundLike />
 
   return (
@@ -73,7 +73,7 @@ export default function AdminPage() {
         {t('lead')}
       </PageHeader>
       {error && <p role="alert" className="text-sm text-destructive">{errorText(error, t.locale)}</p>}
-      {!pulse && !error && <Skeleton className="h-64 rounded-[14px]" />}
+      {!pulse && !error && <Skeleton className="h-64 rounded-xl" />}
       {pulse && (
         <>
           <UsersSection p={pulse} />
@@ -95,7 +95,7 @@ function NotFoundLike() {
   return (
     <div className="py-16">
       <p className="font-mono text-sm text-muted-foreground">404</p>
-      <h1 className="display mt-2 text-[2.6rem]">{t('nfTitle')}</h1>
+      <h1 className="display mt-2 text-title-sm sm:text-title">{t('nfTitle')}</h1>
       <p className="mt-3 text-muted-foreground">{t('nfText')}</p>
       <Link href="/" className="mt-6 inline-block text-sm font-semibold text-primary hover:underline">{t('nfLink')}</Link>
     </div>
@@ -113,7 +113,7 @@ function Tile({ label, value, hint, tone, children, className }: {
   className?: string
 }) {
   return (
-    <div className={cn('min-w-0 rounded-[14px] border border-border bg-card p-4', className)}>
+    <div className={cn('min-w-0 rounded-xl border border-border bg-card p-4', className)}>
       <div className="text-xs font-semibold text-muted-foreground">{label}</div>
       <div className={cn('mt-1 font-mono text-2xl font-bold break-words',
         tone === 'bad' && 'text-destructive', tone === 'warn' && 'text-warning', tone === 'good' && 'text-success')}>{value}</div>
@@ -223,7 +223,7 @@ function TanksSection({ p }: { p: AdminPulse }) {
         <Tile label={t('tournament')} value={<span className="text-lg">{tk.tournament ? stLabel(t, tk.tournament.status) : t('none')}</span>}
           hint={tk.tournament ? <Link href={`/tanks/tournaments/${tk.tournament.id}`} className="text-primary hover:underline">{tk.tournament.name}</Link> : undefined} />
       </div>
-      <div className="mt-3 rounded-[14px] border border-border bg-card">
+      <div className="mt-3 rounded-xl border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow><TableHead>#</TableHead><TableHead>{t('colBot')}</TableHead><TableHead>{t('colOwner')}</TableHead><TableHead className="text-right">{t('colRating')}</TableHead><TableHead className="text-right">{t('colMatches')}</TableHead></TableRow>
@@ -263,7 +263,7 @@ function HealthSection({ p }: { p: AdminPulse }) {
       </div>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <div className="min-w-0 rounded-[14px] border border-border bg-card">
+        <div className="min-w-0 rounded-xl border border-border bg-card">
           <Table>
             <TableHeader><TableRow><TableHead>{t('colJobKind')}</TableHead><TableHead>{t('colState')}</TableHead><TableHead className="text-right">{t('colCount')}</TableHead></TableRow></TableHeader>
             <TableBody>
@@ -278,7 +278,7 @@ function HealthSection({ p }: { p: AdminPulse }) {
             </TableBody>
           </Table>
         </div>
-        <div className="min-w-0 rounded-[14px] border border-border bg-card">
+        <div className="min-w-0 rounded-xl border border-border bg-card">
           <Table>
             <TableHeader><TableRow><TableHead>{t('colStuck')}</TableHead><TableHead>{t('colId')}</TableHead><TableHead className="text-right">{t('colRunningFor')}</TableHead></TableRow></TableHeader>
             <TableBody>
@@ -296,7 +296,7 @@ function HealthSection({ p }: { p: AdminPulse }) {
       </div>
 
       <h3 className="heading mt-6 mb-2 text-base">{t('lastInfra')}</h3>
-      <div className="rounded-[14px] border border-border bg-card">
+      <div className="rounded-xl border border-border bg-card">
         <Table>
           <TableHeader><TableRow><TableHead>{t('colWhen')}</TableHead><TableHead>{t('colKind')}</TableHead><TableHead>{t('colId')}</TableHead><TableHead>{t('colReason')}</TableHead></TableRow></TableHeader>
           <TableBody>
@@ -327,7 +327,7 @@ function FeedSection({ items }: { items: AdminEvent[] }) {
   return (
     <section>
       <SectionTitle aside={t('last50')}>{t('recent')}</SectionTitle>
-      <div className="rounded-[14px] border border-border bg-card">
+      <div className="rounded-xl border border-border bg-card">
         <Table>
           <TableHeader><TableRow><TableHead>{t('colWhen')}</TableHead><TableHead>{t('colEvent')}</TableHead><TableHead>{t('colWho')}</TableHead><TableHead>{t('colDetail')}</TableHead><TableHead>{t('colStatus')}</TableHead></TableRow></TableHeader>
           <TableBody>

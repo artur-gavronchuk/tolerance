@@ -34,14 +34,14 @@ export function AccountManage({ handle }: { handle: string }) {
   return (
     <section>
       <SectionTitle>{t('title')}</SectionTitle>
-      <div className="space-y-3 rounded-[14px] border border-border bg-card p-4 sm:p-5">
+      <div className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
         <p className="max-w-2xl text-sm text-muted-foreground">{t('intro')} <Link className="text-foreground underline underline-offset-2" href="/privacy">{t('privacy')}</Link></p>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" nativeButton={false} render={<a href="/api/v1/me/export" download />}>{t('download')}</Button>
           {!asking && <Button size="sm" variant="outline" onClick={() => setAsking(true)}>{t('deleteButton')}</Button>}
         </div>
         {asking && (
-          <div className="max-w-md space-y-3 rounded-[10px] border border-destructive/40 p-3">
+          <div className="max-w-md space-y-3 rounded-lg border border-destructive/40 p-3">
             <p className="text-sm text-muted-foreground">{t('deleteWarn', { handle })}</p>
             <Label htmlFor="confirm-handle">{t('handleLabel')}</Label>
             <Input id="confirm-handle" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />

@@ -106,7 +106,7 @@ export function NotificationBell() {
         )}
       </button>
       {open && (
-        <div className="fixed inset-x-3 top-[4.25rem] z-50 rounded-[14px] border border-border bg-card shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96">
+        <div className="fixed inset-x-3 top-[4.25rem] z-50 rounded-xl border border-border bg-card shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96">
           <ul className="max-h-[60vh] divide-y divide-border overflow-y-auto">
             {items.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted-foreground">{t('empty')}</li>}
             {items.map((n) => {

@@ -54,7 +54,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
     return (
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-14 sm:px-6">
         <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-64 rounded-[14px]" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     )
   }
@@ -83,20 +83,20 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
       </PageHeader>
 
       {t.status === 'scheduled' && (
-        <p className="mt-8 rounded-[14px] border border-border bg-card p-6 text-center">
+        <p className="mt-8 rounded-xl border border-border bg-card p-6 text-center">
           <span className="block text-sm text-muted-foreground">{tr('tour.drawnIn')}</span>
           <span className="mt-1 block text-3xl font-bold"><Countdown to={t.starts_at} serverNow={t.now} done={tr('tour.anyMoment')} /></span>
         </p>
       )}
 
       {t.status === 'cancelled' && (
-        <p className="mt-8 rounded-[14px] border border-dashed border-strong p-6 text-center text-sm text-muted-foreground">
+        <p className="mt-8 rounded-xl border border-dashed border-strong p-6 text-center text-sm text-muted-foreground">
           {tr('tour.cancelled')}
         </p>
       )}
 
       {t.champion && (
-        <div className="mt-8 flex flex-wrap items-center gap-3 rounded-[14px] border border-warning bg-warning/10 p-5">
+        <div className="mt-8 flex flex-wrap items-center gap-3 rounded-xl border border-warning bg-warning/10 p-5">
           <Trophy className="size-6 text-warning" />
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr('tour.champion')}</p>
@@ -118,7 +118,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
       {(t.entries?.length ?? 0) > 0 && (
         <section className="mt-10">
           <SectionTitle>{tr('tour.entrants')}</SectionTitle>
-          <ul className="divide-y divide-border rounded-[14px] border border-border">
+          <ul className="divide-y divide-border rounded-xl border border-border">
             {t.entries!.map((e) => (
               <li key={e.bot_id} className="flex items-center gap-3 p-3 text-sm">
                 <span className="w-6 shrink-0 font-mono text-muted-foreground">#{e.seed}</span>

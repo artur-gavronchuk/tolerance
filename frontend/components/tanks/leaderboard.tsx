@@ -12,7 +12,7 @@ function Provisional() {
   const t = useT(m)
   return (
     <span title={t('lb.provisionalTitle')}
-      className="rounded-full border border-border px-1.5 py-px text-[0.65rem] font-semibold text-muted-foreground">
+      className="rounded-full border border-border px-1.5 py-px text-2xs font-semibold text-muted-foreground">
       {t('lb.provisional')}
     </span>
   )
@@ -29,7 +29,7 @@ export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
   const t = useT(m)
   if (entries.length === 0) {
     return (
-      <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
+      <p className="rounded-xl border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
         {t('lb.empty')}
       </p>
     )
@@ -70,7 +70,7 @@ export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
           ))}
         </TableBody>
       </Table>
-      <ul className="divide-y divide-border rounded-[14px] border border-border sm:hidden">
+      <ul className="divide-y divide-border rounded-xl border border-border sm:hidden">
         {entries.map((e) => (
           <li key={e.bot_id} className="flex items-center gap-3 p-3">
             <span className="w-5 shrink-0 font-mono text-sm text-muted-foreground">{e.rank}</span>

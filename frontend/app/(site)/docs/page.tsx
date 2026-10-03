@@ -33,14 +33,14 @@ function Section({ id, title, children }: { id: string; title: string; children:
   return (
     <section id={id} className="mt-12 scroll-mt-20">
       <h2 className="heading text-xl">{title}</h2>
-      <div className="mt-3 flex min-w-0 flex-col gap-3 text-[0.95rem] leading-7 text-muted-foreground">{children}</div>
+      <div className="mt-3 flex min-w-0 flex-col gap-3 text-lede leading-7 text-muted-foreground">{children}</div>
     </section>
   )
 }
 
 function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
   return (
-    <div className="overflow-x-auto rounded-[10px] border border-border">
+    <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-left text-sm">
         <thead className="bg-muted/60 text-xs text-foreground">
           <tr>{head.map((h) => <th key={h} className="px-3 py-2 font-semibold">{h}</th>)}</tr>

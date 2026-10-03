@@ -36,7 +36,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-12 w-72 max-w-full" />
-          <Skeleton className="h-40 rounded-[16px]" />
+          <Skeleton className="h-40 rounded-xl" />
         </div>
       ) : (
         <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">{children}</main>

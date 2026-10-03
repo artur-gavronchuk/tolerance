@@ -47,7 +47,7 @@ export function ModerationSection() {
         <Button type="submit" disabled={busy}>{busy ? t('searching') : t('searchGo')}</Button>
       </form>
       {error && <p role="alert" className="mt-2 text-sm text-destructive">{errorText(error, t.locale)}</p>}
-      <ul className="mt-3 divide-y divide-border rounded-[14px] border border-border bg-card">
+      <ul className="mt-3 divide-y divide-border rounded-xl border border-border bg-card">
         {users?.length === 0 && <li className="p-4 text-sm text-muted-foreground">{t('noUsers')}</li>}
         {users?.map((u) => <UserRow key={u.id} u={u} onChanged={changed} />)}
       </ul>
@@ -86,7 +86,7 @@ function UserRow({ u, onChanged }: { u: ModUser; onChanged: () => void }) {
           onDone={() => { setForm(false); onChanged(); if (showItems) void loadItems() }} onCancel={() => setForm(false)} />
       )}
       {showItems && items && (
-        <ul className="divide-y divide-border rounded-[10px] border border-border">
+        <ul className="divide-y divide-border rounded-lg border border-border">
           {items.length === 0 && <li className="p-3 text-sm text-muted-foreground">{t('noItems')}</li>}
           {items.map((it) => <ItemRow key={`${it.kind}-${it.id}`} it={it} onChanged={() => { void loadItems(); onChanged() }} />)}
         </ul>
@@ -123,7 +123,7 @@ function ModLog({ items }: { items: ModLogItem[] }) {
   return (
     <div className="mt-6">
       <SectionTitle aside={t('last50')}>{t('log')}</SectionTitle>
-      <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
+      <ul className="divide-y divide-border rounded-xl border border-border bg-card">
         {items.length === 0 && <li className="p-4 text-sm text-muted-foreground">{t('nothingYet')}</li>}
         {items.map((l, i) => (
           <li key={`${l.at}-${i}`} className="min-w-0 space-y-1 p-3 text-sm">

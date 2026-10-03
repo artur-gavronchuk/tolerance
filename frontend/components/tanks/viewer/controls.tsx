@@ -25,7 +25,7 @@ export function Controls({ playing, onPlayPause, speed, onSpeed, tick, maxTick, 
 }) {
   const t = useT(tanksMatchMessages)
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-border bg-card px-3 py-2.5">
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5">
       <button
         onClick={onPlayPause}
         aria-label={playing ? t('pause') : t('play')}

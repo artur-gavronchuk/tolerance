@@ -23,7 +23,7 @@ export function DayStatsPanel({ stats }: { stats: DayStats }) {
   if (stats.participants === 0) return null
   const rate = Math.round((100 * stats.solvers) / stats.participants)
   return (
-    <div className="rounded-[14px] border border-border bg-card p-5">
+    <div className="rounded-xl border border-border bg-card p-5">
       <dl className="grid grid-cols-3 gap-3 text-center">
         <Stat label={t('tried')} value={stats.participants} />
         <Stat label={t('solved')} value={stats.solvers} />

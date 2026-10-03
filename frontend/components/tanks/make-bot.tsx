@@ -34,7 +34,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 export function MakeBot({ onUploaded }: { onUploaded: (v: VersionView) => void }) {
   const t = useT(m)
   return (
-    <section className="rounded-[14px] border border-border bg-card p-5">
+    <section className="rounded-xl border border-border bg-card p-5">
       <h2 className="heading text-xl">{t('make.title')}</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         {t('make.intro')}

@@ -59,14 +59,14 @@ export function MyMatches({ matches, botId }: { matches: MatchView[]; botId: str
 
   if (matches.length === 0) {
     return (
-      <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">
+      <p className="rounded-xl border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">
         {t('mm.empty')}
       </p>
     )
   }
 
   return (
-    <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
+    <ul className="divide-y divide-border rounded-xl border border-border bg-card">
       {matches.map((match) => {
         const log = logs[match.id]
         const isOpen = openId === match.id
@@ -85,7 +85,7 @@ export function MyMatches({ matches, botId }: { matches: MatchView[]; botId: str
               </button>
             </div>
             {isOpen && (
-              <pre id={`match-log-${match.id}`} className="mt-3 max-h-64 overflow-auto rounded-[10px] border border-border bg-muted/40 p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words">
+              <pre id={`match-log-${match.id}`} className="mt-3 max-h-64 overflow-auto rounded-lg border border-border bg-muted/40 p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words">
                 {log === 'loading' ? t('mm.loading') : log === 'error' ? t('mm.logError') : log?.text || t('mm.noOutput')}
               </pre>
             )}

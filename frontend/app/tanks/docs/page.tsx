@@ -33,13 +33,13 @@ function Section({ id, title, children }: { id: string; title: string; children:
   return (
     <section id={id} className="mt-12 scroll-mt-20">
       <h2 className="heading text-xl">{title}</h2>
-      <div className="mt-3 flex flex-col gap-3 text-[0.95rem] leading-7 text-muted-foreground">{children}</div>
+      <div className="mt-3 flex flex-col gap-3 text-lede leading-7 text-muted-foreground">{children}</div>
     </section>
   )
 }
 
 function Code({ children }: { children: string }) {
-  return <pre className="overflow-x-auto rounded-[10px] border border-border bg-muted p-4 font-mono text-[0.8rem] leading-6 text-foreground">{children}</pre>
+  return <pre className="overflow-x-auto rounded-lg border border-border bg-muted p-4 font-mono text-code text-foreground">{children}</pre>
 }
 
 const RULE_COUNT = 19
@@ -79,7 +79,7 @@ export default async function TanksDocsPage() {
       </Section>
 
       <Section id="rules" title={t('rules.title')}>
-        <div className="overflow-hidden rounded-[10px] border border-border">
+        <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-left text-sm">
             <tbody>
               {Array.from({ length: RULE_COUNT }, (_, i) => (
@@ -133,7 +133,7 @@ export default async function TanksDocsPage() {
       </Section>
 
       <Section id="statuses" title={t('status.title')}>
-        <div className="overflow-hidden rounded-[10px] border border-border">
+        <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-left text-sm">
             <tbody>
               {STATUS_IDS.map((status) => (

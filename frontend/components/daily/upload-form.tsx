@@ -84,7 +84,7 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
             if (f) pick(f)
           }}
           className={cn(
-            'flex w-full flex-col items-center gap-1.5 rounded-[12px] border-2 border-dashed px-4 py-6 text-center transition-colors disabled:opacity-60',
+            'flex w-full flex-col items-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors disabled:opacity-60',
             dragging ? 'border-primary bg-primary/5' : 'border-input hover:bg-muted/50',
           )}>
           {file ? <FileCheck className="size-5 text-success" /> : <Upload className="size-5 text-muted-foreground" />}

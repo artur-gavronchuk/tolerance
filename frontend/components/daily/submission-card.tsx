@@ -62,7 +62,7 @@ export function SubmissionCard({ sub, onUpdate }: { sub: Submission; onUpdate: (
         </ul>
       )}
       {sub.log_tail && (
-        <details className="mt-3 rounded-[10px] border border-border">
+        <details className="mt-3 rounded-lg border border-border">
           <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">{t('logTail')}</summary>
           <pre className="max-h-64 overflow-auto border-t border-border p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words">{sub.log_tail}</pre>
         </details>

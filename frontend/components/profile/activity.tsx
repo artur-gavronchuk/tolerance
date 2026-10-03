@@ -44,14 +44,14 @@ export function MainStack() {
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{children}</p>
+  return <p className="rounded-xl border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{children}</p>
 }
 
 function BotCard({ b }: { b: ActivityBot }) {
   const t = useT(profileMessages)
   const titles = b.tournaments.filter((t) => t.champion)
   return (
-    <li className="flex h-full flex-col gap-3 rounded-[14px] border border-border bg-card p-4">
+    <li className="flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <Link href={`/tanks/bots/${b.id}`} className="min-w-0 break-words font-semibold hover:text-primary hover:underline">{b.name}</Link>
         <span className="shrink-0 font-mono text-lg font-bold">{b.rating}</span>
@@ -82,7 +82,7 @@ export function TanksSection() {
   return (
     <section>
       <SectionTitle>{t('tanks')}</SectionTitle>
-      {!data ? <Skeleton className="h-24 rounded-[14px]" /> : data.bots.length === 0 ? (
+      {!data ? <Skeleton className="h-24 rounded-xl" /> : data.bots.length === 0 ? (
         <Empty>
           <Bot className="mx-auto mb-2 size-5" />
           {t('noBots')} — <Link href="/app/tanks" className="font-semibold text-primary hover:underline">{t('buildOne')}</Link>

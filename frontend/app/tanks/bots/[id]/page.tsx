@@ -53,7 +53,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
     return (
       <div className="mx-auto max-w-4xl space-y-6 px-4 py-14 sm:px-6">
         <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-32 rounded-[14px]" />
+        <Skeleton className="h-32 rounded-xl" />
       </div>
     )
   }
@@ -91,7 +91,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
 
       <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {stats.map(([label, value]) => (
-          <div key={label} className="rounded-[12px] border border-border bg-card p-4">
+          <div key={label} className="rounded-xl border border-border bg-card p-4">
             <p className="text-xs font-bold text-muted-foreground">{label}</p>
             <p className="mt-1 font-mono text-xl font-bold">{value}</p>
           </div>
@@ -101,11 +101,11 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
       <section className="mt-10">
         <SectionTitle>{tr('bot.tournaments')}</SectionTitle>
         {bot.tournaments.length === 0 ? (
-          <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">
+          <p className="rounded-xl border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">
             {tr('bot.noTournaments')}
           </p>
         ) : (
-          <ul className="divide-y divide-border rounded-[14px] border border-border">
+          <ul className="divide-y divide-border rounded-xl border border-border">
             {bot.tournaments.map((t) => (
               <li key={t.tournament_id}>
                 <Link href={`/tanks/tournaments/${t.tournament_id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 text-sm hover:bg-muted/50">
@@ -125,7 +125,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
       {bot.seasons.length > 0 && (
         <section className="mt-10">
           <SectionTitle>{tr('bot.pastSeasons')}</SectionTitle>
-          <ul className="divide-y divide-border rounded-[14px] border border-border">
+          <ul className="divide-y divide-border rounded-xl border border-border">
             {bot.seasons.map((x) => (
               <li key={x.season_id}>
                 <Link href={`/tanks/seasons/${x.season_id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 text-sm hover:bg-muted/50">
@@ -142,7 +142,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
 
       <section className="mt-10">
         <SectionTitle>{tr('bot.versions')}</SectionTitle>
-        <ul className="divide-y divide-border rounded-[14px] border border-border">
+        <ul className="divide-y divide-border rounded-xl border border-border">
           {bot.versions.map((v) => (
             <li key={v.number} className="flex flex-wrap items-center gap-3 p-4 text-sm">
               <span className="font-mono text-muted-foreground">v{v.number}</span>
@@ -163,7 +163,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
 
       <section className="mt-10">
         <SectionTitle>{tr('bot.recent')}</SectionTitle>
-        {matches == null ? <Skeleton className="h-64 rounded-[14px]" /> : <MatchList matches={matches} botId={id} showReport={mine} />}
+        {matches == null ? <Skeleton className="h-64 rounded-xl" /> : <MatchList matches={matches} botId={id} showReport={mine} />}
       </section>
     </div>
   )

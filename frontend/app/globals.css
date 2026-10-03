@@ -38,6 +38,22 @@
   --color-terminal-success: var(--terminal-success);
   --color-terminal-accent: var(--terminal-accent);
   --color-arena: var(--arena);
+  /* Type scale: page titles, the dark panel headline, ledes and prose, commands, tiny chips. */
+  --text-title: 2.75rem;
+  --text-title--line-height: 1.02;
+  --text-title-sm: 2.1rem;
+  --text-title-sm--line-height: 1.02;
+  --text-panel: 2rem;
+  --text-panel--line-height: 1.02;
+  --text-panel-sm: 1.6rem;
+  --text-panel-sm--line-height: 1.02;
+  --text-lede: 0.95rem;
+  --text-lede--line-height: 1.625;
+  --text-code: 0.8rem;
+  --text-code--line-height: 1.5rem;
+  --text-2xs: 0.7rem;
+  --text-2xs--line-height: 1rem;
+  --radius-control: 9px;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);

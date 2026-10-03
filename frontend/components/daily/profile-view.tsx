@@ -53,7 +53,7 @@ function Calendar({ days }: { days: ProfileDay[] }) {
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-[14px] border border-border bg-card p-4">
+    <div className="rounded-xl border border-border bg-card p-4">
       <div className="font-mono text-2xl font-bold">{value}</div>
       <div className="text-xs text-muted-foreground">{label}</div>
     </div>
@@ -75,7 +75,7 @@ export function ProfileView({ handle }: { handle: string }) {
 
   if (missing) notFound()
   if (error) return <p role="alert" className="text-sm text-destructive">{error}</p>
-  if (!p) return <Skeleton className="h-64 rounded-[14px]" />
+  if (!p) return <Skeleton className="h-64 rounded-xl" />
 
   const isMe = me?.user.handle.toLowerCase() === p.handle.toLowerCase()
   const tools = [...new Set(p.tools.map((x) => localizeStack(displayStack(x), t.locale)))]
@@ -84,7 +84,7 @@ export function ProfileView({ handle }: { handle: string }) {
     <div className="space-y-10">
       <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="display text-[2.1rem] break-words sm:text-[2.75rem]">{p.handle}</h1>
+          <h1 className="display text-title-sm break-words sm:text-title">{p.handle}</h1>
           {isMe && <Badge>{t('thisIsYou')}</Badge>}
         </div>
         <p className="text-sm text-muted-foreground">
@@ -106,15 +106,15 @@ export function ProfileView({ handle }: { handle: string }) {
 
       <section>
         <SectionTitle>{t('last12')}</SectionTitle>
-        <div className="rounded-[14px] border border-border bg-card p-4 sm:p-5"><Calendar days={p.days} /></div>
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-5"><Calendar days={p.days} /></div>
       </section>
 
       <section>
         <SectionTitle>{t('history')}</SectionTitle>
         {p.days.length === 0 ? (
-          <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('noDaily')}</p>
+          <p className="rounded-xl border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('noDaily')}</p>
         ) : (
-          <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
+          <ul className="divide-y divide-border rounded-xl border border-border bg-card">
             {p.days.map((d) => (
               <li key={d.day} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4">
                 {d.status === 'passed' ? <Check className="size-4 shrink-0 text-success" /> : <X className="size-4 shrink-0 text-destructive" />}

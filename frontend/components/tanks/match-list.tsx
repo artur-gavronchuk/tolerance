@@ -27,13 +27,13 @@ export function MatchList({ matches, botId, showReport = false }: { matches: Mat
   const t = useT(m)
   if (matches.length === 0) {
     return (
-      <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
+      <p className="rounded-xl border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
         {t('ml.empty')}
       </p>
     )
   }
   return (
-    <ul className="divide-y divide-border rounded-[14px] border border-border">
+    <ul className="divide-y divide-border rounded-xl border border-border">
       {matches.map((m) => {
         const ranked = [...m.players].sort((a, b) => (a.place ?? 99) - (b.place ?? 99))
         const winner = ranked.find((p) => p.place === 1)

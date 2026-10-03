@@ -20,7 +20,7 @@ export function EventFeed({ events, players }: { events: ReplayEvent[]; players:
     .map((e, i) => ({ e, text: describe(e, players, t), key: `${e.t}-${e.e}-${e.a}-${e.b ?? ''}-${i}` }))
     .filter((r): r is { e: ReplayEvent; text: string; key: string } => r.text != null)
   return (
-    <div className="rounded-[12px] border border-border bg-card p-3">
+    <div className="rounded-xl border border-border bg-card p-3">
       <p className="mb-2 text-xs font-bold text-muted-foreground">{t('recentEvents')}</p>
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('nothingYet')}</p>

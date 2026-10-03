@@ -35,7 +35,7 @@ export default function TournamentsPage() {
       </PageHeader>
 
       {items == null ? (
-        <Skeleton className="mt-8 h-64 rounded-[14px]" />
+        <Skeleton className="mt-8 h-64 rounded-xl" />
       ) : (
         <>
           <section className="mt-8">

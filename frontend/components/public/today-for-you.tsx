@@ -80,7 +80,7 @@ export function TodayForYou() {
       <ul className="grid gap-2 sm:grid-cols-2">
         {shown.map((t) => (
           <li key={t.key} className="min-w-0">
-            <Link href={t.href} className="group flex h-full flex-col gap-0.5 rounded-[12px] border border-border bg-card px-3.5 py-2.5 transition-colors hover:border-primary/50">
+            <Link href={t.href} className="group flex h-full flex-col gap-0.5 rounded-xl border border-border bg-card px-3.5 py-2.5 transition-colors hover:border-primary/50">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <t.icon className="size-3.5 text-primary" />{t.label}
               </span>

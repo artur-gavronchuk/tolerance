@@ -79,7 +79,7 @@ export function AuthForm() {
       <div className="flex flex-col px-4 py-6 sm:px-10">
         <Brand />
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">
-          <h1 className="display text-[2.2rem]">{t('title')}</h1>
+          <h1 className="display text-title-sm sm:text-title">{t('title')}</h1>
           <p className="mt-2 text-muted-foreground">
             {t('lead')}
           </p>
@@ -93,7 +93,7 @@ export function AuthForm() {
             ))}
             {nothing && <p className="text-sm text-muted-foreground">{t('notConfigured')}</p>}
           </div>
-          {error && <p role="alert" className="mt-4 rounded-[9px] bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+          {error && <p role="alert" className="mt-4 rounded-control bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
           {options?.dev_login && (
             <form onSubmit={devSignIn} className={`flex flex-col gap-3 ${options.providers.length ? 'mt-6 border-t border-dashed pt-6' : 'mt-8'}`}>
               <Label htmlFor="email">{t('devTitle')}</Label>
@@ -110,7 +110,7 @@ export function AuthForm() {
         </div>
       </div>
       <aside className="relative hidden overflow-hidden bg-terminal lg:flex lg:flex-col lg:justify-center lg:px-14">
-        <p className="display max-w-md text-[2rem] text-terminal-foreground">{t('asideTitle')}</p>
+        <p className="display max-w-md text-panel text-terminal-foreground">{t('asideTitle')}</p>
         <ul className="mt-6 flex max-w-md flex-col gap-4 text-terminal-foreground/70">
           <li><b className="text-terminal-foreground">{t('asideDaily')}</b> {t('asideDailyText')}</li>
           <li><b className="text-terminal-foreground">{t('asideTanks')}</b> {t('asideTanksText')}</li>

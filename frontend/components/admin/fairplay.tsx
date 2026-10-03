@@ -70,7 +70,7 @@ export function FairplaySection() {
             {data.clusters.length === 0 && <Empty text={t('noClusters')} />}
             <ul className="space-y-2">
               {data.clusters.map((c) => (
-                <li key={c.kind + c.hash} className="flex flex-wrap items-center gap-2 rounded-[14px] border border-border bg-card p-3 text-sm">
+                <li key={c.kind + c.hash} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm">
                   <Badge variant={c.kind === 'device' ? 'destructive' : 'outline'}>{c.kind === 'device' ? t('kindDevice') : t('kindIp')}</Badge>
                   <span className="font-mono text-xs text-muted-foreground">{c.hash}</span>
                   {c.users.map((u) => <Link key={u.id} href={`/u/${encodeURIComponent(u.handle)}`} className="font-semibold hover:underline">{u.handle}{u.banned ? ` (${t('bannedNow')})` : ''}</Link>)}
@@ -85,13 +85,13 @@ export function FairplaySection() {
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="rounded-[14px] border border-dashed border-strong p-3 text-sm text-muted-foreground">{text}</p>
+  return <p className="rounded-xl border border-dashed border-strong p-3 text-sm text-muted-foreground">{text}</p>
 }
 
 function FlagRow({ it, reload }: { it: FairItem; reload: () => Promise<unknown> }) {
   const t = useT(fairplayMessages)
   return (
-    <li className="min-w-0 rounded-[14px] border border-border bg-card p-3">
+    <li className="min-w-0 rounded-xl border border-border bg-card p-3">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <Link href={`/u/${encodeURIComponent(it.handle)}`} className="font-semibold hover:underline">{it.handle}</Link>
         {it.banned && <Badge variant="destructive">{t('bannedNow')}</Badge>}
@@ -115,7 +115,7 @@ function FlagRow({ it, reload }: { it: FairItem; reload: () => Promise<unknown> 
 function ReportRow({ r, reload }: { r: FairReport; reload: () => Promise<unknown> }) {
   const t = useT(fairplayMessages)
   return (
-    <li className="min-w-0 rounded-[14px] border border-border bg-card p-3">
+    <li className="min-w-0 rounded-xl border border-border bg-card p-3">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <Link href={`/u/${encodeURIComponent(r.handle)}`} className="font-semibold hover:underline">{r.handle}</Link>
         {r.banned && <Badge variant="destructive">{t('bannedNow')}</Badge>}

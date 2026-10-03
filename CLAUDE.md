@@ -150,5 +150,9 @@ an attempt.
   `bg-terminal`/`text-terminal-foreground` for copy blocks and dark panels (navy
   in both themes), `bg-arena` for the match viewer, `border-input` for control
   borders (3:1), `border-strong` for dashed empty states.
+- Sizes and corners are tokens too: page titles `display text-title-sm sm:text-title`,
+  ledes/prose `text-lede`, commands `text-code`, tiny chips `text-2xs`; cards
+  `rounded-xl`, copy blocks `rounded-lg`, big frames `rounded-2xl`, controls
+  `rounded-control`. No `rounded-[Npx]` / `text-[Nrem]` for these.
 - Commit subjects in English, imperative, sentence case, no `feat:` prefixes.
   Docs in `docs/` are in Russian, code and comments in English.

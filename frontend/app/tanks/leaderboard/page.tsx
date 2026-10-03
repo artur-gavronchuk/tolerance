@@ -61,7 +61,7 @@ export default function LadderPage() {
         {failed ? (
           <p role="alert" className="text-sm text-destructive">{tr('ladder.failed')}</p>
         ) : d == null ? (
-          <Skeleton className="h-96 rounded-[14px]" />
+          <Skeleton className="h-96 rounded-xl" />
         ) : (
           <Leaderboard entries={d.standings} />
         )}

@@ -526,7 +526,7 @@ export default function Scene3D({ replay, clock, selectedSlot, onSelect, onUnsup
   const followedName = selectedSlot != null ? names.find((p) => p.slot === selectedSlot)?.name : null
 
   return (
-    <div className="relative w-full overflow-hidden rounded-[14px] bg-arena" style={{ aspectRatio: '3 / 2' }}>
+    <div className="relative w-full overflow-hidden rounded-xl bg-arena" style={{ aspectRatio: '3 / 2' }}>
       <div ref={containerRef} className="absolute inset-0" />
       {followedName && (
         <button

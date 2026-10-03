@@ -11,7 +11,7 @@ import { errorText } from '@/lib/format'
 import { useT } from '@/lib/i18n/client'
 import { dailyMessages } from '@/lib/i18n/messages/daily'
 
-const box = 'rounded-[14px] border border-border bg-card'
+const box = 'rounded-xl border border-border bg-card'
 const pre = 'max-h-[32rem] overflow-auto border-t border-border p-3 font-mono text-xs leading-5'
 
 // A closed day's hidden tests and the earliest fully passing solutions.
@@ -24,14 +24,14 @@ export function DayRevealView({ day }: { day: string }) {
   }, [day])
 
   if (error) return <p role="alert" className="text-sm text-destructive">{error}</p>
-  if (!data) return <Skeleton className="h-32 rounded-[14px]" />
+  if (!data) return <Skeleton className="h-32 rounded-xl" />
 
   return (
     <div className="space-y-10">
       <section>
         <SectionTitle aside={t('shown', { n: data.solutions.length })}>{t('solutions')}</SectionTitle>
         {data.solutions.length === 0 ? (
-          <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('noSolutions')}</p>
+          <p className="rounded-xl border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('noSolutions')}</p>
         ) : (
           <ul className="space-y-3">
             {data.solutions.map((s) => (

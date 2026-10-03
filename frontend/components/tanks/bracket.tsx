@@ -19,7 +19,7 @@ export function roundName(t: BracketT, round: number, rounds: number): string {
 function BotRow({ t, bot, wins, won, lost, bye }: { t: BracketT; bot: TournamentBot | null; wins: number; won: boolean; lost: boolean; bye?: boolean }) {
   return (
     <div className={cn('flex items-center gap-2 px-3 py-2', won && 'bg-success/10', lost && 'text-muted-foreground')}>
-      <span className="w-4 shrink-0 text-right font-mono text-[0.7rem] text-muted-foreground">{bot?.seed ?? ''}</span>
+      <span className="w-4 shrink-0 text-right font-mono text-2xs text-muted-foreground">{bot?.seed ?? ''}</span>
       {bot ? (
         <Link href={`/tanks/bots/${bot.bot_id}`} className={cn('min-w-0 flex-1 truncate text-sm hover:text-primary', won ? 'font-bold' : 'font-semibold')}>
           {bot.name}
@@ -40,7 +40,7 @@ function PairingCard({ t, p }: { t: BracketT; p: TournamentPairing }) {
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-[10px] border bg-card',
+        'overflow-hidden rounded-lg border bg-card',
         p.status === 'running' ? 'border-primary shadow-sm' : 'border-border',
       )}
     >
@@ -57,7 +57,7 @@ function PairingCard({ t, p }: { t: BracketT; p: TournamentPairing }) {
                 key={g.game}
                 href={`/tanks/matches/${g.match_id}`}
                 title={`${t('bracket.gameTitle', { game: g.game, map: g.map })}${w ? t('bracket.gameWon', { name: label ?? '' }) : ''}`}
-                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-[0.7rem] hover:border-primary hover:text-primary"
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-2xs hover:border-primary hover:text-primary"
               >
                 <span className="font-mono text-muted-foreground">G{g.game}</span>
                 <span className="max-w-[5.5rem] truncate">{label}</span>
@@ -78,7 +78,7 @@ export function Bracket({ t: tour }: { t: TournamentView }) {
   if (pairings.length === 0) return null
   const rounds = Array.from({ length: tour.rounds }, (_, i) => i + 1)
   return (
-    <div className="overflow-x-auto rounded-[14px] border border-border bg-muted/20 p-4">
+    <div className="overflow-x-auto rounded-xl border border-border bg-muted/20 p-4">
       <div className="flex min-w-max items-stretch gap-5">
         {rounds.map((r) => (
           <div key={r} className="flex w-56 shrink-0 flex-col">
@@ -100,7 +100,7 @@ export function Bracket({ t: tour }: { t: TournamentView }) {
           <div className="flex flex-1 items-center">
             <div
               className={cn(
-                'w-full rounded-[10px] border px-3 py-3 text-center',
+                'w-full rounded-lg border px-3 py-3 text-center',
                 tour.champion ? 'border-warning bg-warning/10' : 'border-dashed border-border text-muted-foreground',
               )}
             >

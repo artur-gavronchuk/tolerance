@@ -64,14 +64,14 @@ export default function TanksPage() {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!data ? (
         <div className="space-y-6">
-          <Skeleton className="h-36 rounded-[14px]" />
-          <Skeleton className="h-52 rounded-[14px]" />
+          <Skeleton className="h-36 rounded-xl" />
+          <Skeleton className="h-52 rounded-xl" />
         </div>
       ) : (
         <div>
           <div className="min-w-0 space-y-10">
             {data.bot && (
-              <section className="rounded-[14px] border border-border bg-card p-5">
+              <section className="rounded-xl border border-border bg-card p-5">
                 <>
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -100,7 +100,7 @@ export default function TanksPage() {
             <MakeBot onUploaded={() => void load()} />
 
             {!data.bot && (
-              <section className="rounded-[14px] border border-border bg-card p-5">
+              <section className="rounded-xl border border-border bg-card p-5">
                 <p className="mb-3 text-sm text-muted-foreground">
                   {t('page.firstUpload')}
                 </p>

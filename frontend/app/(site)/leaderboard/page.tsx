@@ -26,9 +26,9 @@ export default function LeaderboardPage() {
     <div className="space-y-8">
       <PageHeader title={t('lbTitle')}>{t('lbIntro')}</PageHeader>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      {!rows && !error && <Skeleton className="h-64 rounded-[14px]" />}
+      {!rows && !error && <Skeleton className="h-64 rounded-xl" />}
       {rows && rows.length === 0 && (
-        <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">{t('lbEmpty')}</p>
+        <p className="rounded-xl border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">{t('lbEmpty')}</p>
       )}
       {rows && rows.length > 0 && (
         <Table>

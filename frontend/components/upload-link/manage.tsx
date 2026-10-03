@@ -17,7 +17,7 @@ export function UploadLinkManage() {
   return (
     <section>
       <SectionTitle>{t('title')}</SectionTitle>
-      <div className="space-y-3 rounded-[14px] border border-border bg-card p-4 sm:p-5">
+      <div className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
         <p className="max-w-2xl text-sm text-muted-foreground">{t('intro')}</p>
         {status && (
           <p className="flex flex-wrap items-center gap-2 text-sm">

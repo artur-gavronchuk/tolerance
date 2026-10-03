@@ -19,11 +19,11 @@ export function TournamentList({ items, empty }: { items: TournamentView[]; empt
   const t = useT(m)
   if (items.length === 0) {
     return (
-      <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">{empty ?? t('tl.empty')}</p>
+      <p className="rounded-xl border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">{empty ?? t('tl.empty')}</p>
     )
   }
   return (
-    <ul className="divide-y divide-border rounded-[14px] border border-border">
+    <ul className="divide-y divide-border rounded-xl border border-border">
       {items.map((it) => (
         <li key={it.id}>
           <Link href={`/tanks/tournaments/${it.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 hover:bg-muted/50">

@@ -101,7 +101,7 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
     return (
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-14 sm:px-6">
         <Skeleton className="h-10 w-72" />
-        <Skeleton className="aspect-[3/2] w-full rounded-[18px]" />
+        <Skeleton className="aspect-[3/2] w-full rounded-2xl" />
       </div>
     )
   }
@@ -170,18 +170,18 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
         {replayState.kind === 'ready' ? (
           <ReplayPlayer replay={replayState.replay} />
         ) : replayState.kind === 'loading' ? (
-          <Skeleton className="aspect-[3/2] w-full rounded-[18px]" />
+          <Skeleton className="aspect-[3/2] w-full rounded-2xl" />
         ) : replayState.kind === 'unsupported' ? (
-          <div className="rounded-[18px] border border-dashed border-strong px-6 py-14 text-center text-sm text-muted-foreground">
+          <div className="rounded-2xl border border-dashed border-strong px-6 py-14 text-center text-sm text-muted-foreground">
             {t('unsupported')}
           </div>
         ) : replayState.kind === 'error' ? (
-          <div className="flex flex-col items-center gap-4 rounded-[18px] border border-dashed border-strong px-6 py-14 text-center">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-strong px-6 py-14 text-center">
             <p className="text-sm text-destructive">{t('replayError', { message: replayState.message })}</p>
             <Button variant="outline" onClick={() => void loadReplay(id)}>{t('retry')}</Button>
           </div>
         ) : (
-          <div className="rounded-[18px] border border-dashed border-strong px-6 py-14 text-center text-sm text-muted-foreground">
+          <div className="rounded-2xl border border-dashed border-strong px-6 py-14 text-center text-sm text-muted-foreground">
             {t('replayExpired')}
           </div>
         )}

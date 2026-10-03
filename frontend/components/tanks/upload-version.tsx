@@ -87,7 +87,7 @@ export function UploadVersion({ onUploaded }: { onUploaded: (v: VersionView) => 
         onDragLeave={() => setOver(false)}
         onDrop={onDrop}
         className={cn(
-          'flex w-full flex-col items-center gap-1.5 rounded-[12px] border-2 border-dashed px-4 py-8 text-center transition-colors disabled:opacity-60',
+          'flex w-full flex-col items-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors disabled:opacity-60',
           over ? 'border-primary bg-primary/5' : 'border-input hover:bg-muted/50',
         )}
       >

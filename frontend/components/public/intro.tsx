@@ -38,12 +38,12 @@ export function Intro() {
   }
 
   return (
-    <section className="relative mb-8 overflow-hidden rounded-[14px] bg-terminal p-5 text-terminal-foreground sm:p-7">
+    <section className="relative mb-8 overflow-hidden rounded-xl bg-terminal p-5 text-terminal-foreground sm:p-7">
       <button onClick={hide} aria-label={t('hideIntro')} title={t('hide')}
         className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full text-terminal-foreground/60 hover:bg-white/10 hover:text-terminal-foreground">
         <X className="size-4" />
       </button>
-      <p className="display max-w-2xl pr-8 text-[1.6rem] leading-tight sm:text-[2rem]">
+      <p className="display max-w-2xl pr-8 text-panel-sm leading-tight sm:text-panel">
         {t('introTitle')}
       </p>
       <p className="mt-2 max-w-2xl text-[13px] text-terminal-foreground/70 sm:text-base">
@@ -52,7 +52,7 @@ export function Intro() {
       <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5">
         {MODES.map((m) => (
           <Link key={m.href} href={m.href}
-            className="group flex flex-col rounded-[10px] border border-white/10 bg-white/[0.04] p-3 sm:p-3.5 transition-colors hover:border-white/25 hover:bg-white/[0.07]">
+            className="group flex flex-col rounded-lg border border-white/10 bg-white/[0.04] p-3 sm:p-3.5 transition-colors hover:border-white/25 hover:bg-white/[0.07]">
             <span className="flex items-center gap-2 text-[13px] font-bold sm:text-sm">
               <m.icon className="size-4 text-terminal-accent" />
               {t(m.title)}

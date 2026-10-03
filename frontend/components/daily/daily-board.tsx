@@ -13,7 +13,7 @@ export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: stri
   const t = useT(dailyMessages)
   if (rows.length === 0) {
     return (
-      <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
+      <p className="rounded-xl border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
         {t('emptyBoard')}
       </p>
     )
@@ -45,7 +45,7 @@ export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: stri
           ))}
         </TableBody>
       </Table>
-      <ul className="divide-y divide-border rounded-[14px] border border-border sm:hidden">
+      <ul className="divide-y divide-border rounded-xl border border-border sm:hidden">
         {rows.map((r) => (
           <li key={r.handle} className={`flex items-center gap-3 p-3 ${mine(r) ? 'bg-accent' : ''}`}>
             <span className="w-5 shrink-0 font-mono text-sm text-muted-foreground">{r.house ? <Bot className="size-4" aria-hidden /> : r.place}</span>
@@ -69,7 +69,7 @@ function Player({ row }: { row: DailyRow }) {
   return (
     <>
       {row.house_name || row.handle}{' '}
-      <span title={t('houseNote')} className="ml-1 inline-block rounded-full border border-border bg-muted px-2 py-0.5 align-middle text-[0.7rem] font-semibold text-muted-foreground">
+      <span title={t('houseNote')} className="ml-1 inline-block rounded-full border border-border bg-muted px-2 py-0.5 align-middle text-2xs font-semibold text-muted-foreground">
         {t('houseBadge')}
       </span>
     </>

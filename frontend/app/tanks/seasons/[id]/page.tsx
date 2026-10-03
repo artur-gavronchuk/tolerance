@@ -59,7 +59,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
     return (
       <div className="mx-auto max-w-4xl space-y-6 px-4 py-14 sm:px-6">
         <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-64 rounded-[14px]" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     )
   }
@@ -92,7 +92,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
       </PageHeader>
 
       {s.winner && (
-        <div className="mt-8 flex flex-wrap items-center gap-3 rounded-[14px] border border-warning bg-warning/10 p-5">
+        <div className="mt-8 flex flex-wrap items-center gap-3 rounded-xl border border-warning bg-warning/10 p-5">
           <Trophy className="size-6 text-warning" />
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{tr('season.winner')}</p>

@@ -17,7 +17,7 @@ export function Scoreboard({ players, tanks, killsBySlot, selectedSlot, onSelect
   const t = useT(tanksMatchMessages)
   const sorted = [...players].sort((a, b) => a.slot - b.slot)
   return (
-    <div className="rounded-[12px] border border-border bg-card p-3">
+    <div className="rounded-xl border border-border bg-card p-3">
       <p className="mb-2 flex items-baseline justify-between gap-2 text-xs font-bold text-muted-foreground">
         <span>{t('scoreboardTanks')}</span>
         <span className="font-normal">{t('healthKills')}</span>
@@ -70,7 +70,7 @@ export function Scoreboard({ players, tanks, killsBySlot, selectedSlot, onSelect
           )
         })}
       </ul>
-      <p className="mt-2.5 text-[0.7rem] text-muted-foreground">{t('scoreboardNote')}</p>
+      <p className="mt-2.5 text-2xs text-muted-foreground">{t('scoreboardNote')}</p>
     </div>
   )
 }

@@ -82,7 +82,7 @@ export function DailyView({ day }: { day?: string }) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-12 w-72 max-w-full" />
-        <Skeleton className="h-64 rounded-[14px]" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     )
   }
@@ -107,7 +107,7 @@ export function DailyView({ day }: { day?: string }) {
         <p className="text-sm font-semibold text-muted-foreground">
           {practice ? <>{t('kickerArchive', { day: daily.day })} <Link href="/days" className="text-primary hover:underline">{t('allDays')}</Link></> : t('kickerToday', { day: daily.day })}
         </p>
-        <h1 className="display text-[2.1rem] break-words sm:text-[2.75rem]">{task.title}</h1>
+        <h1 className="display text-title-sm break-words sm:text-title">{task.title}</h1>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TaskBadges language={task.language} difficulty={task.difficulty} kind={task.kind} direction={task.direction} />
           {daily.is_open ? (
@@ -119,12 +119,12 @@ export function DailyView({ day }: { day?: string }) {
       </header>
 
       <div className="grid items-start gap-8 lg:grid-cols-[1fr_22rem]">
-        <section className="min-w-0 rounded-[14px] border border-border bg-card p-5 sm:p-6">
+        <section className="min-w-0 rounded-xl border border-border bg-card p-5 sm:p-6">
           <Markdown>{task.task_md}</Markdown>
         </section>
 
         <aside className="order-first min-w-0 space-y-6 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto">
-          <section className="rounded-[14px] border border-border bg-card p-5">
+          <section className="rounded-xl border border-border bg-card p-5">
             <h2 className="heading">{t('howTitle')}</h2>
             <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
               <li>{t('how1')}</li>
@@ -141,7 +141,7 @@ export function DailyView({ day }: { day?: string }) {
             </Button>
           </section>
 
-          <section id="submit" className="scroll-mt-6 rounded-[14px] border border-border bg-card p-5">
+          <section id="submit" className="scroll-mt-6 rounded-xl border border-border bg-card p-5">
             <h2 className="heading">{practice ? t('practiceTitle') : t('submitTitle')}</h2>
             {signedIn ? (
               <div className="mt-3 space-y-3">
@@ -161,7 +161,7 @@ export function DailyView({ day }: { day?: string }) {
                 <Button className="w-full sm:w-auto" render={<Link href={loginHref} />} nativeButton={false}>{t('signInToSubmit')}</Button>
               </div>
             ) : (
-              <Skeleton className="mt-3 h-32 rounded-[10px]" />
+              <Skeleton className="mt-3 h-32 rounded-lg" />
             )}
           </section>
         </aside>
@@ -174,9 +174,9 @@ export function DailyView({ day }: { day?: string }) {
           </SectionTitle>
           {share && <div className="mb-3"><ShareResult text={share} /></div>}
           {subs.length === 0 ? (
-            <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('nothingYet')}</p>
+            <p className="rounded-xl border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('nothingYet')}</p>
           ) : (
-            <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
+            <ul className="divide-y divide-border rounded-xl border border-border bg-card">
               {subs.map((s) => <SubmissionCard key={s.id} sub={s} onUpdate={update} />)}
             </ul>
           )}
@@ -188,7 +188,7 @@ export function DailyView({ day }: { day?: string }) {
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
           <div className="min-w-0">
             <HouseStrip house={daily.house ?? []} optimize={task.kind === 'optimize'} />
-            {rows == null ? <Skeleton className="h-48 rounded-[14px]" /> : <DailyBoard rows={rows} me={me?.user.handle} optimize={task.kind === 'optimize'} />}
+            {rows == null ? <Skeleton className="h-48 rounded-xl" /> : <DailyBoard rows={rows} me={me?.user.handle} optimize={task.kind === 'optimize'} />}
           </div>
           {stats && <DayStatsPanel stats={stats} />}
         </div>

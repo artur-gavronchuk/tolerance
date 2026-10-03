@@ -53,7 +53,7 @@ function CheckList({ checks }: { checks: VersionView['checks'] }) {
 function PendingNote() {
   const t = useT(m)
   return (
-    <div className="mt-3 rounded-[10px] border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+    <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
       <p className="font-semibold text-foreground">{t('ver.pendingTitle')}</p>
       <p className="mt-1">
         {t('ver.pendingBody1')}<span className="font-mono">ready</span>{t('ver.pendingBody2')}
@@ -66,7 +66,7 @@ function CheckLog({ text }: { text: string }) {
   const t = useT(m)
   if (!text) return null
   return (
-    <details className="group mt-3 rounded-[10px] border border-border bg-muted/30">
+    <details className="group mt-3 rounded-lg border border-border bg-muted/30">
       <summary className="cursor-pointer list-none px-3 py-2 text-xs font-bold select-none marker:hidden">
         <span className="mr-1.5 inline-block text-muted-foreground transition-transform group-open:rotate-90">›</span>{t('ver.checkLog')}
       </summary>
@@ -81,13 +81,13 @@ export function VersionList({ versions }: { versions: VersionView[] }) {
   const t = useT(m)
   if (versions.length === 0) {
     return (
-      <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">
+      <p className="rounded-xl border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">
         {t('ver.empty')}
       </p>
     )
   }
   return (
-    <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
+    <ul className="divide-y divide-border rounded-xl border border-border bg-card">
       {versions.map((v) => (
         <li key={v.id} className="p-4">
           <div className="flex flex-wrap items-center gap-3">

@@ -16,7 +16,7 @@ export function RecapCard({ recap }: { recap: Recap }) {
   const optimize = y?.task.kind === 'optimize'
   const res = (r: RecapResult) => (optimize ? fmtScore(r.score, t.locale) : `${r.passed_tests}/${r.total_tests}`)
   return (
-    <div className="mb-2 grid gap-3 rounded-[12px] border border-border bg-card p-3.5 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-6">
+    <div className="mb-2 grid gap-3 rounded-xl border border-border bg-card p-3.5 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-6">
       {y ? (
         <div className="min-w-0 space-y-1 text-sm">
           <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">

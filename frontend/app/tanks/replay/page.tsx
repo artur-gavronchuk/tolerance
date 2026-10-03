@@ -45,7 +45,7 @@ export default function ReplayFilePage() {
             if (f) void open(f)
           }}
           className={cn(
-            'mt-8 flex flex-col items-center gap-4 rounded-[18px] border-2 border-dashed px-6 py-16 text-center transition-colors',
+            'mt-8 flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed px-6 py-16 text-center transition-colors',
             dragging ? 'border-primary bg-accent' : 'border-input'
           )}
         >

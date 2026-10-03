@@ -17,7 +17,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section className="mt-8">
       <h2 className="heading text-lg text-foreground">{title}</h2>
-      <div className="mt-2 flex flex-col gap-3 text-[0.95rem] leading-7 text-muted-foreground">{children}</div>
+      <div className="mt-2 flex flex-col gap-3 text-lede leading-7 text-muted-foreground">{children}</div>
     </section>
   )
 }
@@ -40,9 +40,9 @@ export default async function TermsPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 sm:py-8">
       <Brand />
-      <h1 className="display mt-12 text-[2.3rem] sm:text-[2.75rem]">{t('title')}</h1>
+      <h1 className="display mt-12 text-title-sm sm:text-title">{t('title')}</h1>
       <p className="mt-2 text-sm text-muted-foreground">{t('lastUpdated', { date: t('updated') })}</p>
-      <p className="mt-5 text-[0.95rem] leading-7 text-muted-foreground">{t('intro', { product: PRODUCT })}</p>
+      <p className="mt-5 text-lede leading-7 text-muted-foreground">{t('intro', { product: PRODUCT })}</p>
 
       <Section title={t('runsTitle')}>
         <p>{t('runs1')}</p>

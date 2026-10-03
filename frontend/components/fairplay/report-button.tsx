@@ -44,7 +44,7 @@ export function ReportButton({ handle }: { handle: string }) {
     }
   }
   return (
-    <form onSubmit={submit} className="my-1 flex w-full max-w-sm flex-col gap-2 rounded-[10px] border border-border bg-card p-3 text-sm font-normal">
+    <form onSubmit={submit} className="my-1 flex w-full max-w-sm flex-col gap-2 rounded-lg border border-border bg-card p-3 text-sm font-normal">
       <label className="flex flex-col gap-1">
         <span className="text-xs font-semibold text-muted-foreground">{t('reportReason')}</span>
         <select value={reason} onChange={(e) => setReason(e.target.value as (typeof REASONS)[number])}

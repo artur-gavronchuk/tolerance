@@ -22,7 +22,7 @@ import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 import type { Showcase } from '@/lib/types'
 
-const TILE = 'rounded-[14px] border border-border bg-card p-5'
+const TILE = 'rounded-xl border border-border bg-card p-5'
 
 export default function TanksHome() {
   const { me } = useMe()
@@ -50,7 +50,7 @@ export default function TanksHome() {
           <Live />
         </div>
         <div className="order-1 lg:order-2">
-          <h1 className="display text-[2rem] sm:text-[2.5rem]">{tr('home.title')}</h1>
+          <h1 className="display text-title-sm sm:text-title">{tr('home.title')}</h1>
           <p className="mt-4 leading-relaxed text-muted-foreground">
             {tr('home.lead')}
           </p>
@@ -71,7 +71,7 @@ export default function TanksHome() {
       </div>
 
       {show == null ? (
-        <Skeleton className="mt-16 h-40 rounded-[14px]" />
+        <Skeleton className="mt-16 h-40 rounded-xl" />
       ) : (
         <>
           <div className="mt-16 grid gap-4 md:grid-cols-2">
@@ -173,11 +173,11 @@ export default function TanksHome() {
             <div>
               <SectionTitle>{tr('home.pastSeasons')}</SectionTitle>
               {show.past_seasons.length === 0 ? (
-                <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
+                <p className="rounded-xl border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
                   {tr('home.firstSeason')}
                 </p>
               ) : (
-                <ul className="divide-y divide-border rounded-[14px] border border-border">
+                <ul className="divide-y divide-border rounded-xl border border-border">
                   {show.past_seasons.map((s) => (
                     <li key={s.id}>
                       <Link href={`/tanks/seasons/${s.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 hover:bg-muted/50">

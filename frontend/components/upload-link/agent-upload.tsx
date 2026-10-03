@@ -26,7 +26,7 @@ export function AgentUpload({ target }: { target: AgentTarget }) {
     setBusy(false)
   }
   return (
-    <div className="rounded-[12px] border border-dashed border-input p-3">
+    <div className="rounded-xl border border-dashed border-strong p-3">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 text-left text-sm font-bold">
         <Bot className="size-4 text-primary" />{t('toggle')}
         <span className="ml-auto text-xs font-normal text-muted-foreground">{open ? '−' : '+'}</span>

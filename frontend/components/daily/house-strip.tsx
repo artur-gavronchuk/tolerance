@@ -45,7 +45,7 @@ export function HouseStrip({ house, optimize }: { house: HouseResult[]; optimize
   const mine = house.filter((h) => h.vs_me)
   const gapText = (gap: number) => (optimize ? fmtScore(gap, t.locale) : t.plural('houseTests', Math.round(gap)))
   return (
-    <div className="mb-3 space-y-3 rounded-[14px] border border-border bg-card p-4">
+    <div className="mb-3 space-y-3 rounded-xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Bot className="size-4 text-muted-foreground" aria-hidden />{t('houseTitle')}</h3>
         <ul className="flex flex-wrap gap-2">

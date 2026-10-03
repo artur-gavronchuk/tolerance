@@ -22,15 +22,15 @@ export default function DaysPage() {
     <div className="space-y-8">
       <PageHeader title={t('archiveTitle')}>{t('archiveIntro')}</PageHeader>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      {!items && !error && <Skeleton className="h-64 rounded-[14px]" />}
+      {!items && !error && <Skeleton className="h-64 rounded-xl" />}
       {items && items.length === 0 && (
-        <div className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
+        <div className="rounded-xl border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
           <p>{t('archiveEmpty')}</p>
           <Link href="/" className="mt-3 inline-block font-semibold text-primary hover:underline">{t('backToToday')}</Link>
         </div>
       )}
       {items && items.length > 0 && (
-        <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
+        <ul className="divide-y divide-border rounded-xl border border-border bg-card">
           {items.map((d) => (
             <li key={d.day}>
               <Link href={`/day/${d.day}`} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4 hover:bg-muted/50">

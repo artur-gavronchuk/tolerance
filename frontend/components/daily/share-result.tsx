@@ -37,7 +37,7 @@ export function ShareResult({ text }: { text: string }) {
     } catch {}
   }
   return (
-    <div className="flex flex-col gap-3 rounded-[14px] border border-border bg-card p-4 sm:flex-row sm:items-start">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-start">
       <pre className="min-w-0 flex-1 font-mono text-sm leading-6 whitespace-pre-wrap [overflow-wrap:anywhere]">{text}</pre>
       <div className="flex shrink-0 gap-2">
         <Button size="sm" onClick={copy}>{copied ? <Check /> : <Copy />}{copied ? t('copied') : t('copyResult')}</Button>

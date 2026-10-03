@@ -42,7 +42,7 @@ export function FunnelSection() {
   }, [])
 
   if (error) return <p role="alert" className="text-sm text-destructive">{errorText(error, t.locale)}</p>
-  if (!f) return <Skeleton className="h-64 rounded-[14px]" />
+  if (!f) return <Skeleton className="h-64 rounded-xl" />
 
   const steps = [
     { key: 'visit', label: t('visit') }, { key: 'signin', label: t('signin') }, { key: 'download', label: t('download') },
@@ -58,7 +58,7 @@ export function FunnelSection() {
     <section>
       <SectionTitle aside={t('aside')}>{t('title')}</SectionTitle>
       <div className="grid gap-3 lg:grid-cols-3">
-        <div className="min-w-0 rounded-[14px] border border-border bg-card p-4 lg:col-span-2">
+        <div className="min-w-0 rounded-xl border border-border bg-card p-4 lg:col-span-2">
           <div className="text-xs font-semibold text-muted-foreground">{t('steps')}</div>
           <ul className="mt-3 space-y-3">
             {steps.map((s) => (
@@ -74,7 +74,7 @@ export function FunnelSection() {
           </ul>
           <p className="mt-3 text-xs text-muted-foreground">{t('stepsHint')}</p>
         </div>
-        <div className="min-w-0 rounded-[14px] border border-border bg-card p-4">
+        <div className="min-w-0 rounded-xl border border-border bg-card p-4">
           <div className="text-xs font-semibold text-muted-foreground">{t('retention')}</div>
           <div className="mt-1 font-mono text-2xl font-bold">{visits ? `${Math.round((back / visits) * 100)}%` : '-'}</div>
           <div className="mt-1 text-xs text-muted-foreground">{t('retentionHint')}</div>
@@ -85,7 +85,7 @@ export function FunnelSection() {
       <h3 className="heading mt-6 mb-2 text-base">{t('activity')}</h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {f.modes.map((m) => (
-          <div key={m.mode} className="min-w-0 rounded-[14px] border border-border bg-card p-4">
+          <div key={m.mode} className="min-w-0 rounded-xl border border-border bg-card p-4">
             <div className="text-xs font-semibold text-muted-foreground">{t(m.mode)}</div>
             <div className="mt-1 font-mono text-2xl font-bold">{t('people', { n: m.people })}</div>
             <div className="mt-1 text-xs text-muted-foreground">{t('events', { n: m.events })}</div>
@@ -97,7 +97,7 @@ export function FunnelSection() {
       <div className="mt-6 grid gap-3 lg:grid-cols-2">
         <div className="min-w-0">
           <h3 className="heading mb-2 text-base">{t('pages')}</h3>
-          <div className="rounded-[14px] border border-border bg-card">
+          <div className="rounded-xl border border-border bg-card">
             <Table>
               <TableHeader><TableRow><TableHead>{t('colPage')}</TableHead><TableHead className="text-right">{t('colViews')}</TableHead><TableHead className="text-right">{t('colVisitors')}</TableHead></TableRow></TableHeader>
               <TableBody>
@@ -111,7 +111,7 @@ export function FunnelSection() {
         </div>
         <div className="min-w-0">
           <h3 className="heading mb-2 text-base">{t('sources')}</h3>
-          <div className="rounded-[14px] border border-border bg-card">
+          <div className="rounded-xl border border-border bg-card">
             <Table>
               <TableHeader><TableRow><TableHead>{t('colSource')}</TableHead><TableHead className="text-right">{t('colVisits')}</TableHead></TableRow></TableHeader>
               <TableBody>
