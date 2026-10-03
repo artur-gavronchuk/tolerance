@@ -37,6 +37,11 @@ export interface DayReveal {
   solutions: { place: number; handle: string; made_with: string; submitted_at: string; diff: string }[]
 }
 
+export interface DayStats {
+  participants: number; solvers: number; submissions: number
+  by_tool: { made_with: string; participants: number; solvers: number }[]
+}
+
 export interface DayListItem {
   day: string
   task: { slug: string; title: string; language: 'go' | 'python'; difficulty: number }

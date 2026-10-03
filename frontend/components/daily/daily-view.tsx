@@ -8,6 +8,7 @@ import { Markdown } from '@/components/daily/markdown'
 import { Countdown } from '@/components/daily/countdown'
 import { DailyBoard } from '@/components/daily/daily-board'
 import { DayRevealView } from '@/components/daily/day-reveal'
+import { DayStatsPanel } from '@/components/daily/day-stats'
 import { ShareResult, shareText } from '@/components/daily/share-result'
 import { SubmissionCard } from '@/components/daily/submission-card'
 import { TaskBadges } from '@/components/daily/task-header'
@@ -18,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, ApiError, friendlyMessage } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
-import type { Daily, DailyRow, Submission } from '@/lib/types'
+import type { Daily, DailyRow, DayStats, Submission } from '@/lib/types'
 
 export const AGENT_PROMPT = `Here is a repository and a task description in TASK.md. Read TASK.md and fix the issue it describes.
 Do not modify or delete existing tests, and do not add test files. Keep the change minimal and in the style of the surrounding code.
@@ -30,6 +31,7 @@ export function DailyView({ day }: { day?: string }) {
   const { me, refresh: refreshMe } = useMe()
   const [daily, setDaily] = useState<Daily | null>(null)
   const [rows, setRows] = useState<DailyRow[] | null>(null)
+  const [stats, setStats] = useState<DayStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [missing, setMissing] = useState(false)
   // Submissions made or polled in this session, kept apart from the server's list.
@@ -40,8 +42,12 @@ export function DailyView({ day }: { day?: string }) {
       const d = await api<Daily>(day ? `/daily/${day}` : '/daily')
       setDaily(d)
       setError(null)
-      const lb = await api<{ items: DailyRow[] }>(`/daily/${d.day}/leaderboard`)
+      const [lb, st] = await Promise.all([
+        api<{ items: DailyRow[] }>(`/daily/${d.day}/leaderboard`),
+        api<DayStats>(`/daily/${d.day}/stats`),
+      ])
       setRows(lb.items)
+      setStats(st)
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setMissing(true)
       else setError(friendlyMessage(e))
@@ -115,6 +121,7 @@ export function DailyView({ day }: { day?: string }) {
             <ol start={3} className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
               <li>Zip the edited repository, or save your change as a .patch, and upload it below.</li>
             </ol>
+            <div className="mt-3"><CopyBlock text={`cd ${task.slug} && zip -r ../solution.zip . -x '.git/*'`} /></div>
             {!practice && <p className="mt-3 text-xs text-muted-foreground">When the day closes, the hidden tests and the first passing solutions are published.</p>}
             <Button className="mt-4 w-full" render={<a href={task.repo_url} download />} nativeButton={false}>
               <Download />Download repo
@@ -158,7 +165,12 @@ export function DailyView({ day }: { day?: string }) {
 
       <section>
         <SectionTitle aside={practice ? 'Final standings' : 'Live'}>Leaderboard</SectionTitle>
-        {rows == null ? <Skeleton className="h-48 rounded-[14px]" /> : <DailyBoard rows={rows} me={me?.user.handle} />}
+        <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+          <div className="min-w-0">
+            {rows == null ? <Skeleton className="h-48 rounded-[14px]" /> : <DailyBoard rows={rows} me={me?.user.handle} />}
+          </div>
+          {stats && <DayStatsPanel stats={stats} />}
+        </div>
       </section>
 
       {practice && <DayRevealView day={daily.day} />}

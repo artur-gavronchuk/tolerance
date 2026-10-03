@@ -399,3 +399,53 @@ func (s *Service) Reveal(ctx context.Context, day string) (Reveal, error) {
 	sort.Slice(out.HiddenTests, func(i, j int) bool { return out.HiddenTests[i].Path < out.HiddenTests[j].Path })
 	return out, nil
 }
+
+type ToolStat struct {
+	MadeWith     string `json:"made_with"` // "" = not stated
+	Participants int    `json:"participants"`
+	Solvers      int    `json:"solvers"`
+}
+
+type Stats struct {
+	Participants int        `json:"participants"`
+	Solvers      int        `json:"solvers"`
+	Submissions  int        `json:"submissions"`
+	ByTool       []ToolStat `json:"by_tool"`
+}
+
+// Stats summarises a day's finished submissions: how many people tried and
+// solved it, overall and per "made with" tool (compared case-insensitively,
+// each person counted under the tool of their best submission).
+func (s *Service) Stats(ctx context.Context, day string) (Stats, error) {
+	if _, ok := ParseDay(day); !ok || day > Today() {
+		return Stats{}, httpx.NotFound()
+	}
+	st := Stats{ByTool: []ToolStat{}}
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `
+			SELECT count(*), count(DISTINCT user_id), count(DISTINCT user_id) FILTER (WHERE status = 'passed')
+			FROM submissions WHERE day = $1 AND status IN ('passed', 'failed')`, day).
+			Scan(&st.Submissions, &st.Participants, &st.Solvers); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `
+			SELECT tool, count(*), count(*) FILTER (WHERE solved) FROM (
+				SELECT DISTINCT ON (user_id) lower(trim(made_with)) AS tool, status = 'passed' AS solved
+				FROM submissions WHERE day = $1 AND status IN ('passed', 'failed')
+				ORDER BY user_id, passed_tests DESC, created_at ASC) best
+			GROUP BY tool ORDER BY count(*) FILTER (WHERE solved) DESC, count(*) DESC, tool LIMIT 20`, day)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var t ToolStat
+			if err := rows.Scan(&t.MadeWith, &t.Participants, &t.Solvers); err != nil {
+				return err
+			}
+			st.ByTool = append(st.ByTool, t)
+		}
+		return rows.Err()
+	})
+	return st, err
+}

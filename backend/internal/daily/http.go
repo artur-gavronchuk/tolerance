@@ -43,6 +43,14 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service, who UserFunc, my MyFun
 		}
 		httpx.Respond(w, http.StatusOK, rv)
 	})
+	mux.HandleFunc("GET /api/v1/daily/{day}/stats", func(w http.ResponseWriter, r *http.Request) {
+		st, err := s.Stats(r.Context(), r.PathValue("day"))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, st)
+	})
 	mux.HandleFunc("GET /api/v1/days", func(w http.ResponseWriter, r *http.Request) {
 		items, err := s.Days(r.Context())
 		if err != nil {

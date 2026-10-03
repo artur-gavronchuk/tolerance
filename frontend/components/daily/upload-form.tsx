@@ -22,6 +22,7 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
   const [madeWith, setMadeWith] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
   const exhausted = attemptsLeft !== undefined && attemptsLeft <= 0
 
   async function submit(e: React.FormEvent) {
@@ -51,13 +52,23 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
 
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-4">
-      <div className="space-y-2">
+      <div
+        className={`space-y-2 rounded-[10px] border border-dashed p-3 transition-colors ${dragging ? 'border-primary bg-accent' : 'border-input'}`}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragging(false)
+          const f = e.dataTransfer.files?.[0]
+          if (f) { setFile(f); setError(null) }
+        }}>
         <Label htmlFor="solution-file">Your result</Label>
         <Input id="solution-file" ref={fileRef} type="file" accept=".zip,.patch,.diff"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         <p className="text-xs text-muted-foreground">
-          A .zip of the edited repository (files at the root) or a .patch / .diff, up to 5 MB.
+          Drop or pick a .zip of the edited repository or a .patch / .diff, up to 5 MB.
         </p>
+        {file && <p className="truncate font-mono text-xs" title={file.name}>{file.name}</p>}
       </div>
       <div className="space-y-2">
         <Label htmlFor="made-with">Made with <span className="font-normal text-muted-foreground">(optional)</span></Label>
