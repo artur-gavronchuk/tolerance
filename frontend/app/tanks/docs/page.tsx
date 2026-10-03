@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { PageHeader } from '@/components/page-header'
 import { CopyBlock } from '@/components/copy-block'
 import { CLI } from '@/lib/brand'
+import { InstallCli } from '@/components/tanks/install-cli'
 
 export const metadata: Metadata = {
   title: 'Docs',
@@ -61,6 +62,12 @@ export default function TanksDocsPage() {
 
       <Section id="quick-start" title="Quick start">
         <p>Two ways to get a bot into the ladder, then upload it.</p>
+        <p className="font-semibold text-foreground">0. Install the <code>{CLI}</code> tool</p>
+        <InstallCli />
+        <p>
+          One binary, no dependencies, for macOS and Linux. Or build it from the repository:{' '}
+          <code>cd backend &amp;&amp; go build -o {CLI} ./cmd/{CLI}</code>.
+        </p>
         <p className="font-semibold text-foreground">1. Let your coding agent write it</p>
         <CopyBlock text={`${CLI} tanks new mybot --lang python`} />
         <p>
