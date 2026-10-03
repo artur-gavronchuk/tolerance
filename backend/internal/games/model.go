@@ -106,6 +106,9 @@ type LeaderboardEntry struct {
 	House   bool    `json:"house"`
 	Source  string  `json:"source"`
 	Version int     `json:"version"`
+	// Rating, Mu, Sigma, Matches and Wins are the current season's; LifetimeRating is across all seasons.
+	LifetimeRating int    `json:"lifetime_rating"`
+	Owner          string `json:"owner"` // the owner's public handle; empty for house bots
 }
 
 // VersionPublic is one bot_versions row as shown on another owner's bot profile: no archive, no checks, no
@@ -121,8 +124,11 @@ type VersionPublic struct {
 // no active version yet, or it's the idle house bot) plus its full version history.
 type BotProfile struct {
 	LeaderboardEntry
-	CreatedAt time.Time       `json:"created_at"`
-	Versions  []VersionPublic `json:"versions"`
+	CreatedAt   time.Time         `json:"created_at"`
+	Versions    []VersionPublic   `json:"versions"`
+	Season      SeasonView        `json:"season"`
+	Seasons     []BotSeasonResult `json:"seasons"`     // archived seasons, newest first
+	Tournaments []BotTournament   `json:"tournaments"` // newest first
 }
 
 // LiveView is what the arena's live page polls: the broadcast currently airing (or the most recently

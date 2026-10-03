@@ -46,6 +46,9 @@ func newHandler(cfg config, d deps) http.Handler {
 	games.RegisterOwnerRoutes(owner, d.games)
 	products.RegisterOwnerRoutes(owner, d.products)
 
+	admin := http.NewServeMux()
+	games.RegisterAdminRoutes(admin, d.games)
+
 	public := http.NewServeMux()
 	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
 	tasks.RegisterPublicRoutes(public, d.pool)
@@ -79,6 +82,8 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/users/", public)
 	api.Handle("/api/v1/tasks/", public)
 	api.Handle("/api/v1/tanks/", public)
+	// Starting a tournament now: admins, or anyone signed in when the dev login is on (local runs).
+	api.Handle("POST /api/v1/tanks/tournaments", session(adminOrDev(cfg.devLogin)(admin)))
 
 	top := http.NewServeMux()
 	top.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -147,4 +152,15 @@ func withMiddleware(next http.Handler, log *slog.Logger, trustProxy bool) http.H
 		}
 		log.Info("request", fields...)
 	})
+}
+
+// adminOrDev lets a request through when its user is an admin, or always when dev is true (ARENA_DEV_LOGIN,
+// which is refused next to secure cookies, so it never applies to production).
+func adminOrDev(dev bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		if dev {
+			return next
+		}
+		return identity.RequireAdmin(next)
+	}
 }

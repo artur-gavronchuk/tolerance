@@ -189,9 +189,10 @@ func (s *Service) finishMatch(ctx context.Context, matchID string, participants 
 }
 
 // applyRatings locks the match's bots (FOR UPDATE, ordered by id to avoid deadlocking against a
-// concurrent match sharing a bot), applies rating.Update from their current mu/sigma and places, and
-// writes each bot's new rating, matches and wins back. It returns each bot's rating before and after,
-// aligned with participants, for the caller to record on the match_players rows.
+// concurrent match sharing a bot), applies rating.Update twice - to the bots' season ratings (what the
+// ladder shows and what match_players records) and to their lifetime ratings - and writes both back along
+// with matches and wins. It returns each bot's season rating before and after, aligned with participants,
+// for the caller to record on the match_players rows.
 func (s *Service) applyRatings(ctx context.Context, tx pgx.Tx, participants []playerInput, result match.Result) ([]rating.Rating, []rating.Rating, error) {
 	ids := make([]string, len(participants))
 	for i, p := range participants {
@@ -200,11 +201,16 @@ func (s *Service) applyRatings(ctx context.Context, tx pgx.Tx, participants []pl
 	sorted := append([]string(nil), ids...)
 	sort.Strings(sorted)
 
+	season, err := ensureSeasonTx(ctx, tx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	rows, err := tx.Query(ctx, `SELECT id, mu, sigma FROM game_bots WHERE id = ANY($1) ORDER BY id FOR UPDATE`, sorted)
 	if err != nil {
 		return nil, nil, err
 	}
-	current := make(map[string]rating.Rating, len(ids))
+	lifetime := make(map[string]rating.Rating, len(ids))
 	for rows.Next() {
 		var id string
 		var r rating.Rating
@@ -212,7 +218,33 @@ func (s *Service) applyRatings(ctx context.Context, tx pgx.Tx, participants []pl
 			rows.Close()
 			return nil, nil, err
 		}
-		current[id] = r
+		lifetime[id] = r
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	rows.Close()
+
+	for _, id := range sorted {
+		if _, err := tx.Exec(ctx, `INSERT INTO tanks_season_ratings (season_id, bot_id, mu, sigma) VALUES ($1, $2, $3, $4)
+			ON CONFLICT (season_id, bot_id) DO NOTHING`, season.ID, id, rating.DefaultMu, rating.DefaultSigma); err != nil {
+			return nil, nil, err
+		}
+	}
+	rows, err = tx.Query(ctx, `SELECT bot_id, mu, sigma FROM tanks_season_ratings
+		WHERE season_id = $1 AND bot_id = ANY($2) ORDER BY bot_id FOR UPDATE`, season.ID, sorted)
+	if err != nil {
+		return nil, nil, err
+	}
+	seasonal := make(map[string]rating.Rating, len(ids))
+	for rows.Next() {
+		var id string
+		var r rating.Rating
+		if err := rows.Scan(&id, &r.Mu, &r.Sigma); err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		seasonal[id] = r
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil, err
@@ -220,12 +252,15 @@ func (s *Service) applyRatings(ctx context.Context, tx pgx.Tx, participants []pl
 	rows.Close()
 
 	before := make([]rating.Rating, len(participants))
+	lifeBefore := make([]rating.Rating, len(participants))
 	places := make([]int, len(participants))
 	for i, p := range participants {
-		before[i] = current[p.BotID]
+		before[i] = seasonal[p.BotID]
+		lifeBefore[i] = lifetime[p.BotID]
 		places[i] = result.Players[i].Place
 	}
 	after := rating.Update(before, places)
+	lifeAfter := rating.Update(lifeBefore, places)
 
 	for i, p := range participants {
 		win := 0
@@ -233,7 +268,11 @@ func (s *Service) applyRatings(ctx context.Context, tx pgx.Tx, participants []pl
 			win = 1
 		}
 		if _, err := tx.Exec(ctx, `UPDATE game_bots SET mu = $2, sigma = $3, matches = matches + 1, wins = wins + $4, last_match_at = now()
-			WHERE id = $1`, p.BotID, after[i].Mu, after[i].Sigma, win); err != nil {
+			WHERE id = $1`, p.BotID, lifeAfter[i].Mu, lifeAfter[i].Sigma, win); err != nil {
+			return nil, nil, err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE tanks_season_ratings SET mu = $3, sigma = $4, matches = matches + 1, wins = wins + $5
+			WHERE season_id = $1 AND bot_id = $2`, season.ID, p.BotID, after[i].Mu, after[i].Sigma, win); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -241,36 +280,18 @@ func (s *Service) applyRatings(ctx context.Context, tx pgx.Tx, participants []pl
 }
 
 // leaderboardAll loads every active bot (except the idle house bot, which exists only for qualification
-// checks) and ranks them by their displayed rating, highest first.
+// checks) and ranks them by their displayed rating in the current season, highest first.
 func (s *Service) leaderboardAll(ctx context.Context) ([]LeaderboardEntry, error) {
 	var out []LeaderboardEntry
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `
-			SELECT g.id, g.name, g.mu, g.sigma, g.matches, g.wins, g.house, v.source, v.number
-			FROM game_bots g JOIN bot_versions v ON v.id = g.active_version_id
-			WHERE g.active_version_id IS NOT NULL AND g.id <> 'bot_house_idle'`)
+		season, err := ensureSeasonTx(ctx, tx)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var e LeaderboardEntry
-			if err := rows.Scan(&e.BotID, &e.Name, &e.Mu, &e.Sigma, &e.Matches, &e.Wins, &e.House, &e.Source, &e.Version); err != nil {
-				return err
-			}
-			e.Rating = rating.Display(rating.Rating{Mu: e.Mu, Sigma: e.Sigma})
-			out = append(out, e)
-		}
-		return rows.Err()
+		out, err = seasonLadder(ctx, tx, season.ID, false)
+		return err
 	})
-	if err != nil {
-		return nil, err
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Rating > out[j].Rating })
-	for i := range out {
-		out[i].Rank = i + 1
-	}
-	return out, nil
+	return out, err
 }
 
 // Leaderboard returns the top limit active bots by rating (or all of them, if limit <= 0 or larger than
@@ -294,38 +315,45 @@ func (s *Service) Leaderboard(ctx context.Context, limit int) ([]LeaderboardEntr
 func (s *Service) Bot(ctx context.Context, id string) (BotProfile, error) {
 	var out BotProfile
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		var mu, sigma float64
-		var matches, wins int
-		var name string
-		var house bool
-		var createdAt time.Time
-		var activeVersionID *string
-		if err := tx.QueryRow(ctx, `SELECT name, house, mu, sigma, matches, wins, created_at, active_version_id
-			FROM game_bots WHERE id = $1`, id).
-			Scan(&name, &house, &mu, &sigma, &matches, &wins, &createdAt, &activeVersionID); err != nil {
+		season, err := ensureSeasonTx(ctx, tx)
+		if err != nil {
 			return err
 		}
-		out.LeaderboardEntry = LeaderboardEntry{
-			BotID: id, Name: name, House: house, Mu: mu, Sigma: sigma, Matches: matches, Wins: wins,
-			Rating: rating.Display(rating.Rating{Mu: mu, Sigma: sigma}),
+		out.Season = season
+		var mu, sigma float64
+		var name, owner string
+		var house bool
+		var createdAt time.Time
+		if err := tx.QueryRow(ctx, `SELECT g.name, g.house, g.mu, g.sigma, g.created_at, coalesce(u.handle, '')
+			FROM game_bots g LEFT JOIN users u ON u.id = g.owner_user_id WHERE g.id = $1`, id).
+			Scan(&name, &house, &mu, &sigma, &createdAt, &owner); err != nil {
+			return err
 		}
 		out.CreatedAt = createdAt.UTC()
-
-		if activeVersionID != nil {
-			if err := tx.QueryRow(ctx, `SELECT source, number FROM bot_versions WHERE id = $1`, *activeVersionID).
-				Scan(&out.Source, &out.Version); err != nil {
-				return err
+		ladder, err := seasonLadder(ctx, tx, season.ID, false)
+		if err != nil {
+			return err
+		}
+		found := false
+		for _, e := range ladder {
+			if e.BotID == id {
+				out.LeaderboardEntry = e
+				found = true
+				break
 			}
-			if id != "bot_house_idle" {
-				var rank int
-				if err := tx.QueryRow(ctx, `
-					SELECT count(*) + 1 FROM game_bots g2
-					WHERE g2.active_version_id IS NOT NULL AND g2.id <> 'bot_house_idle' AND g2.id <> $1
-					  AND (1000 + 40 * (g2.mu - 3 * g2.sigma)) > (1000 + 40 * ($2 - 3 * $3))`, id, mu, sigma).Scan(&rank); err != nil {
-					return err
-				}
-				out.Rank = rank
+		}
+		if !found { // no active version yet, or the idle house bot: no rank
+			life := rating.Display(rating.Rating{Mu: mu, Sigma: sigma})
+			out.LeaderboardEntry = LeaderboardEntry{
+				BotID: id, Name: name, House: house, Owner: owner, Mu: rating.DefaultMu, Sigma: rating.DefaultSigma,
+				Rating: rating.Display(rating.Default()), LifetimeRating: life,
 			}
+		}
+		if out.Seasons, err = botSeasonResultsTx(ctx, tx, id); err != nil {
+			return err
+		}
+		if out.Tournaments, err = botTournamentsTx(ctx, tx, id); err != nil {
+			return err
 		}
 
 		rows, err := tx.Query(ctx, `SELECT number, source, status, created_at FROM bot_versions WHERE bot_id = $1 ORDER BY number DESC`, id)
@@ -557,13 +585,13 @@ func (s *Service) SweepStuck(ctx context.Context) (int, error) {
 }
 
 // PruneReplays deletes replays for matches finished more than 3 days ago, except featured matches and
-// check matches, and returns how many it deleted.
+// check and tournament matches, and returns how many it deleted.
 func (s *Service) PruneReplays(ctx context.Context) (int, error) {
 	var n int64
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
 			DELETE FROM match_replays r USING matches m
-			WHERE r.match_id = m.id AND m.kind <> 'check' AND m.featured = false
+			WHERE r.match_id = m.id AND m.kind NOT IN ('check', 'tournament') AND m.featured = false
 			  AND m.finished_at IS NOT NULL AND m.finished_at < now() - interval '3 days'`)
 		n = tag.RowsAffected()
 		return err

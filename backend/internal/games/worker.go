@@ -163,7 +163,8 @@ func (w *Worker) dispatch(ctx context.Context, job *jobs.Job) error {
 	}
 }
 
-// scheduleLoop drives the ladder and the broadcast: every 2s ScheduleTick and RefreshBroadcast, every
+// scheduleLoop drives the ladder, the broadcast, seasons and tournaments: every 2s ScheduleTick,
+// RefreshBroadcast, SeasonTick and TournamentTick, every
 // minute SweepStuck, every hour PruneReplays and match.RemoveStaleBotContainers. It logs every error and
 // keeps going; it returns when ctx is done.
 func (w *Worker) scheduleLoop(ctx context.Context) {
@@ -183,6 +184,12 @@ func (w *Worker) scheduleLoop(ctx context.Context) {
 			}
 			if err := w.svc.RefreshBroadcast(ctx); err != nil {
 				w.log.Error("games: refresh broadcast", "err", err)
+			}
+			if err := w.svc.SeasonTick(ctx); err != nil {
+				w.log.Error("games: season tick", "err", err)
+			}
+			if err := w.svc.TournamentTick(ctx); err != nil {
+				w.log.Error("games: tournament tick", "err", err)
 			}
 		case <-minuteTick.C:
 			if n, err := w.svc.SweepStuck(ctx); err != nil {

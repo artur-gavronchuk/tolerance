@@ -3,6 +3,7 @@ package games
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"tolerance/internal/platform/httpx"
 )
@@ -22,6 +23,33 @@ func parseLimit(r *http.Request, def, max int) (int, error) {
 		n = max
 	}
 	return n, nil
+}
+
+// RegisterAdminRoutes registers what only an admin (or a local dev login) may do: starting a tournament now.
+// The caller wraps the mux in the session and role checks.
+func RegisterAdminRoutes(mux *http.ServeMux, s *Service) {
+	mux.HandleFunc("POST /api/v1/tanks/tournaments", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Size int `json:"size"`
+		}
+		raw, err := httpx.ReadBody(w, r)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		if len(raw) > 0 {
+			if err := httpx.Decode(raw, &in); err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+		}
+		t, err := s.StartTournament(r.Context(), in.Size)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusCreated, t)
+	})
 }
 
 // RegisterPublicRoutes registers the tanks arena's public, unauthenticated routes: the leaderboard, the
@@ -82,6 +110,62 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
 			return
 		}
 		httpx.Respond(w, http.StatusOK, b)
+	})
+
+	mux.HandleFunc("GET /api/v1/tanks/showcase", func(w http.ResponseWriter, r *http.Request) {
+		out, err := s.Showcase(r.Context())
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, out)
+	})
+
+	mux.HandleFunc("GET /api/v1/tanks/seasons", func(w http.ResponseWriter, r *http.Request) {
+		limit, err := parseLimit(r, 24, 100)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		items, err := s.Seasons(r.Context(), limit)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, map[string]any{"items": items})
+	})
+
+	// {id} is a season id like "2026-10", or "current".
+	mux.HandleFunc("GET /api/v1/tanks/seasons/{id}", func(w http.ResponseWriter, r *http.Request) {
+		d, err := s.Season(r.Context(), r.PathValue("id"))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, d)
+	})
+
+	mux.HandleFunc("GET /api/v1/tanks/tournaments", func(w http.ResponseWriter, r *http.Request) {
+		limit, err := parseLimit(r, 30, 100)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		items, err := s.Tournaments(r.Context(), r.URL.Query().Get("status"), limit)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, map[string]any{"items": items, "now": time.Now().UTC()})
+	})
+
+	mux.HandleFunc("GET /api/v1/tanks/tournaments/{id}", func(w http.ResponseWriter, r *http.Request) {
+		t, err := s.Tournament(r.Context(), r.PathValue("id"))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, t)
 	})
 
 	mux.HandleFunc("GET /api/v1/tanks/live", func(w http.ResponseWriter, r *http.Request) {
