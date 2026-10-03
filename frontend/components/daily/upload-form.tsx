@@ -5,13 +5,20 @@ import { FileCheck, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { upload, friendlyMessage } from '@/lib/api'
+import { upload } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { formatNumber, type Locale } from '@/lib/i18n/core'
 import type { Submission } from '@/lib/types'
+import { errorText } from '@/lib/format'
+import { useT } from '@/lib/i18n/client'
+import { dailyMessages } from '@/lib/i18n/messages/daily'
 
 const MAX_BYTES = 5 << 20
 
-const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1 << 20 ? `${(n / 1024).toFixed(1)} KB` : `${(n / (1 << 20)).toFixed(2)} MB`)
+const fmtSize = (n: number, locale: Locale) => {
+  const [b, kb, mb] = locale === 'ru' ? ['Б', 'КБ', 'МБ'] : ['B', 'KB', 'MB']
+  return n < 1024 ? `${n} ${b}` : n < 1 << 20 ? `${formatNumber(locale, n / 1024, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${kb}` : `${formatNumber(locale, n / (1 << 20), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${mb}`
+}
 
 // taskSlug is sent only for practice uploads (a past day); for today's task
 // the backend defaults to it.
@@ -20,6 +27,7 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
   attemptsLeft?: number
   onSubmitted: (s: Submission) => void
 }) {
+  const t = useT(dailyMessages)
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [madeWith, setMadeWith] = useState('')
@@ -37,7 +45,7 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
     e.preventDefault()
     if (!file) return
     if (file.size > MAX_BYTES) {
-      setError('That file is over 5 MB.')
+      setError(t('over5'))
       return
     }
     setBusy(true)
@@ -52,7 +60,7 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
       setFile(null)
       if (fileRef.current) fileRef.current.value = ''
     } catch (err) {
-      setError(friendlyMessage(err))
+      setError(errorText(err, t.locale))
     } finally {
       setBusy(false)
     }
@@ -61,7 +69,7 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="solution-file">Your solution (.zip or .patch)</Label>
+        <Label htmlFor="solution-file">{t('yourSolution')}</Label>
         <button
           type="button"
           disabled={busy}
@@ -83,12 +91,12 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
           {file ? (
             <>
               <span className="max-w-full truncate font-mono text-sm font-bold" title={file.name}>{file.name}</span>
-              <span className="text-xs text-muted-foreground">{fmtSize(file.size)} · click or drop to replace</span>
+              <span className="text-xs text-muted-foreground">{t('replaceHint', { size: fmtSize(file.size, t.locale) })}</span>
             </>
           ) : (
             <>
-              <span className="text-sm font-bold">Drop your file here, or click to choose</span>
-              <span className="text-xs text-muted-foreground">.zip of the edited repository, or a .patch / .diff, up to 5 MB</span>
+              <span className="text-sm font-bold">{t('dropTitle')}</span>
+              <span className="text-xs text-muted-foreground">{t('dropHint')}</span>
             </>
           )}
         </button>
@@ -96,7 +104,7 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
           onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(f) }} />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="made-with">Made with <span className="font-normal text-muted-foreground">(optional)</span></Label>
+        <Label htmlFor="made-with">{t('madeWith')} <span className="font-normal text-muted-foreground">{t('optional')}</span></Label>
         <Input id="made-with" value={madeWith} maxLength={100} placeholder="Claude Code + Opus"
           list="made-with-suggestions" onChange={(e) => setMadeWith(e.target.value)} />
         <datalist id="made-with-suggestions">
@@ -106,11 +114,11 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={busy || !file || exhausted}>
-          <Upload />{busy ? 'Uploading…' : 'Submit'}
+          <Upload />{busy ? t('uploading') : t('submit')}
         </Button>
         {attemptsLeft !== undefined && (
           <span className="text-sm text-muted-foreground">
-            {exhausted ? 'No attempts left today.' : `${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} left today`}
+            {exhausted ? t('noAttempts') : t.plural('attemptsLeft', attemptsLeft)}
           </span>
         )}
       </div>

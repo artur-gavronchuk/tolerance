@@ -2,27 +2,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { DailyRow } from '@/lib/types'
 import { HandleLink } from '@/components/daily/handle-link'
 import { StackName } from '@/components/daily/stack-label'
+import { useT } from '@/lib/i18n/client'
+import { dailyMessages } from '@/lib/i18n/messages/daily'
+import { formatNumber, type Locale } from '@/lib/i18n/core'
 
 export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: string; optimize?: boolean }) {
+  const t = useT(dailyMessages)
   if (rows.length === 0) {
     return (
       <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">
-        No results yet. Be the first.
+        {t('emptyBoard')}
       </p>
     )
   }
   const mine = (r: DailyRow) => r.handle === me
-  const result = (r: DailyRow) => (optimize ? fmtScore(r.score) : `${r.passed_tests}/${r.total_tests}`)
+  const result = (r: DailyRow) => (optimize ? fmtScore(r.score, t.locale) : `${r.passed_tests}/${r.total_tests}`)
   return (
     <>
       <Table className="hidden sm:table">
         <TableHeader>
           <TableRow>
             <TableHead className="w-10">#</TableHead>
-            <TableHead>Player</TableHead>
-            <TableHead>Made with</TableHead>
-            <TableHead className="text-right">{optimize ? 'Score' : 'Tests'}</TableHead>
-            <TableHead className="text-right">Time (UTC)</TableHead>
+            <TableHead>{t('player')}</TableHead>
+            <TableHead>{t('madeWith')}</TableHead>
+            <TableHead className="text-right">{optimize ? t('score') : t('tests')}</TableHead>
+            <TableHead className="text-right">{t('timeUtc')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -53,8 +57,8 @@ export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: stri
   )
 }
 
-export function fmtScore(v: number | null | undefined) {
-  return v == null ? '—' : v.toLocaleString('en-US', { maximumFractionDigits: 2 })
+export function fmtScore(v: number | null | undefined, locale: Locale = 'en') {
+  return v == null ? '—' : formatNumber(locale, v, { maximumFractionDigits: 2 })
 }
 
 function time(iso: string) {

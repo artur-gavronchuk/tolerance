@@ -5,22 +5,27 @@ import Link from 'next/link'
 import { PageHeader } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { api, friendlyMessage, stacks } from '@/lib/api'
+import { api, stacks } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { DayListItem, StackRow } from '@/lib/types'
+import { localizeStack } from '@/components/daily/stack-label'
+import { errorText } from '@/lib/format'
+import { useT } from '@/lib/i18n/client'
+import { listingMessages } from '@/lib/i18n/messages/listings'
 
 type Range = 'all' | '30' | '7' | 'day'
 
-const RANGES: { id: Range; label: string }[] = [
-  { id: 'all', label: 'All time' },
-  { id: '30', label: '30 days' },
-  { id: '7', label: '7 days' },
-  { id: 'day', label: 'One day' },
+const RANGES: { id: Range; label: 'rangeAll' | 'range30' | 'range7' | 'rangeDay' }[] = [
+  { id: 'all', label: 'rangeAll' },
+  { id: '30', label: 'range30' },
+  { id: '7', label: 'range7' },
+  { id: 'day', label: 'rangeDay' },
 ]
 
 const pct = (v: number | null) => (v === null ? '–' : `${Math.round(v * 100)}%`)
 
 export default function AgentsPage() {
+  const t = useT(listingMessages)
   const [range, setRange] = useState<Range>('all')
   const [days, setDays] = useState<DayListItem[]>([])
   const [daysLoaded, setDaysLoaded] = useState(false)
@@ -38,7 +43,7 @@ export default function AgentsPage() {
     setRows(null)
     setError(null)
     const req = range === 'day' ? stacks.forDay(day) : stacks.overall(range === 'all' ? undefined : Number(range))
-    req.then((r) => { if (!stale) setRows(r) }).catch((e) => { if (!stale) setError(friendlyMessage(e)) })
+    req.then((r) => { if (!stale) setRows(r) }).catch((e) => { if (!stale) setError(errorText(e, t.locale)) })
     return () => { stale = true }
   }, [range, day])
 
@@ -49,18 +54,15 @@ export default function AgentsPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Agents">
-        Which coding-agent stacks do best on the daily task. Everyone solves the same task with their own agent; we
-        sort each free-text &ldquo;made with&rdquo; into a tool and a model and rank stacks by average points.
-      </PageHeader>
+      <PageHeader title={t('agentsTitle')}>{t('agentsIntro')}</PageHeader>
 
       <details className="group max-w-2xl rounded-[14px] border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-        <summary className="cursor-pointer font-semibold text-foreground">How scoring works</summary>
+        <summary className="cursor-pointer font-semibold text-foreground">{t('howScoring')}</summary>
         <ul className="mt-3 list-disc space-y-1.5 pl-5 leading-relaxed">
-          <li>A day is worth up to 100 points: the share of hidden tests passed on a bugfix day, the score against the day&apos;s best on an optimize day. A stack is ranked by its average.</li>
-          <li>Each person-day counts once, under the stack of the attempt that decided it.</li>
-          <li>Solve rate and attempts to first pass count bugfix days only.</li>
-          <li>Small samples are noisy.</li>
+          <li>{t('scoring1')}</li>
+          <li>{t('scoring2')}</li>
+          <li>{t('scoring3')}</li>
+          <li>{t('scoring4')}</li>
         </ul>
       </details>
 
@@ -68,22 +70,22 @@ export default function AgentsPage() {
         {RANGES.map((r) => (
           <button key={r.id} type="button" onClick={() => (r.id === 'day' ? pickDay(day || days[0]?.day || '') : setRange(r.id))}
             disabled={r.id === 'day' && (!daysLoaded || days.length === 0)}
-            title={r.id === 'day' && noPastDays ? 'Available after the first day closes' : undefined}
+            title={r.id === 'day' && noPastDays ? t('dayLocked') : undefined}
             className={cn(
               'rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50',
               range === r.id && 'bg-muted text-foreground'
             )}>
-            {r.label}
+            {t(r.label)}
           </button>
         ))}
-        {noPastDays && <span className="text-xs text-muted-foreground">One day unlocks after the first day closes.</span>}
+        {noPastDays && <span className="text-xs text-muted-foreground">{t('dayUnlocks')}</span>}
         {range === 'day' && day && (
           <>
-            <select aria-label="Day" value={day} onChange={(e) => pickDay(e.target.value)}
+            <select aria-label={t('day')} value={day} onChange={(e) => pickDay(e.target.value)}
               className="h-9 max-w-full min-w-0 rounded-full border border-input bg-card px-3 font-mono text-sm">
               {days.map((d) => <option key={d.day} value={d.day}>{d.day} · {d.task.title}</option>)}
             </select>
-            <Link href={`/day/${day}`} className="text-sm font-semibold text-primary hover:underline">Open that day</Link>
+            <Link href={`/day/${day}`} className="text-sm font-semibold text-primary hover:underline">{t('openDay')}</Link>
           </>
         )}
       </div>
@@ -91,27 +93,27 @@ export default function AgentsPage() {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!rows && !error && <Skeleton className="h-64 rounded-[14px]" />}
       {rows && rows.length === 0 && (
-        <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">No finished submissions yet.</p>
+        <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">{t('noSubs')}</p>
       )}
       {rows && rows.length > 0 && (
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">#</TableHead>
-              <TableHead>Stack</TableHead>
-              <TableHead className="text-right">Avg points</TableHead>
-              <TableHead className="text-right">Solve rate</TableHead>
-              <TableHead className="text-right">Tests passed</TableHead>
-              <TableHead className="text-right">Attempts to pass</TableHead>
-              <TableHead className="text-right">People</TableHead>
-              <TableHead className="text-right">Days</TableHead>
+              <TableHead>{t('stack')}</TableHead>
+              <TableHead className="text-right">{t('avgPoints')}</TableHead>
+              <TableHead className="text-right">{t('solveRate')}</TableHead>
+              <TableHead className="text-right">{t('testsPassed')}</TableHead>
+              <TableHead className="text-right">{t('attemptsToPass')}</TableHead>
+              <TableHead className="text-right">{t('people')}</TableHead>
+              <TableHead className="text-right">{t('days')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((r, i) => (
               <TableRow key={r.label}>
                 <TableCell className="font-mono text-muted-foreground">{i + 1}</TableCell>
-                <TableCell className="min-w-[10rem] font-semibold">{r.label}</TableCell>
+                <TableCell className="min-w-[10rem] font-semibold">{localizeStack(r.label, t.locale)}</TableCell>
                 <TableCell className="text-right font-mono font-bold">{r.avg_points}</TableCell>
                 <TableCell className="text-right font-mono">
                   {pct(r.solve_rate)}

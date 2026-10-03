@@ -1,3 +1,7 @@
+import { useLocale } from '@/lib/i18n/client'
+import { makeT, type Locale } from '@/lib/i18n/core'
+import { dailyMessages } from '@/lib/i18n/messages/daily'
+
 // Display normalizer for the free-text "made with": a TypeScript port of backend/internal/stacks/normalize.go
 // so every page names a stack the same way ("Claude Code + Sonnet"). Keep the rules in sync with the backend.
 const OTHER = 'Other'
@@ -50,10 +54,17 @@ export function displayStack(madeWith: string): string {
   return label === OTHER && madeWith.trim() ? madeWith.trim() : label
 }
 
+// The generic labels in the reader's language; tool and model names stay as they are.
+export function localizeStack(label: string, locale: Locale): string {
+  if (label === 'Other' || label === 'Custom') return makeT(dailyMessages, locale)(`stack.${label}`)
+  return label
+}
+
 // The normalized label with the raw text as a tooltip.
 export function StackName({ madeWith, empty = '—' }: { madeWith: string; empty?: string }) {
+  const locale = useLocale()
   const raw = madeWith.trim()
   if (!raw) return <>{empty}</>
   const label = displayStack(raw)
-  return <span title={label === raw ? undefined : raw}>{label}</span>
+  return <span title={label === raw ? undefined : raw}>{localizeStack(label, locale)}</span>
 }

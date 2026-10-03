@@ -17,7 +17,10 @@ import { CopyBlock } from '@/components/copy-block'
 import { SectionTitle } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, ApiError, friendlyMessage } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
+import { errorText } from '@/lib/format'
+import { useT } from '@/lib/i18n/client'
+import { dailyMessages } from '@/lib/i18n/messages/daily'
 import { useMe } from '@/lib/use-me'
 import type { Daily, DailyRow, DayStats, Submission } from '@/lib/types'
 
@@ -31,6 +34,7 @@ When you are done, the repository should build and the tests should pass.`
 // The task of the day (`day` omitted) or a past day (`day` = YYYY-MM-DD).
 // Past days accept practice uploads: they do not count for the leaderboards.
 export function DailyView({ day }: { day?: string }) {
+  const t = useT(dailyMessages)
   const { me, loading: meLoading, refresh: refreshMe } = useMe()
   const [daily, setDaily] = useState<Daily | null>(null)
   const [rows, setRows] = useState<DailyRow[] | null>(null)
@@ -53,7 +57,7 @@ export function DailyView({ day }: { day?: string }) {
       setStats(st)
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setMissing(true)
-      else setError(friendlyMessage(e))
+      else setError(errorText(e, t.locale))
     }
   }, [day])
   useEffect(() => { void load() }, [load])
@@ -92,21 +96,21 @@ export function DailyView({ day }: { day?: string }) {
     ...local.filter((s) => !serverIds.has(s.id)),
     ...(daily.my?.submissions ?? []).map((s) => localById.get(s.id) ?? s),
   ]
-  const share = shareText({ day: daily.day, title: task.title, subs, streak: daily.is_open ? me?.streak.current ?? 0 : 0 })
+  const share = shareText({ day: daily.day, title: task.title, subs, streak: daily.is_open ? me?.streak.current ?? 0 : 0, scoreWord: t('shareScore') })
 
   return (
     <div className="space-y-10">
       <header className="flex flex-col gap-3">
         <p className="text-sm font-semibold text-muted-foreground">
-          {practice ? <>Archive · {daily.day} · <Link href="/days" className="text-primary hover:underline">all days</Link></> : <>Task of the day · {daily.day}</>}
+          {practice ? <>{t('kickerArchive', { day: daily.day })} <Link href="/days" className="text-primary hover:underline">{t('allDays')}</Link></> : t('kickerToday', { day: daily.day })}
         </p>
         <h1 className="display text-[2.1rem] break-words sm:text-[2.75rem]">{task.title}</h1>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TaskBadges language={task.language} difficulty={task.difficulty} kind={task.kind} direction={task.direction} />
           {daily.is_open ? (
-            <span className="text-sm text-muted-foreground">Closes in <Countdown closesAt={daily.closes_at} onClosed={() => void load()} /></span>
+            <span className="text-sm text-muted-foreground">{t('closesIn')} <Countdown closesAt={daily.closes_at} onClosed={() => void load()} /></span>
           ) : (
-            <span className="text-sm text-muted-foreground">Closed. Uploads here are practice and do not count.</span>
+            <span className="text-sm text-muted-foreground">{t('closedPractice')}</span>
           )}
         </div>
       </header>
@@ -118,28 +122,28 @@ export function DailyView({ day }: { day?: string }) {
 
         <aside className="order-first min-w-0 space-y-6 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto">
           <section className="rounded-[14px] border border-border bg-card p-5">
-            <h2 className="heading">How to solve</h2>
+            <h2 className="heading">{t('howTitle')}</h2>
             <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
-              <li>Download the repository and unpack it.</li>
-              <li>Give it to your coding agent (Claude Code, Cursor, Codex, anything) with this prompt:</li>
+              <li>{t('how1')}</li>
+              <li>{t('how2')}</li>
             </ol>
             <div className="mt-3"><CopyBlock text={task.kind === 'optimize' ? OPTIMIZE_PROMPT(task.direction) : AGENT_PROMPT} /></div>
             <ol start={3} className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
-              <li>Zip the edited repository, or save your change as a .patch, and upload it below.</li>
+              <li>{t('how3')}</li>
             </ol>
             <div className="mt-3"><CopyBlock text={`cd ${task.slug} && zip -r ../solution.zip . -x '.git/*'`} /></div>
-            {!practice && <p className="mt-3 text-xs text-muted-foreground">When the day closes, the hidden tests and the first passing solutions are published.</p>}
+            {!practice && <p className="mt-3 text-xs text-muted-foreground">{t('revealNote')}</p>}
             <Button className="mt-4 w-full" render={<a href={task.repo_url} download />} nativeButton={false}>
-              <Download />Download repo
+              <Download />{t('downloadRepo')}
             </Button>
           </section>
 
           <section id="submit" className="scroll-mt-6 rounded-[14px] border border-border bg-card p-5">
-            <h2 className="heading">{practice ? 'Practice upload' : 'Submit'}</h2>
+            <h2 className="heading">{practice ? t('practiceTitle') : t('submitTitle')}</h2>
             {signedIn ? (
               <div className="mt-3 space-y-3">
                 {practice && (
-                  <p className="text-sm text-muted-foreground">This day is over: you can still try it, but the result will not count for any leaderboard or streak.</p>
+                  <p className="text-sm text-muted-foreground">{t('practiceOver')}</p>
                 )}
                 <UploadForm taskSlug={practice ? task.slug : undefined} attemptsLeft={attemptsLeft} onSubmitted={update} />
               </div>
@@ -147,10 +151,10 @@ export function DailyView({ day }: { day?: string }) {
               <div className="mt-3 space-y-3">
                 <p className="text-sm text-muted-foreground">
                   {practice
-                    ? 'Sign in to try this day as practice.'
-                    : 'Sign in to upload your solution and get on the leaderboard. Reading the task and downloading the repo works without an account.'}
+                    ? t('signInPractice')
+                    : t('signInSubmit')}
                 </p>
-                <Button className="w-full sm:w-auto" render={<Link href={loginHref} />} nativeButton={false}>Sign in to submit</Button>
+                <Button className="w-full sm:w-auto" render={<Link href={loginHref} />} nativeButton={false}>{t('signInToSubmit')}</Button>
               </div>
             ) : (
               <Skeleton className="mt-3 h-32 rounded-[10px]" />
@@ -161,12 +165,12 @@ export function DailyView({ day }: { day?: string }) {
 
       {signedIn && daily.my && (
         <section>
-          <SectionTitle aside={daily.my.best ? (task.kind === 'optimize' ? `Best score: ${fmtScore(daily.my.best.score)}` : `Best: ${daily.my.best.passed_tests}/${daily.my.best.total_tests}`) : undefined}>
-            My submissions
+          <SectionTitle aside={daily.my.best ? (task.kind === 'optimize' ? t('bestScore', { score: fmtScore(daily.my.best.score, t.locale) }) : t('best', { passed: daily.my.best.passed_tests, total: daily.my.best.total_tests })) : undefined}>
+            {t('mySubs')}
           </SectionTitle>
           {share && <div className="mb-3"><ShareResult text={share} /></div>}
           {subs.length === 0 ? (
-            <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">Nothing submitted yet.</p>
+            <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">{t('nothingYet')}</p>
           ) : (
             <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
               {subs.map((s) => <SubmissionCard key={s.id} sub={s} onUpdate={update} />)}
@@ -176,7 +180,7 @@ export function DailyView({ day }: { day?: string }) {
       )}
 
       <section>
-        <SectionTitle aside={practice ? 'Final standings' : 'Live'}>Leaderboard</SectionTitle>
+        <SectionTitle aside={practice ? t('finalStandings') : t('live')}>{t('leaderboard')}</SectionTitle>
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
           <div className="min-w-0">
             {rows == null ? <Skeleton className="h-48 rounded-[14px]" /> : <DailyBoard rows={rows} me={me?.user.handle} optimize={task.kind === 'optimize'} />}

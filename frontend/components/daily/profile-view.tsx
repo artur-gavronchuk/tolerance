@@ -7,13 +7,18 @@ import { Check, X } from 'lucide-react'
 import { SectionTitle } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { StackName, displayStack } from '@/components/daily/stack-label'
-import { api, ApiError, friendlyMessage } from '@/lib/api'
+import { StackName, displayStack, localizeStack } from '@/components/daily/stack-label'
+import { errorText } from '@/lib/format'
+import { useT } from '@/lib/i18n/client'
+import { dailyMessages } from '@/lib/i18n/messages/daily'
+import { formatDate } from '@/lib/i18n/core'
+import { api, ApiError } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import type { Profile, ProfileDay } from '@/lib/types'
 
 // The last 12 weeks as a grid of days, GitHub-style: solved, tried, or empty.
 function Calendar({ days }: { days: ProfileDay[] }) {
+  const t = useT(dailyMessages)
   const byDay = new Map(days.map((d) => [d.day, d]))
   const today = new Date()
   const cells: { day: string; d?: ProfileDay }[] = []
@@ -32,11 +37,11 @@ function Calendar({ days }: { days: ProfileDay[] }) {
         ))}
       </div>
       <div className="space-y-2 text-sm text-muted-foreground">
-        <p><span className="font-mono font-bold text-foreground">{played}</span> of the last 84 days played</p>
+        <p><span className="font-mono font-bold text-foreground">{played}</span> {t('played84')}</p>
         <ul className="space-y-1 text-xs">
-          <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] bg-success" />Solved</li>
-          <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] bg-primary/40" />Tried</li>
-          <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] bg-muted" />No attempt</li>
+          <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] bg-success" />{t('legendSolved')}</li>
+          <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] bg-primary/40" />{t('legendTried')}</li>
+          <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] bg-muted" />{t('legendNone')}</li>
         </ul>
       </div>
     </div>
@@ -53,6 +58,7 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function ProfileView({ handle }: { handle: string }) {
+  const t = useT(dailyMessages)
   const { me } = useMe()
   const [p, setP] = useState<Profile | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -60,7 +66,7 @@ export function ProfileView({ handle }: { handle: string }) {
   useEffect(() => {
     api<Profile>(`/users/${encodeURIComponent(handle)}`).then(setP).catch((e) => {
       if (e instanceof ApiError && e.status === 404) setMissing(true)
-      else setError(friendlyMessage(e))
+      else setError(errorText(e, t.locale))
     })
   }, [handle])
 
@@ -69,37 +75,37 @@ export function ProfileView({ handle }: { handle: string }) {
   if (!p) return <Skeleton className="h-64 rounded-[14px]" />
 
   const isMe = me?.user.handle.toLowerCase() === p.handle.toLowerCase()
-  const tools = [...new Set(p.tools.map(displayStack))]
+  const tools = [...new Set(p.tools.map((x) => localizeStack(displayStack(x), t.locale)))]
 
   return (
     <div className="space-y-10">
       <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="display text-[2.1rem] break-words sm:text-[2.75rem]">{p.handle}</h1>
-          {isMe && <Badge>This is you</Badge>}
+          {isMe && <Badge>{t('thisIsYou')}</Badge>}
         </div>
         <p className="text-sm text-muted-foreground">
-          Joined {p.joined_at.slice(0, 10)}
-          {tools.length > 0 && <> · works with {tools.join(', ')}</>}
+          {t('joined', { date: formatDate(t.locale, p.joined_at) })}
+          {tools.length > 0 && <> · {t('worksWith', { tools: tools.join(', ') })}</>}
         </p>
       </header>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Place overall" value={p.place ? `#${p.place}` : '—'} />
-        <Stat label="Current streak" value={`🔥 ${p.streak.current}`} />
-        <Stat label="Best streak" value={p.streak.best} />
-        <Stat label="Days solved" value={`${p.solved_days}/${p.played_days}`} />
+        <Stat label={t('placeOverall')} value={p.place ? `#${p.place}` : '—'} />
+        <Stat label={t('currentStreak')} value={`🔥 ${p.streak.current}`} />
+        <Stat label={t('bestStreak')} value={p.streak.best} />
+        <Stat label={t('daysSolved')} value={`${p.solved_days}/${p.played_days}`} />
       </div>
 
       <section>
-        <SectionTitle>Last 12 weeks</SectionTitle>
+        <SectionTitle>{t('last12')}</SectionTitle>
         <div className="rounded-[14px] border border-border bg-card p-4 sm:p-5"><Calendar days={p.days} /></div>
       </section>
 
       <section>
-        <SectionTitle>History</SectionTitle>
+        <SectionTitle>{t('history')}</SectionTitle>
         {p.days.length === 0 ? (
-          <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">No daily tasks yet.</p>
+          <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">{t('noDaily')}</p>
         ) : (
           <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
             {p.days.map((d) => (
@@ -111,7 +117,7 @@ export function ProfileView({ handle }: { handle: string }) {
                   {d.score != null ? d.score : `${d.passed_tests}/${d.total_tests}`}
                 </span>
                 {d.made_with && <Badge variant="outline"><StackName madeWith={d.made_with} /></Badge>}
-                <span className="text-xs text-muted-foreground">{d.attempts} attempt{d.attempts === 1 ? '' : 's'}</span>
+                <span className="text-xs text-muted-foreground">{t.plural('attempts', d.attempts)}</span>
               </li>
             ))}
           </ul>
