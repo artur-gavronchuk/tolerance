@@ -8,6 +8,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -216,6 +220,9 @@ func Sync(ctx context.Context, pool *db.Pool, ts []Task) error {
 	}
 	slugs := make([]string, 0, len(ts))
 	return pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if err := checkPlayedUnchanged(ctx, tx, ts); err != nil {
+			return err
+		}
 		for _, t := range ts {
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO tasks (slug, title, language, difficulty, task_md, repo_tar, hidden_tar, image, run_cmd, sandbox_timeout_s, hidden_tests,
@@ -233,6 +240,72 @@ func Sync(ctx context.Context, pool *db.Pool, ts []Task) error {
 		_, err := tx.Exec(ctx, `UPDATE tasks SET active = false WHERE active AND NOT (slug = ANY($1))`, slugs)
 		return err
 	})
+}
+
+// checkPlayedUnchanged refuses a sync that would change what a played task (one that has been a daily
+// task) checks against: its statement, repository, hidden tests and run parameters. Past verdicts, the
+// archive and queued runs all refer to the task by slug, so a fix to a played task has to ship as a new
+// slug. Title and difficulty are presentation and may change. The whole sync is rejected, so the catalog
+// is never half-applied.
+func checkPlayedUnchanged(ctx context.Context, tx pgx.Tx, ts []Task) error {
+	rows, err := tx.Query(ctx, `
+		SELECT t.slug, t.language, t.image, t.run_cmd, t.sandbox_timeout_s, t.hidden_tests, t.kind, coalesce(t.direction, ''),
+		       t.solve_cmd, t.case_time_limit_s, t.cases, t.task_md, t.repo_tar, t.hidden_tar, min(d.day)::text
+		FROM tasks t JOIN daily_tasks d ON d.task_slug = t.slug
+		GROUP BY t.slug`)
+	if err != nil {
+		return err
+	}
+	played := map[string]struct {
+		sum string
+		day string
+	}{}
+	for rows.Next() {
+		var t Task
+		var day string
+		if err := rows.Scan(&t.Slug, &t.Language, &t.Image, &t.RunCmd, &t.SandboxTimeoutS, &t.HiddenTests, &t.Kind, &t.Direction,
+			&t.SolveCmd, &t.CaseTimeLimitS, &t.Cases, &t.TaskMD, &t.RepoTar, &t.HiddenTar, &day); err != nil {
+			rows.Close()
+			return err
+		}
+		played[t.Slug] = struct {
+			sum string
+			day string
+		}{Fingerprint(t), day}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	var changed []string
+	for _, t := range ts {
+		if p, ok := played[t.Slug]; ok && p.sum != Fingerprint(t) {
+			changed = append(changed, fmt.Sprintf("%s (daily task on %s)", t.Slug, p.day))
+		}
+	}
+	if len(changed) > 0 {
+		return fmt.Errorf("refusing to sync: the checked content of played task(s) changed: %s; "+
+			"a played task is frozen, publish the fix under a new slug", strings.Join(changed, ", "))
+	}
+	return nil
+}
+
+// Fingerprint is a SHA-256 over everything that decides a verdict for t: statement, repository, hidden
+// tests and run parameters (not the title or difficulty). Each field is length-prefixed so no two
+// different tasks can collide by shifting bytes between fields.
+func Fingerprint(t Task) string {
+	h := sha256.New()
+	for _, f := range [][]byte{
+		[]byte(t.Language), []byte(t.Image), []byte(t.RunCmd), []byte(strconv.Itoa(t.SandboxTimeoutS)),
+		[]byte(strconv.Itoa(t.HiddenTests)), []byte(t.Kind), []byte(t.Direction), []byte(t.SolveCmd),
+		[]byte(strconv.Itoa(t.CaseTimeLimitS)), []byte(strconv.Itoa(t.Cases)), []byte(t.TaskMD), t.RepoTar, t.HiddenTar,
+	} {
+		var n [8]byte
+		binary.BigEndian.PutUint64(n[:], uint64(len(f)))
+		h.Write(n[:])
+		h.Write(f)
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // TarDir packs dir into a deterministic gzip tarball with paths relative to dir.
