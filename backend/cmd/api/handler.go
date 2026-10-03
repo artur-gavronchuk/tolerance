@@ -12,6 +12,7 @@ import (
 	"tolerance/internal/account"
 	adminpkg "tolerance/internal/admin"
 	"tolerance/internal/analytics"
+	"tolerance/internal/badges"
 	"tolerance/internal/daily"
 	"tolerance/internal/fairplay"
 	"tolerance/internal/games"
@@ -78,6 +79,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	tasks.RegisterPublicRoutes(public, d.pool, identity.OptionalUserID(d.users))
 	analytics.RegisterPublicRoutes(public, d.analytics, identity.OptionalUserID(d.users), d.limiter, cfg.trustProxy)
 	profiles.RegisterPublicRoutes(public, d.profiles)
+	badges.RegisterPublicRoutes(public, badges.Deps{Daily: d.daily, Games: d.games})
 	games.RegisterPublicRoutes(public, d.games, identity.OptionalUserID(d.users))
 
 	// The personal upload link: the token in the URL is the credential (no session).
@@ -108,6 +110,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/days", public)
 	api.Handle("/api/v1/leaderboard", public)
 	api.Handle("/api/v1/users/", public)
+	api.Handle("GET /api/v1/badges/", public)
 	// Remember when a signed-in user first fetched a task repo (fair-play signal), then serve it as usual.
 	api.Handle("GET /api/v1/tasks/{slug}/repo.zip", d.fairplay.RecordDownload("task", identity.OptionalUserID(d.users))(public))
 	api.Handle("/api/v1/tasks/", public)

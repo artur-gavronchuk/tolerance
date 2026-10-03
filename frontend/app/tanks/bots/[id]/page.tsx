@@ -4,6 +4,7 @@ import { errorText } from '@/lib/i18n/messages/errors'
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Trophy } from 'lucide-react'
+import { ReadmeBadge } from '@/components/badges/readme-badge'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { BotBadge } from '@/components/tanks/bot-badge'
 import { HandleLink } from '@/components/daily/handle-link'
@@ -97,6 +98,8 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
           </div>
         ))}
       </div>
+
+      {mine && !bot.house && <div className="mt-10"><ReadmeBadge kind="bot" id={bot.bot_id} href={`/tanks/bots/${bot.bot_id}`} /></div>}
 
       <section className="mt-10">
         <SectionTitle>{tr('bot.tournaments')}</SectionTitle>
