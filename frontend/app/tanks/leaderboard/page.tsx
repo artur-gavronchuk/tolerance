@@ -36,7 +36,7 @@ export default function LadderPage() {
       </PageHeader>
 
       {all.length > 1 && (
-        <div className="mt-6 flex flex-wrap items-center gap-2" aria-label="Seasons">
+        <nav aria-label="Seasons" className="mt-6 flex flex-wrap items-center gap-2">
           {all.map((x) => (
             <Link
               key={x.id}
@@ -51,7 +51,7 @@ export default function LadderPage() {
               {x.status === 'active' && ' (current)'}
             </Link>
           ))}
-        </div>
+        </nav>
       )}
 
       <div className="mt-8">

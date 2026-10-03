@@ -43,8 +43,8 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
     return (
       <div className="mx-auto max-w-3xl space-y-4 px-4 py-14 sm:px-6">
         <p role="alert" className="text-destructive">{error}</p>
-        <Button variant="outline" render={<Link href="/tanks" />} nativeButton={false}>
-          <ArrowLeft />Back to tanks
+        <Button variant="outline" render={<Link href="/tanks/leaderboard" />} nativeButton={false}>
+          <ArrowLeft />Back to the ladder
         </Button>
       </div>
     )
@@ -63,8 +63,8 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
       <PageHeader
         kicker={
-          <Link href="/tanks" className="inline-flex items-center gap-1.5 hover:text-foreground">
-            <ArrowLeft className="size-4" />Tanks
+          <Link href="/tanks/leaderboard" className="inline-flex items-center gap-1.5 hover:text-foreground">
+            <ArrowLeft className="size-4" />Ladder
           </Link>
         }
         title={
@@ -105,7 +105,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
       {all.length > 1 && (
         <section className="mt-10">
           <SectionTitle>All seasons</SectionTitle>
-          <div className="flex flex-wrap gap-2">
+          <nav aria-label="Seasons" className="flex flex-wrap gap-2">
             {all.map((x) => (
               <Link
                 key={x.id}
@@ -118,7 +118,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
                 {x.name}
               </Link>
             ))}
-          </div>
+          </nav>
         </section>
       )}
     </div>
