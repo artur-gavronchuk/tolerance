@@ -3,6 +3,7 @@ import { JetBrains_Mono, Manrope } from 'next/font/google'
 import './globals.css'
 import { PRODUCT } from '@/lib/brand'
 import { SITE_URL } from '@/lib/server-api'
+import { AnalyticsProvider } from '@/components/analytics-provider'
 import { I18nProvider } from '@/lib/i18n/client'
 import { getLocale, getT } from '@/lib/i18n/server'
 import { shellMessages } from '@/lib/i18n/messages/shell'
@@ -27,6 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={locale} className={`${manrope.variable} ${jetbrains.variable}`}>
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
         <I18nProvider locale={locale}>{children}</I18nProvider>
+        <AnalyticsProvider />
       </body>
     </html>
   )

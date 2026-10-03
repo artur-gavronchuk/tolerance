@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"tolerance/internal/analytics"
 
 	"tolerance/internal/games/match"
 	"tolerance/internal/platform/db"
@@ -207,6 +208,11 @@ func (w *Worker) scheduleLoop(ctx context.Context) {
 				w.log.Error("games: prune replays", "err", err)
 			} else if n > 0 {
 				w.log.Info("games: pruned replays", "count", n)
+			}
+			if n, err := analytics.Prune(ctx); err != nil {
+				w.log.Error("games: prune events", "err", err)
+			} else if n > 0 {
+				w.log.Info("games: pruned analytics events", "count", n)
 			}
 			if n, err := match.RemoveStaleBotContainers(ctx); err != nil {
 				w.log.Error("games: remove stale bot containers", "err", err)

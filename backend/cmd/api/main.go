@@ -15,6 +15,7 @@ import (
 	"time"
 
 	adminpkg "tolerance/internal/admin"
+	"tolerance/internal/analytics"
 	"tolerance/internal/daily"
 	"tolerance/internal/games"
 	"tolerance/internal/games/match"
@@ -71,15 +72,23 @@ func main() {
 	productsSvc := products.NewService(pool)
 	recapSvc := recap.NewService(pool, dailySvc)
 
+	analyticsSvc := analytics.NewService(pool)
+	analytics.Use(analyticsSvc)
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), daily: dailySvc,
 		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: productsSvc, admin: adminpkg.NewService(pool), moderation: moderation.NewService(pool), stacks: stacks.NewService(pool), profiles: profiles.NewService(pool),
-		uploadLinks: uploadlink.NewService(pool), recap: recapSvc, notify: notify.NewService(pool, gamesSvc, productsSvc, recapSvc),
+		uploadLinks: uploadlink.NewService(pool), recap: recapSvc, notify: notify.NewService(pool, gamesSvc, productsSvc, recapSvc), analytics: analyticsSvc,
 		limiter:   ratelimit.New(nil),
 		providers: providersFromConfig(cfg),
 	}
 
 	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		analyticsSvc.Run(ctx, log)
+	}()
 
 	{
 		var runner sandbox.Runner = sandbox.NewDocker()

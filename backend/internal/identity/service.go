@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"tolerance/internal/analytics"
 
 	"github.com/jackc/pgx/v5"
 
@@ -132,6 +133,7 @@ func (s *Service) SignIn(ctx context.Context, id Identity) (User, string, error)
 	if err != nil {
 		return User{}, "", err
 	}
+	analytics.Track("signin", u.ID, nil)
 	return u, token, nil
 }
 
@@ -174,6 +176,7 @@ func (s *Service) attachIdentity(ctx context.Context, tx pgx.Tx, id Identity, em
 	action := "user.identity_linked"
 	if created.RowsAffected() == 1 {
 		action = "user.signed_up"
+		analytics.Track("signup", userID, map[string]any{"provider": id.Provider})
 	}
 	return userID, audit.Record(ctx, tx, audit.Event{ActorID: userID, ActorKind: KindUser, Action: action,
 		AggregateKind: "user", AggregateID: userID, RequestID: httpx.RequestID(ctx),

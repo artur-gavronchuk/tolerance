@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Download } from 'lucide-react'
+import { track } from '@/lib/analytics'
 import { Markdown } from '@/components/daily/markdown'
 import { Countdown } from '@/components/daily/countdown'
 import { DailyBoard, fmtScore } from '@/components/daily/daily-board'
@@ -134,7 +135,7 @@ export function DailyView({ day }: { day?: string }) {
             </ol>
             <div className="mt-3"><CopyBlock text={`cd ${task.slug} && zip -r ../solution.zip . -x '.git/*'`} /></div>
             {!practice && <p className="mt-3 text-xs text-muted-foreground">{t('revealNote')}</p>}
-            <Button className="mt-4 w-full" render={<a href={task.repo_url} download />} nativeButton={false}>
+            <Button className="mt-4 w-full" render={<a href={task.repo_url} download onClick={() => track({ name: 'daily.download' })} />} nativeButton={false}>
               <Download />{t('downloadRepo')}
             </Button>
           </section>

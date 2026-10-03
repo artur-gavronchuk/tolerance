@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"time"
+	"tolerance/internal/analytics"
 
 	"github.com/jackc/pgx/v5"
 
@@ -114,11 +115,12 @@ func (s *Service) Qualify(ctx context.Context, versionID string) (bool, []Check,
 	}
 
 	var status string
+	var ownerID *string
 	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var activeVersionID *string
 		var mu, sigma float64
-		if err := tx.QueryRow(ctx, `SELECT active_version_id, mu, sigma FROM game_bots WHERE id = $1 FOR UPDATE`, v.botID).
-			Scan(&activeVersionID, &mu, &sigma); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT active_version_id, mu, sigma, owner_user_id FROM game_bots WHERE id = $1 FOR UPDATE`, v.botID).
+			Scan(&activeVersionID, &mu, &sigma, &ownerID); err != nil {
 			return err
 		}
 		var activeNumber *int
@@ -163,6 +165,9 @@ func (s *Service) Qualify(ctx context.Context, versionID string) (bool, []Check,
 	})
 	if err != nil {
 		return false, nil, err
+	}
+	if status == "active" && ownerID != nil {
+		analytics.Track("bot.active", *ownerID, nil)
 	}
 	return status == "active", checks, nil
 }

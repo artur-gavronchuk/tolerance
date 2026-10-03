@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"time"
+	"tolerance/internal/analytics"
 
 	"github.com/jackc/pgx/v5"
 
@@ -63,6 +64,11 @@ func (s *Service) Rotate(ctx context.Context, userID string) (token string, st S
 		return "", Status{}, err
 	}
 	token = "ul_" + hex.EncodeToString(b[:])
+	defer func() {
+		if err == nil {
+			analytics.Track("upload_link.created", userID, nil)
+		}
+	}()
 	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
 			INSERT INTO upload_links (user_id, token_hash) VALUES ($1, $2)

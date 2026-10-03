@@ -1,5 +1,5 @@
 import type {
-  AdminEvent, AdminPulse, ModItem, ModLogItem, ModUser, NotificationList, Recap, CompareJudged, CompareNext, ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
+  AdminEvent, AdminFunnel, AdminPulse, ModItem, ModLogItem, ModUser, NotificationList, Recap, CompareJudged, CompareNext, ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
 } from './types'
 
 export class ApiError extends Error {
@@ -95,6 +95,7 @@ export const tanks = {
 
 export const admin = {
   pulse: () => api<AdminPulse>('/admin/pulse'),
+  funnel: () => api<AdminFunnel>('/admin/funnel'),
   recent: () => api<{ items: AdminEvent[] }>('/admin/recent').then((r) => r.items),
 }
 

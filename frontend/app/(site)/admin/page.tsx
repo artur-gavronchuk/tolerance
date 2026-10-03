@@ -11,6 +11,7 @@ import { errorText } from '@/lib/i18n/messages/errors'
 import { useT } from '@/lib/i18n/client'
 import { formatDateTime, type T } from '@/lib/i18n/core'
 import { adminMessages } from '@/lib/i18n/messages/admin'
+import { FunnelSection } from '@/components/admin/funnel'
 import { ModerationSection } from '@/components/admin/moderation'
 import { useMe } from '@/lib/use-me'
 import { cn } from '@/lib/utils'
@@ -82,6 +83,7 @@ export default function AdminPage() {
         </>
       )}
       {recent && <FeedSection items={recent} />}
+      <FunnelSection />
       <ModerationSection />
     </div>
   )

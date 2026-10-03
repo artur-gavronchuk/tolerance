@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"tolerance/internal/analytics"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
@@ -127,6 +128,9 @@ func (s *Service) Create(ctx context.Context, userID, taskSlug, filename string,
 		return audit.Record(ctx, tx, audit.Event{ActorID: userID, Action: "submission.created", AggregateKind: "submission", AggregateID: id,
 			RequestID: httpx.RequestID(ctx)})
 	})
+	if err == nil && day != nil {
+		analytics.Track("daily.upload", userID, nil)
+	}
 	return out, err
 }
 

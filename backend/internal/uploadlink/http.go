@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"tolerance/internal/analytics"
 
 	"github.com/jackc/pgx/v5"
 
@@ -112,6 +113,9 @@ func RegisterPublicRoutes(mux *http.ServeMux, d Deps) {
 				httpx.WriteError(w, r, httpx.New(http.StatusTooManyRequests, "rate_limited", "Too many requests on this upload link, wait a minute"))
 				return
 			}
+			if r.Method == http.MethodPost {
+				analytics.Track("upload_link.used", uid, nil)
+			}
 			h(w, r, uid)
 		})
 	}
@@ -140,6 +144,9 @@ func RegisterPublicRoutes(mux *http.ServeMux, d Deps) {
 		var z []byte
 		if err == nil {
 			z, err = tasks.RepoZip(tarball, taskMD)
+		}
+		if err == nil {
+			analytics.Track("daily.download", uid, nil)
 		}
 		if err != nil {
 			httpx.WriteError(w, r, err)

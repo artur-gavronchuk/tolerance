@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"tolerance/internal/analytics"
 
 	"github.com/jackc/pgx/v5"
 
@@ -357,8 +358,18 @@ func (w *Worker) finish(ctx context.Context, id, language, status, reason string
 		return err
 	}
 	return w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE submissions SET status = $2, failure_reason = NULLIF($3, ''), tests = $4, passed_tests = $5,
-			log_tail = $6, finished_at = now() WHERE id = $1 AND status = 'running'`, id, status, reason, testsJSON, passedCount, logTail)
+		var userID string
+		err := tx.QueryRow(ctx, `UPDATE submissions SET status = $2, failure_reason = NULLIF($3, ''), tests = $4, passed_tests = $5,
+			log_tail = $6, finished_at = now() WHERE id = $1 AND status = 'running' AND day IS NOT NULL RETURNING user_id`, id, status, reason, testsJSON, passedCount, logTail).Scan(&userID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Not a daily row, or the stuck sweep got there first: repeat the update without the day filter.
+			_, err = tx.Exec(ctx, `UPDATE submissions SET status = $2, failure_reason = NULLIF($3, ''), tests = $4, passed_tests = $5,
+				log_tail = $6, finished_at = now() WHERE id = $1 AND status = 'running'`, id, status, reason, testsJSON, passedCount, logTail)
+			return err
+		}
+		if err == nil && status == "passed" {
+			analytics.Track("daily.passed", userID, nil)
+		}
 		return err
 	})
 }

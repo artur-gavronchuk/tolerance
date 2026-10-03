@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	adminpkg "tolerance/internal/admin"
+	"tolerance/internal/analytics"
 	"tolerance/internal/daily"
 	"tolerance/internal/games"
 	"tolerance/internal/identity"
@@ -44,6 +45,7 @@ type deps struct {
 	profiles    *profiles.Service
 	recap       *recap.Service
 	notify      *notify.Service
+	analytics   *analytics.Service
 	uploadLinks *uploadlink.Service
 	limiter     *ratelimit.Limiter
 	providers   map[string]identity.Provider
@@ -67,10 +69,12 @@ func newHandler(cfg config, d deps) http.Handler {
 	games.RegisterAdminRoutes(admin, d.games)
 	adminpkg.RegisterRoutes(pulse, d.admin)
 	moderation.RegisterRoutes(pulse, d.moderation)
+	analytics.RegisterAdminRoutes(pulse, d.analytics)
 
 	public := http.NewServeMux()
 	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
 	tasks.RegisterPublicRoutes(public, d.pool)
+	analytics.RegisterPublicRoutes(public, d.analytics, identity.OptionalUserID(d.users), d.limiter, cfg.trustProxy)
 	stacks.RegisterPublicRoutes(public, d.stacks)
 	profiles.RegisterPublicRoutes(public, d.profiles)
 	games.RegisterPublicRoutes(public, d.games)
@@ -110,6 +114,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("GET /api/v1/product-entries/{id}/source", public)
 	api.Handle("GET /api/v1/product-entries/{id}/zip", public)
 	api.Handle("GET /api/v1/product-entries/{id}/site/{path...}", public)
+	api.Handle("POST /api/v1/events", public)
 	api.Handle("/api/v1/daily", public)
 	api.Handle("/api/v1/daily/", public)
 	api.Handle("/api/v1/days", public)
@@ -123,6 +128,7 @@ func newHandler(cfg config, d deps) http.Handler {
 
 	api.Handle("GET /api/v1/admin/pulse", session(adminOrDev(cfg.devLogin)(pulse)))
 	api.Handle("GET /api/v1/admin/recent", session(adminOrDev(cfg.devLogin)(pulse)))
+	api.Handle("GET /api/v1/admin/funnel", session(adminOrDev(cfg.devLogin)(pulse)))
 	api.Handle("/api/v1/admin/moderation/", session(adminOrDev(cfg.devLogin)(pulse)))
 
 	top := http.NewServeMux()

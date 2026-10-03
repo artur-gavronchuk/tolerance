@@ -276,6 +276,13 @@ export interface AdminPulse {
     infra_errors: { at: string; kind: string; id: string; reason: string }[]
   }
 }
+export interface FunnelDay { day: string; visit: number; signin: number; download: number; upload: number; passed: number; returned: number | null }
+export interface AdminFunnel {
+  days: FunnelDay[]
+  modes: { mode: 'daily' | 'tanks'; people: number; events: number; series: AdminPoint[] }[]
+  pages: { path: string; views: number; visitors: number }[]
+  sources: { source: string; visits: number }[]
+}
 export interface AdminEvent { at: string; type: 'signup' | 'submission' | 'product_entry' | 'bot_version' | 'tournament'; title: string; detail: string; status: string; href: string }
 
 // Retention: `/me/recap` and `/me/notifications`.

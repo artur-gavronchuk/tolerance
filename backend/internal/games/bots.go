@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"tolerance/internal/analytics"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -374,5 +375,9 @@ func (s *Service) uploadVersion(ctx context.Context, userID string, archive []by
 // yet, enforces 20 uploads per bot per day, and inserts a pending version with the next number, enqueuing
 // its check_bot job.
 func (s *Service) UploadVersion(ctx context.Context, userID string, archive []byte) (VersionView, error) {
-	return s.uploadVersion(ctx, userID, archive)
+	v, err := s.uploadVersion(ctx, userID, archive)
+	if err == nil {
+		analytics.Track("bot.upload", userID, nil)
+	}
+	return v, err
 }
