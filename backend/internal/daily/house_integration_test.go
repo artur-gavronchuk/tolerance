@@ -16,7 +16,7 @@ import (
 func TestHouseRowsTakeNoPlaceAndAreNotPeople(t *testing.T) {
 	d := dbtest.New(t)
 	ctx := context.Background()
-	ts, err := tasks.LoadFlat(filepath.Join("..", "..", "fixtures", "proofs"))
+	ts, err := tasks.LoadByLanguage(filepath.Join("..", "..", "fixtures", "skills"))
 	if err != nil {
 		t.Fatal(err)
 	}

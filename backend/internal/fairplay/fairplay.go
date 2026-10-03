@@ -143,6 +143,15 @@ func (s *Service) observe(ctx context.Context, u Upload, c client) error {
 	sketch := sketchOf(u.Kind, u.Content)
 	dlKind := "task"
 	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		// House agents (platform-run, internal/house) are trusted: nothing is recorded for them, so their
+		// (often minimal, common) fix is never a "duplicate" that flags a person.
+		var house bool
+		if err := tx.QueryRow(ctx, `SELECT house FROM users WHERE id = $1`, u.UserID).Scan(&house); err != nil {
+			return err
+		}
+		if house {
+			return nil
+		}
 		// One person's uploads are recorded one at a time, so burst counts and duplicate lookups are consistent.
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('fairplay:' || $1))`, u.UserID); err != nil {
 			return err
