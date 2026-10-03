@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sort"
 	"time"
+	"tolerance/internal/analytics"
 
 	"github.com/jackc/pgx/v5"
 
@@ -77,13 +78,15 @@ func RepoZip(repoTar []byte, taskMD string) ([]byte, error) {
 }
 
 // RegisterPublicRoutes mounts GET /tasks/{slug}/repo.zip.
-func RegisterPublicRoutes(mux *http.ServeMux, pool *db.Pool) {
+// viewer returns the signed-in user id or ""; a download of today's task is tracked as daily.download.
+func RegisterPublicRoutes(mux *http.ServeMux, pool *db.Pool, viewer func(*http.Request) string) {
 	mux.HandleFunc("GET /api/v1/tasks/{slug}/repo.zip", func(w http.ResponseWriter, r *http.Request) {
 		var tarball []byte
 		var taskMD string
+		var isToday bool
 		err := pool.Tx(r.Context(), func(ctx context.Context, tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT repo_tar, task_md FROM tasks WHERE slug = $1
-				AND EXISTS (SELECT 1 FROM daily_tasks d WHERE d.task_slug = tasks.slug AND d.day <= (now() AT TIME ZONE 'UTC')::date)`, r.PathValue("slug")).Scan(&tarball, &taskMD)
+			return tx.QueryRow(ctx, `SELECT repo_tar, task_md, EXISTS (SELECT 1 FROM daily_tasks d WHERE d.task_slug = tasks.slug AND d.day = (now() AT TIME ZONE 'UTC')::date) FROM tasks WHERE slug = $1
+				AND EXISTS (SELECT 1 FROM daily_tasks d WHERE d.task_slug = tasks.slug AND d.day <= (now() AT TIME ZONE 'UTC')::date)`, r.PathValue("slug")).Scan(&tarball, &taskMD, &isToday)
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			httpx.WriteError(w, r, httpx.NotFound())
@@ -95,6 +98,9 @@ func RegisterPublicRoutes(mux *http.ServeMux, pool *db.Pool) {
 				w.Header().Set("Content-Type", "application/zip")
 				w.Header().Set("Content-Disposition", `attachment; filename="`+r.PathValue("slug")+`.zip"`)
 				_, _ = w.Write(z)
+				if isToday {
+					analytics.Track("daily.download", viewer(r), nil)
+				}
 				return
 			}
 		}

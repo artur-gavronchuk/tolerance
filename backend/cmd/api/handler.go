@@ -75,7 +75,7 @@ func newHandler(cfg config, d deps) http.Handler {
 
 	public := http.NewServeMux()
 	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
-	tasks.RegisterPublicRoutes(public, d.pool)
+	tasks.RegisterPublicRoutes(public, d.pool, identity.OptionalUserID(d.users))
 	analytics.RegisterPublicRoutes(public, d.analytics, identity.OptionalUserID(d.users), d.limiter, cfg.trustProxy)
 	profiles.RegisterPublicRoutes(public, d.profiles)
 	games.RegisterPublicRoutes(public, d.games, identity.OptionalUserID(d.users))

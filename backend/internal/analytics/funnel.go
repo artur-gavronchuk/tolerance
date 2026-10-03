@@ -78,11 +78,13 @@ func (s *Service) Funnel(ctx context.Context) (FunnelReport, error) {
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `CREATE TEMP TABLE ev ON COMMIT DROP AS
 			WITH link AS (SELECT anon_id, min(user_id) AS user_id FROM events
-				WHERE at >= $1 AND anon_id IS NOT NULL AND user_id IS NOT NULL GROUP BY anon_id)
+				WHERE at >= $1 AND anon_id IS NOT NULL AND user_id IS NOT NULL
+					AND user_id NOT IN (SELECT id FROM users WHERE house) GROUP BY anon_id)
 			SELECT (e.at AT TIME ZONE 'UTC')::date AS day, e.name, COALESCE(e.user_id, l.user_id, 'a:' || e.anon_id) AS pid,
 				e.path, e.ref, e.utm, e.entry
 			FROM events e LEFT JOIN link l ON l.anon_id = e.anon_id
-			WHERE e.at >= $1 AND (e.user_id IS NOT NULL OR e.anon_id IS NOT NULL)`, from); err != nil {
+			WHERE e.at >= $1 AND (e.user_id IS NOT NULL OR e.anon_id IS NOT NULL)
+				AND (e.user_id IS NULL OR e.user_id NOT IN (SELECT id FROM users WHERE house))`, from); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `SELECT day::text,
