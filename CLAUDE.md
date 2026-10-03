@@ -12,9 +12,14 @@ overrides the superpowers skills and any default habits:
   plans in `docs/`, no subagent-driven-development, no TDD, no per-task or
   whole-branch reviews — unless the user asks for one. If a change needs a
   plan, a short list of steps in chat is enough.
-- **Tests only where hand-checking is hard**: verdict rules, rating math,
-  concurrent claims. Don't write tests for new screens/endpoints. When code is
-  rewritten or thrown away, delete its tests instead of fixing them.
+- **No new tests.** Most tests were deleted on 2026-10-03; what's left guards
+  only what you can't see by clicking: proof verdicts and diff-apply safety
+  (`internal/proofs/*_test.go`), pytest output parsing
+  (`internal/proofs/sandbox`), rating math (`internal/skillrating`), the job
+  queue (`internal/platform/jobs`). Add a test only for a bug found in one of
+  those. If a change breaks one of them, the change is probably wrong.
+  `*_test.go` under `backend/fixtures/**` are task content (hidden tests), not
+  our tests — never delete them.
 - **"Done" = it compiles and works locally**: `make test-fast`, then `make dev`
   (or `make up`) and the flow clicked through. Full `make test` is optional.
   CI (`ci.yml`) is manual-only (`workflow_dispatch`); nothing runs on push.
@@ -57,7 +62,7 @@ make migrate     # goose migrations + catalog sync
 make run-api     # native API alone;  ARENA_SANDBOX=fake runs without Docker
 make run-web     # pnpm dev, proxying /api to the native API
 make images      # sandbox + bot runtime images, built only when missing
-make test-fast   # go vet + go test (minus the slow sandbox package) + pnpm typecheck
+make test-fast   # go vet + go test + pnpm typecheck
 make test        # everything: -race, ARENA_TEST_REQUIRE_DOCKER=1, frontend build
 
 cd backend && go test ./internal/proofs/...   # one package

@@ -79,9 +79,9 @@ connector:
 			-o $(CONNECTOR_DIR)/arena-$${target%/*}-$${target#*/} ./cmd/arena || exit 1; \
 	done
 
-# Everyday check: builds, unit tests, typecheck. Skips the slow Docker sandbox package.
+# Everyday check: vet, the few remaining tests (integration ones skip without Docker), typecheck.
 test-fast:
-	cd backend && go vet ./... && go test $$(go list ./... | grep -v /proofs/sandbox)
+	cd backend && go vet ./... && go test ./...
 	cd frontend && pnpm typecheck
 
 # Everything, the way CI runs it.
