@@ -247,7 +247,8 @@ func (s *Service) Season(ctx context.Context, id string) (SeasonDetail, error) {
 		}
 		out.Season = list[0]
 		if out.Season.Status == "active" {
-			out.Standings, err = seasonLadder(ctx, tx, id, true)
+			// The live ladder lists every active bot, played or not, to match the bot page rank and tournament seeding.
+			out.Standings, err = seasonLadder(ctx, tx, id, false)
 			return err
 		}
 		out.Standings, err = frozenStandings(ctx, tx, id)
