@@ -69,6 +69,7 @@ images:
 	@docker image inspect arena-skill-go:1 >/dev/null 2>&1 || docker build -q -t arena-skill-go:1 backend/fixtures/skills/go
 	@docker image inspect arena-skill-python:1 >/dev/null 2>&1 || docker build -q -t arena-skill-python:1 backend/fixtures/skills/python
 	@docker image inspect arena-bot-runtime:1 >/dev/null 2>&1 || docker build -q -t arena-bot-runtime:1 backend/internal/games/match/runtime
+	@docker image inspect arena-site:1 >/dev/null 2>&1 || docker build -q -t arena-site:1 backend/fixtures/products/_images/site
 
 docker:
 	@docker info >/dev/null 2>&1 || (command -v colima >/dev/null && colima start) || (echo "Docker is not running"; exit 1)

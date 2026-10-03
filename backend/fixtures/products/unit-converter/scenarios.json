@@ -1,0 +1,317 @@
+[
+ {
+  "name": "offers the five categories",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=category] option",
+    "count": 5
+   }
+  ]
+ },
+ {
+  "name": "converts length m to ft",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=category]",
+    "value": "length"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=from-unit]",
+    "value": "m"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=to-unit]",
+    "value": "ft"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=from-value]",
+    "value": "100"
+   },
+   {
+    "op": "expect_number",
+    "selector": "[data-testid=to-value]",
+    "value": 328.084,
+    "tolerance": 0.01
+   }
+  ]
+ },
+ {
+  "name": "converts backwards: editing the second field",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=category]",
+    "value": "length"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=from-unit]",
+    "value": "km"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=to-unit]",
+    "value": "mi"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=to-value]",
+    "value": "10"
+   },
+   {
+    "op": "expect_number",
+    "selector": "[data-testid=from-value]",
+    "value": 16.0934,
+    "tolerance": 0.01
+   }
+  ]
+ },
+ {
+  "name": "converts temperature C to F",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=category]",
+    "value": "temperature"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=from-unit]",
+    "value": "c"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=to-unit]",
+    "value": "f"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=from-value]",
+    "value": "100"
+   },
+   {
+    "op": "expect_number",
+    "selector": "[data-testid=to-value]",
+    "value": 212,
+    "tolerance": 0.01
+   }
+  ]
+ },
+ {
+  "name": "converts temperature F to C (offset)",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=category]",
+    "value": "temperature"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=from-unit]",
+    "value": "f"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=to-unit]",
+    "value": "c"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=from-value]",
+    "value": "32"
+   },
+   {
+    "op": "expect_number",
+    "selector": "[data-testid=to-value]",
+    "value": 0,
+    "tolerance": 0.01
+   }
+  ]
+ },
+ {
+  "name": "converts temperature C to K",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=category]",
+    "value": "temperature"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=from-unit]",
+    "value": "c"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=to-unit]",
+    "value": "k"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=from-value]",
+    "value": "0"
+   },
+   {
+    "op": "expect_number",
+    "selector": "[data-testid=to-value]",
+    "value": 273.15,
+    "tolerance": 0.01
+   }
+  ]
+ },
+ {
+  "name": "converts mass kg to lb",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=category]",
+    "value": "mass"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=from-unit]",
+    "value": "kg"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=to-unit]",
+    "value": "lb"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=from-value]",
+    "value": "1"
+   },
+   {
+    "op": "expect_number",
+    "selector": "[data-testid=to-value]",
+    "value": 2.20462,
+    "tolerance": 0.001
+   }
+  ]
+ },
+ {
+  "name": "converts speed km/h to mph",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=category]",
+    "value": "speed"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=from-unit]",
+    "value": "kmh"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=to-unit]",
+    "value": "mph"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=from-value]",
+    "value": "100"
+   },
+   {
+    "op": "expect_number",
+    "selector": "[data-testid=to-value]",
+    "value": 62.1371,
+    "tolerance": 0.01
+   }
+  ]
+ },
+ {
+  "name": "converts volume l to US gallons",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=category]",
+    "value": "volume"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=from-unit]",
+    "value": "l"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=to-unit]",
+    "value": "gal"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=from-value]",
+    "value": "1"
+   },
+   {
+    "op": "expect_number",
+    "selector": "[data-testid=to-value]",
+    "value": 0.264172,
+    "tolerance": 0.001
+   }
+  ]
+ },
+ {
+  "name": "fits a 375px screen without horizontal scroll",
+  "viewport": 375,
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=from-value]",
+    "value": "123456789012345"
+   },
+   {
+    "op": "expect_no_hscroll"
+   }
+  ]
+ }
+]

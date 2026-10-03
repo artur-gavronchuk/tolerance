@@ -60,7 +60,7 @@ func Sync(ctx context.Context, pool *db.Pool, dir string) (int, error) {
 				return 0, fmt.Errorf("products: %s: a cli task needs image, command and timeout_s", mf)
 			}
 		case KindSite:
-			// A site is judged by votes only: nothing runs in the sandbox.
+			// A site is judged by votes; it may also list Playwright scenarios (scenarios.json) that run in `image`.
 		default:
 			return 0, fmt.Errorf("products: %s: kind must be cli or site", mf)
 		}
@@ -72,13 +72,17 @@ func Sync(ctx context.Context, pool *db.Pool, dir string) (int, error) {
 			return 0, err
 		}
 		l.md = string(md)
-		if l.m.Kind == KindSite {
+		l.scenarios, err = os.ReadFile(filepath.Join(base, "scenarios.json"))
+		if l.m.Kind == KindSite && os.IsNotExist(err) {
 			l.scenarios = []byte("[]")
 			all = append(all, l)
 			continue
 		}
-		if l.scenarios, err = os.ReadFile(filepath.Join(base, "scenarios.json")); err != nil {
+		if err != nil {
 			return 0, err
+		}
+		if l.m.Kind == KindSite && (l.m.Image == "" || l.m.TimeoutS <= 0) {
+			return 0, fmt.Errorf("products: %s: a site task with scenarios needs image and timeout_s", base)
 		}
 		var scs []Scenario
 		if err := json.Unmarshal(l.scenarios, &scs); err != nil || len(scs) == 0 {

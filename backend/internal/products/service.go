@@ -158,7 +158,7 @@ func (s *Service) Create(ctx context.Context, userID, slug, filename string, dat
 		if used >= limits.Cap(AttemptsPerTask) {
 			return httpx.New(http.StatusTooManyRequests, "attempts_exhausted", "All attempts for this task are used")
 		}
-		if kind == KindSite {
+		if kind == KindSite && total == 0 {
 			// Nothing to run: a site is done once its zip holds an index.html, and votes decide.
 			if _, ok := files["index.html"]; !ok {
 				return invalid("The zip needs an index.html at its root (or inside a single top-level folder)")
@@ -168,6 +168,11 @@ func (s *Service) Create(ctx context.Context, userID, slug, filename string, dat
 				return err
 			}
 		} else {
+			if kind == KindSite {
+				if _, ok := files["index.html"]; !ok {
+					return invalid("The zip needs an index.html at its root (or inside a single top-level folder)")
+				}
+			}
 			if _, err := tx.Exec(ctx, `INSERT INTO product_entries (id, task_slug, user_id, zip, made_with, total) VALUES ($1,$2,$3,$4,$5,$6)`,
 				id, slug, userID, data, madeWith, total); err != nil {
 				return err
@@ -202,16 +207,16 @@ func (s *Service) Results(ctx context.Context, slug, userID string) (Results, er
 			return err
 		}
 		// A cli entry counts by its best score (earliest on ties); a site by the latest upload.
-		pick := "passed DESC, created_at"
+		pick, order := "passed DESC, created_at", "e.passed DESC, 11 DESC"
 		if r.Task.Kind == KindSite {
-			pick = "created_at DESC"
+			pick, order = "created_at DESC", "11 DESC, e.passed DESC" // votes first, the scenario score breaks ties
 		}
 		rows, err := tx.Query(ctx, `
 			SELECT `+entryCols+` FROM (
 				SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $2 AND status = 'done'
 				ORDER BY user_id, `+pick+`) e
 			JOIN users u ON u.id = e.user_id
-			ORDER BY e.passed DESC, 11 DESC, e.created_at`, userID, slug)
+			ORDER BY `+order+`, e.created_at`, userID, slug)
 		if err != nil {
 			return err
 		}

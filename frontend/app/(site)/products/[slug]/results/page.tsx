@@ -43,7 +43,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
         {task.phase === 'open'
           ? `Entries are published after the deadline, ${new Date(task.deadline).toLocaleString()}. ${task.entry_count} scored so far.`
           : task.kind === 'site'
-            ? 'Ranked by votes. Try each site and vote once per entry, not for your own.'
+            ? 'Ranked by votes (automated checks, where the task has them, break ties). Try each site and vote once per entry, not for your own.'
             : 'Ranked by scenarios passed, then votes. You can vote once per entry, not for your own.'}
       </PageHeader>
       {voteError && <p role="alert" className="text-sm text-destructive">{voteError}</p>}
@@ -61,6 +61,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
                   <div className="truncate font-semibold">{e.handle}{e.mine && <span className="font-normal text-muted-foreground"> (you)</span>}</div>
                   {e.made_with && <div className="truncate text-xs text-muted-foreground">{e.made_with}</div>}
                 </div>
+                {e.total > 0 && <span className="font-mono text-xs text-muted-foreground" title="Automated checks passed">{e.passed}/{e.total}</span>}
                 <Button size="sm" variant={e.voted ? 'secondary' : 'outline'} disabled={!me || e.mine || e.voted}
                   aria-label={e.voted ? 'Voted' : 'Vote'} onClick={() => void vote(e.id)}>
                   <ThumbsUp />{e.votes}

@@ -25,6 +25,9 @@ import (
 //go:embed runner.py
 var runnerPy []byte
 
+//go:embed runner_site.py
+var runnerSitePy []byte
+
 const resultsMarker = "@@RESULTS@@"
 
 type Worker struct {
@@ -134,14 +137,14 @@ func (w *Worker) handle(ctx context.Context, job *jobs.Job) {
 // every verdict about the participant's code is written to the entry and returns nil.
 func (w *Worker) RunEntry(ctx context.Context, id string) error {
 	var zipData, scenarios []byte
-	var image, command string
+	var image, command, kind string
 	var timeoutS int
 	err := w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
 			UPDATE product_entries e SET status = 'running'
 			FROM product_tasks t
 			WHERE e.id = $1 AND t.slug = e.task_slug AND e.status IN ('queued', 'running')
-			RETURNING e.zip, t.image, t.command, t.timeout_s, t.scenarios`, id).Scan(&zipData, &image, &command, &timeoutS, &scenarios)
+			RETURNING e.zip, t.image, t.command, t.timeout_s, t.scenarios, t.kind`, id).Scan(&zipData, &image, &command, &timeoutS, &scenarios, &kind)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -182,7 +185,11 @@ func (w *Worker) RunEntry(ctx context.Context, id string) error {
 	if err := os.WriteFile(filepath.Join(dir, "_scenarios", "spec.json"), spec, 0o644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "_scenarios", "run.py"), runnerPy, 0o644); err != nil {
+	runner := runnerPy
+	if kind == KindSite {
+		runner = runnerSitePy
+	}
+	if err := os.WriteFile(filepath.Join(dir, "_scenarios", "run.py"), runner, 0o644); err != nil {
 		return err
 	}
 

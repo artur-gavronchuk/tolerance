@@ -48,6 +48,10 @@ type Scenario struct {
 	Stdin    string   `json:"stdin"`
 	Stdout   string   `json:"stdout"`
 	ExitCode int      `json:"exit_code"`
+
+	// Site kind: browser steps (see runner_site.py), optionally at a viewport width.
+	Viewport int               `json:"viewport,omitempty"`
+	Steps    []json.RawMessage `json:"steps,omitempty"`
 }
 
 type ScenarioResult struct {
