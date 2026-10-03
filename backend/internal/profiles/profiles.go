@@ -31,7 +31,8 @@ type ProductEntry struct {
 	Phase     string    `json:"phase"`
 	Deadline  time.Time `json:"deadline"`
 	EntryID   string    `json:"entry_id"`
-	Passed    int       `json:"passed"` // automated checks; hidden (0) while the task is open
+	Passed    int       `json:"passed"`   // automated checks; hidden (0) while the task is open
+	BenchMS   *float64  `json:"bench_ms"` // cli benchmark time; hidden while the task is open
 	Total     int       `json:"total"`
 	Votes     int       `json:"votes"`
 	Place     *int      `json:"place"`    // final standings only
@@ -112,13 +113,13 @@ func (s *Service) Activity(ctx context.Context, handle string) (Activity, error)
 }
 
 // productsOf lists the tasks the person took part in with the upload that counts for them. The counting rule and the
-// ranking rule mirror products.rankRule (cli: best upload, ranked by checks then votes). Site tasks take their place from
+// ranking rule mirror products.rankRule (cli: best upload, ranked by checks, bench time, then votes). Site tasks take their place from
 // products.SiteRanking (Bradley-Terry score of the blind comparisons). Entries stay hidden until the deadline, so open
 // tasks carry no score.
 func productsOf(ctx context.Context, tx pgx.Tx, userID string) ([]ProductEntry, error) {
 	rows, err := tx.Query(ctx, `
 		WITH counted AS (
-			SELECT DISTINCT ON (e.task_slug, e.user_id) e.id, e.task_slug, e.user_id, e.passed, e.total, e.created_at,
+			SELECT DISTINCT ON (e.task_slug, e.user_id) e.id, e.task_slug, e.user_id, e.passed, e.bench_ms, e.total, e.created_at,
 			       t.kind, t.title, t.deadline,
 			       (SELECT count(*) FROM product_votes v WHERE v.entry_id = e.id) AS votes
 			FROM product_entries e JOIN product_tasks t ON t.slug = e.task_slug
@@ -126,15 +127,17 @@ func productsOf(ctx context.Context, tx pgx.Tx, userID string) ([]ProductEntry, 
 			  AND e.task_slug IN (SELECT task_slug FROM product_entries WHERE user_id = $1 AND status = 'done')
 			ORDER BY e.task_slug, e.user_id,
 			         (CASE WHEN t.kind = 'cli' THEN e.passed END) DESC NULLS LAST,
+			         (CASE WHEN t.kind = 'cli' THEN e.bench_ms END) ASC NULLS LAST,
 			         (CASE WHEN t.kind = 'site' THEN e.created_at END) DESC NULLS LAST,
 			         e.created_at),
 		ranked AS (
 			SELECT c.*, row_number() OVER (PARTITION BY c.task_slug ORDER BY
 			         (CASE WHEN c.kind = 'cli' THEN c.passed ELSE c.votes END) DESC,
+			         (CASE WHEN c.kind = 'cli' THEN c.bench_ms END) ASC NULLS LAST,
 			         (CASE WHEN c.kind = 'cli' THEN c.votes ELSE c.passed END) DESC, c.created_at) AS place,
 			       count(*) OVER (PARTITION BY c.task_slug) AS entrants
 			FROM counted c)
-		SELECT task_slug, title, kind, deadline, id, passed, total, votes, place, entrants, created_at
+		SELECT task_slug, title, kind, deadline, id, passed, bench_ms, total, votes, place, entrants, created_at
 		FROM ranked WHERE user_id = $1 ORDER BY deadline DESC`, userID)
 	if err != nil {
 		return nil, err
@@ -144,14 +147,14 @@ func productsOf(ctx context.Context, tx pgx.Tx, userID string) ([]ProductEntry, 
 	for rows.Next() {
 		var p ProductEntry
 		var votes, place, entrants int64
-		if err := rows.Scan(&p.TaskSlug, &p.TaskTitle, &p.Kind, &p.Deadline, &p.EntryID, &p.Passed, &p.Total, &votes, &place, &entrants, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.TaskSlug, &p.TaskTitle, &p.Kind, &p.Deadline, &p.EntryID, &p.Passed, &p.BenchMS, &p.Total, &votes, &place, &entrants, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		p.Deadline, p.CreatedAt = p.Deadline.UTC(), p.CreatedAt.UTC()
 		p.Votes, p.Entrants = int(votes), int(entrants)
 		p.Phase = phaseOf(p.Deadline)
 		if p.Phase == products.PhaseOpen {
-			p.Passed, p.Total, p.Votes, p.Entrants = 0, 0, 0, 0
+			p.Passed, p.Total, p.Votes, p.Entrants, p.BenchMS = 0, 0, 0, 0, nil
 		}
 		if p.Phase == products.PhaseFinal {
 			pl := int(place)

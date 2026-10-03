@@ -2,6 +2,7 @@ import { ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { ProductEntry } from '@/lib/types'
+import { BenchTime } from './bench'
 import { ago, usePT } from './phase'
 
 const REASONS = ['invalid_zip', 'timeout', 'no_results', 'stuck'] as const
@@ -25,7 +26,7 @@ export function SitePreview({ id, title }: { id: string; title: string }) {
 }
 
 // One of the viewer's own uploads: status, score and per-scenario results (or the site itself).
-export function EntryCard({ entry: e, site = false, counts = false, preview = true }: { entry: ProductEntry; site?: boolean; counts?: boolean; preview?: boolean }) {
+export function EntryCard({ entry: e, site = false, counts = false, preview = true, bench = false, fastest = null }: { entry: ProductEntry; site?: boolean; counts?: boolean; preview?: boolean; bench?: boolean; fastest?: number | null }) {
   const t = usePT()
   const waiting = e.status === 'queued' || e.status === 'running'
   const scored = !site || e.total > 0 // a site without scenarios is just uploaded
@@ -49,6 +50,9 @@ export function EntryCard({ entry: e, site = false, counts = false, preview = tr
             </li>
           ))}
         </ul>
+      )}
+      {bench && e.status === 'done' && scored && (
+        <p className="mt-3 text-sm"><span className="text-muted-foreground">{t('bench.label')}: </span><BenchTime ms={e.bench_ms} fastest={fastest} className="font-mono font-semibold" /></p>
       )}
       {site && preview && e.status === 'done' && <div className="mt-3"><SitePreview id={e.id} title={t('entry.yourSite')} /></div>}
     </div>

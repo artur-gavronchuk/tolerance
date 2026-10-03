@@ -39,6 +39,7 @@ func Sync(ctx context.Context, pool *db.Pool, dir string) (int, error) {
 		m         manifest
 		md        string
 		scenarios []byte
+		bench     []byte
 	}
 	var all []loaded
 	for _, mf := range dirs {
@@ -90,17 +91,22 @@ func Sync(ctx context.Context, pool *db.Pool, dir string) (int, error) {
 				return 0, fmt.Errorf("products: %s: every scenario needs a name", base)
 			}
 		}
+		if l.m.Kind == KindCLI {
+			if l.bench, err = loadBench(base); err != nil {
+				return 0, err
+			}
+		}
 		all = append(all, l)
 	}
 	slugs := make([]string, 0, len(all))
 	err = pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		for _, l := range all {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO product_tasks (slug, title, summary, kind, task_md, image, command, timeout_s, scenarios, ord)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+				INSERT INTO product_tasks (slug, title, summary, kind, task_md, image, command, timeout_s, scenarios, ord, bench)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 				ON CONFLICT (slug) DO UPDATE SET title = $2, summary = $3, kind = $4, task_md = $5, image = $6, command = $7,
-				    timeout_s = $8, scenarios = $9, ord = $10, active = true, synced_at = now()`,
-				l.m.Slug, l.m.Title, l.m.Summary, l.m.Kind, l.md, l.m.Image, l.m.Command, l.m.TimeoutS, l.scenarios, l.m.Order); err != nil {
+				    timeout_s = $8, scenarios = $9, ord = $10, bench = $11, active = true, synced_at = now()`,
+				l.m.Slug, l.m.Title, l.m.Summary, l.m.Kind, l.md, l.m.Image, l.m.Command, l.m.TimeoutS, l.scenarios, l.m.Order, l.bench); err != nil {
 				return fmt.Errorf("products: sync %s: %w", l.m.Slug, err)
 			}
 			slugs = append(slugs, l.m.Slug)
@@ -109,4 +115,30 @@ func Sync(ctx context.Context, pool *db.Pool, dir string) (int, error) {
 		return err
 	})
 	return len(all), err
+}
+
+// benchDef is bench.json: how many timed passes to take. The generator (bench_gen.py, see runner.py) ships with it.
+type benchDef struct {
+	Runs int `json:"runs"`
+}
+
+// loadBench reads <dir>/bench.json and bench_gen.py into the product_tasks.bench document; nil when the task has no
+// benchmark.
+func loadBench(dir string) ([]byte, error) {
+	raw, err := os.ReadFile(filepath.Join(dir, "bench.json"))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var d benchDef
+	if err := json.Unmarshal(raw, &d); err != nil || d.Runs < 1 || d.Runs > 20 {
+		return nil, fmt.Errorf("products: %s: bench.json needs runs between 1 and 20", dir)
+	}
+	gen, err := os.ReadFile(filepath.Join(dir, "bench_gen.py"))
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]any{"runs": d.Runs, "gen": string(gen)})
 }

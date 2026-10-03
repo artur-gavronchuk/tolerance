@@ -42,12 +42,12 @@ func phaseOf(deadline time.Time) string {
 // published reports whether entries are visible to everyone (the deadline has passed).
 func published(deadline time.Time) bool { return phaseOf(deadline) != PhaseOpen }
 
-const taskCols = `t.slug, t.title, t.summary, t.kind, t.opens_at, t.deadline, jsonb_array_length(t.scenarios),
+const taskCols = `t.slug, t.title, t.summary, t.kind, t.opens_at, t.deadline, jsonb_array_length(t.scenarios), t.bench IS NOT NULL,
 	(SELECT count(DISTINCT e.user_id) FROM product_entries e WHERE e.task_slug = t.slug AND e.status = 'done')`
 
 func scanTask(row scanner) (Task, error) {
 	var t Task
-	if err := row.Scan(&t.Slug, &t.Title, &t.Summary, &t.Kind, &t.OpensAt, &t.Deadline, &t.ScenarioCount, &t.EntryCount); err != nil {
+	if err := row.Scan(&t.Slug, &t.Title, &t.Summary, &t.Kind, &t.OpensAt, &t.Deadline, &t.ScenarioCount, &t.HasBench, &t.EntryCount); err != nil {
 		return Task{}, err
 	}
 	t.OpensAt, t.Deadline = t.OpensAt.UTC(), t.Deadline.UTC()
@@ -104,6 +104,8 @@ type Detail struct {
 	Task
 	AttemptsUsed int     `json:"attempts_used"`
 	Mine         []Entry `json:"mine"`
+	// FastestMS is the best benchmark time among the counted entries; only known once the deadline has passed (entries are hidden before).
+	FastestMS *float64 `json:"fastest_ms"`
 }
 
 func (s *Service) Get(ctx context.Context, slug, userID string) (Detail, error) {
@@ -116,6 +118,12 @@ func (s *Service) Get(ctx context.Context, slug, userID string) (Detail, error) 
 		}
 		if err := tx.QueryRow(ctx, `SELECT task_md FROM product_tasks WHERE slug = $1`, slug).Scan(&d.TaskMD); err != nil {
 			return err
+		}
+		if d.Phase != PhaseOpen && d.Kind == KindCLI {
+			pick, _ := rankRule(KindCLI)
+			if err := tx.QueryRow(ctx, `SELECT min(bench_ms) FROM (SELECT DISTINCT ON (user_id) bench_ms FROM product_entries WHERE task_slug = $1 AND status = 'done' ORDER BY user_id, `+pick+`) c`, slug).Scan(&d.FastestMS); err != nil {
+				return err
+			}
 		}
 		if userID == "" {
 			return nil

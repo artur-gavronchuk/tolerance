@@ -158,11 +158,12 @@ func rotate(ctx context.Context, tx pgx.Tx, force bool, actorID string) (string,
 
 // Winner is the top entry of a finished task.
 type Winner struct {
-	EntryID string `json:"entry_id"`
-	Handle  string `json:"handle"`
-	Votes   int    `json:"votes"`
-	Passed  int    `json:"passed"`
-	Total   int    `json:"total"`
+	EntryID string   `json:"entry_id"`
+	Handle  string   `json:"handle"`
+	Votes   int      `json:"votes"`
+	Passed  int      `json:"passed"`
+	BenchMS *float64 `json:"bench_ms"`
+	Total   int      `json:"total"`
 }
 
 func winnerOf(ctx context.Context, tx pgx.Tx, slug, kind string) (*Winner, error) {
@@ -177,11 +178,11 @@ func winnerOf(ctx context.Context, tx pgx.Tx, slug, kind string) (*Winner, error
 		where, args = ` WHERE e.id = $2`, append(args, st[0].EntryID)
 	}
 	err := tx.QueryRow(ctx, `
-		SELECT e.id, u.handle, `+votesOf+`, e.passed, e.total FROM (
+		SELECT e.id, u.handle, `+votesOf+`, e.passed, e.total, e.bench_ms FROM (
 			SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $1 AND status = 'done'
 			ORDER BY user_id, `+pick+`) e
 		JOIN users u ON u.id = e.user_id`+where+`
-		ORDER BY `+order+` LIMIT 1`, args...).Scan(&w.EntryID, &w.Handle, &w.Votes, &w.Passed, &w.Total)
+		ORDER BY `+order+` LIMIT 1`, args...).Scan(&w.EntryID, &w.Handle, &w.Votes, &w.Passed, &w.Total, &w.BenchMS)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

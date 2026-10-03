@@ -23,8 +23,9 @@ type Results struct {
 const votesOf = `(SELECT count(*) FROM product_votes v WHERE v.entry_id = e.id)`
 
 // rankRule is how a task's entries are counted and ordered.
-//   - cli: a person's best upload counts (most scenarios passed, earliest on ties). Ranked by scenarios passed,
-//     then votes: a tool that fails checks does not win on popularity, and the votes pick among the correct ones.
+//   - cli: a person's best upload counts (most scenarios passed, then the faster benchmark, earliest on ties).
+//     Ranked by scenarios passed, then the median benchmark time (faster wins, no time ranks last), then votes: a
+//     tool that fails checks does not win on popularity, and the votes pick among equally good and fast ones.
 //   - site: a person's latest upload counts. Ranked by the Bradley-Terry score of the blind comparisons (see
 //     SiteRanking, which does the ordering in Go), then direct votes, then automated checks.
 //
@@ -33,7 +34,7 @@ func rankRule(kind string) (pick, order string) {
 	if kind == KindSite {
 		return "created_at DESC", votesOf + " DESC, e.passed DESC, e.created_at"
 	}
-	return "passed DESC, created_at", "e.passed DESC, " + votesOf + " DESC, e.created_at"
+	return "passed DESC, bench_ms ASC NULLS LAST, created_at", "e.passed DESC, e.bench_ms ASC NULLS LAST, " + votesOf + " DESC, e.created_at"
 }
 
 func (s *Service) Results(ctx context.Context, slug, userID string) (Results, error) {

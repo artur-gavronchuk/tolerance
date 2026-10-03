@@ -170,7 +170,8 @@ export interface ProductTask {
   slug: string; title: string; summary: string; kind: 'cli' | 'site'; phase: 'open' | 'voting' | 'final'
   opens_at: string; deadline: string; voting_ends_at: string; scenario_count: number; attempts: number; entry_count: number
   task_md?: string
-  winner?: { entry_id: string; handle: string; votes: number; passed: number; total: number }
+  has_bench: boolean // cli: the tool is also timed on a large generated input
+  winner?: { entry_id: string; handle: string; votes: number; passed: number; bench_ms: number | null; total: number }
 }
 
 // `/products`: every task that has opened, newest first, plus what is known about the ones still to come.
@@ -179,6 +180,7 @@ export interface ProductList { items: ProductTask[]; upcoming: { count: number; 
 export interface ProductEntry {
   id: string; task_slug: string; handle?: string; status: 'queued' | 'running' | 'done' | 'infra_error'
   passed: number; total: number; failure_reason: string | null; results: ProductScenarioResult[]
+  bench_ms: number | null // cli: median benchmark time in ms (faster ranks higher); null when there is no time
   log_tail?: string; made_with: string; votes: number; voted: boolean; mine: boolean
   score?: number; comparisons: number // site tasks: Bradley-Terry score of the blind comparisons, and how many there were
   created_at: string; finished_at: string | null
@@ -190,7 +192,8 @@ export interface CompareNext { pair: ComparePair | null; judged: number; target:
 export interface CompareRevealed { id: string; handle: string; made_with: string }
 export interface CompareJudged { a: CompareRevealed; b: CompareRevealed; winner: 'a' | 'b' | 'tie'; judged: number; target: number }
 
-export interface ProductDetail extends ProductTask { attempts_used: number; mine: ProductEntry[] }
+// fastest_ms is the best benchmark time among all entries, known once the deadline has passed.
+export interface ProductDetail extends ProductTask { attempts_used: number; mine: ProductEntry[]; fastest_ms: number | null }
 
 export interface ProductSourceFile { path: string; size: number; content?: string; truncated?: boolean; binary?: boolean }
 
@@ -215,7 +218,7 @@ export interface Profile {
 // A person's activity across products, tanks and their main stack (`/users/{handle}/activity`).
 export interface ActivityProduct {
   task_slug: string; task_title: string; kind: 'cli' | 'site'; phase: 'open' | 'voting' | 'final'; deadline: string
-  entry_id: string; passed: number; total: number; votes: number; place: number | null; entrants: number; created_at: string
+  entry_id: string; passed: number; bench_ms: number | null; total: number; votes: number; place: number | null; entrants: number; created_at: string
 }
 
 export interface ActivityBotTournament { id: string; name: string; starts_at: string; result: string; champion: boolean; open: boolean }

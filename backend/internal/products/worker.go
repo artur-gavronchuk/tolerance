@@ -28,7 +28,10 @@ var runnerPy []byte
 //go:embed runner_site.py
 var runnerSitePy []byte
 
-const resultsMarker = "@@RESULTS@@"
+const (
+	resultsMarker = "@@RESULTS@@"
+	benchMarker   = "@@BENCH@@"
+)
 
 type Worker struct {
 	pool    *db.Pool
@@ -143,7 +146,7 @@ func (w *Worker) handle(ctx context.Context, job *jobs.Job) {
 // RunEntry scores one entry in the sandbox. An error means the platform could not run it (the job retries);
 // every verdict about the participant's code is written to the entry and returns nil.
 func (w *Worker) RunEntry(ctx context.Context, id string) error {
-	var zipData, scenarios []byte
+	var zipData, scenarios, bench []byte
 	var image, command, kind string
 	var timeoutS int
 	err := w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
@@ -151,7 +154,7 @@ func (w *Worker) RunEntry(ctx context.Context, id string) error {
 			UPDATE product_entries e SET status = 'running'
 			FROM product_tasks t
 			WHERE e.id = $1 AND t.slug = e.task_slug AND e.status IN ('queued', 'running')
-			RETURNING e.zip, t.image, t.command, t.timeout_s, t.scenarios, t.kind`, id).Scan(&zipData, &image, &command, &timeoutS, &scenarios, &kind)
+			RETURNING e.zip, t.image, t.command, t.timeout_s, t.scenarios, t.kind, t.bench`, id).Scan(&zipData, &image, &command, &timeoutS, &scenarios, &kind, &bench)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -165,7 +168,7 @@ func (w *Worker) RunEntry(ctx context.Context, id string) error {
 	}
 	files, err := submissions.ReadZip(zipData)
 	if err != nil {
-		return w.finish(ctx, id, scs, nil, "", "invalid_zip")
+		return w.finish(ctx, id, scs, nil, nil, "", "invalid_zip")
 	}
 
 	dir, err := os.MkdirTemp(w.workDir, "product-")
@@ -182,7 +185,24 @@ func (w *Worker) RunEntry(ctx context.Context, id string) error {
 			return err
 		}
 	}
-	spec, err := json.Marshal(map[string]any{"command": command, "scenarios": scs})
+	specDoc := map[string]any{"command": command, "scenarios": scs}
+	if len(bench) > 0 && kind == KindCLI {
+		var b struct {
+			Runs int    `json:"runs"`
+			Gen  string `json:"gen"`
+		}
+		if err := json.Unmarshal(bench, &b); err != nil {
+			return fmt.Errorf("products: entry %s: bad bench: %w", id, err)
+		}
+		specDoc["bench"] = map[string]any{"runs": b.Runs}
+		if err := os.MkdirAll(filepath.Join(dir, "_scenarios"), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, "_scenarios", "bench_gen.py"), []byte(b.Gen), 0o644); err != nil {
+			return err
+		}
+	}
+	spec, err := json.Marshal(specDoc)
 	if err != nil {
 		return err
 	}
@@ -206,13 +226,13 @@ func (w *Worker) RunEntry(ctx context.Context, id string) error {
 		return err
 	}
 	if res.TimedOut {
-		return w.finish(ctx, id, scs, nil, res.Output, ReasonTimeout)
+		return w.finish(ctx, id, scs, nil, nil, res.Output, ReasonTimeout)
 	}
 	passed, ok := parseResults(res.Output)
 	if !ok {
-		return w.finish(ctx, id, scs, nil, res.Output, ReasonNoResults)
+		return w.finish(ctx, id, scs, nil, nil, res.Output, ReasonNoResults)
 	}
-	return w.finish(ctx, id, scs, passed, res.Output, "")
+	return w.finish(ctx, id, scs, passed, parseBench(res.Output), res.Output, "")
 }
 
 // parseResults reads the runner's marker line: scenario name -> passed.
@@ -235,8 +255,25 @@ func parseResults(out string) (map[string]bool, bool) {
 	return nil, false
 }
 
+// parseBench reads the runner's benchmark marker line: the median time in ms, nil when there is no score.
+func parseBench(out string) *float64 {
+	for _, line := range strings.Split(out, "\n") {
+		i := strings.Index(line, benchMarker)
+		if i < 0 {
+			continue
+		}
+		var b struct {
+			MS *float64 `json:"ms"`
+		}
+		if json.Unmarshal([]byte(line[i+len(benchMarker):]), &b) == nil && b.MS != nil && *b.MS > 0 {
+			return b.MS
+		}
+	}
+	return nil
+}
+
 // finish writes the verdict; only an entry this run moved to running gets one (the stuck sweep may have won).
-func (w *Worker) finish(ctx context.Context, id string, scs []Scenario, passed map[string]bool, output, reason string) error {
+func (w *Worker) finish(ctx context.Context, id string, scs []Scenario, passed map[string]bool, benchMS *float64, output, reason string) error {
 	results := make([]ScenarioResult, 0, len(scs))
 	n := 0
 	for _, sc := range scs {
@@ -252,14 +289,14 @@ func (w *Worker) finish(ctx context.Context, id string, scs []Scenario, passed m
 	}
 	var kept []string
 	for _, l := range strings.Split(output, "\n") {
-		if !strings.Contains(l, resultsMarker) {
+		if !strings.Contains(l, resultsMarker) && !strings.Contains(l, benchMarker) {
 			kept = append(kept, l)
 		}
 	}
 	logTail := sanitize.CleanLog(strings.TrimSpace(strings.Join(kept, "\n")), maxLogTail)
 	return w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `UPDATE product_entries SET status = 'done', failure_reason = NULLIF($2, ''), results = $3, passed = $4,
-			total = $5, log_tail = $6, finished_at = now() WHERE id = $1 AND status = 'running'`, id, reason, body, n, len(scs), logTail)
+			total = $5, log_tail = $6, bench_ms = $7, finished_at = now() WHERE id = $1 AND status = 'running'`, id, reason, body, n, len(scs), logTail, benchMS)
 		return err
 	})
 }

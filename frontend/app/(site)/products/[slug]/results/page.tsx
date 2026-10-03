@@ -5,6 +5,7 @@ import { use } from 'react'
 import { Download } from 'lucide-react'
 import { HandleLink } from '@/components/daily/handle-link'
 import { PageHeader, SectionTitle } from '@/components/page-header'
+import { BenchTime, fastestOf } from '@/components/products/bench'
 import { Podium } from '@/components/products/podium'
 import { PhaseBadge, RankingHow, VotingNote, isBlind, rankSummary, usePT, utc } from '@/components/products/phase'
 import { useResults } from '@/components/products/use-results'
@@ -25,6 +26,8 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
   const { task, entries } = res
   const bt = task.kind === 'site'
   const blind = isBlind(task) // standings, authors, checks and source stay hidden while sites are judged blind
+  const timed = task.has_bench && entries.some((e) => e.bench_ms != null)
+  const fastest = fastestOf(entries)
   const scored = entries.some((e) => e.total > 0) // sites without automated checks have no score column
 
   return (
@@ -64,6 +67,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
                   <TableHead className="w-10">#</TableHead>
                   <TableHead>{t('res.player')}</TableHead>
                   {scored && <TableHead className="text-right">{task.kind === 'site' ? t('res.checks') : t('res.score')}</TableHead>}
+                  {timed && <TableHead className="text-right" title={t('bench.hint')}>{t('res.speed')}</TableHead>}
                   {bt && <TableHead className="text-right" title={t('res.scoreHint')}>{t('res.score')}</TableHead>}
                   {bt && <TableHead className="text-right" title={t('res.judgedHint')}>{t('res.judged')}</TableHead>}
                   <TableHead className="text-right">{t('res.votes')}</TableHead>
@@ -79,6 +83,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
                       {e.made_with && <div className="truncate text-xs text-muted-foreground">{e.made_with}</div>}
                     </TableCell>
                     {scored && <TableCell className="text-right font-mono font-bold">{e.total > 0 ? `${e.passed}/${e.total}` : '-'}</TableCell>}
+                    {timed && <TableCell className="text-right font-mono"><BenchTime ms={e.bench_ms} fastest={fastest} /></TableCell>}
                     {bt && <TableCell className="text-right font-mono font-bold">{e.score != null ? Math.round(e.score) : '-'}</TableCell>}
                     {bt && <TableCell className="text-right font-mono">{e.comparisons}</TableCell>}
                     <TableCell className="text-right font-mono">{e.votes}</TableCell>

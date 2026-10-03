@@ -16,3 +16,59 @@ for sc in spec["scenarios"]:
         ok = False
     results.append({"name": sc["name"], "passed": ok})
 print("@@RESULTS@@" + json.dumps(results))
+
+
+# Benchmark: the task ships a generator (_scenarios/bench_gen.py OUTDIR) that writes plan.json and the input/expected
+# files. Every invocation's output must be right, otherwise there is no bench score. The score is the sum, over the
+# plan's cases, of the median wall time (ms) of one pass over the case's invocations.
+import os
+import statistics
+import sys
+import tempfile
+import time
+
+BENCH_BUDGET_S = 30.0  # the whole benchmark; later samples are skipped once it is spent
+BENCH_RUN_TIMEOUT_S = 10
+
+
+def bench(spec, cmd):
+    runs = int(spec.get("runs", 5))
+    out = tempfile.mkdtemp(prefix="bench-")
+    subprocess.run([sys.executable, "_scenarios/bench_gen.py", out], check=True, timeout=60)
+    plan = json.load(open(os.path.join(out, "plan.json")))
+    deadline = time.monotonic() + BENCH_BUDGET_S
+    total = 0.0
+    for case in plan:
+        samples = []
+        for i in range(runs + 1):  # the first pass is a warm-up and the correctness check
+            took = 0.0
+            for inv in case["invocations"]:
+                want = open(os.path.join(out, inv["stdout"]), "rb").read() if inv.get("stdout") else b""
+                with open(os.path.join(out, inv["stdin"]), "rb") if inv.get("stdin") else open(os.devnull, "rb") as fin:
+                    t0 = time.perf_counter()
+                    try:
+                        p = subprocess.run(cmd + inv.get("args", []), stdin=fin, capture_output=True,
+                                           timeout=BENCH_RUN_TIMEOUT_S, cwd="solution")
+                    except subprocess.TimeoutExpired:
+                        return None, "case %s: timed out" % case["name"]
+                    took += time.perf_counter() - t0
+                if p.returncode != inv.get("exit_code", 0) or p.stdout.rstrip() != want.rstrip():
+                    return None, "case %s: wrong output" % case["name"]
+            if i > 0:
+                samples.append(took * 1000)
+            if time.monotonic() > deadline and (i > 0 or took > BENCH_BUDGET_S / 2):
+                break
+        if not samples:
+            return None, "case %s: too slow to measure" % case["name"]
+        total += statistics.median(samples)
+    return total, ""
+
+
+if spec.get("bench"):
+    try:
+        ms, err = bench(spec["bench"], cmd)
+    except Exception as e:
+        ms, err = None, "benchmark could not run: %s" % e
+    if err:
+        print("bench: " + err)
+    print("@@BENCH@@" + json.dumps({"ms": ms}))

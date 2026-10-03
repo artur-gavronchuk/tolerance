@@ -3,6 +3,8 @@ package products
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 
@@ -20,6 +22,7 @@ func (PassAll) Run(_ context.Context, req sandbox.Request) (sandbox.Result, erro
 	}
 	var spec struct {
 		Scenarios []Scenario `json:"scenarios"`
+		Bench     any        `json:"bench"`
 	}
 	if err := json.Unmarshal(raw, &spec); err != nil {
 		return sandbox.Result{}, err
@@ -29,7 +32,11 @@ func (PassAll) Run(_ context.Context, req sandbox.Request) (sandbox.Result, erro
 		rs = append(rs, ScenarioResult{Name: sc.Name, Passed: true})
 	}
 	body, err := json.Marshal(rs)
-	return sandbox.Result{Output: resultsMarker + string(body) + "\n"}, err
+	out := resultsMarker + string(body) + "\n"
+	if spec.Bench != nil { // a made-up time so the bench UI has something to show locally
+		out += fmt.Sprintf("%s{\"ms\": %d}\n", benchMarker, 150+rand.IntN(900))
+	}
+	return sandbox.Result{Output: out}, err
 }
 
 // RunOptimize is never used for product runs; it only completes sandbox.Runner.

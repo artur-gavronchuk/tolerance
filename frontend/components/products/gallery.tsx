@@ -5,6 +5,7 @@ import { HandleLink } from '@/components/daily/handle-link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { ProductEntry, ProductTask } from '@/lib/types'
+import { BenchTime, fastestOf } from './bench'
 import { SitePreview } from './entry-card'
 import { SourceViewer } from './source-viewer'
 import { VoteButton } from './vote-button'
@@ -24,13 +25,14 @@ export function EntryGallery({ task, entries, signedIn, busy, onToggleVote }: {
   const t = usePT()
   const site = task.kind === 'site'
   const blind = site && task.phase === 'voting'
+  const fastest = fastestOf(entries)
   const shown = blind ? [...entries].sort((a, b) => hash(a.id) - hash(b.id)) : entries
   return (
     <ul className={`grid gap-5 ${site ? 'md:grid-cols-2' : ''}`}>
       {shown.map((e, i) => (
         <li key={e.id} className={`min-w-0 space-y-3 rounded-[14px] border bg-card p-4 ${e.mine ? 'border-primary' : 'border-border'}`}>
           {site && <SitePreview id={e.id} title={blind ? t('gallery.site', { n: i + 1 }) : t('gallery.sitesOf', { handle: e.handle ?? '' })} />}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {blind && !e.mine ? (
               <div className="min-w-0 flex-1 truncate font-semibold">
                 {t('gallery.site', { n: i + 1 })}
@@ -45,6 +47,7 @@ export function EntryGallery({ task, entries, signedIn, busy, onToggleVote }: {
                     {e.mine && <span className="font-normal text-muted-foreground">{t('gallery.you')}</span>}
                   </div>
                   {e.made_with && <div className="truncate text-xs text-muted-foreground">{e.made_with}</div>}
+                  {!site && task.has_bench && <div className="text-xs"><BenchTime ms={e.bench_ms} fastest={fastest} className="font-mono" /></div>}
                 </div>
               </>
             )}
