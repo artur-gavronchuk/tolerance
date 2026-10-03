@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { Check, LoaderCircle, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { fmtScore } from '@/components/daily/daily-board'
 import { api } from '@/lib/api'
 import { ago, reasonLabel, STATUS_LABEL } from '@/lib/format'
 import type { Submission } from '@/lib/types'
@@ -29,8 +30,13 @@ export function SubmissionCard({ sub, onUpdate }: { sub: Submission; onUpdate: (
           {active && <LoaderCircle className="animate-spin" />}
           {STATUS_LABEL[sub.status] ?? sub.status}
         </Badge>
+        {!active && sub.score != null && (
+          <span className="font-mono text-sm font-bold">Score {fmtScore(sub.score)}</span>
+        )}
         {!active && sub.total_tests > 0 && (
-          <span className="font-mono text-sm font-bold">{sub.passed_tests}/{sub.total_tests} tests</span>
+          <span className="font-mono text-sm font-bold">
+            {sub.passed_tests}/{sub.total_tests} {sub.score != null || sub.tests.some((t) => 'score' in t) ? 'valid cases' : 'tests'}
+          </span>
         )}
         {sub.day === null && <Badge variant="outline">Practice</Badge>}
         {sub.made_with && <span className="min-w-0 truncate text-sm text-muted-foreground">{sub.made_with}</span>}
@@ -46,6 +52,8 @@ export function SubmissionCard({ sub, onUpdate }: { sub: Submission; onUpdate: (
             <li key={t.name} className="flex min-w-0 items-center gap-2 text-sm">
               {t.passed ? <Check className="size-4 shrink-0 text-success" /> : <X className="size-4 shrink-0 text-destructive" />}
               <span className="truncate font-mono text-xs" title={t.name}>{t.name}</span>
+              {t.score !== undefined && t.passed && <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">{fmtScore(t.score)}</span>}
+              {t.reason && <span className="min-w-0 truncate text-xs text-destructive" title={t.reason}>{t.reason}</span>}
             </li>
           ))}
         </ul>

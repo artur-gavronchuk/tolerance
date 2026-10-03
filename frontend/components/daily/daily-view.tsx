@@ -6,7 +6,7 @@ import { notFound } from 'next/navigation'
 import { Download } from 'lucide-react'
 import { Markdown } from '@/components/daily/markdown'
 import { Countdown } from '@/components/daily/countdown'
-import { DailyBoard } from '@/components/daily/daily-board'
+import { DailyBoard, fmtScore } from '@/components/daily/daily-board'
 import { DayRevealView } from '@/components/daily/day-reveal'
 import { DayStatsPanel } from '@/components/daily/day-stats'
 import { ShareResult, shareText } from '@/components/daily/share-result'
@@ -20,6 +20,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { api, ApiError, friendlyMessage } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import type { Daily, DailyRow, DayStats, Submission } from '@/lib/types'
+
+export const OPTIMIZE_PROMPT = (direction: 'max' | 'min' | null) => `Here is a repository and a task description in TASK.md. Improve solve.py to ${direction === 'min' ? 'minimize' : 'maximize'} the score described in TASK.md.
+Test locally with tools/score.py on the instances in examples/. Keep the output valid and within the time limit per case. Use only the standard library.`
 
 export const AGENT_PROMPT = `Here is a repository and a task description in TASK.md. Read TASK.md and fix the issue it describes.
 Do not modify or delete existing tests, and do not add test files. Keep the change minimal and in the style of the surrounding code.
@@ -96,7 +99,7 @@ export function DailyView({ day }: { day?: string }) {
         </p>
         <h1 className="display text-[2.1rem] break-words sm:text-[2.75rem]">{task.title}</h1>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <TaskBadges language={task.language} difficulty={task.difficulty} />
+          <TaskBadges language={task.language} difficulty={task.difficulty} kind={task.kind} direction={task.direction} />
           {daily.is_open ? (
             <span className="text-sm text-muted-foreground">Closes in <Countdown closesAt={daily.closes_at} onClosed={() => void load()} /></span>
           ) : (
@@ -117,7 +120,7 @@ export function DailyView({ day }: { day?: string }) {
               <li>Download the repository and unpack it.</li>
               <li>Give it to your coding agent (Claude Code, Cursor, Codex, anything) with this prompt:</li>
             </ol>
-            <div className="mt-3"><CopyBlock text={AGENT_PROMPT} /></div>
+            <div className="mt-3"><CopyBlock text={task.kind === 'optimize' ? OPTIMIZE_PROMPT(task.direction) : AGENT_PROMPT} /></div>
             <ol start={3} className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
               <li>Zip the edited repository, or save your change as a .patch, and upload it below.</li>
             </ol>
@@ -149,7 +152,7 @@ export function DailyView({ day }: { day?: string }) {
 
       {daily.my && (
         <section>
-          <SectionTitle aside={daily.my.best ? `Best: ${daily.my.best.passed_tests}/${daily.my.best.total_tests}` : undefined}>
+          <SectionTitle aside={daily.my.best ? (task.kind === 'optimize' ? `Best score: ${fmtScore(daily.my.best.score)}` : `Best: ${daily.my.best.passed_tests}/${daily.my.best.total_tests}`) : undefined}>
             My submissions
           </SectionTitle>
           {share && <div className="mb-3"><ShareResult text={share} /></div>}
@@ -167,7 +170,7 @@ export function DailyView({ day }: { day?: string }) {
         <SectionTitle aside={practice ? 'Final standings' : 'Live'}>Leaderboard</SectionTitle>
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
           <div className="min-w-0">
-            {rows == null ? <Skeleton className="h-48 rounded-[14px]" /> : <DailyBoard rows={rows} me={me?.user.handle} />}
+            {rows == null ? <Skeleton className="h-48 rounded-[14px]" /> : <DailyBoard rows={rows} me={me?.user.handle} optimize={task.kind === 'optimize'} />}
           </div>
           {stats && <DayStatsPanel stats={stats} />}
         </div>

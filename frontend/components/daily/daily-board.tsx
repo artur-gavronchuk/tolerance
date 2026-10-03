@@ -1,7 +1,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { DailyRow } from '@/lib/types'
 
-export function DailyBoard({ rows, me }: { rows: DailyRow[]; me?: string }) {
+export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: string; optimize?: boolean }) {
   if (rows.length === 0) {
     return (
       <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">
@@ -10,6 +10,7 @@ export function DailyBoard({ rows, me }: { rows: DailyRow[]; me?: string }) {
     )
   }
   const mine = (r: DailyRow) => r.handle === me
+  const result = (r: DailyRow) => (optimize ? fmtScore(r.score) : `${r.passed_tests}/${r.total_tests}`)
   return (
     <>
       <Table className="hidden sm:table">
@@ -18,7 +19,7 @@ export function DailyBoard({ rows, me }: { rows: DailyRow[]; me?: string }) {
             <TableHead className="w-10">#</TableHead>
             <TableHead>Player</TableHead>
             <TableHead>Made with</TableHead>
-            <TableHead className="text-right">Tests</TableHead>
+            <TableHead className="text-right">{optimize ? 'Score' : 'Tests'}</TableHead>
             <TableHead className="text-right">Time (UTC)</TableHead>
           </TableRow>
         </TableHeader>
@@ -28,7 +29,7 @@ export function DailyBoard({ rows, me }: { rows: DailyRow[]; me?: string }) {
               <TableCell className="font-mono text-muted-foreground">{r.place}</TableCell>
               <TableCell className="font-semibold">{r.handle}</TableCell>
               <TableCell className="text-muted-foreground">{r.made_with || '—'}</TableCell>
-              <TableCell className="text-right font-mono font-bold">{r.passed_tests}/{r.total_tests}</TableCell>
+              <TableCell className="text-right font-mono font-bold">{result(r)}</TableCell>
               <TableCell className="text-right font-mono text-muted-foreground">{time(r.submitted_at)}</TableCell>
             </TableRow>
           ))}
@@ -42,12 +43,16 @@ export function DailyBoard({ rows, me }: { rows: DailyRow[]; me?: string }) {
               <p className="truncate font-semibold">{r.handle}</p>
               <p className="truncate text-xs text-muted-foreground">{r.made_with || '—'} · {time(r.submitted_at)}</p>
             </div>
-            <span className="shrink-0 font-mono text-lg font-bold">{r.passed_tests}/{r.total_tests}</span>
+            <span className="shrink-0 font-mono text-lg font-bold">{result(r)}</span>
           </li>
         ))}
       </ul>
     </>
   )
+}
+
+export function fmtScore(v: number | null | undefined) {
+  return v == null ? '—' : v.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
 
 function time(iso: string) {

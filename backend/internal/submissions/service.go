@@ -157,6 +157,21 @@ func (s *Service) MyDay(ctx context.Context, userID, day string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	var kind, direction string
+	err = s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		var d *string
+		err := tx.QueryRow(ctx, `SELECT t.kind, t.direction FROM daily_tasks dt JOIN tasks t ON t.slug = dt.task_slug WHERE dt.day = $1::date`, day).Scan(&kind, &d)
+		if d != nil {
+			direction = *d
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
 	for i := range my.Submissions {
 		sub := my.Submissions[i]
 		if sub.Status != StatusInfraError {
@@ -166,10 +181,35 @@ func (s *Service) MyDay(ctx context.Context, userID, day string) (any, error) {
 			continue
 		}
 		// Submissions are newest first: on a tie the later index is the earlier submission, so prefer it.
-		if my.Best == nil || sub.PassedTests >= my.Best.PassedTests {
+		if my.Best == nil || betterOrEqual(kind, direction, sub, *my.Best) {
 			b := sub
 			my.Best = &b
 		}
 	}
 	return my, nil
+}
+
+// betterOrEqual compares a submission with the current best of a day: tests passed for bugfix tasks, the
+// score (by direction) for optimize tasks. A min task ranks only fully valid submissions, because an invalid
+// case scores 0.
+func betterOrEqual(kind, direction string, a, b Submission) bool {
+	if kind != "optimize" {
+		return a.PassedTests >= b.PassedTests
+	}
+	if direction == "min" {
+		if (a.PassedTests == a.TotalTests) != (b.PassedTests == b.TotalTests) {
+			return a.PassedTests == a.TotalTests
+		}
+	}
+	as, bs := 0.0, 0.0
+	if a.Score != nil {
+		as = *a.Score
+	}
+	if b.Score != nil {
+		bs = *b.Score
+	}
+	if direction == "min" {
+		return as <= bs
+	}
+	return as >= bs
 }

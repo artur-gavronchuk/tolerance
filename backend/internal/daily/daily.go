@@ -111,6 +111,7 @@ type Row struct {
 	MadeWith    string    `json:"made_with"`
 	PassedTests int       `json:"passed_tests"`
 	TotalTests  int       `json:"total_tests"`
+	Score       *float64  `json:"score"`
 	SubmittedAt time.Time `json:"submitted_at"`
 }
 
@@ -121,20 +122,47 @@ func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
 	}
 	out := []Row{}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `
-			SELECT handle, made_with, passed_tests, total_tests, created_at FROM (
+		var kind string
+		var direction *string
+		err := tx.QueryRow(ctx, `SELECT t.kind, t.direction FROM daily_tasks d JOIN tasks t ON t.slug = d.task_slug WHERE d.day = $1::date`, day).Scan(&kind, &direction)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		q := `
+			SELECT handle, made_with, passed_tests, total_tests, NULL::float8, created_at FROM (
 				SELECT DISTINCT ON (s.user_id) u.handle, s.made_with, s.passed_tests, s.total_tests, s.created_at
 				FROM submissions s JOIN users u ON u.id = s.user_id
 				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND s.passed_tests > 0
 				ORDER BY s.user_id, s.passed_tests DESC, s.created_at ASC) best
-			ORDER BY passed_tests DESC, created_at ASC, handle LIMIT 200`, day)
+			ORDER BY passed_tests DESC, created_at ASC, handle LIMIT 200`
+		if kind == "optimize" {
+			// Best score per person by direction, ties by the earlier submission. A failed submission still
+			// ranks (the score is the sum of its valid cases), except on a min task, where an invalid case
+			// scores 0 and would be the best possible: there only fully valid submissions rank.
+			dir := "DESC"
+			if direction != nil && *direction == "min" {
+				dir = "ASC"
+			}
+			q = `
+			SELECT handle, made_with, passed_tests, total_tests, score, created_at FROM (
+				SELECT DISTINCT ON (s.user_id) u.handle, s.made_with, s.passed_tests, s.total_tests, s.score, s.created_at
+				FROM submissions s JOIN users u ON u.id = s.user_id JOIN tasks t ON t.slug = s.task_slug
+				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND s.score IS NOT NULL
+				  AND (t.direction <> 'min' OR s.cases_valid = t.cases)
+				ORDER BY s.user_id, s.score ` + dir + `, s.created_at ASC) best
+			ORDER BY score ` + dir + `, created_at ASC, handle LIMIT 200`
+		}
+		rows, err := tx.Query(ctx, q, day)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var r Row
-			if err := rows.Scan(&r.Handle, &r.MadeWith, &r.PassedTests, &r.TotalTests, &r.SubmittedAt); err != nil {
+			if err := rows.Scan(&r.Handle, &r.MadeWith, &r.PassedTests, &r.TotalTests, &r.Score, &r.SubmittedAt); err != nil {
 				return err
 			}
 			r.SubmittedAt = r.SubmittedAt.UTC()

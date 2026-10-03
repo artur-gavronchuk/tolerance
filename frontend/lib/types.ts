@@ -4,6 +4,8 @@ export interface AuthProviders { providers: ('github' | 'google')[]; dev_login: 
 export interface TaskSummary {
   slug: string; title: string; language: 'go' | 'python'; difficulty: number
   task_md: string; repo_url: string
+  kind: 'bugfix' | 'optimize'
+  direction: 'max' | 'min' | null // optimize tasks: which way the score is better
 }
 
 export type SubmissionStatus = 'queued' | 'running' | 'passed' | 'failed' | 'infra_error'
@@ -13,8 +15,10 @@ export interface Submission {
   day: string | null // null = practice (the task is not today's)
   status: SubmissionStatus
   passed_tests: number; total_tests: number
+  score: number | null // optimize tasks only
   failure_reason: string | null
-  tests: { name: string; passed: boolean }[]
+  // optimize tasks: one entry per case, with its score and, when invalid, the reason
+  tests: { name: string; passed: boolean; score?: number; reason?: string }[]
   log_tail: string; made_with: string
   created_at: string; finished_at: string | null
 }
@@ -28,7 +32,7 @@ export interface Daily {
 
 export interface DailyRow {
   place: number; handle: string; made_with: string
-  passed_tests: number; total_tests: number; submitted_at: string
+  passed_tests: number; total_tests: number; score: number | null; submitted_at: string
 }
 
 // Published once a day closes (`/daily/{day}/reveal`).

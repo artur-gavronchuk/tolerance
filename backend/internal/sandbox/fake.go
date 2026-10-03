@@ -14,6 +14,9 @@ type Fake struct {
 	Result Result
 	Err    error
 	Calls  []Request
+	// Optimize is returned by RunOptimize.
+	Optimize      OptimizeResult
+	OptimizeCalls []OptimizeRequest
 }
 
 func (f *Fake) Run(_ context.Context, req Request) (Result, error) {

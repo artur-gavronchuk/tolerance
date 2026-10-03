@@ -17,20 +17,22 @@ import (
 
 // Summary is the public face of a task.
 type Summary struct {
-	Slug       string `json:"slug"`
-	Title      string `json:"title"`
-	Language   string `json:"language"`
-	Difficulty int    `json:"difficulty"`
-	TaskMD     string `json:"task_md"`
-	RepoURL    string `json:"repo_url"`
+	Slug       string  `json:"slug"`
+	Title      string  `json:"title"`
+	Language   string  `json:"language"`
+	Difficulty int     `json:"difficulty"`
+	TaskMD     string  `json:"task_md"`
+	Kind       string  `json:"kind"`
+	Direction  *string `json:"direction"`
+	RepoURL    string  `json:"repo_url"`
 }
 
 // Get loads the public summary of an active or past task.
 func Get(ctx context.Context, pool *db.Pool, slug string) (Summary, error) {
 	var s Summary
 	err := pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT slug, title, language, difficulty, task_md FROM tasks WHERE slug = $1`, slug).
-			Scan(&s.Slug, &s.Title, &s.Language, &s.Difficulty, &s.TaskMD)
+		return tx.QueryRow(ctx, `SELECT slug, title, language, difficulty, task_md, kind, direction FROM tasks WHERE slug = $1`, slug).
+			Scan(&s.Slug, &s.Title, &s.Language, &s.Difficulty, &s.TaskMD, &s.Kind, &s.Direction)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Summary{}, httpx.NotFound()

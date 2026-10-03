@@ -8,6 +8,7 @@ import (
 	"io"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -69,5 +70,32 @@ func HiddenTestNames(language string, hiddenTar []byte) ([]string, error) {
 			names = append(names, name+"::"+m[1])
 		}
 	}
+	return names, nil
+}
+
+var caseName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// HiddenCaseNames lists the case names (cases/NN.in without the extension, sorted) of an optimize task's
+// hidden tarball and checks that score.py is there.
+func HiddenCaseNames(hiddenTar []byte) ([]string, error) {
+	files, err := ReadTar(hiddenTar)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := files["score.py"]; !ok {
+		return nil, fmt.Errorf("hidden tarball has no score.py")
+	}
+	var names []string
+	for p := range files {
+		if path.Dir(p) != "cases" || !strings.HasSuffix(p, ".in") {
+			continue
+		}
+		n := strings.TrimSuffix(path.Base(p), ".in")
+		if !caseName.MatchString(n) {
+			return nil, fmt.Errorf("bad case name %q", p)
+		}
+		names = append(names, n)
+	}
+	sort.Strings(names)
 	return names, nil
 }

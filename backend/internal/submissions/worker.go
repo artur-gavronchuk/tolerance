@@ -35,6 +35,7 @@ const (
 	ReasonTestsFailed   = "hidden_tests_failed"
 	ReasonTestsNotRun   = "tests_did_not_run"
 	ReasonTimeout       = "timeout"
+	ReasonInvalidCases  = "invalid_cases"
 	reasonStuck         = "stuck"
 	maxInfraReasonBytes = 500
 )
@@ -154,6 +155,8 @@ func (w *Worker) handle(ctx context.Context, job *jobs.Job) {
 type runInput struct {
 	diff, slug, language, image, runCmd string
 	timeoutS                            int
+	kind, solveCmd                      string
+	caseTimeLimitS                      int
 	repoTar, hiddenTar                  []byte
 }
 
@@ -166,8 +169,8 @@ func (w *Worker) RunSubmission(ctx context.Context, id string) error {
 			UPDATE submissions s SET status = 'running'
 			FROM tasks t
 			WHERE s.id = $1 AND t.slug = s.task_slug AND s.status IN ('queued', 'running')
-			RETURNING s.diff, t.slug, t.language, t.image, t.run_cmd, t.sandbox_timeout_s, t.repo_tar, t.hidden_tar`, id).
-			Scan(&in.diff, &in.slug, &in.language, &in.image, &in.runCmd, &in.timeoutS, &in.repoTar, &in.hiddenTar)
+			RETURNING s.diff, t.slug, t.language, t.image, t.run_cmd, t.sandbox_timeout_s, t.kind, t.solve_cmd, t.case_time_limit_s, t.repo_tar, t.hidden_tar`, id).
+			Scan(&in.diff, &in.slug, &in.language, &in.image, &in.runCmd, &in.timeoutS, &in.kind, &in.solveCmd, &in.caseTimeLimitS, &in.repoTar, &in.hiddenTar)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		w.log.Info("run_submission: nothing to do", "submission", id)
@@ -177,6 +180,9 @@ func (w *Worker) RunSubmission(ctx context.Context, id string) error {
 		return err
 	}
 
+	if in.kind == tasks.KindOptimize {
+		return w.runOptimize(ctx, id, in)
+	}
 	hidden, err := tasks.HiddenTestNames(in.language, in.hiddenTar)
 	if err != nil {
 		return err

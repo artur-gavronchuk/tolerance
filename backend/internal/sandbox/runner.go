@@ -32,6 +32,7 @@ type Result struct {
 
 type Runner interface {
 	Run(ctx context.Context, req Request) (Result, error)
+	RunOptimize(ctx context.Context, req OptimizeRequest) (OptimizeResult, error)
 }
 
 // ParseOutput turns the sandbox's captured output into per-test results

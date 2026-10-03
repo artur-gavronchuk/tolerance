@@ -22,6 +22,9 @@ import (
 	"tolerance/internal/platform/db"
 )
 
+// KindOptimize is the manifest kind of a scored optimization task; the default kind is bugfix.
+const KindOptimize = "optimize"
+
 // Task is one catalog entry as loaded from disk.
 type Task struct {
 	Slug            string
@@ -32,6 +35,11 @@ type Task struct {
 	RunCmd          string
 	SandboxTimeoutS int
 	HiddenTests     int
+	Kind            string // bugfix | optimize
+	Direction       string // optimize: max | min
+	SolveCmd        string
+	CaseTimeLimitS  int
+	Cases           int
 	TaskMD          string
 	RepoTar         []byte
 	HiddenTar       []byte
@@ -53,6 +61,11 @@ type manifest struct {
 	RunCmd          string `json:"run_cmd"`
 	SandboxTimeoutS int    `json:"sandbox_timeout_s"`
 	HiddenTests     int    `json:"hidden_tests"`
+	Kind            string `json:"kind"`
+	Direction       string `json:"direction"`
+	SolveCmd        string `json:"solve_cmd"`
+	CaseTimeLimitS  int    `json:"case_time_limit_s"`
+	Cases           int    `json:"cases"`
 }
 
 // LoadFlat reads a directory of task directories that each carry their own image and run command in
@@ -160,8 +173,17 @@ func loadTask(dir string, l language) (Task, error) {
 	if m.RunCmd == "" {
 		m.RunCmd = l.RunCmd
 	}
-	if m.Slug == "" || m.Language == "" || m.Image == "" || m.RunCmd == "" || m.SandboxTimeoutS <= 0 || m.HiddenTests <= 0 || m.Difficulty < 1 || m.Difficulty > 3 {
-		return Task{}, fmt.Errorf("tasks: %s/manifest.json: slug, language, image, run_cmd, sandbox_timeout_s, hidden_tests and difficulty 1-3 are required", dir)
+	if m.Kind == "" {
+		m.Kind = "bugfix"
+	}
+	if m.Kind != "bugfix" && m.Kind != "optimize" {
+		return Task{}, fmt.Errorf("tasks: %s/manifest.json: unknown kind %q", dir, m.Kind)
+	}
+	if m.Kind == KindOptimize && m.RunCmd == "" {
+		m.RunCmd = m.SolveCmd
+	}
+	if m.Slug == "" || m.Language == "" || m.Image == "" || m.RunCmd == "" || m.SandboxTimeoutS <= 0 || m.Difficulty < 1 || m.Difficulty > 3 {
+		return Task{}, fmt.Errorf("tasks: %s/manifest.json: slug, language, image, run_cmd, sandbox_timeout_s and difficulty 1-3 are required", dir)
 	}
 	md, err := os.ReadFile(filepath.Join(dir, "TASK.md"))
 	if err != nil {
@@ -175,6 +197,25 @@ func loadTask(dir string, l language) (Task, error) {
 	if err != nil {
 		return Task{}, err
 	}
+	t := Task{Slug: m.Slug, Title: m.Title, Language: m.Language, Difficulty: m.Difficulty, Image: m.Image, RunCmd: m.RunCmd,
+		SandboxTimeoutS: m.SandboxTimeoutS, Kind: m.Kind, TaskMD: string(md), RepoTar: repoTar, HiddenTar: hiddenTar}
+	if m.Kind == KindOptimize {
+		if (m.Direction != "max" && m.Direction != "min") || m.SolveCmd == "" || m.CaseTimeLimitS <= 0 || m.Cases <= 0 {
+			return Task{}, fmt.Errorf("tasks: %s/manifest.json: optimize needs direction (max|min), solve_cmd, case_time_limit_s and cases", dir)
+		}
+		names, err := HiddenCaseNames(hiddenTar)
+		if err != nil {
+			return Task{}, fmt.Errorf("tasks: %s: %w", dir, err)
+		}
+		if len(names) != m.Cases {
+			return Task{}, fmt.Errorf("tasks: %s: manifest says %d cases, _hidden/cases has %d", dir, m.Cases, len(names))
+		}
+		t.Direction, t.SolveCmd, t.CaseTimeLimitS, t.Cases, t.HiddenTests = m.Direction, m.SolveCmd, m.CaseTimeLimitS, m.Cases, m.Cases
+		return t, nil
+	}
+	if m.HiddenTests <= 0 {
+		return Task{}, fmt.Errorf("tasks: %s/manifest.json: hidden_tests is required", dir)
+	}
 	// The score divides by hidden_tests and counts hidden tests by name, so the manifest and the files
 	// must agree on how many there are.
 	names, err := HiddenTestNames(m.Language, hiddenTar)
@@ -184,8 +225,8 @@ func loadTask(dir string, l language) (Task, error) {
 	if len(names) != m.HiddenTests {
 		return Task{}, fmt.Errorf("tasks: %s: manifest says %d hidden tests, _hidden has %d: %v", dir, m.HiddenTests, len(names), names)
 	}
-	return Task{Slug: m.Slug, Title: m.Title, Language: m.Language, Difficulty: m.Difficulty, Image: m.Image, RunCmd: m.RunCmd,
-		SandboxTimeoutS: m.SandboxTimeoutS, HiddenTests: m.HiddenTests, TaskMD: string(md), RepoTar: repoTar, HiddenTar: hiddenTar}, nil
+	t.HiddenTests = m.HiddenTests
+	return t, nil
 }
 
 // Sync upserts the catalog; a task gone from it stays (past submissions reference it) but is deactivated
@@ -198,11 +239,14 @@ func Sync(ctx context.Context, pool *db.Pool, ts []Task) error {
 	return pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		for _, t := range ts {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO tasks (slug, title, language, difficulty, task_md, repo_tar, hidden_tar, image, run_cmd, sandbox_timeout_s, hidden_tests, active, synced_at)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, true, now())
+				INSERT INTO tasks (slug, title, language, difficulty, task_md, repo_tar, hidden_tar, image, run_cmd, sandbox_timeout_s, hidden_tests,
+				    kind, direction, solve_cmd, case_time_limit_s, cases, active, synced_at)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULLIF($13,''),$14,$15,$16, true, now())
 				ON CONFLICT (slug) DO UPDATE SET title = $2, language = $3, difficulty = $4, task_md = $5, repo_tar = $6, hidden_tar = $7,
-				    image = $8, run_cmd = $9, sandbox_timeout_s = $10, hidden_tests = $11, active = true, synced_at = now()`,
-				t.Slug, t.Title, t.Language, t.Difficulty, t.TaskMD, t.RepoTar, t.HiddenTar, t.Image, t.RunCmd, t.SandboxTimeoutS, t.HiddenTests); err != nil {
+				    image = $8, run_cmd = $9, sandbox_timeout_s = $10, hidden_tests = $11,
+				    kind = $12, direction = NULLIF($13,''), solve_cmd = $14, case_time_limit_s = $15, cases = $16, active = true, synced_at = now()`,
+				t.Slug, t.Title, t.Language, t.Difficulty, t.TaskMD, t.RepoTar, t.HiddenTar, t.Image, t.RunCmd, t.SandboxTimeoutS, t.HiddenTests,
+				t.Kind, t.Direction, t.SolveCmd, t.CaseTimeLimitS, t.Cases); err != nil {
 				return fmt.Errorf("tasks: sync %s: %w", t.Slug, err)
 			}
 			slugs = append(slugs, t.Slug)

@@ -49,24 +49,7 @@ func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
 	// Network isolation, resource limits and immediate container removal after
 	// each run remain in place; only in-container filesystem tampering during
 	// a single ephemeral run is no longer prevented.
-	create := exec.CommandContext(ctx, "docker", "create",
-		"--network", "none", "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
-		"--cap-drop=ALL", "--security-opt=no-new-privileges",
-		"--tmpfs", "/tmp:rw,exec,size=512m",
-		// --storage-opt size= would cap the writable layer directly but only
-		// works on a handful of storage drivers (devicemapper, btrfs, zfs,
-		// overlay2-on-xfs-with-pquota) and errors out on anything else, so it
-		// cannot be turned on unconditionally here. --ulimit fsize caps how
-		// large a single file the sandboxed process may create, everywhere:
-		// a malicious diff or test cannot fill the host disk by writing one
-		// huge file into /work (the container's writable layer, not the
-		// size-capped /tmp above). It does not cap many small files summing
-		// past this, but combined with --memory and the timeout in Run, that
-		// residual risk is bounded by how much a single sandbox run can do
-		// before being killed.
-		"--ulimit", "fsize=209715200",
-		"-e", "HOME=/tmp", "-e", "GOCACHE=/tmp/gocache", "-e", "GOPATH=/tmp/gopath", "-e", "GOTMPDIR=/tmp",
-		"-w", "/work", req.Image, "sh", "-c", req.RunCmd)
+	create := exec.CommandContext(ctx, "docker", createArgs(req.Image, "/work", nil, "sh", "-c", req.RunCmd)...)
 	idRaw, err := create.CombinedOutput()
 	if err != nil {
 		return Result{}, fmt.Errorf("sandbox: docker create: %w: %s", err, strings.TrimSpace(string(idRaw)))
@@ -105,6 +88,24 @@ func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
 		return Result{}, fmt.Errorf("sandbox: container failed to start: %s", tail(res.Output, 2000))
 	}
 	return res, nil
+}
+
+// createArgs is the `docker create` command line shared by every sandbox container: no network, resource
+// limits, dropped capabilities. env is extra KEY=VALUE pairs.
+func createArgs(image, workdir string, env []string, cmd ...string) []string {
+	args := []string{"create",
+		"--network", "none", "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
+		"--cap-drop=ALL", "--security-opt=no-new-privileges",
+		"--tmpfs", "/tmp:rw,exec,size=512m",
+		// --ulimit fsize caps how large a single file the sandboxed process may create, everywhere:
+		// storage-opt size= only works on a handful of storage drivers.
+		"--ulimit", "fsize=209715200",
+		"-e", "HOME=/tmp", "-e", "GOCACHE=/tmp/gocache", "-e", "GOPATH=/tmp/gopath", "-e", "GOTMPDIR=/tmp"}
+	for _, e := range env {
+		args = append(args, "-e", e)
+	}
+	args = append(args, "-w", workdir, image)
+	return append(args, cmd...)
 }
 
 func tail(s string, n int) string {

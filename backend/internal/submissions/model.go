@@ -27,6 +27,9 @@ const (
 type TestResult struct {
 	Name   string `json:"name"`
 	Passed bool   `json:"passed"`
+	// Optimize tasks: the case's score and, when invalid, why.
+	Score  *float64 `json:"score,omitempty"`
+	Reason string   `json:"reason,omitempty"`
 }
 
 // Submission is the API shape (see the daily contract).
@@ -37,6 +40,7 @@ type Submission struct {
 	Status        string       `json:"status"`
 	PassedTests   int          `json:"passed_tests"`
 	TotalTests    int          `json:"total_tests"`
+	Score         *float64     `json:"score"`
 	FailureReason *string      `json:"failure_reason"`
 	Tests         []TestResult `json:"tests"`
 	LogTail       string       `json:"log_tail"`
@@ -50,14 +54,14 @@ type RunPayload struct {
 	SubmissionID string `json:"submission_id"`
 }
 
-const cols = `s.id, s.task_slug, s.day::text, s.status, s.passed_tests, s.total_tests, s.failure_reason, s.tests, s.log_tail, s.made_with, s.created_at, s.finished_at`
+const cols = `s.id, s.task_slug, s.day::text, s.status, s.passed_tests, s.total_tests, s.score, s.failure_reason, s.tests, s.log_tail, s.made_with, s.created_at, s.finished_at`
 
 type scanner interface{ Scan(...any) error }
 
 func scan(row scanner) (Submission, error) {
 	var s Submission
 	var tests []byte
-	if err := row.Scan(&s.ID, &s.TaskSlug, &s.Day, &s.Status, &s.PassedTests, &s.TotalTests, &s.FailureReason, &tests, &s.LogTail, &s.MadeWith, &s.CreatedAt, &s.FinishedAt); err != nil {
+	if err := row.Scan(&s.ID, &s.TaskSlug, &s.Day, &s.Status, &s.PassedTests, &s.TotalTests, &s.Score, &s.FailureReason, &tests, &s.LogTail, &s.MadeWith, &s.CreatedAt, &s.FinishedAt); err != nil {
 		return Submission{}, err
 	}
 	s.CreatedAt = s.CreatedAt.UTC()
