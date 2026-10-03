@@ -68,8 +68,8 @@ export default function TanksPage() {
       ) : (
         <div>
           <div className="min-w-0 space-y-10">
-            <section className="rounded-[14px] border border-border bg-card p-5">
-              {data.bot ? (
+            {data.bot && (
+              <section className="rounded-[14px] border border-border bg-card p-5">
                 <>
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -92,21 +92,19 @@ export default function TanksPage() {
                     <BotNameForm currentName={data.bot.name} onSaved={() => void load()} />
                   </div>
                 </>
-              ) : (
-                <>
-                  <h2 className="heading text-xl">No bot yet</h2>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Upload a version below and a bot is created for you automatically.
-                    Pick a name now, or rename it later.
-                  </p>
-                  <div className="mt-4">
-                    <BotNameForm suggestedName={me.user.handle} onSaved={() => void load()} />
-                  </div>
-                </>
-              )}
-            </section>
+              </section>
+            )}
 
             <MakeBot onUploaded={() => void load()} />
+
+            {!data.bot && (
+              <section className="rounded-[14px] border border-border bg-card p-5">
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Your first upload creates the bot with an automatic name. Pick a better one now, or rename it any time.
+                </p>
+                <BotNameForm suggestedName={me.user.handle} onSaved={() => void load()} />
+              </section>
+            )}
 
             <section>
               <SectionTitle aside={data.versions.length > 0 ? `${data.versions.length} total` : undefined}>Versions</SectionTitle>

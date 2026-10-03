@@ -38,13 +38,15 @@ export function BotNameForm({ currentName, suggestedName, onSaved }: {
   return (
     <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-2">
       <div className="flex-1 space-y-1.5">
-        <Label htmlFor="bot-name" className="sr-only">Bot name</Label>
+        <Label htmlFor="bot-name" className={currentName ? 'sr-only' : 'text-xs font-bold text-muted-foreground'}>
+          Bot name (optional)
+        </Label>
         <Input id="bot-name" required pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,31}" value={name}
           onChange={(e) => setName(e.target.value)} className="font-mono" placeholder="my-tank" />
         {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
       </div>
-      <Button type="submit" variant={currentName ? 'outline' : 'default'} disabled={busy || !name || name === currentName}>
-        {busy ? 'Saving…' : currentName ? 'Rename' : 'Choose a name'}
+      <Button type="submit" variant="outline" className={currentName ? undefined : 'sm:mt-[1.375rem]'} disabled={busy || !name || name === currentName}>
+        {busy ? 'Saving…' : currentName ? 'Rename' : 'Save'}
       </Button>
     </form>
   )

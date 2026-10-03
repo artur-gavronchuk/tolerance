@@ -10,13 +10,14 @@ import { MatchList } from '@/components/tanks/match-list'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, ApiError } from '@/lib/api'
-import type { BotProfile, MatchView } from '@/lib/types'
+import type { BotProfile, MatchView, MyTanks } from '@/lib/types'
 
 export default function BotPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [bot, setBot] = useState<BotProfile | null>(null)
   const [matches, setMatches] = useState<MatchView[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [mine, setMine] = useState(false) // the signed-in viewer owns this bot
 
   useEffect(() => {
     void api<BotProfile>(`/tanks/bots/${id}`)
@@ -25,6 +26,10 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
     void api<{ items: MatchView[] }>(`/tanks/matches?bot_id=${id}&limit=20`)
       .then((r) => setMatches(r.items))
       .catch(() => setMatches([]))
+    // Anonymous visitors get a 401 here; that just means no report buttons.
+    void api<MyTanks>('/me/tanks')
+      .then((t) => setMine(t.bot?.id === id))
+      .catch(() => setMine(false))
   }, [id])
 
   if (error) {
@@ -60,7 +65,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
       <PageHeader
         kicker={
           <Link href="/tanks/leaderboard" className="inline-flex items-center gap-1.5 hover:text-foreground">
-            <ArrowLeft className="size-4" />Leaderboard
+            <ArrowLeft className="size-4" />Ladder
           </Link>
         }
         title={
@@ -148,7 +153,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
 
       <section className="mt-10">
         <SectionTitle>Recent matches</SectionTitle>
-        {matches == null ? <Skeleton className="h-64 rounded-[14px]" /> : <MatchList matches={matches} />}
+        {matches == null ? <Skeleton className="h-64 rounded-[14px]" /> : <MatchList matches={matches} botId={id} showReport={mine} />}
       </section>
     </div>
   )

@@ -15,7 +15,10 @@ export function Scoreboard({ players, tanks, killsBySlot, selectedSlot, onSelect
   const sorted = [...players].sort((a, b) => a.slot - b.slot)
   return (
     <div className="rounded-[12px] border border-border bg-card p-3">
-      <p className="mb-2 text-xs font-bold text-muted-foreground">Tanks</p>
+      <p className="mb-2 flex items-baseline justify-between gap-2 text-xs font-bold text-muted-foreground">
+        <span>Tanks</span>
+        <span className="font-normal">health · kills</span>
+      </p>
       <ul className="space-y-2.5">
         {sorted.map((p) => {
           const tank = tanks[p.slot]
@@ -35,7 +38,7 @@ export function Scoreboard({ players, tanks, killsBySlot, selectedSlot, onSelect
                   style={{ width: `${hp}%`, backgroundColor: alive ? color : 'var(--muted-foreground)' }}
                 />
               </span>
-              <span className="w-6 shrink-0 text-right font-mono text-xs tabular-mono text-muted-foreground">
+              <span title="Kills" className="w-6 shrink-0 text-right font-mono text-xs tabular-mono text-muted-foreground">
                 {killsBySlot[p.slot] ?? 0}
               </span>
             </>
@@ -64,6 +67,7 @@ export function Scoreboard({ players, tanks, killsBySlot, selectedSlot, onSelect
           )
         })}
       </ul>
+      <p className="mt-2.5 text-[0.7rem] text-muted-foreground">Struck-through name: tank destroyed.</p>
     </div>
   )
 }

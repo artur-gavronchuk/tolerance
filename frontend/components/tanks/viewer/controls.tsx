@@ -31,9 +31,12 @@ export function Controls({ playing, onPlayPause, speed, onSpeed, tick, maxTick, 
         {playing ? <Pause className="size-3.5" fill="currentColor" /> : <Play className="size-3.5 translate-x-px" fill="currentColor" />}
       </button>
       {live ? (
-        <span className="flex items-center gap-1.5 text-xs font-bold text-primary">
-          <span className="size-2 rounded-full bg-primary animate-status-pulse" />
-          LIVE
+        <span
+          title="Everyone watching sees the same moment of the latest ladder match"
+          className="flex items-center gap-1.5 text-xs font-bold text-primary"
+        >
+          <span className="size-2 rounded-full bg-primary" />
+          Latest match
         </span>
       ) : (
         <input

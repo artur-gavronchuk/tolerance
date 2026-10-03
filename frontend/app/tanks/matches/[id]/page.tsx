@@ -103,6 +103,8 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
   }
 
   const ranked = [...match.players].sort((a, b) => (a.place ?? 99) - (b.place ?? 99))
+  // Only ladder matches change ratings; for checks and tournament games the column would be all dashes.
+  const hasRating = ranked.some((p) => p.rating_before != null && p.rating_after != null)
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
       <PageHeader
@@ -125,6 +127,39 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
         <span className="font-mono text-sm">{match.map} · seed {match.seed} · {match.kind}</span>
       </PageHeader>
 
+      <section className="mt-8">
+        <SectionTitle aside={<span title="Kills are tanks this bot destroyed">Kills = tanks destroyed</span>}>Result</SectionTitle>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Place</TableHead>
+              <TableHead>Bot</TableHead>
+              <TableHead className="text-right">Kills</TableHead>
+              <TableHead className="text-right">Damage</TableHead>
+              <TableHead>Status</TableHead>
+              {hasRating && <TableHead className="text-right">Rating</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {ranked.map((p) => (
+              <TableRow key={p.slot}>
+                <TableCell className="font-mono">{p.place ?? '—'}</TableCell>
+                <TableCell>
+                  <Link href={`/tanks/bots/${p.bot_id}`} className="inline-flex items-center gap-2 font-semibold hover:text-primary">
+                    {p.name}
+                    <BotBadge source={p.source} house={p.house} />
+                  </Link>
+                </TableCell>
+                <TableCell className="text-right font-mono">{p.kills}</TableCell>
+                <TableCell className="text-right font-mono">{p.damage}</TableCell>
+                <TableCell className="text-muted-foreground">{p.status}</TableCell>
+                {hasRating && <TableCell className="text-right font-mono">{ratingDelta(p.rating_before, p.rating_after)}</TableCell>}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </section>
+
       <div className="mt-8">
         {replayState.kind === 'ready' ? (
           <ReplayPlayer replay={replayState.replay} />
@@ -146,39 +181,6 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
           </div>
         )}
       </div>
-
-      <section className="mt-10">
-        <SectionTitle>Result</SectionTitle>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Place</TableHead>
-              <TableHead>Bot</TableHead>
-              <TableHead className="text-right">Kills</TableHead>
-              <TableHead className="text-right">Damage</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Rating</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {ranked.map((p) => (
-              <TableRow key={p.slot}>
-                <TableCell className="font-mono">{p.place ?? '—'}</TableCell>
-                <TableCell>
-                  <Link href={`/tanks/bots/${p.bot_id}`} className="inline-flex items-center gap-2 font-semibold hover:text-primary">
-                    {p.name}
-                    <BotBadge source={p.source} house={p.house} />
-                  </Link>
-                </TableCell>
-                <TableCell className="text-right font-mono">{p.kills}</TableCell>
-                <TableCell className="text-right font-mono">{p.damage}</TableCell>
-                <TableCell className="text-muted-foreground">{p.status}</TableCell>
-                <TableCell className="text-right font-mono">{ratingDelta(p.rating_before, p.rating_after)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </section>
     </div>
   )
 }

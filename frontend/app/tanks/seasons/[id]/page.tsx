@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ArrowLeft, Trophy } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { Countdown } from '@/components/tanks/countdown'
@@ -16,18 +17,27 @@ import type { SeasonDetail, SeasonView } from '@/lib/types'
 
 export default function SeasonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const router = useRouter()
   const [d, setD] = useState<SeasonDetail | null>(null)
   const [all, setAll] = useState<SeasonView[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setD(null)
+    // The current season is the Ladder page; this page is for archived seasons.
+    if (id === 'current') {
+      router.replace('/tanks/leaderboard')
+      return
+    }
     void tanks
       .season(id)
-      .then(setD)
+      .then((r) => {
+        if (r.season.status === 'active') router.replace('/tanks/leaderboard')
+        else setD(r)
+      })
       .catch((e) => setError((e as ApiError).status === 404 ? 'There is no season with this id.' : (e as ApiError).message))
     void tanks.seasons().then(setAll).catch(() => {})
-  }, [id])
+  }, [id, router])
 
   if (error) {
     return (
@@ -99,7 +109,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
             {all.map((x) => (
               <Link
                 key={x.id}
-                href={`/tanks/seasons/${x.id}`}
+                href={x.status === 'active' ? '/tanks/leaderboard' : `/tanks/seasons/${x.id}`}
                 className={cn(
                   'rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground',
                   x.id === s.id && 'bg-muted text-foreground',
