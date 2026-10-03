@@ -14,6 +14,7 @@ import { useT } from '@/lib/i18n/client'
 import { dailyMessages } from '@/lib/i18n/messages/daily'
 import { formatDate } from '@/lib/i18n/core'
 import { api, ApiError } from '@/lib/api'
+import { AccountManage } from '@/components/account/manage'
 import { UploadLinkManage } from '@/components/upload-link/manage'
 import { useMe } from '@/lib/use-me'
 import type { Profile, ProfileDay } from '@/lib/types'
@@ -101,6 +102,7 @@ export function ProfileView({ handle }: { handle: string }) {
       <div className="max-w-sm"><StreakStrip hideNumbers solved={p.days.filter((d) => d.status === 'passed').map((d) => d.day)} streak={p.streak} /></div>
 
       {isMe && <UploadLinkManage />}
+      {isMe && <AccountManage handle={p.handle} />}
 
       <section>
         <SectionTitle>{t('last12')}</SectionTitle>

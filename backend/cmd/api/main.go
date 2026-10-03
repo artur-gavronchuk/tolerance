@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"tolerance/internal/account"
 	adminpkg "tolerance/internal/admin"
 	"tolerance/internal/analytics"
 	"tolerance/internal/daily"
@@ -78,7 +79,7 @@ func main() {
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), daily: dailySvc,
 		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: productsSvc, admin: adminpkg.NewService(pool), moderation: moderation.NewService(pool), stacks: stacks.NewService(pool), profiles: profiles.NewService(pool),
-		uploadLinks: uploadlink.NewService(pool), recap: recapSvc, notify: notify.NewService(pool, gamesSvc, productsSvc, recapSvc), analytics: analyticsSvc,
+		uploadLinks: uploadlink.NewService(pool), account: account.NewService(pool), recap: recapSvc, notify: notify.NewService(pool, gamesSvc, productsSvc, recapSvc), analytics: analyticsSvc,
 		limiter:   ratelimit.New(nil),
 		providers: providersFromConfig(cfg),
 	}

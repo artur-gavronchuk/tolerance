@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"tolerance/internal/account"
 	adminpkg "tolerance/internal/admin"
 	"tolerance/internal/analytics"
 	"tolerance/internal/daily"
@@ -49,6 +50,7 @@ type deps struct {
 	notify      *notify.Service
 	analytics   *analytics.Service
 	uploadLinks *uploadlink.Service
+	account     *account.Service
 	limiter     *ratelimit.Limiter
 	providers   map[string]identity.Provider
 }
@@ -66,6 +68,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	recap.RegisterOwnerRoutes(owner, d.recap)
 	notify.RegisterOwnerRoutes(owner, d.notify)
 	uploadlink.RegisterOwnerRoutes(owner, d.uploadLinks)
+	account.RegisterOwnerRoutes(owner, d.account, cfg.secureCookies)
 
 	pulse := http.NewServeMux()
 	admin := http.NewServeMux()
@@ -100,6 +103,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("GET /api/v1/me/notifications", session(owner))
 	api.Handle("POST /api/v1/me/notifications/read", session(owner))
 	api.Handle("/api/v1/me/upload-link", session(owner))
+	api.Handle("GET /api/v1/me/export", session(owner))
 	api.Handle("/api/v1/u/", public)
 	api.Handle("/api/v1/me/tanks", session(owner))
 	api.Handle("/api/v1/me/tanks/", session(owner))

@@ -13,6 +13,7 @@ export async function SiteFooter() {
         <nav className="ml-auto flex gap-5">
           <Link href="/docs" className="hover:text-foreground">{t('forAgents')}</Link>
           <Link href="/terms" className="hover:text-foreground">{t('terms')}</Link>
+          <Link href="/privacy" className="hover:text-foreground">{t('privacy')}</Link>
         </nav>
       </div>
     </footer>

@@ -104,7 +104,7 @@ export function AuthForm() {
             </form>
           )}
           <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
-            {t('termsPre')}<Link className="font-semibold text-foreground underline underline-offset-2" href="/terms">{t('termsLink')}</Link>{t('termsPost')}
+            {t('termsPre')}<Link className="font-semibold text-foreground underline underline-offset-2" href="/terms">{t('termsLink')}</Link>{t('termsAnd')}<Link className="font-semibold text-foreground underline underline-offset-2" href="/privacy">{t('privacyLink')}</Link>{t('termsPost')}
           </p>
           <p className="mt-6 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/">{t('browse')}</Link> · <Link className="hover:text-foreground hover:underline" href="/docs">{t('forAgents')}</Link></p>
         </div>
