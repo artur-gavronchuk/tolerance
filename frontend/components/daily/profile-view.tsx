@@ -7,6 +7,7 @@ import { Check, X } from 'lucide-react'
 import { SectionTitle } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { StreakStrip } from '@/components/profile/streak-strip'
 import { StackName, displayStack, localizeStack } from '@/components/daily/stack-label'
 import { errorText } from '@/lib/format'
 import { useT } from '@/lib/i18n/client'
@@ -96,6 +97,7 @@ export function ProfileView({ handle }: { handle: string }) {
         <Stat label={t('bestStreak')} value={p.streak.best} />
         <Stat label={t('daysSolved')} value={`${p.solved_days}/${p.played_days}`} />
       </div>
+      <div className="max-w-sm"><StreakStrip hideNumbers solved={p.days.filter((d) => d.status === 'passed').map((d) => d.day)} streak={p.streak} /></div>
 
       <section>
         <SectionTitle>{t('last12')}</SectionTitle>

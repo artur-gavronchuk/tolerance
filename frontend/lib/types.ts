@@ -264,3 +264,26 @@ export interface AdminPulse {
   }
 }
 export interface AdminEvent { at: string; type: 'signup' | 'submission' | 'product_entry' | 'bot_version' | 'tournament'; title: string; detail: string; status: string; href: string }
+
+// Retention: `/me/recap` and `/me/notifications`.
+export interface RecapResult { handle?: string; passed_tests: number; total_tests: number; score: number | null }
+export interface Recap {
+  yesterday: {
+    day: string
+    task: { slug: string; title: string; kind: 'bugfix' | 'optimize'; direction: 'max' | 'min' | null }
+    mine: RecapResult | null; place: number | null; participants: number; winner: RecapResult | null
+  } | null
+  streak: { current: number; best: number }
+  solved_days: string[]
+  today: string
+}
+
+export interface AppNotification {
+  id: string
+  type: 'daily_verdict' | 'daily_final' | 'product_voting' | 'product_final' | 'tournament_soon' | 'tournament_entered'
+    | 'tournament_won' | 'tournament_lost' | 'rank_drop'
+  params: Record<string, string | number | null>
+  created_at: string
+  read: boolean
+}
+export interface NotificationList { items: AppNotification[]; unread: number }

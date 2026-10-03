@@ -19,11 +19,13 @@ import (
 	"tolerance/internal/games"
 	"tolerance/internal/games/match"
 	"tolerance/internal/identity"
+	"tolerance/internal/notify"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/limits"
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/products"
 	"tolerance/internal/profiles"
+	"tolerance/internal/recap"
 	"tolerance/internal/sandbox"
 	"tolerance/internal/stacks"
 	"tolerance/internal/submissions"
@@ -64,10 +66,13 @@ func main() {
 	}
 	gamesSvc := games.NewService(pool, launcher, log, games.Config{WorkDir: cfg.workDir})
 	dailySvc := daily.NewService(pool)
+	productsSvc := products.NewService(pool)
+	recapSvc := recap.NewService(pool, dailySvc)
 
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), daily: dailySvc,
-		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: products.NewService(pool), admin: adminpkg.NewService(pool), stacks: stacks.NewService(pool), profiles: profiles.NewService(pool),
+		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: productsSvc, admin: adminpkg.NewService(pool), stacks: stacks.NewService(pool), profiles: profiles.NewService(pool),
+		recap: recapSvc, notify: notify.NewService(pool, gamesSvc, productsSvc, recapSvc),
 		limiter:   ratelimit.New(nil),
 		providers: providersFromConfig(cfg),
 	}

@@ -1,5 +1,5 @@
 import type {
-  AdminEvent, AdminPulse, CompareJudged, CompareNext, ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
+  AdminEvent, AdminPulse, NotificationList, Recap, CompareJudged, CompareNext, ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
 } from './types'
 
 export class ApiError extends Error {
@@ -96,4 +96,10 @@ export const tanks = {
 export const admin = {
   pulse: () => api<AdminPulse>('/admin/pulse'),
   recent: () => api<{ items: AdminEvent[] }>('/admin/recent').then((r) => r.items),
+}
+
+export const retention = {
+  recap: () => api<Recap>('/me/recap'),
+  notifications: () => api<NotificationList>('/me/notifications'),
+  markNotificationsRead: () => post<{ ok: boolean }>('/me/notifications/read'),
 }

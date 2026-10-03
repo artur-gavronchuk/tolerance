@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n/client'
 import { navMessages } from '@/lib/i18n/messages/nav'
 import { LocaleSwitch } from '@/components/public/locale-switch'
+import { NotificationBell } from '@/components/public/notification-bell'
 
 type NavKey = keyof typeof navMessages.en
 
@@ -88,6 +89,7 @@ export function SiteHeader({ returnTo }: { returnTo?: string }) {
               {me.can_admin && (
                 <Link href="/admin" className="hidden h-9 items-center rounded-full px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground sm:flex">{t('admin')}</Link>
               )}
+              <NotificationBell />
               <Link href={`/u/${encodeURIComponent(me.user.handle)}`} title={t('myProfile')}
                 className="flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm hover:border-primary">
                 <span className="max-w-[8rem] truncate font-bold">{me.user.handle}</span>

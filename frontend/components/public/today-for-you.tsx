@@ -5,13 +5,14 @@ import Link from 'next/link'
 import { Code2, Swords, Trophy } from 'lucide-react'
 import { Countdown } from '@/components/daily/countdown'
 import { Countdown as TanksCountdown } from '@/components/tanks/countdown'
-import { api, products, tanks } from '@/lib/api'
+import { RecapCard } from '@/components/public/recap-card'
+import { api, products, retention, tanks } from '@/lib/api'
 import { fmtScore } from '@/components/daily/daily-board'
 import { useMe } from '@/lib/use-me'
 import { useT } from '@/lib/i18n/client'
 import { formatDate, type T } from '@/lib/i18n/core'
 import { shellMessages } from '@/lib/i18n/messages/shell'
-import type { Daily, MyTanks, ProductDetail, Showcase, SeasonDetail } from '@/lib/types'
+import type { Daily, MyTanks, Recap, ProductDetail, Showcase, SeasonDetail } from '@/lib/types'
 
 type TT = T<typeof shellMessages.en>
 type Tile = { key: string; icon: typeof Code2; label: string; href: string; headline: React.ReactNode; sub: React.ReactNode }
@@ -90,6 +91,7 @@ export function TodayForYou() {
   const { me } = useMe()
   const t = useT(shellMessages)
   const [tiles, setTiles] = useState<Record<string, Tile | null>>({})
+  const [recap, setRecap] = useState<Recap | null>(null)
   const handle = me?.user.handle
 
   useEffect(() => {
@@ -100,14 +102,16 @@ export function TodayForYou() {
         .then((t) => live && setTiles((cur) => ({ ...cur, [t.key]: t })))
         .catch(() => {})
     }
+    retention.recap().then((r) => live && setRecap(r)).catch(() => {})
     return () => { live = false }
   }, [handle, t])
 
   const shown = ['daily', 'products', 'tanks'].map((k) => tiles[k]).filter((t): t is Tile => !!t)
-  if (!me || shown.length === 0) return null
+  if (!me || (shown.length === 0 && !recap)) return null
   return (
     <section aria-label={t('forYou')} className="mb-8">
       <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('forYou')}</h2>
+      {recap && <RecapCard recap={recap} />}
       <ul className="grid gap-2 sm:grid-cols-3">
         {shown.map((t) => (
           <li key={t.key} className="min-w-0">

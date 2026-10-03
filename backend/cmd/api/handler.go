@@ -13,6 +13,7 @@ import (
 	"tolerance/internal/daily"
 	"tolerance/internal/games"
 	"tolerance/internal/identity"
+	"tolerance/internal/notify"
 	"tolerance/internal/platform/clientip"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
@@ -20,6 +21,7 @@ import (
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/products"
 	"tolerance/internal/profiles"
+	"tolerance/internal/recap"
 	"tolerance/internal/stacks"
 	"tolerance/internal/submissions"
 	"tolerance/internal/tasks"
@@ -36,6 +38,8 @@ type deps struct {
 	admin       *adminpkg.Service
 	stacks      *stacks.Service
 	profiles    *profiles.Service
+	recap       *recap.Service
+	notify      *notify.Service
 	limiter     *ratelimit.Limiter
 	providers   map[string]identity.Provider
 }
@@ -49,6 +53,8 @@ func newHandler(cfg config, d deps) http.Handler {
 	submissions.RegisterOwnerRoutes(owner, d.submissions)
 	games.RegisterOwnerRoutes(owner, d.games)
 	products.RegisterOwnerRoutes(owner, d.products, cfg.devLogin)
+	recap.RegisterOwnerRoutes(owner, d.recap)
+	notify.RegisterOwnerRoutes(owner, d.notify)
 
 	pulse := http.NewServeMux()
 	admin := http.NewServeMux()
@@ -71,6 +77,9 @@ func newHandler(cfg config, d deps) http.Handler {
 	// Public: the local `arena tanks new|play` tool is downloadable without an account.
 	api.HandleFunc("GET /api/v1/connector/download", connectorDownload(cfg.connectorDir))
 	api.Handle("/api/v1/me", session(owner))
+	api.Handle("GET /api/v1/me/recap", session(owner))
+	api.Handle("GET /api/v1/me/notifications", session(owner))
+	api.Handle("POST /api/v1/me/notifications/read", session(owner))
 	api.Handle("/api/v1/me/tanks", session(owner))
 	api.Handle("/api/v1/me/tanks/", session(owner))
 	api.Handle("/api/v1/submissions", session(owner))
