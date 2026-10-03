@@ -43,7 +43,7 @@ set_env_var() {
 
 echo "==> Allocating dev-server ports for this workspace"
 
-port_base=$(arena_allocate_port_base 0 1) || {
+port_base=$(arena_allocate_port_base 0 1 2) || {
   echo "  Could not allocate a port base, leaving .env ports untouched" >&2
   port_base=""
 }
@@ -51,11 +51,13 @@ port_base=$(arena_allocate_port_base 0 1) || {
 if [ -n "$port_base" ]; then
   web_port=$((port_base + 0))
   api_port=$((port_base + 1))
+  pg_port=$((port_base + 2))
 
   set_env_var WEB_PORT "$web_port"
   set_env_var API_PORT "$api_port"
+  set_env_var PG_PORT "$pg_port"
 
-  echo "  web=${web_port} api=${api_port}"
+  echo "  web=${web_port} api=${api_port} postgres=${pg_port}"
 fi
 
 echo "==> Setup complete"

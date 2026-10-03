@@ -2,357 +2,118 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Prototype mode (since 2026-10-03) — read first
+
+The product concept is still changing week to week (tanks, skills, challenges
+may all be redone). The goal is a working skeleton, fast. This section
+overrides the superpowers skills and any default habits:
+
+- **Write code directly.** No brainstorming sessions, no specs or task-by-task
+  plans in `docs/`, no subagent-driven-development, no TDD, no per-task or
+  whole-branch reviews — unless the user asks for one. If a change needs a
+  plan, a short list of steps in chat is enough.
+- **Tests only where hand-checking is hard**: verdict rules, rating math,
+  concurrent claims. Don't write tests for new screens/endpoints. When code is
+  rewritten or thrown away, delete its tests instead of fixing them.
+- **"Done" = it compiles and works locally**: `make test-fast`, then `make dev`
+  (or `make up`) and the flow clicked through. Full `make test` is optional.
+  CI (`ci.yml`) is manual-only (`workflow_dispatch`); nothing runs on push.
+- **Throwing code away is fine.** When the concept changes, delete the old
+  feature (code, routes, pages, tests) rather than keeping it compatible.
+- **No ops work** unless asked. The whole production stack (Caddy, canary
+  releases, monitoring, backups, `deploy/`, `deploy.yml`) was cut from `main`;
+  it lives at git tag `ops-snapshot-2026-10-03` — restore from there when the
+  product is ready to ship. tolerance.cc keeps running the last deployed build.
+- **Docs**: don't update `README.md` or `docs/` specs. Update this file only
+  with what would trip up the next session.
+- **Git**: commit to `main` directly (`git pull --rebase` first — other
+  sessions push too), no PRs needed.
+
 ## What this is
 
-The product and the repo are both named **tolerance** (lowercase; site
-https://tolerance.cc; it was called Agent Arena until 2026-09-25). The
-connector command stays `arena`, as do `~/.arena`, the `ARENA_` env prefix and
-the `arena` database. An agent owner signs
-up, creates an agent, runs the `arena` connector on their own machine, and the
-platform hands that connector a proof task. The agent solves it locally, the
-connector returns a diff, and the platform replays the diff against hidden tests
-in a Docker sandbox. Model keys and agent code never leave the owner's machine.
+**tolerance** (site https://tolerance.cc; formerly Agent Arena — the connector
+command, `~/.arena`, the `ARENA_` env prefix and the `arena` database keep that
+name). An agent owner signs up, creates an agent, runs the `arena` connector on
+their machine; the platform hands it a task, the agent solves it locally, the
+connector returns a diff, and the platform replays the diff against hidden
+tests in a Docker sandbox. Model keys and agent code never leave the owner's
+machine.
 
-This repository is public, so hidden tests in it are known to everyone:
-`backend/fixtures/*` tasks are practice tasks. The rating pool of hidden skill
-tasks lives in the private repo `artur-gavronchuk/arena-tasks` and is mounted
-on the server (see the slice 2 plan). Never copy those tasks here.
+This repository is public: `backend/fixtures/*` tasks are practice tasks. The
+real hidden rating tasks live in the private repo `artur-gavronchuk/arena-tasks`.
+Never copy those tasks here.
 
-Monorepo, two separately deployable apps: `backend/` (Go API + connector CLI)
-and `frontend/` (Next.js owner dashboard, talks to the backend over HTTP only).
-
-**Source of truth for the current design** (all in Russian, all under `docs/superpowers/`):
-
-- `specs/2026-09-23-platform-roadmap.md` — the whole platform in slices and the
-  decisions taken up front. Read this first for where a change fits. Revised
-  2026-09-25: the product is an arena (connect → prove → rating → competitions);
-  the labor market (jobs, money, autopilot) is deferred and its specs are not executed.
-- Slice 1, complete: spec `specs/2026-09-23-agent-connect-and-proof-design.md`,
-  task-by-task plan `plans/2026-09-23-agent-connect-and-proof.md`.
-- Slice 2 (qualification and rating), built and merged:
-  `specs/2026-09-23-qualification-and-rating-design.md` + its plan.
-  Tanks (a public bot tournament whose bots are written by agents) is built:
-  `specs/2026-09-25-tanks-arena-design.md` + `plans/2026-09-25-tanks-arena.md`.
-  Slice 3 (competitions and the public arena), built:
-  `specs/2026-09-30-competitions-and-public-arena-design.md` +
-  `plans/2026-09-30-competitions-and-public-arena.md`. Slice 4 (version change
-  classes, several agents per owner) comes from the old challenges-and-versions
-  spec and is not started; it is also what would lift `agents`' one-agent-per-owner
-  unique index. Jobs, money and autopilot specs are kept as deferred hypotheses.
-
-The product direction is revised often. Check a doc's date before trusting it, and
-when a doc and the code disagree, trust the code (`backend/internal/*`, `frontend/app/*`).
-
-**`README.md` and `backend/README.md` are current** — Task 14 rewrote both for
-slice 1 (no more competitions, submissions, leaderboards, LLM judge, OIDC/Dex).
-`backend/docs/agent-arena-research-and-product-design.md` is background research,
-not a description of what is built.
-
-Implementation status: slice 1 (plan Tasks 1–14) is complete, including the
-dashboard, the proof page, and ops (Caddy, backups, CI). A whole-branch review
-after Task 14 found and fixed critical issues in proof verdict integrity, the
-sandbox's file-apply safety, and the deploy stack; see that plan's own
-"Самопроверка" section and its SDD workspace ledger
-(`.superpowers/sdd/2026-09-23-agent-connect-and-proof/progress.md`, if still
-present) for what was fixed vs. deliberately deferred as follow-up work
-(connector retry/backoff, a read-only `arena status` endpoint, the full
-read-only/tmpfs sandbox redesign).
+Monorepo: `backend/` (Go API + connector CLI, module `tolerance`) and
+`frontend/` (Next.js, talks to the backend over HTTP only). When old docs in
+`docs/superpowers/` and the code disagree, trust the code.
 
 ## Commands
 
-Whole stack (Docker, from the repo root):
-
 ```sh
-make up        # postgres, api, web; site on http://localhost:3000, api on :8080
-make logs
-make down      # make reset also wipes the DB volume
-```
-Reads `.env` (created from `.env.example` on first `make up`). No seeded login —
-sign in through GitHub, Google, or (locally) the dev login. `make up` auto-detects the docker.sock group
-(`DOCKER_GID`) so the API container's sandbox can reach the daemon.
+make dev         # postgres in Docker + migrate, then api and web natively (Ctrl-C stops both)
+make up          # whole stack in Docker: postgres, migrate, api (all roles), web
+make down        # make reset also wipes the DB volume
+make migrate     # goose migrations + catalog sync
+make run-api     # native API alone;  ARENA_SANDBOX=fake runs without Docker
+make run-web     # pnpm dev, proxying /api to the native API
+make images      # sandbox + bot runtime images, built only when missing
+make test-fast   # go vet + go test (minus the slow sandbox package) + pnpm typecheck
+make test        # everything: -race, ARENA_TEST_REQUIRE_DOCKER=1, frontend build
 
-Native/backend dev (`postgres` from compose, `api`/`web` on the host):
-
-```sh
-make migrate                  # goose migrations + sync fixtures/proofs into proof_tasks
-make run-api                  # go run ./cmd/api
-make run-web                  # pnpm dev, proxying /api to the native API
-make test                     # backend go test -race + frontend typecheck/build
-make check                    # go vet ./... && gofmt -l . (backend only)
-
-cd backend && go test -race ./internal/proofs/...            # one package
-cd backend && go test -race -run TestExpireStale ./internal/proofs   # one test
+cd backend && go test ./internal/proofs/...   # one package
 ```
 
-Frontend (`cd frontend`, pnpm — there is no npm lockfile):
+Ports come from `.env` (`WEB_PORT`, `API_PORT`, `PG_PORT`; Superset's
+`.superset/setup.sh` assigns free ones per workspace). Frontend uses pnpm.
+Sign in locally through the dev login (`ARENA_DEV_LOGIN=true`).
 
-```sh
-pnpm install
-pnpm dev        # next dev on :3000, proxies /api/* to $API_URL (default http://127.0.0.1:8080)
-pnpm typecheck  # tsc --noEmit
-pnpm build
-```
+Integration tests (`*_integration_test.go`) use testcontainers Postgres and
+skip without Docker. With Colima, if testcontainers can't find the socket:
+`export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock TESTCONTAINERS_RYUK_DISABLED=true`.
+`internal/games/match` tests need `python3` and `node` on `PATH`.
 
-CI (`.github/workflows/ci.yml`) runs `go vet`/`gofmt`/`go test -race` with
-`ARENA_TEST_REQUIRE_DOCKER=1` for backend, `pnpm typecheck && pnpm build` for
-frontend. Match that locally before claiming work is done. The 375px `mobile`
-job runs only on a manual dispatch of `ci`.
+The e2e test's OpenAPI response validation is off unless
+`ARENA_TEST_CONTRACT=1`; `openapi.yaml` does not need to track new routes.
 
-**Active build phase (since 2026-10-03):** speed of building the product comes
-first. Merges to `main` do not deploy — `deploy.yml` is `workflow_dispatch`
-only, canary off by default. "Done" means it works locally (`make test`,
-`make up`, the flow run end to end), not a green deploy. Don't add ops work
-(canary, monitoring, alerting, scaling) unless asked; keep specs and plans
-short and review once per feature, not per task.
-
-### Docker-dependent tests
-
-Integration tests (`*_integration_test.go`) start a real Postgres via
-testcontainers, and `internal/proofs/sandbox` builds and runs a real container.
-They **skip** when Docker is unreachable — set `ARENA_TEST_REQUIRE_DOCKER=1` to
-turn those skips into failures. A skipped integration test is not a passing one;
-don't report it as green. Under some Colima setups, testcontainers-go's
-provider auto-detection doesn't resolve Colima's non-default socket path —
-if you hit "rootless Docker not found" with the strict flag set, try:
-
-```sh
-export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock
-export TESTCONTAINERS_RYUK_DISABLED=true   # tests Terminate() in t.Cleanup themselves
-```
-
-The `internal/proofs/sandbox` package's own tests invoke the `docker` CLI
-directly (not testcontainers) and are unaffected by that quirk.
-
-`internal/games/match` needs `python3` and `node` on `PATH`, and
-`internal/games/qualify_integration_test.go` needs `python3` — they run the
-tanks house/starter bots as real processes (`match.ProcessLauncher`) the
-same way `ARENA_SANDBOX=fake` does. Missing an interpreter fails those tests
-under `ARENA_TEST_REQUIRE_DOCKER=1`; without that flag they skip instead.
-
-## Architecture
-
-Go module is `tolerance`; all env vars are prefixed `ARENA_`; Postgres database
-`arena` with two roles, `arena_migrate` (owns the schema) and `arena_app` (what
-the API connects as). `cmd/api` never migrates; `cmd/migrate` does, and also
-syncs the on-disk proof catalog into `proof_tasks`.
+## Map
 
 ```
-backend/cmd/api          config, handler (all routing), main (server + worker goroutine), main_test (e2e)
-backend/cmd/migrate      goose up + catalog sync
-backend/cmd/arena        the owner-side connector CLI: login, init, connect, status, tanks new|play|submit
-backend/internal/identity  GitHub/Google OAuth (state + PKCE), dev login, sessions, RequireSession/RequireAgent, /auth/*, /me
-backend/internal/agents    agent, API keys, presence, derived stage, /agent/*, /connector/heartbeat
-backend/internal/proofs    proof lifecycle, catalog, owner + connector HTTP, worker, sandbox/
-backend/internal/games     tanks arena: bots/versions, the check, ladder, worker, HTTP (owner, connector, public)
-backend/internal/games/tanks    engine, protocol, maps, house bots, Python/JS starters
-backend/internal/games/match    match runner: Spec/Launcher, process and Docker launchers, house wrapper
-backend/internal/games/botpkg   bot archive validation (size, file count, macOS junk, language)
-backend/internal/games/rating   TrueSkill-style μ/σ rating update
-backend/internal/skills    skill catalog, task pool, exposure counting and retirement, /skills
-backend/internal/skillrating  the rating formula as pure functions (Apply, Remove, Tier, Access)
-backend/internal/qualifications  qualification runs: start, worker-driven advance, scoring, ratings
-backend/internal/arena     the public per-skill leaderboard (read-only), /leaderboard
-backend/internal/challenges  challenges: entry, ranking, close/publish, the clock tick, public + admin HTTP
-backend/internal/admin     operator API behind identity.RequireAdmin: retire a task, void a run, ban an agent
-backend/internal/platform  db, dbtest, httpx, jobs, auth (API keys), audit, idgen, ratelimit, sanitize
-backend/fixtures/proofs    proof task definitions (the tanks-bot task is synced by games.Sync instead, see below)
-backend/contracts/openapi  openapi.yaml + validator used by the e2e test
+backend/cmd/api            config, handler.go (ALL routing), main (server + workers), e2e test
+backend/cmd/migrate        goose up + catalog sync (proofs, skills, tanks house bots)
+backend/cmd/arena          connector CLI: login, init, connect, status, tanks …
+backend/internal/identity  OAuth (GitHub/Google), dev login, sessions, RequireSession/RequireAgent/RequireAdmin
+backend/internal/agents    agents, API keys, presence, derived stage
+backend/internal/proofs    proof lifecycle, worker, sandbox/ (docker | fake)
+backend/internal/games     tanks: bots, versions, check, ladder, match runner, rating
+backend/internal/skills, skillrating, qualifications, arena, challenges, admin
+backend/internal/platform  db, dbtest, httpx, jobs queue, auth, sanitize, …
+backend/fixtures           practice proof and skill tasks (`_hidden/` = hidden tests)
+frontend/app, frontend/lib types.ts (API types), api.ts (fetching)
 ```
 
-**Two auth schemes, two route groups.** `cmd/api/handler.go` is the single place
-routing is declared. Owner routes (`/api/v1/me`, `/agent*`, `/proof-tasks`,
-`/proofs*`, `/me/tanks*`) sit behind `identity.RequireSession` — an HttpOnly
-session cookie, 30 days, only the hash stored. Connector routes
-(`/api/v1/connector/*`, including `/connector/tanks/versions`) sit behind
-`identity.RequireAgent` — `Authorization: Bearer <api key>`, SHA-256 in
-the database, plaintext shown once at creation. `/api/v1/tanks/*`
-(leaderboard, matches, a match's replay, a bot's profile, the live broadcast)
-is public — no session, no API key, so it can be embedded on `/tanks/*` pages
-without a login. Adding a route means adding it to the right mux *and* to
-`contracts/openapi/openapi.yaml`.
+Owner routes use a session cookie (`RequireSession`), connector routes
+`/api/v1/connector/*` use `Authorization: Bearer <api key>` (`RequireAgent`),
+public routes (leaderboard, agent profiles, challenges, `/tanks/*`) need
+neither.
 
-Owner sign-in is OAuth only (GitHub, Google); `ARENA_DEV_LOGIN=true` adds
-`POST /auth/dev` for local runs and CI and is refused next to
-`ARENA_SECURE_COOKIES=true`.
+Proof states: `queued → claimed → running_agent → diff_submitted →
+running_sandbox → passed | failed | infra_error | expired`. The worker runs
+inside `cmd/api` and dispatches on `proofs.kind` (`proof | game_bot |
+qualification | challenge`). Agent stage is derived, never stored.
 
-**Proof lifecycle** (the spine of the product):
+## Rules that stay even in prototype mode
 
-```
-queued → claimed → running_agent → diff_submitted → running_sandbox
-       → passed | failed | infra_error | expired
-```
-
-`POST /proofs` enqueues. The connector long-polls `GET /connector/tasks/next`
-(25s), which moves `queued → claimed` atomically — concurrent pollers must yield
-the task to exactly one. It downloads the repo tarball, runs `agent.command` via
-`sh -c`, and posts `{diff, log_tail, duration_ms, exit_code}`, which enqueues a
-`run_proof` job (dedupe key is intentionally empty — a retried proof reuses its
-id, so a fixed dedupe key would silently swallow the resubmission's job).
-`internal/proofs/worker.go` runs inside `cmd/api` (a goroutine, not a separate
-process): it drains the `jobs` queue (`FOR UPDATE SKIP LOCKED` with leases and
-backoff, `internal/platform/jobs`) and ticks stale proofs to `expired` (or
-`infra_error`, for proofs stuck mid-run) every 30s.
-
-`infra_error` means the platform failed (no image, docker error, a job stuck
-past its bound) and is never counted against the agent — it is retryable.
-`failed` means the diff didn't apply, touched a `*_test.go` file, or a hidden
-test didn't run or didn't pass — a `passed` verdict requires every hidden test
-by name to have actually run and passed, not just "no failures reported."
-`worker.go`'s `applyDiff` uses plain `git apply` (no `--unsafe-paths`) so a
-malicious diff can't write outside the sandbox work directory. Keep both
-properties when touching the worker.
-
-`proofs.kind` is `proof | game_bot | qualification | challenge` (`proof_tasks.kind`
-stays `proof | game_bot`; default `proof`,
-CHECK constraints `proofs_kind_check` / `proof_tasks_kind_check` — unnamed in
-the migration, so Postgres names them after `<table>_<column>_check`; slice 2
-will widen the set). A `game_bot` proof is how an agent improves its tanks
-bot: `games.StartAgentRun` builds a one-off repo (the bot's active version or
-the Python starter, plus `GAME.md`/`RESULTS.md`) and calls
-`proofs.CreateWithRepo`, which stores it on the proof row itself via the
-`proofs.repo_tar`/`repo_sha256` columns instead of pointing at a shared
-`proof_tasks` catalog entry — every agent's tanks-bot proof has its own repo.
-`worker.go` dispatches on `kind`: a `game_bot` proof's diff is judged by
-`games.Service.JudgeProof` (`proofs.GameBotJudge`), which applies the diff,
-packages it as a bot archive via `botpkg`, and runs the check match, instead
-of the sandbox's `go test -json`.
-
-**Agent stage** (`registered, offline, connected, checking, operational,
-check_failed`) is never stored — it is derived in `internal/agents/stage.go` from
-presence freshness (2 min) plus proof history. Don't add a column for it.
-
-**Sandbox.** `internal/proofs/sandbox` is a `Runner` interface with `docker` and
-`fake` implementations; `ARENA_SANDBOX=fake` selects the fake for local runs
-without Docker (its `PassAll` mode still checks hidden-test names, so it stays
-honest about the same verdict rule real runs enforce). The docker runner copies
-the work dir into a container with `--network none`, cpu/memory/pids limits,
-`--cap-drop=ALL --security-opt=no-new-privileges`, a capped output reader, and
-parses `go test -json`. `--read-only` is deliberately not set — see the comment
-above `Docker.Run` for why, and the plan file's Task 7 for a sketched
-tar-over-stdin alternative that hasn't been built yet.
-
-**Proof task fixtures** live in `backend/fixtures/proofs/<slug>/`: `manifest.json`,
-`TASK.md`, `repo/` (what the agent sees), `_hidden/` (copied over `repo/` before
-the sandbox run). The directory is `_hidden`, not `hidden` — the underscore keeps
-the Go toolchain from compiling it. The catalog is tarred and stored in
-`proof_tasks`, idempotent by slug, on every `cmd/migrate` run.
-
-Nothing builds the sandbox image outside tests or `make up`:
-`internal/proofs/sandbox/docker_integration_test.go` does
-`docker build -t arena-proof-go:1` itself, and the root `Makefile`'s
-`proof-image` target does the same for `make up`. A real proof run needs that
-image present on the host already.
-
-Note that the `tanks-bot` proof task (see below) is not one of these fixtures:
-`games.Sync` builds and upserts it (Python repo, hidden files, image
-`arena-tanks-bot:1` — a label only; bot code never runs in the proof sandbox,
-only the diff-apply and packaging step does) from `cmd/migrate` alongside the
-house bots, the same way `cmd/migrate` syncs `backend/fixtures/proofs`.
-
-**Tanks arena.** `internal/games` is a public bot tournament (game `tanks`)
-built the same way as proofs: an agent's `game_bot` proof produces a bot
-version, versions run matches, matches feed a rating. `game_bots` are owned
-by a user (`house = false`) or built into the platform (`house = true`,
-`internal/games/tanks/house`: `idle`, `sniper`, `hunter`). A `bot_versions`
-row is `pending` until it passes a **check**: a 1v1 match against the house
-`idle` bot (`qualify.go`), gated on `beats_idle` among other checks — only a
-`pending` version that wins is promoted to `active`. Versions come from three
-`source`s: `agent` (via a `game_bot` proof, see above), `upload` (owner posts
-an archive validated by `botpkg` — size/file-count/language, macOS zip junk
-stripped), `house` (seeded by `games.Sync`). Once a bot has an `active`
-version, `internal/games/worker.go` schedules it into the **ladder**: house
-matches run at most every 2 minutes, everything else on `ARENA_MATCH_INTERVAL`
-(default 20s) with up to `ARENA_MATCH_CONCURRENCY` (default 1) matches
-running at once, each played by `internal/games/match.Run` against
-`internal/games/tanks` (the deterministic engine) and rated by
-`internal/games/rating` (TrueSkill-style μ/σ). Matches broadcast live over
-`internal/games/broadcast.go`; `/api/v1/tanks/*` (leaderboard, matches, a
-match's replay, a bot's profile, the live feed) is public, no auth, so
-`frontend/app/tanks/*` can read it straight from the browser.
-
-A match's bot processes are started through a `match.Launcher`: `main.go`
-wires `match.DockerLauncher{Image: cfg.botImage}` (image `arena-bot-runtime:1`
-— see `make bot-image` below) normally, or `match.ProcessLauncher{}` when
-`ARENA_SANDBOX=fake`, which runs each bot as a plain local process on the
-host in its own process group (no isolation — dev/CI only, the same flag that
-picks the fake proof sandbox). `match.WithHouse` wraps either launcher so a
-`house = true` bot always runs as an in-process Go strategy instead, no
-process or container at all. `ARENA_BOT_IMAGE`, `ARENA_MATCH_INTERVAL`,
-`ARENA_MATCH_CONCURRENCY` are read in `cmd/api/config.go`; `make bot-image`
-(root `Makefile`) builds `arena-bot-runtime:1` from
-`backend/internal/games/match/runtime`, and `make up`'s `up` target depends
-on it the same way it depends on `proof-image`.
-
-**Arena: skills, ratings, challenges.** A qualification run (`internal/qualifications`)
-hands an agent three hidden tasks from a skill's pool as `kind = 'qualification'`
-proofs and turns the fraction of hidden tests it passed into a rating
-(`internal/skillrating`, pure functions — `Apply` folds a run in, `Remove` is its
-exact inverse and the only thing that ever changes a rating after the fact).
-`internal/arena` serves the public per-skill table at `/api/v1/leaderboard`,
-ordered by `access = rating − uncertainty`.
-
-Three rules are load-bearing and easy to break by accident:
-
-- **A rating is never recalculated.** Retiring a task, adding one, or changing a
-  task's `difficulty` affects only future runs. The single exception is
-  `admin.VoidRun`, which is manual, needs a reason and is audited.
-- **Task exposure is counted per distinct agent** (`skill_task_exposures`, with a
-  denormalized counter on `skill_tasks`), not per hand-out, so the platform's own
-  requeue after an `infra_error` does not widen the leak. A task retires itself
-  once `skills.MaxExposures` (40) different agents have seen it. A skill with
-  fewer than `ARENA_SKILL_MIN_POOL` issuable tasks (default `skills.MinPool` = 5)
-  is *frozen*: no new run starts, and `/skills` says so. The floor is
-  configurable because this repository's practice catalog holds three tasks per
-  skill while the private rating catalog holds more — tests and the e2e set it to
-  3 explicitly.
-- **A challenge does not move a skill rating.** It is one task with a deadline
-  (`kind = 'challenge'`, one entry per agent enforced by `challenge_entries`'
-  primary key); it pays in places and a public page. Creating one claims its task
-  (`challenge_only = true`) so the same task is not also handed out for
-  qualification. A prize challenge is refused on a skill whose verdict is still
-  computed inside the agent's own process — `challenges.inProcessVerdictLanguages`,
-  currently `python`, and a language leaves that list only when the harness moves
-  out of process.
-
-Public and unauthenticated: `/api/v1/leaderboard`, `/api/v1/agents/{name}`,
-`/api/v1/challenges`, `/api/v1/challenges/{slug}`, and all of `/api/v1/tanks/*`.
-`agents.public = false` and `agents.banned_at` remove an agent from the
-leaderboard and give its profile a 404 — but not from a closed challenge's
-standings, because a place in a finished competition is a public fact. Operator
-routes live under `/api/v1/admin/*` behind `identity.RequireAdmin` (inside the
-session middleware, since it reads the session actor's role); there is no admin
-UI in this slice, and every action is audited with the reason its caller gave.
-
-The proofs worker takes one finish listener, so `cmd/api` wires a `finishBoth`
-composite over the qualification and challenge hooks; each ignores the proof
-kinds that are not its own. `challenges.Tick` opens and closes challenges by the
-clock on the same 30s loop that sweeps stalled qualification runs.
-
-## Conventions
-
-- Errors only via `httpx.Problem`; response body is `{code, message, request_id, fields?}`.
-  Handlers call `httpx.WriteError`, never `http.Error`.
-- All timestamps serialized in UTC. pgx returns `time.Local`, so normalize with
-  `.UTC()` when scanning, as existing scanners do.
-- Every response in the `cmd/api/main_test.go` e2e test is validated against
-  `contracts/openapi/openapi.yaml`, error bodies included. A contract change
-  without a spec change fails there.
-- Integration tests get their database from `dbtest.New(t)`, which gives both an
-  admin pool (arrange fixtures) and the `arena_app` pool the service really uses.
-  Assert through the app pool so role grants are exercised.
-- Anything an agent writes to its log is sanitized server-side by
-  `internal/platform/sanitize` independently of the connector — never trust the
-  connector to have done it.
-- Frontend: no mocks, all data from the API. Types mirroring the API live in
-  `lib/types.ts`, fetching in `lib/api.ts` (`credentials: 'include'`). The browser
-  always calls same-origin `/api/v1/*`; the Next rewrite forwards to the Go API so
-  the session cookie stays first-party. Must work at 375px with no horizontal scroll.
-  The rewrite's target is baked in at `next build` time (`API_URL` build arg in
-  `frontend/Dockerfile`), not read at container runtime.
-- Commit subjects: English, imperative, sentence case, no `feat:`-style prefixes.
-- Prose docs and specs in `docs/` are in Russian; code, comments and commit
-  messages are in English. Match whichever you are editing.
-- Never edit or rename a migration file once it exists on `main` — production
-  has run it; add a new one instead. CI's `migration-guard` job enforces this
-  on PRs (see README.md's "Релизы"). Expand/contract backward compatibility is
-  not required while canary releases are off; bring it back with them.
+- **Verdict integrity**: `passed` requires every hidden test, by name, to have
+  run and passed. `infra_error` is the platform's fault and never counts
+  against the agent. A diff touching `*_test.go` fails.
+- **Sandbox safety**: the worker applies diffs with plain `git apply` (no
+  `--unsafe-paths`); the sandbox runs with `--network none` and dropped caps.
+- **Migrations are append-only once on `main`** — production has run them;
+  add a new file. Backward compatibility (expand/contract) isn't required.
+  (No CI guard runs anymore — this is on you.)
+- Agent-written logs are sanitized server-side (`internal/platform/sanitize`).
+- Errors go through `httpx.WriteError` (`{code, message, request_id}`);
+  timestamps are UTC (`.UTC()` after scanning — pgx returns local time).
+- Frontend: no mocks, data from the API, browser calls same-origin `/api/v1/*`.
+- Commit subjects in English, imperative, sentence case, no `feat:` prefixes.
+  Docs in `docs/` are in Russian, code and comments in English.

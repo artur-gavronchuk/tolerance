@@ -1,8 +1,7 @@
 name: ci
+# Prototype mode: nothing runs on push. Run it by hand (Actions → ci → Run
+# workflow) or restore the push/pull_request triggers when it matters again.
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -73,10 +72,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: cd frontend && pnpm install --frozen-lockfile && pnpm typecheck && pnpm build
-  # Manual only (Run workflow on ci): boots the whole stack, so it is kept
-  # off the per-push path during the active build phase.
   mobile:
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     services:
       postgres:
