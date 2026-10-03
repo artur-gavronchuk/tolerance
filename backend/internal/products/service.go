@@ -29,11 +29,18 @@ func invalid(msg string) error {
 }
 
 func phaseOf(deadline time.Time) string {
-	if time.Now().Before(deadline) {
+	now := time.Now()
+	switch {
+	case now.Before(deadline):
 		return PhaseOpen
+	case now.Before(deadline.Add(VotingWindow)):
+		return PhaseVoting
 	}
-	return PhaseVoting
+	return PhaseFinal
 }
+
+// published reports whether entries are visible to everyone (the deadline has passed).
+func published(deadline time.Time) bool { return phaseOf(deadline) != PhaseOpen }
 
 const taskCols = `t.slug, t.title, t.summary, t.kind, t.opens_at, t.deadline, jsonb_array_length(t.scenarios),
 	(SELECT count(DISTINCT e.user_id) FROM product_entries e WHERE e.task_slug = t.slug AND e.status = 'done')`
@@ -45,6 +52,7 @@ func scanTask(row scanner) (Task, error) {
 	}
 	t.OpensAt, t.Deadline = t.OpensAt.UTC(), t.Deadline.UTC()
 	t.Phase = phaseOf(t.Deadline)
+	t.VotingEndsAt = t.Deadline.Add(VotingWindow)
 	t.Attempts = limits.Cap(AttemptsPerTask)
 	return t, nil
 }
@@ -147,7 +155,7 @@ func (s *Service) Create(ctx context.Context, userID, slug, filename string, dat
 		if err != nil {
 			return err
 		}
-		if phaseOf(deadline) != PhaseOpen {
+		if published(deadline) {
 			return httpx.New(http.StatusConflict, "deadline_passed", "The deadline has passed; uploads are closed")
 		}
 		var used int
@@ -191,86 +199,6 @@ func (s *Service) Create(ctx context.Context, userID, slug, filename string, dat
 	return out, err
 }
 
-// Results is a task's public standings: one entry per person (their best), best score first, then most votes.
-// Before the deadline the entries are hidden and only the phase and counts are returned.
-type Results struct {
-	Task    Task    `json:"task"`
-	Entries []Entry `json:"entries"`
-}
-
-func (s *Service) Results(ctx context.Context, slug, userID string) (Results, error) {
-	r := Results{Entries: []Entry{}}
-	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		var err error
-		r.Task, err = scanTask(tx.QueryRow(ctx, `SELECT `+taskCols+` FROM product_tasks t WHERE t.slug = $1 AND t.active AND t.opens_at <= now()`, slug))
-		if err != nil || r.Task.Phase != PhaseVoting {
-			return err
-		}
-		// A cli entry counts by its best score (earliest on ties); a site by the latest upload.
-		pick, order := "passed DESC, created_at", "e.passed DESC, 11 DESC"
-		if r.Task.Kind == KindSite {
-			pick, order = "created_at DESC", "11 DESC, e.passed DESC" // votes first, the scenario score breaks ties
-		}
-		rows, err := tx.Query(ctx, `
-			SELECT `+entryCols+` FROM (
-				SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $2 AND status = 'done'
-				ORDER BY user_id, `+pick+`) e
-			JOIN users u ON u.id = e.user_id
-			ORDER BY `+order+`, e.created_at`, userID, slug)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			e, err := scanEntry(rows)
-			if err != nil {
-				return err
-			}
-			e.LogTail = "" // the participant's own output stays with them
-			r.Entries = append(r.Entries, e)
-		}
-		return rows.Err()
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Results{}, httpx.NotFound()
-	}
-	return r, err
-}
-
-// Vote records the caller's vote for a published entry: once per entry, never for their own.
-func (s *Service) Vote(ctx context.Context, userID, entryID string) (Entry, error) {
-	var out Entry
-	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		var owner string
-		var deadline time.Time
-		var status string
-		err := tx.QueryRow(ctx, `SELECT e.user_id, t.deadline, e.status FROM product_entries e JOIN product_tasks t ON t.slug = e.task_slug WHERE e.id = $1`, entryID).
-			Scan(&owner, &deadline, &status)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return httpx.NotFound()
-		}
-		if err != nil {
-			return err
-		}
-		switch {
-		case status != StatusDone || phaseOf(deadline) != PhaseVoting:
-			return httpx.New(http.StatusConflict, "voting_closed", "Voting opens after the deadline")
-		case owner == userID:
-			return httpx.New(http.StatusForbidden, "own_entry", "You cannot vote for your own entry")
-		}
-		tag, err := tx.Exec(ctx, `INSERT INTO product_votes (entry_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, entryID, userID)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return httpx.New(http.StatusConflict, "already_voted", "You already voted for this entry")
-		}
-		out, err = scanEntry(tx.QueryRow(ctx, `SELECT `+entryCols+` FROM product_entries e JOIN users u ON u.id = e.user_id WHERE e.id = $2`, userID, entryID))
-		return err
-	})
-	return out, err
-}
-
 // Zip returns a published entry's upload (after the deadline only).
 func (s *Service) Zip(ctx context.Context, entryID string) ([]byte, error) {
 	var data []byte
@@ -280,7 +208,7 @@ func (s *Service) Zip(ctx context.Context, entryID string) ([]byte, error) {
 			WHERE e.id = $1 AND e.status = 'done'`, entryID).Scan(&data, &deadline); err != nil {
 			return err
 		}
-		if phaseOf(deadline) != PhaseVoting {
+		if !published(deadline) {
 			return httpx.NotFound()
 		}
 		return nil
@@ -302,7 +230,7 @@ func (s *Service) SiteFiles(ctx context.Context, entryID, viewerID string) (map[
 			WHERE e.id = $1 AND e.status = 'done' AND t.kind = 'site'`, entryID).Scan(&data, &owner, &deadline); err != nil {
 			return err
 		}
-		if owner != viewerID && phaseOf(deadline) != PhaseVoting {
+		if owner != viewerID && !published(deadline) {
 			return httpx.NotFound()
 		}
 		return nil

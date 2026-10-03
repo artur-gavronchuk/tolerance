@@ -40,11 +40,11 @@ func newHandler(cfg config, d deps) http.Handler {
 	owner := http.NewServeMux()
 	identity.RegisterMeRoute(owner, d.users, func(ctx context.Context, userID string) (map[string]any, error) {
 		st, err := d.daily.StreakOf(ctx, userID)
-		return map[string]any{"streak": st}, err
+		return map[string]any{"streak": st, "can_admin": products.CanAdmin(cfg.devLogin, identity.MustFromContext(ctx).Role)}, err
 	})
 	submissions.RegisterOwnerRoutes(owner, d.submissions)
 	games.RegisterOwnerRoutes(owner, d.games)
-	products.RegisterOwnerRoutes(owner, d.products)
+	products.RegisterOwnerRoutes(owner, d.products, cfg.devLogin)
 
 	admin := http.NewServeMux()
 	games.RegisterAdminRoutes(admin, d.games)
@@ -71,7 +71,11 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/products", public)
 	api.Handle("/api/v1/products/", public)
 	api.Handle("POST /api/v1/products/{slug}/entries", session(owner))
+	api.Handle("POST /api/v1/products/{slug}/close", session(owner))
+	api.Handle("POST /api/v1/products/{slug}/reopen", session(owner))
 	api.Handle("POST /api/v1/product-entries/{id}/vote", session(owner))
+	api.Handle("DELETE /api/v1/product-entries/{id}/vote", session(owner))
+	api.Handle("GET /api/v1/product-entries/{id}/source", public)
 	api.Handle("GET /api/v1/product-entries/{id}/zip", public)
 	api.Handle("GET /api/v1/product-entries/{id}/site/{path...}", public)
 	api.Handle("/api/v1/daily", public)

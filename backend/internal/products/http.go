@@ -1,6 +1,7 @@
 package products
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"mime"
@@ -39,6 +40,14 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service, viewer func(r *http.Re
 		httpx.Respond(w, http.StatusOK, res)
 	})
 	mux.HandleFunc("GET /api/v1/product-entries/{id}/site/{path...}", serveSite(s, viewer))
+	mux.HandleFunc("GET /api/v1/product-entries/{id}/source", func(w http.ResponseWriter, r *http.Request) {
+		files, err := s.Source(r.Context(), r.PathValue("id"))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, map[string]any{"files": files})
+	})
 	mux.HandleFunc("GET /api/v1/product-entries/{id}/zip", func(w http.ResponseWriter, r *http.Request) {
 		data, err := s.Zip(r.Context(), r.PathValue("id"))
 		if err != nil {
@@ -86,8 +95,49 @@ func serveSite(s *Service, viewer func(r *http.Request) string) http.HandlerFunc
 	}
 }
 
+// CanAdmin reports whether the signed-in caller may close and reopen tasks: an admin, or anyone on a local
+// run with dev login on.
+func CanAdmin(devLogin bool, role string) bool { return devLogin || role == "admin" }
+
 // RegisterOwnerRoutes mounts the session-protected routes.
-func RegisterOwnerRoutes(mux *http.ServeMux, s *Service) {
+func RegisterOwnerRoutes(mux *http.ServeMux, s *Service, devLogin bool) {
+	// adminTask runs a close/reopen action for an admin and answers with the task as the admin sees it.
+	adminTask := func(act func(r *http.Request, uid, slug string) error) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			a := identity.MustFromContext(r.Context())
+			if !CanAdmin(devLogin, a.Role) {
+				httpx.WriteError(w, r, httpx.Forbidden("Admin role required"))
+				return
+			}
+			slug := r.PathValue("slug")
+			if err := act(r, a.UserID, slug); err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+			d, err := s.Get(r.Context(), slug, a.UserID)
+			if err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+			httpx.Respond(w, http.StatusOK, d)
+		}
+	}
+	// POST /products/{slug}/close {"final": bool}: end uploads now (and, with final, the voting window too).
+	mux.HandleFunc("POST /api/v1/products/{slug}/close", adminTask(func(r *http.Request, uid, slug string) error {
+		var body struct {
+			Final bool `json:"final"`
+		}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&body)
+		return s.Close(r.Context(), uid, slug, body.Final)
+	}))
+	// POST /products/{slug}/reopen {"days": n}: uploads open again for n days (default 7).
+	mux.HandleFunc("POST /api/v1/products/{slug}/reopen", adminTask(func(r *http.Request, uid, slug string) error {
+		body := struct {
+			Days int `json:"days"`
+		}{Days: 7}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&body)
+		return s.Reopen(r.Context(), uid, slug, body.Days)
+	}))
 	mux.HandleFunc("POST /api/v1/products/{slug}/entries", func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, MaxUploadBytes+(256<<10))
 		if err := r.ParseMultipartForm(1 << 20); err != nil {
@@ -120,6 +170,14 @@ func RegisterOwnerRoutes(mux *http.ServeMux, s *Service) {
 	})
 	mux.HandleFunc("POST /api/v1/product-entries/{id}/vote", func(w http.ResponseWriter, r *http.Request) {
 		e, err := s.Vote(r.Context(), identity.MustFromContext(r.Context()).UserID, r.PathValue("id"))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, e)
+	})
+	mux.HandleFunc("DELETE /api/v1/product-entries/{id}/vote", func(w http.ResponseWriter, r *http.Request) {
+		e, err := s.Unvote(r.Context(), identity.MustFromContext(r.Context()).UserID, r.PathValue("id"))
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return

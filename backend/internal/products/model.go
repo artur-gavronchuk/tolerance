@@ -30,6 +30,10 @@ const (
 
 	PhaseOpen   = "open"   // before the deadline: uploads allowed, entries hidden
 	PhaseVoting = "voting" // after the deadline: uploads closed, entries public, voting open
+	PhaseFinal  = "final"  // the voting window is over: standings are final
+
+	// VotingWindow is how long voting stays open after the deadline.
+	VotingWindow = 3 * 24 * time.Hour
 )
 
 // Failure reasons stored in product_entries.failure_reason.
@@ -68,6 +72,7 @@ type Task struct {
 	Phase         string    `json:"phase"`
 	OpensAt       time.Time `json:"opens_at"`
 	Deadline      time.Time `json:"deadline"`
+	VotingEndsAt  time.Time `json:"voting_ends_at"`
 	ScenarioCount int       `json:"scenario_count"`
 	Attempts      int       `json:"attempts"`
 	EntryCount    int       `json:"entry_count"`
