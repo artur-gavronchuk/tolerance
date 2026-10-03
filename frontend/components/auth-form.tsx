@@ -1,5 +1,6 @@
 'use client'
 
+import { errorText } from '@/lib/i18n/messages/errors'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -66,7 +67,7 @@ export function AuthForm() {
       router.replace(next)
     } catch (err) {
       const a = err as ApiError
-      setError(a.status === 429 || a.code === 'rate_limited' ? t('err.rate_limited') : a.message)
+      setError(errorText(a, t.locale))
     } finally {
       setBusy(false)
     }

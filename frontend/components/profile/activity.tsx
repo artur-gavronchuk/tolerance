@@ -7,8 +7,10 @@ import { PhaseBadge } from '@/components/products/phase'
 import { SectionTitle } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, friendlyMessage, products } from '@/lib/api'
-import { useT } from '@/lib/i18n/client'
+import { api, products } from '@/lib/api'
+import { errorText } from '@/lib/i18n/messages/errors'
+import { resultLabel, tournamentName } from '@/lib/i18n/messages/names'
+import { useLocale, useT } from '@/lib/i18n/client'
 import { formatDate } from '@/lib/i18n/core'
 import { profileMessages } from '@/lib/i18n/messages/profile'
 import type { Activity, ActivityBot, ActivityProduct, ProductList } from '@/lib/types'
@@ -19,13 +21,14 @@ const Ctx = createContext<State>({ data: null, error: null })
 
 export function ActivityProvider({ handle, children }: { handle: string; children: React.ReactNode }) {
   const [state, setState] = useState<State>({ data: null, error: null })
+  const locale = useLocale()
   useEffect(() => {
     let live = true
     api<Activity>(`/users/${encodeURIComponent(handle)}/activity`)
       .then((data) => live && setState({ data, error: null }))
-      .catch((e) => live && setState({ data: null, error: friendlyMessage(e) }))
+      .catch((e) => live && setState({ data: null, error: errorText(e, locale) }))
     return () => { live = false }
-  }, [handle])
+  }, [handle, locale])
   return <Ctx.Provider value={state}>{children}</Ctx.Provider>
 }
 
@@ -139,13 +142,13 @@ function BotCard({ b }: { b: ActivityBot }) {
       </p>
       {(titles.length > 0 || b.best_finish) && (
         <div className="mt-auto flex flex-wrap items-center gap-2 text-xs">
-          {titles.map((t) => (
-            <Link key={t.id} href={`/tanks/tournaments/${t.id}`} title={t.name}
+          {titles.map((tt) => (
+            <Link key={tt.id} href={`/tanks/tournaments/${tt.id}`} title={tournamentName(t.locale, tt)}
               className="inline-flex max-w-full items-center gap-1 rounded-4xl border border-warning bg-warning/10 px-2.5 py-0.5 font-bold hover:text-primary">
-              <Trophy className="size-3.5 shrink-0 text-warning" /><span className="truncate">{t.name}</span>
+              <Trophy className="size-3.5 shrink-0 text-warning" /><span className="truncate">{tournamentName(t.locale, tt)}</span>
             </Link>
           ))}
-          {titles.length === 0 && b.best_finish && <span className="text-muted-foreground">{t('bestFinish')} <b className="text-foreground">{b.best_finish}</b></span>}
+          {titles.length === 0 && b.best_finish && <span className="text-muted-foreground">{t('bestFinish')} <b className="text-foreground">{resultLabel(t.locale, b.best_finish)}</b></span>}
         </div>
       )}
     </li>

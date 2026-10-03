@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Trophy } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Countdown } from './countdown'
+import { tournamentName } from '@/lib/i18n/messages/names'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 import { formatDate } from '@/lib/i18n/core'
@@ -28,7 +29,7 @@ export function TournamentList({ items, empty }: { items: TournamentView[]; empt
           <Link href={`/tanks/tournaments/${it.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 hover:bg-muted/50">
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-2 text-sm font-semibold">
-                <span className="truncate">{it.name}</span>
+                <span className="truncate">{tournamentName(t.locale, it)}</span>
                 {it.open && <Badge variant="secondary" title={t('tl.openTitle')}>{t('tl.open')}</Badge>}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">

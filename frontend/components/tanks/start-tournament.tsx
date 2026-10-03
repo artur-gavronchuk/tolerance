@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { friendlyMessage, tanks } from '@/lib/api'
+import { tanks } from '@/lib/api'
+import { errorText } from '@/lib/i18n/messages/errors'
 import { useMe } from '@/lib/use-me'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
@@ -25,7 +26,7 @@ export function StartTournament() {
       const tour = await tanks.startTournament()
       router.push(`/tanks/tournaments/${tour.id}`)
     } catch (e) {
-      setError(friendlyMessage(e))
+      setError(errorText(e, t.locale))
       setBusy(false)
     }
   }

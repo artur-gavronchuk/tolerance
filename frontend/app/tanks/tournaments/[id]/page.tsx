@@ -1,5 +1,6 @@
 'use client'
 
+import { errorText } from '@/lib/i18n/messages/errors'
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Trophy } from 'lucide-react'
@@ -11,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, tanks } from '@/lib/api'
+import { seasonNameFromId, tournamentName } from '@/lib/i18n/messages/names'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 import type { TournamentView } from '@/lib/types'
@@ -28,7 +30,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
       void tanks
         .tournament(id)
         .then((r) => alive && setT(r))
-        .catch((e) => alive && setError((e as ApiError).status === 404 ? tr('tour.notFound') : (e as ApiError).message))
+        .catch((e) => alive && setError((e as ApiError).status === 404 ? tr('tour.notFound') : errorText(e, tr.locale)))
     load()
     if (!live) return () => { alive = false }
     const timer = setInterval(load, 4000)
@@ -65,7 +67,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
             <ArrowLeft className="size-4" />{tr('tour.tournaments')}
           </Link>
         }
-        title={t.name}
+        title={tournamentName(tr.locale, t)}
         actions={
           <Badge variant={t.status === 'running' ? 'default' : 'secondary'} className="self-start">
             {tr(`status.${t.status}` as 'status.scheduled')}
@@ -75,7 +77,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
         {tr('tour.intro', { size: t.size, bestOf: t.best_of })}
         {t.season_id && (
           <>
-            {' '}{tr('tour.season')} <Link href={`/tanks/seasons/${t.season_id}`} className="font-semibold text-primary hover:underline">{t.season_id}</Link>.
+            {' '}{tr('tour.season')} <Link href={`/tanks/seasons/${t.season_id}`} className="font-semibold text-primary hover:underline">{seasonNameFromId(tr.locale, t.season_id)}</Link>.
           </>
         )}
       </PageHeader>

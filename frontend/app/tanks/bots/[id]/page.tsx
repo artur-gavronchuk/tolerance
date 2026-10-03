@@ -1,5 +1,6 @@
 'use client'
 
+import { errorText } from '@/lib/i18n/messages/errors'
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Trophy } from 'lucide-react'
@@ -10,6 +11,7 @@ import { MatchList } from '@/components/tanks/match-list'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, ApiError } from '@/lib/api'
+import { resultLabel, seasonName, seasonNameFromId, tournamentName } from '@/lib/i18n/messages/names'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 import { formatDate } from '@/lib/i18n/core'
@@ -26,7 +28,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
   useEffect(() => {
     void api<BotProfile>(`/tanks/bots/${id}`)
       .then(setBot)
-      .catch((e) => setError((e as ApiError).status === 404 ? tr('bot.notFound') : (e as ApiError).message))
+      .catch((e) => setError((e as ApiError).status === 404 ? tr('bot.notFound') : errorText(e, tr.locale)))
     void api<{ items: MatchView[] }>(`/tanks/matches?bot_id=${id}&limit=20`)
       .then((r) => setMatches(r.items))
       .catch(() => setMatches([]))
@@ -55,11 +57,6 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
     )
   }
 
-  const resultLabel = (r: string) => {
-    if (r === 'Champion' || r === 'In progress' || r === 'Runner-up' || r === 'Semifinalist' || r === 'Quarterfinalist') return tr(`result.${r}`)
-    const out = /^Out in round (\d+)$/.exec(r)
-    return out ? tr('result.out', { n: out[1] }) : r
-  }
   const versionStatus = (s: string) =>
     s === 'active' || s === 'rejected' || s === 'pending' || s === 'retired' ? tr(`vstatus.${s}`) : s
   const winRate = bot.matches > 0 ? `${Math.round((bot.wins / bot.matches) * 100)}%` : '—'
@@ -86,7 +83,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
           </span>
         }
       >
-        {bot.rank > 0 ? <>{tr('bot.rank', { rank: bot.rank, season: bot.season.name })}</> : <>{tr('bot.unranked', { season: bot.season.name })}</>}
+        {bot.rank > 0 ? <>{tr('bot.rank', { rank: bot.rank, season: seasonName(tr.locale, bot.season.starts_at) })}</> : <>{tr('bot.unranked', { season: seasonName(tr.locale, bot.season.starts_at) })}</>}
         {bot.owner && <> {tr('bot.by')} <HandleLink handle={bot.owner} />.</>}
       </PageHeader>
 
@@ -110,11 +107,11 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
             {bot.tournaments.map((t) => (
               <li key={t.tournament_id}>
                 <Link href={`/tanks/tournaments/${t.tournament_id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 text-sm hover:bg-muted/50">
-                  <span className="min-w-0 flex-1 truncate font-semibold">{t.name}</span>
+                  <span className="min-w-0 flex-1 truncate font-semibold">{tournamentName(tr.locale, t)}</span>
                   <span className="font-mono text-xs text-muted-foreground">{tr('bot.seed', { n: t.seed })}</span>
                   <span className={t.champion ? 'inline-flex items-center gap-1 font-bold' : 'text-muted-foreground'}>
                     {t.champion && <Trophy className="size-3.5 text-warning" />}
-                    {resultLabel(t.result)}
+                    {resultLabel(tr.locale, t.result)}
                   </span>
                 </Link>
               </li>
@@ -130,7 +127,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
             {bot.seasons.map((x) => (
               <li key={x.season_id}>
                 <Link href={`/tanks/seasons/${x.season_id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 text-sm hover:bg-muted/50">
-                  <span className="min-w-0 flex-1 truncate font-semibold">{x.name}</span>
+                  <span className="min-w-0 flex-1 truncate font-semibold">{seasonNameFromId(tr.locale, x.season_id)}</span>
                   <span className="font-mono text-xs text-muted-foreground">{tr('bot.matchesWins', { matches: x.matches, wins: x.wins })}</span>
                   <span className="font-mono font-bold">#{x.rank}</span>
                   <span className="font-mono text-muted-foreground">{x.rating}</span>

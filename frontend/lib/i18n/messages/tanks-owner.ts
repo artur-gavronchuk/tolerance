@@ -1,5 +1,5 @@
-import { defineMessages } from '../core'
-import { ApiError } from '@/lib/api'
+import { defineMessages, type Locale } from '../core'
+import { errorText } from './errors'
 
 // The signed-in "My bot" area: /app/tanks, starter kit steps, uploads, versions, own matches, report copying.
 export const tanksOwnerMessages = defineMessages({
@@ -156,14 +156,5 @@ export const tanksOwnerMessages = defineMessages({
   },
 })
 
-type ErrT = (key: 'err.rate' | 'err.rateIn' | 'err.large' | 'err.generic', vars?: Record<string, string | number>) => string
-
 // Known API error codes in the reader's language; anything else shows the server's message.
-export function ownerError(t: ErrT, err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 429 || err.code === 'rate_limited') return err.retryAfterSec ? t('err.rateIn', { n: err.retryAfterSec }) : t('err.rate')
-    if (err.status === 413 || err.code === 'payload_too_large') return t('err.large')
-    return err.message
-  }
-  return t('err.generic')
-}
+export const ownerError = (t: { locale: Locale }, err: unknown) => errorText(err, t.locale)

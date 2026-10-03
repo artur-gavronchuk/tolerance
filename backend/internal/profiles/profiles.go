@@ -45,6 +45,7 @@ type BotTournament struct {
 	StartsAt time.Time `json:"starts_at"`
 	Result   string    `json:"result"`
 	Champion bool      `json:"champion"`
+	Open     bool      `json:"open"` // started on demand, not the weekly one
 }
 
 type Bot struct {
@@ -301,6 +302,7 @@ func botTournaments(ctx context.Context, tx pgx.Tx, botID string) ([]BotTourname
 			return nil, err
 		}
 		b.StartsAt = b.StartsAt.UTC()
+		b.Open = strings.HasPrefix(b.Name, "Open tournament")
 		b.Result = finish(b.Champion, lost, rounds)
 		out = append(out, b)
 	}

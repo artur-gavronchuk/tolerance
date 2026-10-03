@@ -1,4 +1,3 @@
-import { ApiError } from '@/lib/api'
 import { makeT, type Locale } from '@/lib/i18n/core'
 import { dailyMessages } from '@/lib/i18n/messages/daily'
 
@@ -39,16 +38,4 @@ export function countdown(iso: string, now = Date.now()) {
   return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`
 }
 
-// friendlyMessage from lib/api, in the reader's language: known codes are translated, other server messages pass through.
-export function errorText(err: unknown, locale: Locale = 'en') {
-  const t = makeT(dailyMessages, locale)
-  if (err instanceof ApiError) {
-    if (err.code !== 'attempts_exhausted' && (err.status === 429 || err.code === 'rate_limited')) {
-      return err.retryAfterSec ? t('errRateLimitedIn', { n: err.retryAfterSec }) : t('errRateLimited')
-    }
-    if (err.status === 413 || err.code === 'payload_too_large') return t('errTooLarge')
-    if (err.code === 'attempts_exhausted') return t('errAttempts')
-    return err.message
-  }
-  return t('errGeneric')
-}
+export { errorText } from '@/lib/i18n/messages/errors'

@@ -1,5 +1,6 @@
 'use client'
 
+import { errorText } from '@/lib/i18n/messages/errors'
 import { use, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Check, Copy } from 'lucide-react'
@@ -52,7 +53,7 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
     } catch (e) {
       if (!aliveRef.current) return
       if (e instanceof ApiError && e.status === 404) setReplayState({ kind: 'expired' })
-      else setReplayState({ kind: 'error', message: e instanceof ApiError ? e.message : t('replayLoadFailed') })
+      else setReplayState({ kind: 'error', message: errorText(e, t.locale) })
     }
   }, [t])
 
@@ -71,7 +72,7 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       })
       .catch((e) => {
         if (!aliveRef.current) return
-        setError(e instanceof ApiError && e.status === 404 ? t('noMatch') : (e as ApiError).message)
+        setError(e instanceof ApiError && e.status === 404 ? t('noMatch') : errorText(e, t.locale))
       })
     return () => {
       aliveRef.current = false

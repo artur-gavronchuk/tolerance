@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge'
-import { ApiError } from '@/lib/api'
+import { errorText } from '@/lib/i18n/messages/errors'
 import { formatDate, formatDateTime, type Locale, type T } from '@/lib/i18n/core'
 import { useT } from '@/lib/i18n/client'
 import { productsMessages } from '@/lib/i18n/messages/products'
@@ -46,18 +46,7 @@ export const utc = (locale: Locale, iso: string) => formatDateTime(locale, iso, 
 export const utcDay = (locale: Locale, iso: string) => formatDate(locale, iso)
 
 // Server messages for known codes, translated; unknown ones fall back to the server's text.
-export function friendly(t: PT, err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.code !== 'attempts_exhausted' && (err.status === 429 || err.code === 'rate_limited')) {
-      return err.retryAfterSec ? t('err.rateLimitedIn', { s: err.retryAfterSec }) : t('err.rateLimited')
-    }
-    if (err.status === 413 || err.code === 'payload_too_large') return t('err.tooLarge')
-    const key = `err.${err.code}`
-    if (key in productsMessages.en) return t(key as 'err.generic')
-    return err.message
-  }
-  return t('err.generic')
-}
+export const friendly = (t: PT, err: unknown): string => errorText(err, t.locale)
 
 // True while a site task's entries are judged blind: automated check counts and source stay hidden so they
 // can't sway the votes.

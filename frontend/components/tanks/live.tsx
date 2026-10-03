@@ -1,5 +1,6 @@
 'use client'
 
+import { errorText } from '@/lib/i18n/messages/errors'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { api, ApiError } from '@/lib/api'
@@ -176,7 +177,7 @@ export function Live() {
 
       begin(offsetMs)
     } catch (e) {
-      setPhase({ kind: 'error', message: (e as ApiError).message })
+      setPhase({ kind: 'error', message: errorText(e, t.locale) })
       const delay = retryDelayRef.current
       retryDelayRef.current = Math.min(RETRY_CAP_MS, retryDelayRef.current * 2)
       scheduleLoad(delay)

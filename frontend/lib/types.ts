@@ -137,7 +137,7 @@ export interface TournamentView {
 
 export interface BotTournament {
   tournament_id: string; name: string; status: string; starts_at: string
-  seed: number; rounds: number; result: string; champion: boolean
+  seed: number; rounds: number; result: string; champion: boolean; open: boolean
 }
 
 export interface Showcase {
@@ -218,7 +218,7 @@ export interface ActivityProduct {
   entry_id: string; passed: number; total: number; votes: number; place: number | null; entrants: number; created_at: string
 }
 
-export interface ActivityBotTournament { id: string; name: string; starts_at: string; result: string; champion: boolean }
+export interface ActivityBotTournament { id: string; name: string; starts_at: string; result: string; champion: boolean; open: boolean }
 
 export interface ActivityBot {
   id: string; name: string; rating: number; rank: number | null; lifetime_rating: number

@@ -1,5 +1,6 @@
 'use client'
 
+import { errorText } from '@/lib/i18n/messages/errors'
 import { useEffect, useRef, useState } from 'react'
 import { Check, ClipboardCopy, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -32,7 +33,7 @@ export function CopyReportButton({
       setMessage(matchIds.length === 1 ? t('copy.one') : t('copy.many', { n: matchIds.length }))
     } catch (e) {
       setState('error')
-      setMessage(e instanceof ApiError ? e.message : t('copy.fail'))
+      setMessage(e instanceof ApiError ? errorText(e, t.locale) : t('copy.fail'))
     }
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => setState('idle'), 3500)

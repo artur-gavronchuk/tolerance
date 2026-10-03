@@ -1,3 +1,4 @@
+import { seasonName, tournamentName } from '@/lib/i18n/messages/names'
 import type { Metadata } from 'next'
 import { PRODUCT } from '@/lib/brand'
 import { clip, fmtDay, type OgCard, type OgStat } from '@/lib/og'
@@ -101,17 +102,18 @@ export async function tournamentShare(id: string): Promise<Share | null> {
   const tv = await serverApi<TournamentView>(`/tanks/tournaments/${encodeURIComponent(id)}`)
   if (!tv) return null
   const t = await getT(ogMessages)
+  const name = tournamentName(t.locale, tv)
   const live = tv.status === 'running'
   const state = tv.status === 'finished' ? t('stFinished') : tv.status === 'cancelled' ? t('stCancelled') : live ? t('stLive') : t('stScheduled')
   const champ = tv.champion ? (tv.champion.owner ? t('byOwner', { name: tv.champion.name, owner: tv.champion.owner }) : tv.champion.name) : null
   return {
-    title: tv.name,
+    title: name,
     description: champ
-      ? t('tourWon', { name: tv.name, champ, size: tv.size, bestOf: tv.best_of })
-      : t('tourPlain', { name: tv.name, size: tv.size }) + (live ? t('tourLive') : ''),
+      ? t('tourWon', { name, champ, size: tv.size, bestOf: tv.best_of })
+      : t('tourPlain', { name, size: tv.size }) + (live ? t('tourLive') : ''),
     card: {
       kicker: t('kickerTournament'),
-      title: tv.name,
+      title: name,
       subtitle: champ ? t('champion', { champ }) : live ? t('tourFighting') : t('tourSub'),
       stats: [
         { label: t('statBracket'), value: tv.size },
@@ -177,8 +179,9 @@ export async function seasonShare(id: string): Promise<{ title: string; descript
   if (!s) return null
   const t = await getT(ogMessages)
   const top = s.standings[0]
+  const sname = seasonName(t.locale, s.season.starts_at)
   return {
-    title: s.season.name,
-    description: t('seasonDescription', { name: s.season.name, top: top ? t('seasonTop', { name: top.name, rating: top.rating }) : '' }),
+    title: sname,
+    description: t('seasonDescription', { name: sname, top: top ? t('seasonTop', { name: top.name, rating: top.rating }) : '' }),
   }
 }

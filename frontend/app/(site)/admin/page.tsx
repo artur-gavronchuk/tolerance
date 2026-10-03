@@ -6,7 +6,8 @@ import { PageHeader, SectionTitle } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { admin, ApiError, friendlyMessage } from '@/lib/api'
+import { admin, ApiError } from '@/lib/api'
+import { errorText } from '@/lib/i18n/messages/errors'
 import { useT } from '@/lib/i18n/client'
 import { formatDateTime, type T } from '@/lib/i18n/core'
 import { adminMessages } from '@/lib/i18n/messages/admin'
@@ -68,7 +69,7 @@ export default function AdminPage() {
         actions={<span className="self-end text-xs text-muted-foreground">{at ? t('updated', { ago: ago(t, new Date(at).toISOString()) }) : t('loading')}</span>}>
         {t('lead')}
       </PageHeader>
-      {error && <p role="alert" className="text-sm text-destructive">{friendlyMessage(error)}</p>}
+      {error && <p role="alert" className="text-sm text-destructive">{errorText(error, t.locale)}</p>}
       {!pulse && !error && <Skeleton className="h-64 rounded-[14px]" />}
       {pulse && (
         <>

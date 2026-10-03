@@ -1,5 +1,6 @@
 'use client'
 
+import { errorText } from '@/lib/i18n/messages/errors'
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -13,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, tanks } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { seasonName } from '@/lib/i18n/messages/names'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 import { formatDate } from '@/lib/i18n/core'
@@ -39,7 +41,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
         if (r.season.status === 'active') router.replace('/tanks/leaderboard')
         else setD(r)
       })
-      .catch((e) => setError((e as ApiError).status === 404 ? tr('season.notFound') : (e as ApiError).message))
+      .catch((e) => setError((e as ApiError).status === 404 ? tr('season.notFound') : errorText(e, tr.locale)))
     void tanks.seasons().then(setAll).catch(() => {})
   }, [id, router, tr])
 
@@ -73,7 +75,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
         }
         title={
           <span className="inline-flex flex-wrap items-center gap-3">
-            {tr('season.title', { name: s.name })}
+            {tr('season.title', { name: seasonName(tr.locale, s.starts_at) })}
             <Badge variant={s.status === 'active' ? 'default' : 'secondary'}>{s.status === 'active' ? tr('season.inProgress') : tr('season.final')}</Badge>
           </span>
         }
@@ -119,7 +121,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
                   x.id === s.id && 'bg-muted text-foreground',
                 )}
               >
-                {x.name}
+                {seasonName(tr.locale, x.starts_at)}
               </Link>
             ))}
           </nav>

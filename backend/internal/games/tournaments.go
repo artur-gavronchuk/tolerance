@@ -97,6 +97,7 @@ type BotTournament struct {
 	Rounds       int       `json:"rounds"`
 	Result       string    `json:"result"`
 	Champion     bool      `json:"champion"`
+	Open         bool      `json:"open"` // started on demand, not the weekly one
 }
 
 // Showcase is everything the /tanks front page needs in one call.
@@ -982,6 +983,7 @@ func botTournamentsTx(ctx context.Context, tx pgx.Tx, botID string) ([]BotTourna
 			return nil, err
 		}
 		b.StartsAt = b.StartsAt.UTC()
+		b.Open = strings.HasPrefix(b.Name, openTournamentPrefix)
 		b.Result = tournamentResult(b.Champion, lost, b.Rounds)
 		out = append(out, b)
 	}

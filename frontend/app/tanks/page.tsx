@@ -17,6 +17,7 @@ import { loginHref } from '@/components/public/return-path'
 import { Skeleton } from '@/components/ui/skeleton'
 import { tanks } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
+import { seasonName, tournamentName } from '@/lib/i18n/messages/names'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 import type { Showcase } from '@/lib/types'
@@ -81,7 +82,7 @@ export default function TanksHome() {
                   {tr('home.standings')}
                 </Link>
               </div>
-              <p className="heading mt-2 text-2xl">{show.season.name}</p>
+              <p className="heading mt-2 text-2xl">{seasonName(tr.locale, show.season.starts_at)}</p>
               <p className="mt-3 text-sm text-muted-foreground">
                 {tr('home.endsIn')} <span className="font-bold text-foreground"><Countdown to={show.season.ends_at} serverNow={show.now} /></span>
               </p>
@@ -98,7 +99,7 @@ export default function TanksHome() {
               {tour ? (
                 <>
                   <p className="heading mt-2 flex flex-wrap items-center gap-2 text-2xl">
-                    <Link href={`/tanks/tournaments/${tour.id}`} className="hover:text-primary">{tour.name}</Link>
+                    <Link href={`/tanks/tournaments/${tour.id}`} className="hover:text-primary">{tournamentName(tr.locale, tour)}</Link>
                     {tour.status === 'running' && <Badge>{tr('home.live')}</Badge>}
                   </p>
                   {tour.champion ? (
@@ -118,7 +119,7 @@ export default function TanksHome() {
                 </>
               ) : next ? (
                 <>
-                  <p className="heading mt-2 text-2xl">{next.name}</p>
+                  <p className="heading mt-2 text-2xl">{tournamentName(tr.locale, next)}</p>
                   <p className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground">
                     <CalendarClock className="size-4" />
                     {tr('home.startsIn')} <span className="font-bold text-foreground"><Countdown to={next.starts_at} serverNow={show.now} /></span>
@@ -146,7 +147,7 @@ export default function TanksHome() {
           {tour && (tour.pairings?.length ?? 0) > 0 && (
             <section className="mt-10">
               <SectionTitle aside={<Link href={`/tanks/tournaments/${tour.id}`} className="font-semibold text-primary hover:underline">{tr('home.openBracket')}</Link>}>
-                {tour.status === 'running' ? tr('home.liveBracket') : tour.name}
+                {tour.status === 'running' ? tr('home.liveBracket') : tournamentName(tr.locale, tour)}
               </SectionTitle>
               <Bracket t={tour} />
             </section>
@@ -180,7 +181,7 @@ export default function TanksHome() {
                   {show.past_seasons.map((s) => (
                     <li key={s.id}>
                       <Link href={`/tanks/seasons/${s.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 hover:bg-muted/50">
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{s.name}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{seasonName(tr.locale, s.starts_at)}</span>
                         {s.winner && (
                           <span className="inline-flex items-center gap-1.5 text-sm font-bold">
                             <Trophy className="size-3.5 text-warning" />

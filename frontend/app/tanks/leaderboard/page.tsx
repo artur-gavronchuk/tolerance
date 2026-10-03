@@ -8,6 +8,7 @@ import { Leaderboard } from '@/components/tanks/leaderboard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { tanks } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { seasonName } from '@/lib/i18n/messages/names'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 import type { SeasonDetail, SeasonView } from '@/lib/types'
@@ -30,7 +31,7 @@ export default function LadderPage() {
       <PageHeader title={tr('ladder.title')}>
         {d && s ? (
           <>
-            {tr('ladder.withSeason', { name: s.name })} <Countdown to={s.ends_at} serverNow={d.now} />. {tr('ladder.withSeasonRest')}
+            {tr('ladder.withSeason', { name: seasonName(tr.locale, s.starts_at) })} <Countdown to={s.ends_at} serverNow={d.now} />. {tr('ladder.withSeasonRest')}
           </>
         ) : (
           <>{tr('ladder.noSeason')}</>
