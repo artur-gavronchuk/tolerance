@@ -1,21 +1,24 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { Brand } from '@/components/brand'
+import { loginHref, rememberPath } from '@/components/public/return-path'
 import { Button } from '@/components/ui/button'
 import { post } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import { cn } from '@/lib/utils'
 
+// The three modes first, then the cross-cutting pages.
 const SITE_NAV = [
   { label: 'Today', href: '/' },
-  { label: 'Archive', href: '/days' },
-  { label: 'Leaderboard', href: '/leaderboard' },
-  { label: 'Agents', href: '/agents' },
   { label: 'Products', href: '/products' },
   { label: 'Tanks', href: '/tanks' },
+  { label: 'Leaderboard', href: '/leaderboard' },
+  { label: 'Agents', href: '/agents' },
+  { label: 'Archive', href: '/days' },
 ]
 
 const TANKS_NAV = [
@@ -26,14 +29,31 @@ const TANKS_NAV = [
   { label: 'My bot', href: '/app/tanks' },
 ]
 
+const STREAK_HELP = 'Days in a row with a passing daily result; next task at 00:00 UTC'
+
 export function SiteHeader() {
   const { me, loading } = useMe()
   const pathname = usePathname()
+  const stripRef = useRef<HTMLDivElement>(null)
   const inTanks = pathname === '/tanks' || pathname.startsWith('/tanks/') || pathname.startsWith('/app/tanks')
+
+  // Remember where the visitor is, so /login can send them back after sign-in.
+  useEffect(() => {
+    rememberPath(pathname + window.location.search)
+  }, [pathname])
+
+  // Keep the active tab of the mobile strip in view.
+  useEffect(() => {
+    const strip = stripRef.current
+    const active = strip?.querySelector<HTMLElement>('[data-active="true"]')
+    if (!strip || !active) return
+    strip.scrollLeft = Math.max(0, active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2)
+  }, [pathname, me?.can_admin])
 
   const isActive = (href: string, nav: typeof SITE_NAV) => {
     if (href === '/') return pathname === '/' || pathname.startsWith('/day/')
     if (href === '/tanks' && nav === TANKS_NAV) return pathname === '/tanks'
+    if (href === '/tanks') return inTanks
     return pathname === href || pathname.startsWith(href + '/')
   }
 
@@ -41,6 +61,7 @@ export function SiteHeader() {
     <Link
       key={item.href}
       href={item.href}
+      data-active={isActive(item.href, nav)}
       className={cn(
         'shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground',
         isActive(item.href, nav) && 'bg-muted text-foreground'
@@ -69,7 +90,8 @@ export function SiteHeader() {
               <Link href={`/u/${encodeURIComponent(me.user.handle)}`} title="My profile"
                 className="flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm hover:border-primary">
                 <span className="max-w-[8rem] truncate font-bold">{me.user.handle}</span>
-                <span className="font-mono text-xs text-muted-foreground">🔥 {me.streak.current}</span>
+                <span className="font-mono text-xs text-muted-foreground" title={STREAK_HELP}
+                  aria-label={`${me.streak.current} day streak. ${STREAK_HELP}`}>🔥 {me.streak.current}</span>
               </Link>
               <button onClick={() => void signOut()} aria-label="Sign out" title="Sign out"
                 className="flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -77,17 +99,23 @@ export function SiteHeader() {
               </button>
             </>
           ) : (
-            <Button render={<Link href="/login" />} nativeButton={false}>Sign in</Button>
+            <Button render={<Link href={loginHref(pathname)} />} nativeButton={false}>Sign in</Button>
           )}
         </div>
       </div>
-      <div className="flex h-11 items-center gap-1 overflow-x-auto border-t border-border px-4 sm:hidden">
-        {SITE_NAV.map((item) => link(item, SITE_NAV))}
-        {me?.can_admin && link({ label: 'Admin', href: '/admin' }, SITE_NAV)}
+      <div className="relative border-t border-border sm:hidden">
+        <div ref={stripRef} className="relative flex h-11 items-center gap-1 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {SITE_NAV.map((item) => link(item, SITE_NAV))}
+          {me?.can_admin && link({ label: 'Admin', href: '/admin' }, SITE_NAV)}
+          <span aria-hidden className="w-4 shrink-0" />
+        </div>
+        <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent" />
       </div>
       {inTanks && (
-        <div className="flex h-11 items-center gap-1 overflow-x-auto border-t border-border px-4 sm:px-6">
-          <div className="mx-auto flex w-full max-w-6xl items-center gap-1">{TANKS_NAV.map((item) => link(item, TANKS_NAV))}</div>
+        <div className="border-t border-border">
+          <div className="mx-auto flex h-11 max-w-6xl items-center overflow-x-auto px-4 sm:px-6">
+            <div className="-ml-3 flex items-center gap-1">{TANKS_NAV.map((item) => link(item, TANKS_NAV))}</div>
+          </div>
         </div>
       )}
     </header>
