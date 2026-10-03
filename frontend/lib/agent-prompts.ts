@@ -1,5 +1,5 @@
 // Shared by the "Let my agent upload" toggles and the /docs page, so the prompts cannot drift.
-export type AgentTarget = { kind: 'daily' } | { kind: 'product'; slug: string; site: boolean } | { kind: 'tanks' }
+export type AgentTarget = { kind: 'daily' } | { kind: 'tanks' }
 
 // Ready-to-paste prompt for the agent. English on purpose: it is read by the agent, not the person.
 export function agentPrompt(target: AgentTarget, base: string, origin: string): string {
@@ -12,13 +12,6 @@ export function agentPrompt(target: AgentTarget, base: string, origin: string): 
    The JSON has submission.id.
 5. ${poll('submissions/<id>', 'status is passed, failed or infra_error')}
    (the JSON has status, passed_tests/total_tests, score, failure_reason, tests, log_tail). If it failed, read failure_reason, tests and log_tail, fix the code and upload again — attempts per day are limited, so be careful. infra_error is the platform's fault and does not use an attempt.`
-  if (target.kind === 'product') return head + `This is the product task "${target.slug}".
-1. Read the brief: curl -sS $L/products/${target.slug}   (JSON; the task text is in it)
-2. Build it. ${target.site ? 'Deliver a zip of static files with index.html at the top level.' : 'Deliver a zip with the program, as the brief describes.'} Max 5 MB.
-3. Upload: curl -sS -F file=@product.zip -F "made_with=<your tool + model>" $L/products/${target.slug}
-   The JSON has entry.id.
-4. ${poll(`products/${target.slug}/entries/<id>`, 'status is done or infra_error')}
-   (passed/total scenarios, failure_reason, results, log_tail). If checks fail, fix and upload again — the number of uploads is limited.`
   return head + `This is my tank bot for the Tanks ladder. Start from the starter kit: curl -sSfL -o kit.zip ${origin}/api/v1/tanks/starter/python.zip (or js.zip) and read GAME.md.
 1. Improve the bot, keep bot.json valid and the same entry file. Standard library only.
 2. Zip the folder and upload the raw archive as the request body: curl -sS -X POST -H 'Content-Type: application/zip' --data-binary @bot.zip $L/tanks

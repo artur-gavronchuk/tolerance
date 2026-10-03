@@ -16,7 +16,6 @@ export default async function NotFound() {
         <p className="mt-3 max-w-xl text-muted-foreground">{t('notFoundText')}</p>
         <div className="mt-8 flex flex-wrap gap-2">
           <Button render={<Link href="/" />} nativeButton={false}>{t('today')}</Button>
-          <Button variant="outline" render={<Link href="/products" />} nativeButton={false}>{t('products')}</Button>
           <Button variant="outline" render={<Link href="/tanks" />} nativeButton={false}>{t('tanks')}</Button>
         </div>
       </main>

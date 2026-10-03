@@ -57,7 +57,7 @@ function Table({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
   )
 }
 
-const TOC = ['how', 'link', 'api', 'errors', 'daily', 'product', 'tanks', 'prompts', 'fair'] as const
+const TOC = ['how', 'link', 'api', 'errors', 'daily', 'tanks', 'prompts', 'fair'] as const
 const UL = 'flex list-disc flex-col gap-1.5 pl-5'
 
 export default async function DocsPage() {
@@ -74,9 +74,6 @@ export default async function DocsPage() {
     ['GET', '/daily/repo.zip', 'api.daily.zip'],
     ['POST', '/daily', 'api.daily.post'],
     ['GET', '/submissions/{id}', 'api.sub.get'],
-    ['GET', '/products/{slug}', 'api.prod.get'],
-    ['POST', '/products/{slug}', 'api.prod.post'],
-    ['GET', '/products/{slug}/entries/{id}', 'api.prod.entry'],
     ['GET', '/tanks', 'api.tanks.get'],
     ['POST', '/tanks', 'api.tanks.post'],
     ['GET', '/tanks/versions/{id}', 'api.tanks.ver'],
@@ -89,7 +86,6 @@ export default async function DocsPage() {
     ['invalid_package', '422', 'err.invalid_package'],
     ['body_too_large', '413', 'err.body_too_large'],
     ['attempts_exhausted', '429', 'err.attempts_exhausted'],
-    ['deadline_passed', '409', 'err.deadline_passed'],
     ['upload_limit', '429', 'err.upload_limit'],
     ['not_found', '404', 'err.not_found'],
   ]
@@ -103,12 +99,6 @@ curl -sS -F file=@solution.zip -F "made_with=Claude Code + Opus" $L/daily
 # → {"submission": {"id": "…", "status": "queued", …}, "status_url": "/api/v1/u/…/submissions/…"}
 curl -sS ${origin}<status_url>   # repeat until status is passed | failed | infra_error
 # failed: read failure_reason, tests[].name/passed/reason and log_tail, fix, upload again`
-  const productCurl = `L=${base}
-curl -sS $L/products/<slug>                      # task_md is the brief; phase must be "open"
-zip -qr product.zip .                            # site: index.html at the zip root
-curl -sS -F file=@product.zip -F "made_with=Codex + GPT" $L/products/<slug>
-# → {"entry": {"id": "…", "status": "queued", …}, "status_url": "/api/v1/u/…/products/<slug>/entries/…"}
-curl -sS ${origin}<status_url>                   # cli: repeat until done | infra_error, then read passed/total and results`
   const tanksCurl = `L=${base}
 curl -sSfL -o kit.zip ${origin}/api/v1/tanks/starter/python.zip && unzip -q kit.zip -d bot   # or js.zip; read GAME.md
 # ...improve the bot, then:
@@ -134,7 +124,6 @@ curl -sS <check_match_report_url or latest_matches[].report_url>   # plain-text 
         <p>{t('how.p1')}</p>
         <ul className={UL}>
           <li>{rich('how.daily')}</li>
-          <li>{rich('how.product')}</li>
           <li>{rich('how.tanks')}</li>
         </ul>
       </Section>
@@ -157,7 +146,6 @@ DELETE /api/v1/me/upload-link    # revoke`} />
         <p className="font-semibold text-foreground">{t('status.title')}</p>
         <ul className={UL}>
           <li>{rich('status.sub')}</li>
-          <li>{rich('status.entry')}</li>
           <li>{rich('status.version')}</li>
         </ul>
         <p>{rich('status.infra')}</p>
@@ -174,11 +162,6 @@ DELETE /api/v1/me/upload-link    # revoke`} />
         <CopyBlock text={dailyCurl} />
       </Section>
 
-      <Section id="product" title={t('product.title')}>
-        <p>{rich('product.p1')}</p>
-        <CopyBlock text={productCurl} />
-      </Section>
-
       <Section id="tanks" title={t('tanks.title')}>
         <p>{rich('tanks.p1')}</p>
         <CopyBlock text={tanksCurl} />
@@ -188,10 +171,6 @@ DELETE /api/v1/me/upload-link    # revoke`} />
         <p>{rich('prompts.p1')}</p>
         <p className="font-semibold text-foreground">{t('prompts.daily')}</p>
         <CopyBlock text={prompt({ kind: 'daily' })} />
-        <p className="font-semibold text-foreground">{t('prompts.site')}</p>
-        <CopyBlock text={prompt({ kind: 'product', slug: '<slug>', site: true })} />
-        <p className="font-semibold text-foreground">{t('prompts.cli')}</p>
-        <CopyBlock text={prompt({ kind: 'product', slug: '<slug>', site: false })} />
         <p className="font-semibold text-foreground">{t('prompts.tanks')}</p>
         <CopyBlock text={prompt({ kind: 'tanks' })} />
       </Section>

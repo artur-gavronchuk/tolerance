@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { admin, ApiError } from '@/lib/api'
 import { errorText } from '@/lib/i18n/messages/errors'
 import { useT } from '@/lib/i18n/client'
-import { formatDateTime, type T } from '@/lib/i18n/core'
+import type { T } from '@/lib/i18n/core'
 import { adminMessages } from '@/lib/i18n/messages/admin'
 import { FunnelSection } from '@/components/admin/funnel'
 import { ModerationSection } from '@/components/admin/moderation'
@@ -78,7 +78,6 @@ export default function AdminPage() {
         <>
           <UsersSection p={pulse} />
           <DailySection p={pulse} />
-          <ProductsSection p={pulse} />
           <TanksSection p={pulse} />
           <HealthSection p={pulse} />
         </>
@@ -148,7 +147,6 @@ function Bars({ points, label }: { points: AdminPoint[]; label: string }) {
 const sum = (m: Record<string, number> | undefined) => Object.values(m ?? {}).reduce((a, b) => a + b, 0)
 const pct = (x: number) => `${(x * 100).toFixed(x > 0 && x < 0.1 ? 1 : 0)}%`
 const dur = (t: AT, s: number) => (s < 90 ? `${Math.round(s)} ${t('unitS')}` : s < 5400 ? `${Math.round(s / 60)} ${t('unitM')}` : `${(s / 3600).toFixed(1)} ${t('unitH')}`)
-const when = (t: AT, iso: string | null) => (iso ? formatDateTime(t.locale, iso) : '-')
 
 function Statuses({ m, order }: { m: Record<string, number>; order: string[] }) {
   const t = useT(adminMessages)
@@ -205,25 +203,6 @@ function DailySection({ p }: { p: AdminPulse }) {
         <Tile label={t('usersPerDay14')} value={d.user_series[d.user_series.length - 1]?.value ?? 0} hint={t('todayHint')} className="col-span-2 lg:col-span-4">
           <Bars points={d.user_series} label={t('uniquePerDay')} />
         </Tile>
-      </div>
-    </section>
-  )
-}
-
-function ProductsSection({ p }: { p: AdminPulse }) {
-  const t = useT(adminMessages)
-  const x = p.products
-  return (
-    <section>
-      <SectionTitle aside={<Link href="/products" className="hover:text-foreground">{t('openProducts')}</Link>}>{t('productOfWeek')}</SectionTitle>
-      <div className={grid}>
-        <Tile label={t('thisWeek')} value={<span className="text-lg">{x.task_slug || t('noneOpen')}</span>}
-          hint={x.task_slug ? (x.deadline ? t('deadlineHint', { kind: x.task_kind, when: when(t, x.deadline) }) : t('noDeadline', { kind: x.task_kind })) : undefined} />
-        <Tile label={t('entries')} value={x.entries}>
-          <Statuses m={x.by_status} order={['queued', 'running', 'done', 'infra_error']} />
-        </Tile>
-        <Tile label={t('votesSoFar')} value={x.votes} />
-        <Tile label={t('upNext')} value={<span className="text-lg">{x.next_kind || t('nothingQueued')}</span>} hint={t.plural('fresh', x.upcoming)} />
       </div>
     </section>
   )

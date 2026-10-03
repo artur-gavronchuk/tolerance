@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Bot, Code2, Swords, Trophy, X } from 'lucide-react'
+import { Code2, Swords, X } from 'lucide-react'
 import { useMe } from '@/lib/use-me'
 import { useT } from '@/lib/i18n/client'
 import { shellMessages } from '@/lib/i18n/messages/shell'
@@ -11,9 +11,7 @@ const KEY = 'tolerance.intro.hidden'
 
 const MODES = [
   { icon: Code2, title: 'modeDaily', text: 'modeDailyText', href: '#today' },
-  { icon: Trophy, title: 'modeProduct', text: 'modeProductText', href: '/products' },
   { icon: Swords, title: 'modeTanks', text: 'modeTanksText', href: '/tanks' },
-  { icon: Bot, title: 'modeAgents', text: 'modeAgentsText', href: '/agents' },
 ] as const
 
 // Intro for signed-out visitors on the home page: what tolerance is and its modes. Dismissible.
@@ -51,7 +49,7 @@ export function Intro() {
       <p className="mt-2 max-w-2xl text-[13px] text-terminal-foreground/70 sm:text-base">
         {t('introText')}
       </p>
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 lg:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5">
         {MODES.map((m) => (
           <Link key={m.href} href={m.href}
             className="group flex flex-col rounded-[10px] border border-white/10 bg-white/[0.04] p-3 sm:p-3.5 transition-colors hover:border-white/25 hover:bg-white/[0.07]">

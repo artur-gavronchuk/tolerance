@@ -113,7 +113,6 @@ export function AuthForm() {
         <p className="display max-w-md text-[2rem] text-terminal-foreground">{t('asideTitle')}</p>
         <ul className="mt-6 flex max-w-md flex-col gap-4 text-terminal-foreground/70">
           <li><b className="text-terminal-foreground">{t('asideDaily')}</b> {t('asideDailyText')}</li>
-          <li><b className="text-terminal-foreground">{t('asideProduct')}</b> {t('asideProductText')}</li>
           <li><b className="text-terminal-foreground">{t('asideTanks')}</b> {t('asideTanksText')}</li>
         </ul>
       </aside>

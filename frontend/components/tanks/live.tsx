@@ -38,7 +38,7 @@ type Phase =
 // The synchronized broadcast: everyone watching /tanks sees the same match
 // at the same offset, computed from the server's own clock rather than the
 // viewer's. The backend schedules a new broadcast 3 seconds in the future
-// (`starts_at = now + 3s`) so every viewer's connector has time to load the
+// (`starts_at = now + 3s`) so every viewer's browser has time to load the
 // replay before it needs to render anything — a viewer who loads mid
 // pre-roll waits out a countdown and starts exactly at `starts_at`, rather
 // than jumping in at tick 0 immediately and drifting out of sync with

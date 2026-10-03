@@ -2,22 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Code2, Swords, Trophy } from 'lucide-react'
+import { Code2, Swords } from 'lucide-react'
 import { Countdown } from '@/components/daily/countdown'
 import { Countdown as TanksCountdown } from '@/components/tanks/countdown'
 import { RecapCard } from '@/components/public/recap-card'
-import { api, products, retention, tanks } from '@/lib/api'
+import { api, retention, tanks } from '@/lib/api'
 import { fmtScore } from '@/components/daily/daily-board'
 import { useMe } from '@/lib/use-me'
 import { useT } from '@/lib/i18n/client'
-import { formatDate, type T } from '@/lib/i18n/core'
+import type { T } from '@/lib/i18n/core'
 import { shellMessages } from '@/lib/i18n/messages/shell'
-import type { Daily, MyTanks, Recap, ProductDetail, Showcase, SeasonDetail } from '@/lib/types'
+import type { Daily, MyTanks, Recap, Showcase, SeasonDetail } from '@/lib/types'
 
 type TT = T<typeof shellMessages.en>
 type Tile = { key: string; icon: typeof Code2; label: string; href: string; headline: React.ReactNode; sub: React.ReactNode }
-
-const shortDate = (t: TT, iso: string) => formatDate(t.locale, iso, { day: 'numeric', month: 'short' })
 
 async function dailyTile(t: TT): Promise<Tile> {
   const d = await api<Daily>('/daily')
@@ -29,39 +27,6 @@ async function dailyTile(t: TT): Promise<Tile> {
   return {
     key: 'daily', icon: Code2, label: t('taskOfDay'), href: '/#today', headline: <span title={d.task.title}>{headline}</span>,
     sub: d.is_open ? <>{t('closesIn')}<Countdown closesAt={d.closes_at} /></> : t('closedToday'),
-  }
-}
-
-async function productTile(t: TT): Promise<Tile> {
-  const list = await products.list()
-  const cur = list.items.find((t) => t.phase === 'open' || t.phase === 'voting')
-  if (!cur) {
-    const next = list.upcoming?.next_opens_at
-    return {
-      key: 'products', icon: Trophy, label: t('productOfWeek'), href: '/products',
-      headline: t('nothingOpen'), sub: next ? t('nextOpens', { date: shortDate(t, next) }) : t('pastWinners'),
-    }
-  }
-  const detail: ProductDetail = await products.get(cur.slug)
-  const entered = detail.mine.length > 0
-  const entry = entered ? t.plural('uploadsSent', detail.mine.length) : t('notEntered')
-  if (cur.phase === 'open') {
-    return {
-      key: 'products', icon: Trophy, label: t('productOfWeek'), href: `/products/${cur.slug}`,
-      headline: cur.title, sub: <>{entry}{t('closesInLower')}<Countdown closesAt={cur.deadline} /></>,
-    }
-  }
-  let todo: React.ReactNode = <>{t('votingEnds')}<Countdown closesAt={cur.voting_ends_at} /></>
-  if (cur.kind === 'site') {
-    try {
-      const c = await products.compareNext(cur.slug)
-      const left = Math.max(0, c.target - c.judged)
-      todo = c.pair && left > 0 ? t.plural('pairs', left, { judged: c.judged, target: c.target }) : t('allJudged', { judged: c.judged, target: c.target })
-    } catch {}
-  }
-  return {
-    key: 'products', icon: Trophy, label: t('productOfWeek'), href: `/products/${cur.slug}`,
-    headline: todo, sub: <span title={cur.title}>{entry}</span>,
   }
 }
 
@@ -85,7 +50,7 @@ async function tanksTile(t: TT): Promise<Tile> {
   return { key: 'tanks', icon: Swords, label: t('tanksArena'), href: bot || mine.status === 'rejected' ? '/tanks' : '/app/tanks', headline, sub }
 }
 
-// A compact row for signed-in people on the home page: where they stand in each of the three modes.
+// A compact row for signed-in people on the home page: where they stand in each of the two modes.
 // Every tile loads on its own and is dropped when its requests fail.
 export function TodayForYou() {
   const { me } = useMe()
@@ -97,7 +62,7 @@ export function TodayForYou() {
   useEffect(() => {
     if (!handle) return
     let live = true
-    for (const load of [dailyTile, productTile, tanksTile]) {
+    for (const load of [dailyTile, tanksTile]) {
       load(t)
         .then((t) => live && setTiles((cur) => ({ ...cur, [t.key]: t })))
         .catch(() => {})
@@ -106,13 +71,13 @@ export function TodayForYou() {
     return () => { live = false }
   }, [handle, t])
 
-  const shown = ['daily', 'products', 'tanks'].map((k) => tiles[k]).filter((t): t is Tile => !!t)
+  const shown = ['daily', 'tanks'].map((k) => tiles[k]).filter((t): t is Tile => !!t)
   if (!me || (shown.length === 0 && !recap)) return null
   return (
     <section aria-label={t('forYou')} className="mb-8">
       <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('forYou')}</h2>
       {recap && <RecapCard recap={recap} />}
-      <ul className="grid gap-2 sm:grid-cols-3">
+      <ul className="grid gap-2 sm:grid-cols-2">
         {shown.map((t) => (
           <li key={t.key} className="min-w-0">
             <Link href={t.href} className="group flex h-full flex-col gap-0.5 rounded-[12px] border border-border bg-card px-3.5 py-2.5 transition-colors hover:border-primary/50">

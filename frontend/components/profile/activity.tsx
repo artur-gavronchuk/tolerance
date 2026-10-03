@@ -2,18 +2,16 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Bot, Medal, Package, Trophy } from 'lucide-react'
-import { PhaseBadge } from '@/components/products/phase'
+import { Bot, Trophy } from 'lucide-react'
 import { SectionTitle } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, products } from '@/lib/api'
+import { api } from '@/lib/api'
 import { errorText } from '@/lib/i18n/messages/errors'
 import { resultLabel, tournamentName } from '@/lib/i18n/messages/names'
 import { useLocale, useT } from '@/lib/i18n/client'
-import { formatDate } from '@/lib/i18n/core'
 import { profileMessages } from '@/lib/i18n/messages/profile'
-import type { Activity, ActivityBot, ActivityProduct, ProductList } from '@/lib/types'
+import type { Activity, ActivityBot } from '@/lib/types'
 
 // One fetch of /users/{handle}/activity shared by the stack chip (above the daily header) and the sections below it.
 type State = { data: Activity | null; error: string | null }
@@ -47,83 +45,6 @@ export function MainStack() {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{children}</p>
-}
-
-const MEDAL = ['text-warning', 'text-muted-foreground', 'text-[#b4784a]']
-
-function PlaceBadge({ place, of }: { place: number; of: number }) {
-  const t = useT(profileMessages)
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-4xl border border-border px-2.5 py-0.5 text-xs font-bold">
-      {place <= 3 ? <Medal className={`size-3.5 ${MEDAL[place - 1]}`} /> : null}
-      #{place}<span className="font-normal text-muted-foreground">{t('of', { n: of })}</span>
-    </span>
-  )
-}
-
-function ProductCard({ p }: { p: ActivityProduct }) {
-  const t = useT(profileMessages)
-  const href = p.phase === 'open' ? `/products/${p.task_slug}` : `/products/${p.task_slug}/results`
-  const checks = p.total > 0 ? t('checks', { passed: p.passed, total: p.total }) : null
-  return (
-    <li>
-      <Link href={href} className="flex h-full flex-col gap-3 rounded-[14px] border border-border bg-card p-4 transition-colors hover:border-primary/50">
-        <div className="flex items-start justify-between gap-2">
-          <span className="min-w-0 break-words font-semibold">{p.task_title}</span>
-          {p.place != null && <PlaceBadge place={p.place} of={p.entrants} />}
-        </div>
-        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <PhaseBadge phase={p.phase} />
-          <Badge variant="outline">{p.kind}</Badge>
-          {p.phase === 'open' ? (
-            <span>{t('resultsAfter', { date: p.deadline.slice(0, 10) })}</span>
-          ) : (
-            <>
-              {checks && <span className="font-mono">{checks}</span>}
-              <span className="font-mono">{t.plural('votes', p.votes)}</span>
-            </>
-          )}
-        </div>
-      </Link>
-    </li>
-  )
-}
-
-// The call to action depends on whether a product task is open right now.
-function NoProducts() {
-  const t = useT(profileMessages)
-  const [list, setList] = useState<ProductList | null>(null)
-  useEffect(() => {
-    let live = true
-    products.list().then((l) => live && setList(l)).catch(() => {})
-    return () => { live = false }
-  }, [])
-  const open = list?.items.find((t) => t.phase === 'open')
-  const next = list?.upcoming?.next_opens_at
-  return (
-    <Empty>
-      <Package className="mx-auto mb-2 size-5" />
-      {t('noProducts')}
-      {open ? <> — <Link href={`/products/${open.slug}`} className="font-semibold text-primary hover:underline">{t('enterThisWeek')}</Link></>
-        : next ? <> — {t('nextOpens', { date: formatDate(t.locale, next, { day: 'numeric', month: 'short' }) })}</>
-        : null}
-    </Empty>
-  )
-}
-
-export function ProductsSection() {
-  const { data } = useContext(Ctx)
-  const t = useT(profileMessages)
-  return (
-    <section>
-      <SectionTitle>{t('products')}</SectionTitle>
-      {!data ? <Skeleton className="h-24 rounded-[14px]" /> : data.products.length === 0 ? (
-        <NoProducts />
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">{data.products.map((p) => <ProductCard key={p.task_slug} p={p} />)}</ul>
-      )}
-    </section>
-  )
 }
 
 function BotCard({ b }: { b: ActivityBot }) {

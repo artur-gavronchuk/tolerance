@@ -6,7 +6,7 @@ import { serverApi } from '@/lib/server-api'
 import { getT } from '@/lib/i18n/server'
 import { ogMessages } from '@/lib/i18n/messages/og'
 import type {
-  BotProfile, Daily, DailyRow, DayStats, MatchView, Profile, ProductResults, SeasonDetail, TournamentView,
+  BotProfile, Daily, DailyRow, DayStats, MatchView, Profile, SeasonDetail, TournamentView,
 } from '@/lib/types'
 
 // What a shared link says about one entity: the page's title and description
@@ -121,34 +121,6 @@ export async function tournamentShare(id: string): Promise<Share | null> {
         { label: t('statBestOf'), value: tv.best_of },
       ],
       badge: { text: state, live },
-    },
-  }
-}
-
-export async function productShare(slug: string): Promise<Share | null> {
-  const r = await serverApi<ProductResults>(`/products/${encodeURIComponent(slug)}/results`)
-  if (!r) return null
-  const t = await getT(ogMessages)
-  const { task, entries } = r
-  const votes = entries.reduce((n, e) => n + e.votes, 0)
-  const leader = entries[0] // the results come ranked by the task kind's rule
-  const phase = task.phase === 'open' ? t('phaseOpen') : task.phase === 'voting' ? t('phaseVoting') : t('phaseFinal')
-  const stats: OgStat[] = [{ label: t('statEntries'), value: task.entry_count }]
-  if (task.phase !== 'open' && !(task.kind === 'site' && task.phase === 'voting')) stats.push({ label: t('statVotes'), value: votes }) // site votes are blind until voting ends
-  if (task.phase !== 'open' && leader?.handle) stats.push({ label: task.phase === 'final' ? t('statWinner') : t('statLeading'), value: clip(leader.handle, 14) })
-  return {
-    title: task.title,
-    description: t('productDescription', {
-      summary: task.summary || task.title,
-      entries: t.plural('entries', task.entry_count),
-      state: task.phase === 'voting' ? t('stateVoting') : task.phase === 'final' ? t('stateFinal') : t('stateOpen'),
-    }),
-    card: {
-      kicker: t('kickerProduct', { kind: task.kind === 'site' ? t('kindSite') : t('kindCli') }),
-      title: task.title,
-      subtitle: task.summary || undefined,
-      stats,
-      badge: { text: phase, live: task.phase !== 'final' },
     },
   }
 }

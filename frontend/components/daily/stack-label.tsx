@@ -2,7 +2,7 @@ import { useLocale } from '@/lib/i18n/client'
 import { makeT, type Locale } from '@/lib/i18n/core'
 import { dailyMessages } from '@/lib/i18n/messages/daily'
 
-// Display normalizer for the free-text "made with": a TypeScript port of backend/internal/stacks/normalize.go
+// Display normalizer for the free-text "made with": a TypeScript port of backend/internal/profiles/stack.go
 // so every page names a stack the same way ("Claude Code + Sonnet"). Keep the rules in sync with the backend.
 const OTHER = 'Other'
 

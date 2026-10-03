@@ -1,6 +1,6 @@
 import { defineMessages } from '../core'
 
-// Archive, overall leaderboard and agents pages.
+// Archive and overall leaderboard pages.
 export const listingMessages = defineMessages({
   en: {
     archiveTitle: 'Archive',
@@ -16,30 +16,6 @@ export const listingMessages = defineMessages({
     points: 'Points',
     solved: 'Solved',
     streak: 'Streak',
-
-    agentsTitle: 'Agents',
-    agentsIntro: 'Which coding-agent stacks do best on the daily task. Everyone solves the same task with their own agent; we sort each free-text “made with” into a tool and a model and rank stacks by average points.',
-    howScoring: 'How scoring works',
-    scoring1: "A day is worth up to 100 points: the share of hidden tests passed on a bugfix day, the score against the day's best on an optimize day. A stack is ranked by its average.",
-    scoring2: 'Each person-day counts once, under the stack of the attempt that decided it.',
-    scoring3: 'Solve rate and attempts to first pass count bugfix days only.',
-    scoring4: 'Small samples are noisy.',
-    rangeAll: 'All time',
-    range30: '30 days',
-    range7: '7 days',
-    rangeDay: 'One day',
-    dayLocked: 'Available after the first day closes',
-    dayUnlocks: 'One day unlocks after the first day closes.',
-    day: 'Day',
-    openDay: 'Open that day',
-    noSubs: 'No finished submissions yet.',
-    stack: 'Stack',
-    avgPoints: 'Avg points',
-    solveRate: 'Solve rate',
-    testsPassed: 'Tests passed',
-    attemptsToPass: 'Attempts to pass',
-    people: 'People',
-    days: 'Days',
   },
   ru: {
     archiveTitle: 'Архив',
@@ -55,29 +31,5 @@ export const listingMessages = defineMessages({
     points: 'Очки',
     solved: 'Решено',
     streak: 'Серия',
-
-    agentsTitle: 'Агенты',
-    agentsIntro: 'Какие связки кодинг-агентов лучше всего справляются с задачей дня. Все решают одну задачу своим агентом; мы раскладываем свободное поле «сделано с» на инструмент и модель и ранжируем связки по средним очкам.',
-    howScoring: 'Как считаются очки',
-    scoring1: 'День приносит до 100 очков: доля пройденных скрытых тестов в день-багфикс, счёт относительно лучшего за день в день-оптимизацию. Связки ранжируются по среднему.',
-    scoring2: 'Каждый «человеко-день» считается один раз — за связку той попытки, которая его решила.',
-    scoring3: 'Доля решивших и попытки до первого прохождения считаются только по дням-багфиксам.',
-    scoring4: 'На малых выборках цифры шумят.',
-    rangeAll: 'За всё время',
-    range30: '30 дней',
-    range7: '7 дней',
-    rangeDay: 'Один день',
-    dayLocked: 'Появится после закрытия первого дня',
-    dayUnlocks: 'Один день станет доступен после закрытия первого дня.',
-    day: 'День',
-    openDay: 'Открыть этот день',
-    noSubs: 'Завершённых решений пока нет.',
-    stack: 'Связка',
-    avgPoints: 'Средние очки',
-    solveRate: 'Доля решивших',
-    testsPassed: 'Тестов пройдено',
-    attemptsToPass: 'Попыток до успеха',
-    people: 'Людей',
-    days: 'Дней',
   },
 })

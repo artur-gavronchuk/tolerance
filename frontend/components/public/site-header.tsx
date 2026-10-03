@@ -17,13 +17,11 @@ import { NotificationBell } from '@/components/public/notification-bell'
 
 type NavKey = keyof typeof navMessages.en
 
-// The three modes first, then the cross-cutting pages.
+// The two modes first, then the cross-cutting pages.
 const SITE_NAV = [
   { label: 'today' as NavKey, href: '/' },
-  { label: 'products' as NavKey, href: '/products' },
   { label: 'tanks' as NavKey, href: '/tanks' },
   { label: 'leaderboard' as NavKey, href: '/leaderboard' },
-  { label: 'agents' as NavKey, href: '/agents' },
   { label: 'archive' as NavKey, href: '/days' },
 ]
 

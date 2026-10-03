@@ -1,7 +1,7 @@
-// The product name, written in lowercase everywhere. The connector command
+// The product name, written in lowercase everywhere. The CLI command
 // keeps its own name, `arena`.
 export const PRODUCT = 'tolerance'
 
-// The connector CLI's command name, used for every command shown in docs
-// and copy blocks (`${CLI} tanks new`, `${CLI} connect`, ...).
+// The local CLI's command name, used for every command shown in docs
+// and copy blocks (`${CLI} tanks new`, `${CLI} tanks play`).
 export const CLI = 'arena'

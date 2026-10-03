@@ -4,10 +4,8 @@ import { defineMessages } from '../core'
 export const navMessages = defineMessages({
   en: {
     today: 'Today',
-    products: 'Products',
     tanks: 'Tanks',
     leaderboard: 'Leaderboard',
-    agents: 'Agents',
     archive: 'Archive',
     admin: 'Admin',
     live: 'Live',
@@ -24,10 +22,8 @@ export const navMessages = defineMessages({
   },
   ru: {
     today: 'Сегодня',
-    products: 'Продукты',
     tanks: 'Танки',
     leaderboard: 'Рейтинг',
-    agents: 'Агенты',
     archive: 'Архив',
     admin: 'Админка',
     live: 'Эфир',

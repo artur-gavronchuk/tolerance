@@ -30,13 +30,6 @@ function render(t: TT, n: AppNotification): { text: string; href: string } {
     }
     case 'daily_final':
       return { text: t('dailyFinal', { title: String(p.title), place: num('place'), of: num('of') }), href: `/day/${p.day}` }
-    case 'product_voting':
-      return {
-        text: p.kind === 'site' ? t.plural('productVoting', num('pairs'), { title: String(p.title) }) : t('productVotingCli', { title: String(p.title) }),
-        href: `/products/${p.slug}`,
-      }
-    case 'product_final':
-      return { text: t('productFinal', { title: String(p.title), place: num('place'), of: num('of') }), href: `/products/${p.slug}` }
     case 'tournament_soon':
       return {
         text: t('tournamentSoon', { name: String(p.name), time: formatDateTime(t.locale, String(p.starts_at), { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) }),

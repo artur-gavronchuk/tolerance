@@ -3,7 +3,7 @@ import { useT } from '@/lib/i18n/client'
 import { dailyMessages } from '@/lib/i18n/messages/daily'
 import type { DayStats } from '@/lib/types'
 
-// by_tool is keyed by the raw free text; fold it into normalized stacks so one tool is one row.
+// by_tool is keyed by the raw free text; fold it into normalized labels so one tool is one row.
 function groupByStack(by: DayStats['by_tool'], notStated: string) {
   const groups = new Map<string, { label: string; raw: string[]; participants: number; solvers: number }>()
   for (const t of by) {

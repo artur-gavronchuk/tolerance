@@ -1,5 +1,5 @@
 import type {
-  AdminEvent, AdminFunnel, AdminPulse, ModItem, ModLogItem, ModUser, NotificationList, Recap, CompareJudged, CompareNext, ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
+  AdminEvent, AdminFunnel, AdminPulse, ModItem, ModLogItem, ModUser, NotificationList, Recap, SeasonDetail, SeasonView, Showcase, TournamentView,
 } from './types'
 
 export class ApiError extends Error {
@@ -58,30 +58,6 @@ export async function upload<T>(path: string, form: FormData): Promise<T> {
   return (await res.json()) as T
 }
 
-// Product tasks.
-export const products = {
-  list: () => api<ProductList>('/products'),
-  get: (slug: string) => api<ProductDetail>(`/products/${encodeURIComponent(slug)}`),
-  results: (slug: string, limit?: number) => api<ProductResults>(`/products/${encodeURIComponent(slug)}/results${limit ? `?limit=${limit}` : ''}`),
-  submit: (slug: string, form: FormData) => upload<ProductEntry>(`/products/${encodeURIComponent(slug)}/entries`, form),
-  vote: (entryId: string) => post<ProductEntry>(`/product-entries/${encodeURIComponent(entryId)}/vote`),
-  unvote: (entryId: string) => api<ProductEntry>(`/product-entries/${encodeURIComponent(entryId)}/vote`, { method: 'DELETE' }),
-  compareNext: (slug: string) => api<CompareNext>(`/products/${encodeURIComponent(slug)}/compare/next`),
-  compare: (slug: string, a: string, b: string, winner: 'a' | 'b' | 'tie') =>
-    post<CompareJudged>(`/products/${encodeURIComponent(slug)}/compare`, { a, b, winner }),
-  source: (entryId: string) => api<{ files: ProductSourceFile[] }>(`/product-entries/${encodeURIComponent(entryId)}/source`).then((r) => r.files),
-  // Admins and local dev runs: end uploads now (final: end voting too), or open the task again for some days.
-  close: (slug: string, final = false) => post<ProductDetail>(`/products/${encodeURIComponent(slug)}/close`, { final }),
-  startNext: () => post<ProductDetail>('/products/start-next'),
-  reopen: (slug: string, days = 7) => post<ProductDetail>(`/products/${encodeURIComponent(slug)}/reopen`, { days }),
-}
-
-// Agent stacks: which tool + model combinations do best at the daily task.
-export const stacks = {
-  overall: (days?: number) => api<{ items: StackRow[] }>(`/stacks${days ? `?days=${days}` : ''}`).then((r) => r.items),
-  forDay: (day: string) => api<{ items: StackRow[] }>(`/daily/${day}/stacks`).then((r) => r.items),
-}
-
 // Tanks showcase, seasons and tournaments (public reads; starting a tournament needs an admin or the dev login).
 export const tanks = {
   showcase: () => api<Showcase>('/tanks/showcase'),
@@ -99,7 +75,7 @@ export const admin = {
   recent: () => api<{ items: AdminEvent[] }>('/admin/recent').then((r) => r.items),
 }
 
-export type ModKind = 'entry' | 'submission' | 'bot'
+export type ModKind = 'submission' | 'bot'
 export const moderation = {
   users: (q: string) => api<{ items: ModUser[] }>(`/admin/moderation/users?q=${encodeURIComponent(q)}`).then((r) => r.items),
   items: (userId: string) => api<{ items: ModItem[] }>(`/admin/moderation/users/${encodeURIComponent(userId)}/items`).then((r) => r.items),

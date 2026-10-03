@@ -52,15 +52,6 @@ export interface DayListItem {
   solvers: number
 }
 
-// Agent stacks (`/stacks`, `/daily/{day}/stacks`): free-text "made with" normalized to (tool, model).
-// solve_rate, avg_tests_share and avg_attempts_to_pass only count bugfix days, null when there are none.
-export interface StackRow {
-  tool: string; model: string; label: string
-  users: number; days_attempted: number; bugfix_days: number; optimize_days: number; days_solved: number
-  avg_points: number // 0-100 per day, same scale as the overall leaderboard
-  solve_rate: number | null; avg_tests_share: number | null; avg_attempts_to_pass: number | null
-}
-
 export interface OverallRow { place: number; handle: string; points: number; solved_days: number; current_streak: number }
 
 export interface User { id: string; email: string; handle: string; role: 'user' | 'admin'; created_at: string }
@@ -163,52 +154,6 @@ export interface LiveView { match_id: string | null; starts_at: string | null; d
 
 export interface MatchLog { match_id: string; slot: number; stderr: string }
 
-// Product tasks (weekly challenges scored by scenarios, then voted on).
-export interface ProductScenarioResult { name: string; passed: boolean }
-
-export interface ProductTask {
-  slug: string; title: string; summary: string; kind: 'cli' | 'site'; phase: 'open' | 'voting' | 'final'
-  opens_at: string; deadline: string; voting_ends_at: string; scenario_count: number; attempts: number; entry_count: number
-  task_md?: string
-  has_bench: boolean // cli: the tool is also timed on a large generated input
-  winner?: { entry_id: string; handle: string; votes: number; passed: number; bench_ms: number | null; total: number }
-}
-
-// `/products`: every task that has opened, newest first, plus what is known about the ones still to come.
-export interface ProductList { items: ProductTask[]; upcoming: { count: number; next_kind?: 'cli' | 'site'; next_opens_at: string } }
-
-// Site entries: informational signals from the scoring run; never part of the ranking.
-export interface A11yCounts { critical: number; serious: number; moderate: number; minor: number }
-export interface SiteQuality {
-  a11y?: { desktop: A11yCounts; mobile: A11yCounts; top_rules: string[] }
-  perf?: { bytes: number; requests: number; dcl_ms: number; load_ms: number; errors: number }
-  mobile?: { overflow: boolean; small_targets: number }
-}
-
-export interface ProductEntry {
-  id: string; task_slug: string; handle?: string; status: 'queued' | 'running' | 'done' | 'infra_error'
-  passed: number; total: number; failure_reason: string | null; results: ProductScenarioResult[]
-  bench_ms: number | null // cli: trimmed median benchmark time in ms (faster ranks higher); null when there is no time
-  bench_spread_ms: number | null // cli: ± half the range of the kept samples
-  log_tail?: string; made_with: string; votes: number; voted: boolean; mine: boolean
-  score?: number; comparisons: number // site tasks: Bradley-Terry score of the blind comparisons, and how many there were
-  quality?: SiteQuality | null // site: null while hidden (blind voting, others' entries) or when the scan produced nothing
-  created_at: string; finished_at: string | null
-}
-
-// Blind comparison of sites (`/products/{slug}/compare`): ids only until the person has judged.
-export interface ComparePair { a: { id: string }; b: { id: string } }
-export interface CompareNext { pair: ComparePair | null; judged: number; target: number }
-export interface CompareRevealed { id: string; handle: string; made_with: string }
-export interface CompareJudged { a: CompareRevealed; b: CompareRevealed; winner: 'a' | 'b' | 'tie'; judged: number; target: number }
-
-// fastest_ms is the best benchmark time among all entries, known once the deadline has passed.
-export interface ProductDetail extends ProductTask { attempts_used: number; mine: ProductEntry[]; fastest_ms: number | null }
-
-export interface ProductSourceFile { path: string; size: number; content?: string; truncated?: boolean; binary?: boolean }
-
-export interface ProductResults { task: ProductTask; entries: ProductEntry[]; total: number }
-
 // A person's public page (`/users/{handle}`).
 export interface ProfileDay {
   day: string
@@ -225,12 +170,7 @@ export interface Profile {
   tools: string[]; days: ProfileDay[]
 }
 
-// A person's activity across products, tanks and their main stack (`/users/{handle}/activity`).
-export interface ActivityProduct {
-  task_slug: string; task_title: string; kind: 'cli' | 'site'; phase: 'open' | 'voting' | 'final'; deadline: string
-  entry_id: string; passed: number; bench_ms: number | null; total: number; votes: number; place: number | null; entrants: number; created_at: string
-}
-
+// A person's tanks bots and their main stack (`/users/{handle}/activity`).
 export interface ActivityBotTournament { id: string; name: string; starts_at: string; result: string; champion: boolean; open: boolean }
 
 export interface ActivityBot {
@@ -242,7 +182,7 @@ export interface ActivityBot {
 export interface ActivityStack { tool: string; model: string; label: string; count: number }
 
 export interface Activity {
-  handle: string; stack: ActivityStack | null; products: ActivityProduct[]; bots: ActivityBot[]
+  handle: string; stack: ActivityStack | null; bots: ActivityBot[]
 }
 
 // /admin: the owner's pulse of the platform (GET /admin/pulse, GET /admin/recent).
@@ -255,12 +195,6 @@ export interface AdminPulse {
     today: Record<string, number>
     unique_solvers: number; infra_rate_7d: number; submissions_7d: number; median_seconds: number | null
     submission_series: AdminPoint[]; user_series: AdminPoint[]
-  }
-  products: {
-    task_slug: string; task_title: string; task_kind: string
-    opens_at: string | null; deadline: string | null
-    entries: number; by_status: Record<string, number>; votes: number
-    next_kind: string; upcoming: number
   }
   tanks: {
     bots_total: number; bots_active: number; uploads_today: number; rejected_today: number
@@ -283,7 +217,7 @@ export interface AdminFunnel {
   pages: { path: string; views: number; visitors: number }[]
   sources: { source: string; visits: number }[]
 }
-export interface AdminEvent { at: string; type: 'signup' | 'submission' | 'product_entry' | 'bot_version' | 'tournament'; title: string; detail: string; status: string; href: string }
+export interface AdminEvent { at: string; type: 'signup' | 'submission' | 'bot_version' | 'tournament'; title: string; detail: string; status: string; href: string }
 
 // Retention: `/me/recap` and `/me/notifications`.
 export interface RecapResult { handle?: string; passed_tests: number; total_tests: number; score: number | null }
@@ -300,7 +234,7 @@ export interface Recap {
 
 export interface AppNotification {
   id: string
-  type: 'daily_verdict' | 'daily_final' | 'product_voting' | 'product_final' | 'tournament_soon' | 'tournament_entered'
+  type: 'daily_verdict' | 'daily_final' | 'tournament_soon' | 'tournament_entered'
     | 'tournament_won' | 'tournament_lost' | 'rank_drop'
   params: Record<string, string | number | null>
   created_at: string
@@ -309,9 +243,9 @@ export interface AppNotification {
 export interface NotificationList { items: AppNotification[]; unread: number }
 
 // Moderation (`/admin/moderation/*`).
-export interface ModUser { id: string; handle: string; email: string; role: string; created_at: string; banned_at: string | null; submissions: number; entries: number }
-export interface ModItem { kind: 'entry' | 'submission' | 'bot'; id: string; label: string; status: string; at: string; hidden_at: string | null }
-export interface ModLogItem { at: string; action: 'ban' | 'unban' | 'hide' | 'unhide'; kind: 'user' | 'entry' | 'submission' | 'bot'; id: string; label: string; actor: string; reason: string; active: boolean }
+export interface ModUser { id: string; handle: string; email: string; role: string; created_at: string; banned_at: string | null; submissions: number }
+export interface ModItem { kind: 'submission' | 'bot'; id: string; label: string; status: string; at: string; hidden_at: string | null }
+export interface ModLogItem { at: string; action: 'ban' | 'unban' | 'hide' | 'unhide'; kind: 'user' | 'submission' | 'bot'; id: string; label: string; actor: string; reason: string; active: boolean }
 
 // Fair play (`/admin/fairplay`, `POST /reports`).
 export type FairSignal = 'fast_solve' | 'burst' | 'shared_device' | 'shared_ip' | 'near_duplicate'

@@ -72,7 +72,7 @@ function UserRow({ u, onChanged }: { u: ModUser; onChanged: () => void }) {
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
         <span>{formatDateTime(t.locale, u.created_at)}</span>
-        <span>{t('activity', { s: u.submissions, e: u.entries })}</span>
+        <span>{t('activity', { s: u.submissions })}</span>
         <span className="ml-auto flex gap-2">
           <Button size="sm" variant="outline" onClick={() => { setShowItems(!showItems); if (!showItems) void loadItems() }}>{showItems ? t('close') : t('items')}</Button>
           {u.role !== 'admin' && !form && (
