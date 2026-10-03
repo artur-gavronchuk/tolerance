@@ -8,6 +8,7 @@ import { Markdown } from '@/components/daily/markdown'
 import { Countdown } from '@/components/daily/countdown'
 import { DailyBoard } from '@/components/daily/daily-board'
 import { DayRevealView } from '@/components/daily/day-reveal'
+import { ShareResult, shareText } from '@/components/daily/share-result'
 import { SubmissionCard } from '@/components/daily/submission-card'
 import { TaskBadges } from '@/components/daily/task-header'
 import { UploadForm } from '@/components/daily/upload-form'
@@ -26,7 +27,7 @@ When you are done, the repository should build and the tests should pass.`
 // The task of the day (`day` omitted) or a past day (`day` = YYYY-MM-DD).
 // Past days accept practice uploads: they do not count for the leaderboards.
 export function DailyView({ day }: { day?: string }) {
-  const { me } = useMe()
+  const { me, refresh: refreshMe } = useMe()
   const [daily, setDaily] = useState<Daily | null>(null)
   const [rows, setRows] = useState<DailyRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -51,10 +52,13 @@ export function DailyView({ day }: { day?: string }) {
   const update = useCallback((s: Submission) => {
     setLocal((cur) => {
       const prev = cur.find((x) => x.id === s.id)
-      if (prev && ['queued', 'running'].includes(prev.status) && !['queued', 'running'].includes(s.status)) void load()
+      if (prev && ['queued', 'running'].includes(prev.status) && !['queued', 'running'].includes(s.status)) {
+        void load()
+        void refreshMe()
+      }
       return prev ? cur.map((x) => (x.id === s.id ? s : x)) : [s, ...cur]
     })
-  }, [load])
+  }, [load, refreshMe])
 
   if (missing) notFound()
   if (error) return <p role="alert" className="text-sm text-destructive">{error}</p>
@@ -76,6 +80,7 @@ export function DailyView({ day }: { day?: string }) {
     ...local.filter((s) => !serverIds.has(s.id)),
     ...(daily.my?.submissions ?? []).map((s) => localById.get(s.id) ?? s),
   ]
+  const share = shareText({ day: daily.day, title: task.title, subs, streak: daily.is_open ? me?.streak.current ?? 0 : 0 })
 
   return (
     <div className="space-y-10">
@@ -140,6 +145,7 @@ export function DailyView({ day }: { day?: string }) {
           <SectionTitle aside={daily.my.best ? `Best: ${daily.my.best.passed_tests}/${daily.my.best.total_tests}` : undefined}>
             My submissions
           </SectionTitle>
+          {share && <div className="mb-3"><ShareResult text={share} /></div>}
           {subs.length === 0 ? (
             <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">Nothing submitted yet.</p>
           ) : (
