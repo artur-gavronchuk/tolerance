@@ -30,6 +30,18 @@ func parseLimit(r *http.Request, def, max int) (int, error) {
 // RegisterAdminRoutes registers what only an admin (or a local dev login) may do: starting a tournament now.
 // The caller wraps the mux in the session and role checks.
 func RegisterAdminRoutes(mux *http.ServeMux, s *Service) {
+	mux.HandleFunc("POST /api/v1/tanks/tournaments/{id}/pairings/{pairing}/resume", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.ResumePairing(r.Context(), r.PathValue("id"), r.PathValue("pairing")); err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		v, err := s.Tournament(r.Context(), r.PathValue("id"))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, v)
+	})
 	mux.HandleFunc("POST /api/v1/tanks/tournaments", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Size int `json:"size"`

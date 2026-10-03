@@ -504,8 +504,10 @@ func (s *Service) advanceTournamentTx(ctx context.Context, tx pgx.Tx, id string)
 }
 
 // stepPairing looks at the latest match of a running series. A finished match is scored (and either ends
-// the series or queues the next game); a platform failure replaces the match, or after too many decides
-// the series by seed; a match still queued or running changes nothing.
+// the series or queues the next game); a platform failure replaces the match, and after too many in a row
+// stops the series as 'stalled' with no winner, so a platform fault never picks the champion. A bot that
+// crashes or times out on its own still plays a finished match and loses it. A match still queued or
+// running changes nothing.
 func (s *Service) stepPairing(ctx context.Context, tx pgx.Tx, st *bracketState, p *pairingState) error {
 	var game int
 	var matchID, matchStatus string
@@ -537,7 +539,10 @@ func (s *Service) stepPairing(ctx context.Context, tx pgx.Tx, st *bracketState, 
 			return err
 		}
 		if p.infra >= maxPairingInfraErrors {
-			return s.finishPairing(ctx, tx, st, p, betterSeed(st, *p.botA, *p.botB))
+			p.status = "stalled"
+			s.log.Warn("games: tournament pairing stalled on platform errors", "tournament", st.id, "pairing", p.id)
+			_, err := tx.Exec(ctx, `UPDATE tanks_tournament_pairings SET status = 'stalled' WHERE id = $1`, p.id)
+			return err
 		}
 		mid, err := s.newTournamentMatch(ctx, tx, st, p, game)
 		if err != nil {
@@ -576,6 +581,36 @@ func (s *Service) stepPairing(ctx context.Context, tx pgx.Tx, st *bracketState, 
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO tanks_tournament_games (pairing_id, game, match_id) VALUES ($1, $2, $3)`, p.id, game+1, mid)
 	return err
+}
+
+// ResumePairing restarts a stalled series (admin action, once the platform works again): the infra counter
+// resets and the failed game is replayed with the same bot versions; games already scored stay scored.
+// Resuming a pairing that is not stalled is a no-op, so a double click cannot queue a second match.
+func (s *Service) ResumePairing(ctx context.Context, tournamentID, pairingID string) error {
+	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('games:tournaments'))`); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `UPDATE tanks_tournament_pairings p SET status = 'running', infra_errors = 0
+			FROM tanks_tournaments t
+			WHERE p.id = $2 AND p.tournament_id = $1 AND t.id = p.tournament_id AND t.status = 'running' AND p.status = 'stalled'`,
+			tournamentID, pairingID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			var exists bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tanks_tournament_pairings WHERE id = $2 AND tournament_id = $1)`,
+				tournamentID, pairingID).Scan(&exists); err != nil {
+				return err
+			}
+			if !exists {
+				return httpx.NotFound()
+			}
+			return nil
+		}
+		return s.advanceTournamentTx(ctx, tx, tournamentID)
+	})
 }
 
 func (s *Service) finishPairing(ctx context.Context, tx pgx.Tx, st *bracketState, p *pairingState, winner string) error {

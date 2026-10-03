@@ -124,7 +124,8 @@ export interface TournamentPairing {
   id: string; round: number; position: number
   a: TournamentBot | null; b: TournamentBot | null
   wins_a: number; wins_b: number
-  status: 'pending' | 'running' | 'finished'
+  // stalled: repeated platform errors; no winner until an admin resumes it.
+  status: 'pending' | 'running' | 'finished' | 'stalled'
   winner_bot_id: string | null; bye: boolean; games: TournamentGame[]
 }
 

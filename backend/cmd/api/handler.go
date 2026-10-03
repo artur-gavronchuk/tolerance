@@ -124,6 +124,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/tanks/", public)
 	// Starting a tournament now: admins, or anyone signed in when the dev login is on (local runs).
 	api.Handle("POST /api/v1/tanks/tournaments", session(adminOrDev(cfg.devLogin)(admin)))
+	api.Handle("POST /api/v1/tanks/tournaments/{id}/pairings/{pairing}/resume", session(adminOrDev(cfg.devLogin)(admin)))
 
 	api.Handle("GET /api/v1/admin/pulse", session(adminOrDev(cfg.devLogin)(pulse)))
 	api.Handle("GET /api/v1/admin/recent", session(adminOrDev(cfg.devLogin)(pulse)))

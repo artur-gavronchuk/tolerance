@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { Trophy } from 'lucide-react'
+import { PauseCircle, Trophy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
@@ -34,19 +35,35 @@ function BotRow({ t, bot, wins, won, lost, bye }: { t: BracketT; bot: Tournament
   )
 }
 
-function PairingCard({ t, p }: { t: BracketT; p: TournamentPairing }) {
+// onResume is passed only to admins; it restarts a series stalled by platform errors.
+type Resume = (pairingId: string) => Promise<void>
+
+function PairingCard({ t, p, onResume }: { t: BracketT; p: TournamentPairing; onResume?: Resume }) {
+  const [busy, setBusy] = useState(false)
   const aWon = p.status === 'finished' && p.winner_bot_id != null && p.winner_bot_id === p.a?.bot_id
   const bWon = p.status === 'finished' && p.winner_bot_id != null && p.winner_bot_id === p.b?.bot_id
   return (
     <div
       className={cn(
         'overflow-hidden rounded-[10px] border bg-card',
-        p.status === 'running' ? 'border-primary shadow-sm' : 'border-border',
+        p.status === 'running' ? 'border-primary shadow-sm' : p.status === 'stalled' ? 'border-warning' : 'border-border',
       )}
     >
       <BotRow t={t} bot={p.a} wins={p.wins_a} won={aWon} lost={bWon} />
       <div className="border-t border-border" />
       <BotRow t={t} bot={p.b} wins={p.wins_b} won={bWon} lost={aWon} bye={p.bye} />
+      {p.status === 'stalled' && (
+        <div className="space-y-1.5 border-t border-border bg-warning/10 px-3 py-2 text-[0.72rem] leading-snug">
+          <p className="flex gap-1.5"><PauseCircle className="mt-px size-3.5 shrink-0 text-warning" />{t('bracket.stalled')}</p>
+          {onResume && (
+            <button type="button" disabled={busy}
+              onClick={() => { setBusy(true); void onResume(p.id).finally(() => setBusy(false)) }}
+              className="rounded-full border border-border bg-card px-2.5 py-0.5 font-semibold hover:border-primary hover:text-primary disabled:opacity-60">
+              {busy ? t('bracket.resuming') : t('bracket.resume')}
+            </button>
+          )}
+        </div>
+      )}
       {p.games.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-border bg-muted/40 px-3 py-1.5">
           {p.games.map((g) => {
@@ -72,7 +89,7 @@ function PairingCard({ t, p }: { t: BracketT; p: TournamentPairing }) {
 
 // The single-elimination bracket: one column per round, scrolling sideways inside its own container so the
 // page itself never does (it must work at 375px).
-export function Bracket({ t: tour }: { t: TournamentView }) {
+export function Bracket({ t: tour, onResume }: { t: TournamentView; onResume?: Resume }) {
   const t = useT(m)
   const pairings = tour.pairings ?? []
   if (pairings.length === 0) return null
@@ -90,7 +107,7 @@ export function Bracket({ t: tour }: { t: TournamentView }) {
               {pairings
                 .filter((p) => p.round === r)
                 .map((p) => (
-                  <PairingCard key={p.id} t={t} p={p} />
+                  <PairingCard key={p.id} t={t} p={p} onResume={onResume} />
                 ))}
             </div>
           </div>

@@ -11,7 +11,8 @@ import { HandleLink } from '@/components/daily/handle-link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ApiError, tanks } from '@/lib/api'
+import { ApiError, post, tanks } from '@/lib/api'
+import { useMe } from '@/lib/use-me'
 import { seasonNameFromId, tournamentName } from '@/lib/i18n/messages/names'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
@@ -22,6 +23,17 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
   const tr = useT(m)
   const [t, setT] = useState<TournamentView | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { me } = useMe()
+  // Admins (or anyone on a dev build) may resume a series stalled by platform errors.
+  const resume = me?.can_admin
+    ? async (pairingId: string) => {
+        try {
+          setT(await post<TournamentView>(`/tanks/tournaments/${encodeURIComponent(id)}/pairings/${encodeURIComponent(pairingId)}/resume`))
+        } catch (e) {
+          setError(errorText(e, tr.locale))
+        }
+      }
+    : undefined
   const live = t == null || t.status === 'scheduled' || t.status === 'running'
 
   useEffect(() => {
@@ -111,7 +123,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
       {(t.pairings?.length ?? 0) > 0 && (
         <section className="mt-8">
           <SectionTitle aside={t.status === 'running' ? tr('tour.updatesLive') : undefined}>{tr('tour.bracket')}</SectionTitle>
-          <Bracket t={t} />
+          <Bracket t={t} onResume={resume} />
         </section>
       )}
 
