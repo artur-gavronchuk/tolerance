@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { HandleLink } from '@/components/daily/handle-link'
 import { BotBadge } from './bot-badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { LeaderboardEntry } from '@/lib/types'
@@ -40,6 +41,7 @@ export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
                   {e.name}
                   <BotBadge source={e.source} house={e.house} />
                 </Link>
+                {e.owner && <span className="ml-2 text-xs text-muted-foreground">by <HandleLink handle={e.owner} /></span>}
               </TableCell>
               <TableCell className="text-right font-mono font-bold">{e.rating}</TableCell>
               <TableCell className="text-right font-mono text-muted-foreground">{e.matches}</TableCell>
@@ -59,7 +61,7 @@ export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
                 <BotBadge source={e.source} house={e.house} />
               </Link>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {e.matches} matches · {e.wins} wins · {winRate(e)}
+                {e.owner && <><HandleLink handle={e.owner} /> · </>}{e.matches} matches · {e.wins} wins · {winRate(e)}
               </p>
             </div>
             <span className="shrink-0 font-mono text-lg font-bold">{e.rating}</span>

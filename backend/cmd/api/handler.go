@@ -18,6 +18,7 @@ import (
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/products"
+	"tolerance/internal/profiles"
 	"tolerance/internal/stacks"
 	"tolerance/internal/submissions"
 	"tolerance/internal/tasks"
@@ -32,6 +33,7 @@ type deps struct {
 	games       *games.Service
 	products    *products.Service
 	stacks      *stacks.Service
+	profiles    *profiles.Service
 	limiter     *ratelimit.Limiter
 	providers   map[string]identity.Provider
 }
@@ -53,6 +55,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
 	tasks.RegisterPublicRoutes(public, d.pool)
 	stacks.RegisterPublicRoutes(public, d.stacks)
+	profiles.RegisterPublicRoutes(public, d.profiles)
 	games.RegisterPublicRoutes(public, d.games)
 	products.RegisterPublicRoutes(public, d.products, identity.OptionalUserID(d.users))
 

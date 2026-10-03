@@ -197,3 +197,23 @@ export interface Profile {
   solved_days: number; played_days: number; place: number | null
   tools: string[]; days: ProfileDay[]
 }
+
+// A person's activity across products, tanks and their main stack (`/users/{handle}/activity`).
+export interface ActivityProduct {
+  task_slug: string; task_title: string; kind: 'cli' | 'site'; phase: 'open' | 'voting' | 'final'; deadline: string
+  entry_id: string; passed: number; total: number; votes: number; place: number | null; entrants: number; created_at: string
+}
+
+export interface ActivityBotTournament { id: string; name: string; starts_at: string; result: string; champion: boolean }
+
+export interface ActivityBot {
+  id: string; name: string; rating: number; rank: number | null; lifetime_rating: number
+  matches: number; wins: number; total_matches: number; total_wins: number
+  titles: number; best_finish: string; tournaments: ActivityBotTournament[]
+}
+
+export interface ActivityStack { tool: string; model: string; label: string; count: number }
+
+export interface Activity {
+  handle: string; stack: ActivityStack | null; products: ActivityProduct[]; bots: ActivityBot[]
+}

@@ -6,6 +6,7 @@ import { ArrowLeft, Trophy } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { Countdown } from '@/components/tanks/countdown'
 import { Leaderboard } from '@/components/tanks/leaderboard'
+import { HandleLink } from '@/components/daily/handle-link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -80,7 +81,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Season winner</p>
             <Link href={`/tanks/bots/${s.winner.bot_id}`} className="text-xl font-bold hover:text-primary">{s.winner.name}</Link>
-            {s.winner.owner && <span className="ml-2 text-sm text-muted-foreground">by {s.winner.owner}</span>}
+            {s.winner.owner && <span className="ml-2 text-sm text-muted-foreground">by <HandleLink handle={s.winner.owner} /></span>}
             <span className="ml-2 font-mono text-sm text-muted-foreground">{s.winner.rating}</span>
           </div>
         </div>

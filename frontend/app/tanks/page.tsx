@@ -1,5 +1,6 @@
 'use client'
 
+import { HandleLink } from '@/components/daily/handle-link'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { CalendarClock, Trophy } from 'lucide-react'
@@ -95,6 +96,7 @@ export default function TanksHome() {
                     <p className="mt-3 flex items-center gap-1.5 text-sm">
                       <Trophy className="size-4 text-warning" />
                       Champion: <Link href={`/tanks/bots/${tour.champion.bot_id}`} className="font-bold hover:text-primary">{tour.champion.name}</Link>
+                      {tour.champion.owner && <span className="text-muted-foreground">by <HandleLink handle={tour.champion.owner} /></span>}
                     </p>
                   ) : (
                     <p className="mt-3 text-sm text-muted-foreground">{tour.entry_count} bots, best of {tour.best_of}. The bracket is below.</p>

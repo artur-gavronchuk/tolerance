@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Trophy } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { BotBadge } from '@/components/tanks/bot-badge'
+import { HandleLink } from '@/components/daily/handle-link'
 import { MatchList } from '@/components/tanks/match-list'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -70,7 +71,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
         }
       >
         {bot.rank > 0 ? <>Rank #{bot.rank} in season {bot.season.name}.</> : <>Not ranked in season {bot.season.name} yet.</>}
-        {bot.owner && <> By {bot.owner}.</>}
+        {bot.owner && <> By <HandleLink handle={bot.owner} />.</>}
       </PageHeader>
 
       <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">

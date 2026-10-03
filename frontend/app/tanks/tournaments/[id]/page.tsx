@@ -6,6 +6,7 @@ import { ArrowLeft, Trophy } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { Bracket } from '@/components/tanks/bracket'
 import { Countdown } from '@/components/tanks/countdown'
+import { HandleLink } from '@/components/daily/handle-link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -97,7 +98,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
             <Link href={`/tanks/bots/${t.champion.bot_id}`} className="text-xl font-bold hover:text-primary">
               {t.champion.name}
             </Link>
-            {t.champion.owner && <span className="ml-2 text-sm text-muted-foreground">by {t.champion.owner}</span>}
+            {t.champion.owner && <span className="ml-2 text-sm text-muted-foreground">by <HandleLink handle={t.champion.owner} /></span>}
           </div>
         </div>
       )}
@@ -119,7 +120,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
                 <Link href={`/tanks/bots/${e.bot_id}`} className="min-w-0 flex-1 truncate font-semibold hover:text-primary">
                   {e.name}
                 </Link>
-                {e.owner && <span className="text-xs text-muted-foreground">{e.owner}</span>}
+                {e.owner && <span className="text-xs text-muted-foreground"><HandleLink handle={e.owner} /></span>}
               </li>
             ))}
           </ul>

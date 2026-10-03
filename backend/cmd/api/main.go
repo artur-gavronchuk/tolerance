@@ -22,6 +22,7 @@ import (
 	"tolerance/internal/platform/limits"
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/products"
+	"tolerance/internal/profiles"
 	"tolerance/internal/sandbox"
 	"tolerance/internal/stacks"
 	"tolerance/internal/submissions"
@@ -65,7 +66,7 @@ func main() {
 
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), daily: dailySvc,
-		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: products.NewService(pool), stacks: stacks.NewService(pool),
+		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: products.NewService(pool), stacks: stacks.NewService(pool), profiles: profiles.NewService(pool),
 		limiter:   ratelimit.New(nil),
 		providers: providersFromConfig(cfg),
 	}
