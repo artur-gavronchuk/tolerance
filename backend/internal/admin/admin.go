@@ -190,18 +190,18 @@ func (s *Service) Pulse(ctx context.Context) (Pulse, error) {
 
 		// Users.
 		u := &p.Users
-		one(`SELECT count(*) FROM users`, &u.Total)
-		one(`SELECT count(*) FROM users WHERE created_at >= $1`, &u.NewToday, today)
-		one(`SELECT count(*) FROM users WHERE created_at >= $1`, &u.New7d, d7)
+		one(`SELECT count(*) FROM users WHERE NOT house`, &u.Total)
+		one(`SELECT count(*) FROM users WHERE NOT house AND created_at >= $1`, &u.NewToday, today)
+		one(`SELECT count(*) FROM users WHERE NOT house AND created_at >= $1`, &u.New7d, d7)
 		one(`SELECT count(*) FROM (
-			SELECT user_id FROM submissions WHERE created_at >= $1
+			SELECT user_id FROM submissions WHERE created_at >= $1 AND user_id NOT IN (SELECT id FROM users WHERE house)
 			UNION SELECT b.owner_user_id FROM bot_versions v JOIN game_bots b ON b.id = v.bot_id
 				WHERE v.source = 'upload' AND v.created_at >= $1 AND b.owner_user_id IS NOT NULL) a`, &u.ActiveToday, today)
 		if err != nil {
 			return err
 		}
 		if u.SignupSeries, err = series(ctx, tx, since, `SELECT (created_at AT TIME ZONE 'UTC')::date, count(*)::int FROM users
-			WHERE created_at >= $1 GROUP BY 1`); err != nil {
+			WHERE NOT house AND created_at >= $1 GROUP BY 1`); err != nil {
 			return err
 		}
 
@@ -214,7 +214,7 @@ func (s *Service) Pulse(ctx context.Context) (Pulse, error) {
 		if d.Today, err = counts(ctx, tx, `SELECT status, count(*)::int FROM submissions WHERE created_at >= $1 GROUP BY 1`, today); err != nil {
 			return err
 		}
-		one(`SELECT count(DISTINCT user_id) FROM submissions WHERE created_at >= $1`, &d.UniqueSolvers, today)
+		one(`SELECT count(DISTINCT user_id) FROM submissions WHERE created_at >= $1 AND user_id NOT IN (SELECT id FROM users WHERE house)`, &d.UniqueSolvers, today)
 		if err != nil {
 			return err
 		}
@@ -235,7 +235,7 @@ func (s *Service) Pulse(ctx context.Context) (Pulse, error) {
 			return err
 		}
 		if d.UserSeries, err = series(ctx, tx, since, `SELECT (created_at AT TIME ZONE 'UTC')::date, count(DISTINCT user_id)::int FROM submissions
-			WHERE created_at >= $1 GROUP BY 1`); err != nil {
+			WHERE created_at >= $1 AND user_id NOT IN (SELECT id FROM users WHERE house) GROUP BY 1`); err != nil {
 			return err
 		}
 

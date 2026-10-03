@@ -34,6 +34,12 @@ func ParseDay(s string) (time.Time, bool) {
 type Service struct {
 	pool    *db.Pool
 	overall ttlcache.Cache[struct{}, []OverallRow]
+
+	// OnAssign, when set, is called once after a day's task is first assigned (by whichever request or tick
+	// got there first). The house agents hook in here (internal/house).
+	OnAssign func(ctx context.Context, day string)
+	// HouseHandles are the configured house agents, so today's summary can list one that has not run yet.
+	HouseHandles []string
 }
 
 func NewService(pool *db.Pool) *Service {
@@ -51,23 +57,30 @@ var ErrNoTasks = httpx.New(http.StatusServiceUnavailable, "no_tasks", "No task i
 // of the day converge on the same task.
 func (s *Service) TaskFor(ctx context.Context, day string) (string, error) {
 	var slug string
+	assigned := false
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		assigned = false
 		err := tx.QueryRow(ctx, `SELECT task_slug FROM daily_tasks WHERE day = $1`, day).Scan(&slug)
 		if err == nil || !errors.Is(err, pgx.ErrNoRows) || day != Today() {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `
+		tag, err := tx.Exec(ctx, `
 			INSERT INTO daily_tasks (day, task_slug)
 			SELECT $1::date, t.slug FROM tasks t WHERE t.active
 			ORDER BY (SELECT max(d.day) FROM daily_tasks d WHERE d.task_slug = t.slug) ASC NULLS FIRST, t.slug
 			LIMIT 1
-			ON CONFLICT (day) DO NOTHING`, day); err != nil {
+			ON CONFLICT (day) DO NOTHING`, day)
+		if err != nil {
 			return err
 		}
+		assigned = tag.RowsAffected() == 1
 		return tx.QueryRow(ctx, `SELECT task_slug FROM daily_tasks WHERE day = $1`, day).Scan(&slug)
 	})
 	if errors.Is(err, pgx.ErrNoRows) && day == Today() {
 		return "", ErrNoTasks
+	}
+	if err == nil && assigned && s.OnAssign != nil {
+		s.OnAssign(ctx, day)
 	}
 	return slug, err
 }
@@ -80,6 +93,7 @@ type Daily struct {
 	Task           tasks.Summary `json:"task"`
 	AttemptsPerDay int           `json:"attempts_per_day"`
 	My             any           `json:"my"`
+	House          []HouseResult `json:"house"` // what the platform's own agents scored (house.go)
 }
 
 // MyFunc builds the signed-in person's block for a day. It lives outside this package (it needs the
@@ -103,6 +117,9 @@ func (s *Service) Get(ctx context.Context, day, userID string, my MyFunc) (Daily
 		return Daily{}, err
 	}
 	d := Daily{Day: day, ClosesAt: t.Add(24 * time.Hour).UTC(), IsOpen: day == Today(), Task: task, AttemptsPerDay: AttemptsPerDay}
+	if d.House, err = s.houseResults(ctx, day, task, userID); err != nil {
+		return Daily{}, err
+	}
 	if userID != "" && my != nil {
 		if d.My, err = my(ctx, userID, day); err != nil {
 			return Daily{}, err
@@ -120,14 +137,18 @@ type Row struct {
 	TotalTests  int       `json:"total_tests"`
 	Score       *float64  `json:"score"`
 	SubmittedAt time.Time `json:"submitted_at"`
+	House       bool      `json:"house"`      // a platform agent: shown inline, takes no place
+	HouseName   string    `json:"house_name"` // display name of a house agent
 }
 
-// Leaderboard is the day's best finished submission per person with at least one hidden test passed.
+// Leaderboard is the day's best finished submission per person with at least one hidden test passed. House
+// agents' rows sit inline in rank order but take no place (Place is 0): places count people only.
 func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
 	if _, ok := ParseDay(day); !ok || day > Today() {
 		return nil, httpx.NotFound()
 	}
 	out := []Row{}
+	people := 0
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var kind string
 		var direction *string
@@ -139,8 +160,8 @@ func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
 			return err
 		}
 		q := `
-			SELECT id, handle, made_with, passed_tests, total_tests, NULL::float8, created_at FROM (
-				SELECT DISTINCT ON (s.user_id) s.id, u.handle, s.made_with, s.passed_tests, s.total_tests, s.created_at
+			SELECT id, handle, made_with, passed_tests, total_tests, NULL::float8, created_at, house, house_name FROM (
+				SELECT DISTINCT ON (s.user_id) s.id, u.handle, u.house, u.house_name, s.made_with, s.passed_tests, s.total_tests, s.created_at
 				FROM submissions s JOIN users u ON u.id = s.user_id
 				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND s.passed_tests > 0 AND s.hidden_at IS NULL
 				ORDER BY s.user_id, s.passed_tests DESC, s.created_at ASC) best
@@ -154,8 +175,8 @@ func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
 				dir = "ASC"
 			}
 			q = `
-			SELECT id, handle, made_with, passed_tests, total_tests, score, created_at FROM (
-				SELECT DISTINCT ON (s.user_id) s.id, u.handle, s.made_with, s.passed_tests, s.total_tests, s.score, s.created_at
+			SELECT id, handle, made_with, passed_tests, total_tests, score, created_at, house, house_name FROM (
+				SELECT DISTINCT ON (s.user_id) s.id, u.handle, u.house, u.house_name, s.made_with, s.passed_tests, s.total_tests, s.score, s.created_at
 				FROM submissions s JOIN users u ON u.id = s.user_id JOIN tasks t ON t.slug = s.task_slug
 				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND s.score IS NOT NULL AND s.hidden_at IS NULL
 				  AND (t.direction <> 'min' OR s.cases_valid = t.cases)
@@ -169,11 +190,14 @@ func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
 		defer rows.Close()
 		for rows.Next() {
 			var r Row
-			if err := rows.Scan(&r.ID, &r.Handle, &r.MadeWith, &r.PassedTests, &r.TotalTests, &r.Score, &r.SubmittedAt); err != nil {
+			if err := rows.Scan(&r.ID, &r.Handle, &r.MadeWith, &r.PassedTests, &r.TotalTests, &r.Score, &r.SubmittedAt, &r.House, &r.HouseName); err != nil {
 				return err
 			}
 			r.SubmittedAt = r.SubmittedAt.UTC()
-			r.Place = len(out) + 1
+			if !r.House {
+				people++
+				r.Place = people
+			}
 			out = append(out, r)
 		}
 		return rows.Err()
@@ -200,7 +224,7 @@ func (s *Service) Days(ctx context.Context) ([]DayItem, error) {
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT d.day::text, t.slug, t.title, t.language, t.difficulty,
-			       (SELECT count(DISTINCT s.user_id) FROM submissions s WHERE s.day = d.day AND s.status = 'passed' AND s.hidden_at IS NULL)
+			       (SELECT count(DISTINCT s.user_id) FROM submissions s JOIN users u ON u.id = s.user_id AND NOT u.house WHERE s.day = d.day AND s.status = 'passed' AND s.hidden_at IS NULL)
 			FROM daily_tasks d JOIN tasks t ON t.slug = d.task_slug
 			WHERE d.day < $1::date ORDER BY d.day DESC LIMIT 60`, Today())
 		if err != nil {
@@ -260,7 +284,8 @@ func streakOf(days []string, today time.Time) Streak {
 }
 
 func solvedDays(ctx context.Context, tx pgx.Tx, where string, args ...any) (map[string][]string, error) {
-	rows, err := tx.Query(ctx, `SELECT DISTINCT user_id, day::text FROM submissions WHERE day IS NOT NULL AND status = 'passed' AND hidden_at IS NULL `+where, args...)
+	rows, err := tx.Query(ctx, `SELECT DISTINCT user_id, day::text FROM submissions WHERE day IS NOT NULL AND status = 'passed' AND hidden_at IS NULL
+		AND user_id NOT IN (SELECT id FROM users WHERE house) `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -326,10 +351,11 @@ func (s *Service) computeOverall(ctx context.Context) ([]OverallRow, error) {
 				LEFT JOIN (
 					SELECT day, max(score) AS best_max,
 						min(score) FILTER (WHERE score > 0 AND passed_tests = total_tests) AS best_min
-					FROM submissions WHERE day IS NOT NULL AND score IS NOT NULL AND hidden_at IS NULL GROUP BY day) db ON db.day = s.day
+					FROM submissions WHERE day IS NOT NULL AND score IS NOT NULL AND hidden_at IS NULL
+					  AND user_id NOT IN (SELECT id FROM users WHERE house) GROUP BY day) db ON db.day = s.day
 				WHERE s.day IS NOT NULL AND s.status IN ('passed', 'failed') AND s.passed_tests > 0 AND s.total_tests > 0 AND s.hidden_at IS NULL
 				GROUP BY s.user_id, s.day) best
-			JOIN users u ON u.id = best.user_id
+			JOIN users u ON u.id = best.user_id AND NOT u.house
 			GROUP BY u.id, u.handle`)
 		if err != nil {
 			return err
@@ -416,7 +442,7 @@ func (s *Service) Reveal(ctx context.Context, day string) (Reveal, error) {
 		rows, err := tx.Query(ctx, `
 			SELECT id, handle, made_with, created_at, diff FROM (
 				SELECT DISTINCT ON (s.user_id) s.id, u.handle, s.made_with, s.created_at, s.diff
-				FROM submissions s JOIN users u ON u.id = s.user_id
+				FROM submissions s JOIN users u ON u.id = s.user_id AND NOT u.house
 				WHERE s.day = $1 AND s.status = 'passed' AND s.hidden_at IS NULL
 				ORDER BY s.user_id, s.created_at ASC) first
 			ORDER BY created_at ASC, handle LIMIT 10`, day)
@@ -476,7 +502,8 @@ func (s *Service) Stats(ctx context.Context, day string) (Stats, error) {
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `
 			SELECT count(*), count(DISTINCT user_id), count(DISTINCT user_id) FILTER (WHERE status = 'passed')
-			FROM submissions WHERE day = $1 AND status IN ('passed', 'failed') AND hidden_at IS NULL`, day).
+			FROM submissions WHERE day = $1 AND status IN ('passed', 'failed') AND hidden_at IS NULL
+			  AND user_id NOT IN (SELECT id FROM users WHERE house)`, day).
 			Scan(&st.Submissions, &st.Participants, &st.Solvers); err != nil {
 			return err
 		}
@@ -484,6 +511,7 @@ func (s *Service) Stats(ctx context.Context, day string) (Stats, error) {
 			SELECT tool, count(*), count(*) FILTER (WHERE solved) FROM (
 				SELECT DISTINCT ON (user_id) lower(trim(made_with)) AS tool, status = 'passed' AS solved
 				FROM submissions WHERE day = $1 AND status IN ('passed', 'failed') AND hidden_at IS NULL
+				  AND user_id NOT IN (SELECT id FROM users WHERE house)
 				ORDER BY user_id, passed_tests DESC, created_at ASC) best
 			GROUP BY tool ORDER BY count(*) FILTER (WHERE solved) DESC, count(*) DESC, tool LIMIT 20`, day)
 		if err != nil {

@@ -74,7 +74,7 @@ func (s *Service) Activity(ctx context.Context, handle string) (Activity, error)
 	a := Activity{Bots: []Bot{}}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var userID string
-		err := tx.QueryRow(ctx, `SELECT id, handle FROM users WHERE lower(handle) = lower($1) AND banned_at IS NULL`, handle).Scan(&userID, &a.Handle)
+		err := tx.QueryRow(ctx, `SELECT id, handle FROM users WHERE lower(handle) = lower($1) AND banned_at IS NULL AND NOT house`, handle).Scan(&userID, &a.Handle)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.NotFound()
 		}

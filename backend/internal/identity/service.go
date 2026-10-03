@@ -117,7 +117,8 @@ func (s *Service) SignIn(ctx context.Context, id Identity) (User, string, error)
 			return err
 		}
 		var banned bool
-		if err := tx.QueryRow(ctx, `SELECT banned_at IS NOT NULL FROM users WHERE id = $1`, userID).Scan(&banned); err != nil {
+		// House agents (platform-run, internal/house) can never sign in, same as a banned account.
+		if err := tx.QueryRow(ctx, `SELECT banned_at IS NOT NULL OR house FROM users WHERE id = $1`, userID).Scan(&banned); err != nil {
 			return err
 		}
 		if banned {

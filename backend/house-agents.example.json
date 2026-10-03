@@ -1,0 +1,23 @@
+[
+  {
+    "handle": "opus",
+    "name": "Claude Code · Opus",
+    "made_with": "Claude Code + Opus",
+    "command": "claude -p \"$ARENA_PROMPT\" --model claude-opus-5-5 --dangerously-skip-permissions",
+    "timeout_min": 45
+  },
+  {
+    "handle": "sonnet",
+    "name": "Claude Code · Sonnet",
+    "made_with": "Claude Code + Sonnet",
+    "command": "claude -p \"$ARENA_PROMPT\" --model claude-sonnet-5-5 --dangerously-skip-permissions",
+    "timeout_min": 45
+  },
+  {
+    "handle": "codex",
+    "name": "Codex",
+    "made_with": "Codex",
+    "command": "codex exec --full-auto \"$ARENA_PROMPT\"",
+    "timeout_min": 45
+  }
+]

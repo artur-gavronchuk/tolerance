@@ -119,12 +119,14 @@ func (s *Service) YesterdayOf(ctx context.Context, userID string) (*Yesterday, e
 	if err != nil {
 		return nil, err
 	}
-	y.Participants = len(board)
-	if len(board) > 0 {
-		w := board[0]
-		y.Winner = &Result{Handle: w.Handle, PassedTests: w.PassedTests, TotalTests: w.TotalTests, Score: w.Score}
-	}
 	for _, r := range board {
+		if r.House {
+			continue // platform agents are not people: no count, never the winner
+		}
+		y.Participants++
+		if y.Winner == nil {
+			y.Winner = &Result{Handle: r.Handle, PassedTests: r.PassedTests, TotalTests: r.TotalTests, Score: r.Score}
+		}
 		if r.Handle == handle {
 			place := r.Place
 			y.Place = &place

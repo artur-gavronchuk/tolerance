@@ -21,6 +21,7 @@ import (
 	"tolerance/internal/fairplay"
 	"tolerance/internal/games"
 	"tolerance/internal/games/match"
+	"tolerance/internal/house"
 	"tolerance/internal/identity"
 	"tolerance/internal/moderation"
 	"tolerance/internal/notify"
@@ -73,6 +74,24 @@ func main() {
 
 	analyticsSvc := analytics.NewService(pool)
 	analytics.Use(analyticsSvc)
+
+	// House agents (ARENA_HOUSE_AGENTS): platform-run coding agents on each day's task. Off when unset.
+	houseAgents, err := house.LoadAgents(cfg.houseAgents)
+	if err != nil {
+		log.Error("house agents", "err", err)
+		os.Exit(1)
+	}
+	if len(houseAgents) > 0 {
+		if err := house.Sync(ctx, pool, houseAgents); err != nil {
+			log.Error("house agents", "err", err)
+			os.Exit(1)
+		}
+		for _, a := range houseAgents {
+			dailySvc.HouseHandles = append(dailySvc.HouseHandles, a.Handle)
+		}
+		log.Info("house agents on", "count", len(houseAgents))
+	}
+
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), daily: dailySvc,
 		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, admin: adminpkg.NewService(pool), moderation: moderation.NewService(pool), profiles: profiles.NewService(pool),
@@ -91,6 +110,16 @@ func main() {
 		defer wg.Done()
 		analyticsSvc.Run(ctx, log)
 	}()
+
+	if len(houseAgents) > 0 {
+		houseWorker := house.NewWorker(pool, dailySvc, d.submissions, houseAgents, cfg.workDir, log)
+		dailySvc.OnAssign = houseWorker.EnqueueDay
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			houseWorker.Run(ctx)
+		}()
+	}
 
 	{
 		var runner sandbox.Runner = sandbox.NewDocker()

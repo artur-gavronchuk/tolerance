@@ -33,6 +33,7 @@ type config struct {
 	matchInterval    time.Duration
 	matchConcurrency int
 	botImage         string
+	houseAgents      string // ARENA_HOUSE_AGENTS: path to the house agents JSON; "" = feature off
 }
 
 func loadConfig() (config, error) {
@@ -55,6 +56,7 @@ func loadConfig() (config, error) {
 		matchInterval:    20 * time.Second,
 		matchConcurrency: 1,
 		botImage:         env("ARENA_BOT_IMAGE", "arena-bot-runtime:1"),
+		houseAgents:      os.Getenv("ARENA_HOUSE_AGENTS"),
 	}
 	if v := os.Getenv("ARENA_MATCH_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)

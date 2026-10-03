@@ -38,7 +38,7 @@ func (s *Service) ProfileOf(ctx context.Context, handle string) (Profile, error)
 	p := Profile{Tools: []string{}, Days: []ProfileDay{}}
 	var userID string
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `SELECT id, handle, created_at FROM users WHERE lower(handle) = lower($1) AND banned_at IS NULL`, handle).
+		err := tx.QueryRow(ctx, `SELECT id, handle, created_at FROM users WHERE lower(handle) = lower($1) AND banned_at IS NULL AND NOT house`, handle).
 			Scan(&userID, &p.Handle, &p.JoinedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.NotFound()
