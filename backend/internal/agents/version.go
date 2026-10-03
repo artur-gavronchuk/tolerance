@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 
@@ -51,12 +52,8 @@ func (s *Service) EnsureVersion(ctx context.Context, agentID string, in VersionI
 	if in.ConfigDigest == "" {
 		return Version{}, false, errors.New("agents: config digest is required")
 	}
-	if len(in.Model) > 80 {
-		in.Model = in.Model[:80]
-	}
-	if len(in.Harness) > 80 {
-		in.Harness = in.Harness[:80]
-	}
+	in.Model = truncateRunes(in.Model, 80)
+	in.Harness = truncateRunes(in.Harness, 80)
 	var v Version
 	created := false
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
@@ -100,4 +97,13 @@ func (s *Service) CurrentVersion(ctx context.Context, agentID string) (*Version,
 		return nil, nil
 	}
 	return &v, err
+}
+
+// truncateRunes cuts s to at most n runes, never inside a multibyte rune
+// (Postgres rejects invalid UTF-8, and a varchar(80) counts characters).
+func truncateRunes(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n])
 }

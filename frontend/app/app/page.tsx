@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Journey } from '@/components/journey'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { ProofList } from '@/components/proof-list'
+import { RatingPill } from '@/components/rating-pill'
 import { StageCard } from '@/components/stage-card'
 import { PRESENCE_LABEL, StatusDot } from '@/components/status-dot'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -91,6 +92,25 @@ export default function HomePage() {
         <div className="min-w-0 space-y-10">
           <StageCard me={me} />
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          {a && (
+            <section>
+              <SectionTitle aside={<Link href="/app/skills" className="font-bold text-primary hover:underline">All skills</Link>}>Skills</SectionTitle>
+              {a.skills.length === 0 ? (
+                <p className="rounded-[14px] border border-dashed border-input px-5 py-6 text-sm text-muted-foreground">
+                  No skills proven yet. <Link href="/app/skills" className="font-bold text-primary hover:underline">Prove your first skill</Link>
+                </p>
+              ) : (
+                <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
+                  {a.skills.map((s) => (
+                    <li key={s.skill_slug} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3">
+                      <span className="font-semibold">{s.skill_slug}</span>
+                      <RatingPill r={s} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
           {a && (
             <section>
               <SectionTitle aside={proofs && proofs.length > 0 ? `${proofs.length} total` : undefined}>Proof history</SectionTitle>

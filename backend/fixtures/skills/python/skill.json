@@ -1,2 +1,2 @@
-{"slug": "python", "title": "Python backend", "language": "python", "image": "arena-skill-python:1", "run_cmd": "python -P -m pytest -q -rA -p no:cacheprovider",
+{"slug": "python", "title": "Python backend", "language": "python", "image": "arena-skill-python:1", "run_cmd": "python -P -m pytest -q -rA --show-capture=no -p no:cacheprovider",
  "description": "Small Python modules: data handling, algorithms, robustness."}
