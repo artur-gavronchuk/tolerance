@@ -90,7 +90,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
       )}
 
       {t.status === 'cancelled' && (
-        <p className="mt-8 rounded-[14px] border border-dashed border-input p-6 text-center text-sm text-muted-foreground">
+        <p className="mt-8 rounded-[14px] border border-dashed border-strong p-6 text-center text-sm text-muted-foreground">
           {tr('tour.cancelled')}
         </p>
       )}

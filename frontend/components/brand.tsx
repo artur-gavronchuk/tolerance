@@ -9,7 +9,7 @@ export function BrandMark({ className }: { className?: string }) {
     <svg viewBox="0 0 32 32" aria-hidden className={cn('size-8 shrink-0', className)}>
       <rect width="32" height="32" rx="8" className="fill-ink" />
       <path d="M8.5 11l5 5-5 5" fill="none" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="stroke-ink-foreground" />
-      <path d="M16.5 17.5l2.6 2.6 5.4-6.1" fill="none" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="stroke-primary" />
+      <path d="M16.5 17.5l2.6 2.6 5.4-6.1" fill="none" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="stroke-mark-check" />
     </svg>
   )
 }

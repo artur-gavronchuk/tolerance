@@ -154,5 +154,9 @@ an attempt.
   components or `await getT(m)` on the server; dates via `formatDate`/
   `formatDateTime` from `lib/i18n/core`. Language = `lang` cookie, else
   Accept-Language, else en. Task content (TASK.md, GAME.md) stays English.
+- Colours are tokens from `frontend/app/globals.css`, never raw hex in classes:
+  `bg-terminal`/`text-terminal-foreground` for copy blocks and dark panels (navy
+  in both themes), `bg-arena` for the match viewer, `border-input` for control
+  borders (3:1), `border-strong` for dashed empty states.
 - Commit subjects in English, imperative, sentence case, no `feat:` prefixes.
   Docs in `docs/` are in Russian, code and comments in English.

@@ -40,15 +40,15 @@ export function Intro() {
   }
 
   return (
-    <section className="relative mb-8 overflow-hidden rounded-[14px] bg-[#15212b] p-5 text-[#eef2f5] sm:p-7">
+    <section className="relative mb-8 overflow-hidden rounded-[14px] bg-terminal p-5 text-terminal-foreground sm:p-7">
       <button onClick={hide} aria-label={t('hideIntro')} title={t('hide')}
-        className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full text-[#eef2f5]/60 hover:bg-white/10 hover:text-[#eef2f5]">
+        className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full text-terminal-foreground/60 hover:bg-white/10 hover:text-terminal-foreground">
         <X className="size-4" />
       </button>
       <p className="display max-w-2xl pr-8 text-[1.6rem] leading-tight sm:text-[2rem]">
         {t('introTitle')}
       </p>
-      <p className="mt-2 max-w-2xl text-[13px] text-[#eef2f5]/70 sm:text-base">
+      <p className="mt-2 max-w-2xl text-[13px] text-terminal-foreground/70 sm:text-base">
         {t('introText')}
       </p>
       <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 lg:grid-cols-4">
@@ -56,10 +56,10 @@ export function Intro() {
           <Link key={m.href} href={m.href}
             className="group flex flex-col rounded-[10px] border border-white/10 bg-white/[0.04] p-3 sm:p-3.5 transition-colors hover:border-white/25 hover:bg-white/[0.07]">
             <span className="flex items-center gap-2 text-[13px] font-bold sm:text-sm">
-              <m.icon className="size-4 text-[#8fb4ff]" />
+              <m.icon className="size-4 text-terminal-accent" />
               {t(m.title)}
             </span>
-            <span className="mt-1 hidden text-[13px] leading-snug text-[#eef2f5]/65 sm:block">{t(m.text)}</span>
+            <span className="mt-1 hidden text-[13px] leading-snug text-terminal-foreground/65 sm:block">{t(m.text)}</span>
           </Link>
         ))}
       </div>

@@ -46,10 +46,10 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
       {task.phase !== 'open' && <RankingHow kind={task.kind} hasChecks={scored} />}
       {voteError && <p role="alert" className="text-sm text-destructive">{voteError}</p>}
       {task.phase !== 'open' && entries.length === 0 && (
-        <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">{t('task.nobody')}</p>
+        <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">{t('task.nobody')}</p>
       )}
       {blind && (
-        <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">
+        <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
           {t('res.blind', { when: utc(t.locale, task.voting_ends_at) })}
         </p>
       )}

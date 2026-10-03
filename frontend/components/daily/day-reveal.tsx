@@ -31,7 +31,7 @@ export function DayRevealView({ day }: { day: string }) {
       <section>
         <SectionTitle aside={t('shown', { n: data.solutions.length })}>{t('solutions')}</SectionTitle>
         {data.solutions.length === 0 ? (
-          <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">{t('noSolutions')}</p>
+          <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('noSolutions')}</p>
         ) : (
           <ul className="space-y-3">
             {data.solutions.map((s) => (

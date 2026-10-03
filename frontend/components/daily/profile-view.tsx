@@ -110,7 +110,7 @@ export function ProfileView({ handle }: { handle: string }) {
       <section>
         <SectionTitle>{t('history')}</SectionTitle>
         {p.days.length === 0 ? (
-          <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">{t('noDaily')}</p>
+          <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('noDaily')}</p>
         ) : (
           <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
             {p.days.map((d) => (

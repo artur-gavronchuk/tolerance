@@ -101,7 +101,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
       <section className="mt-10">
         <SectionTitle>{tr('bot.tournaments')}</SectionTitle>
         {bot.tournaments.length === 0 ? (
-          <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">
+          <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">
             {tr('bot.noTournaments')}
           </p>
         ) : (

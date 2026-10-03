@@ -29,7 +29,7 @@ export function AdminBar({ task, onChange }: { task?: ProductTask; onChange: () 
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-dashed border-input px-3 py-2 text-sm">
+    <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-dashed border-strong px-3 py-2 text-sm">
       <span className="inline-flex items-center gap-1.5 font-semibold text-muted-foreground"><LockKeyhole className="size-3.5" />{t('admin.label')}</span>
       {task?.phase === 'open' && (
         <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(() => products.close(task.slug))}>{t('admin.close')}</Button>

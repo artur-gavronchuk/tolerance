@@ -93,7 +93,7 @@ export default function AgentsPage() {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!rows && !error && <Skeleton className="h-64 rounded-[14px]" />}
       {rows && rows.length === 0 && (
-        <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">{t('noSubs')}</p>
+        <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">{t('noSubs')}</p>
       )}
       {rows && rows.length > 0 && (
         <Table>

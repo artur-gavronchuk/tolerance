@@ -173,7 +173,7 @@ export default function TanksHome() {
             <div>
               <SectionTitle>{tr('home.pastSeasons')}</SectionTitle>
               {show.past_seasons.length === 0 ? (
-                <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">
+                <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
                   {tr('home.firstSeason')}
                 </p>
               ) : (

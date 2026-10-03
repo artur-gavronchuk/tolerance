@@ -128,7 +128,7 @@ function Published({ task, slug, viewer, signedIn }: { task: ProductDetail; slug
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!res && !error && <Skeleton className="h-40 rounded-[14px]" />}
       {res && res.entries.length === 0 && (
-        <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">{t('task.nobody')}</p>
+        <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">{t('task.nobody')}</p>
       )}
       {res && res.entries.length > 0 && (
         <EntryGallery task={res.task} entries={res.entries} signedIn={signedIn} busy={busy} onToggleVote={(e) => void toggleVote(e)} />

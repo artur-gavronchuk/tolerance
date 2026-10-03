@@ -45,7 +45,7 @@ export default function ProductsPage() {
           {voting[0] && <VoteCta task={voting[0]} signedIn={!!me} />}
           {next ? <OpensCountdown upcoming={next} /> : null}
           {!voting[0] && !next?.next_kind && (
-            <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">{t('list.noneOpen')}</p>
+            <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">{t('list.noneOpen')}</p>
           )}
         </>
       )}
@@ -95,7 +95,7 @@ export default function ProductsPage() {
         <section>
           <SectionTitle>{t('list.archive')}</SectionTitle>
           {archive.length === 0 ? (
-            <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">{t('list.noFinished')}</p>
+            <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('list.noFinished')}</p>
           ) : (
             <ul className="space-y-2">
               {archive.map((k) => (

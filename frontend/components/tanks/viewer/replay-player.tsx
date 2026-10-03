@@ -18,7 +18,7 @@ import { tanksMatchMessages } from '@/lib/i18n/messages/tanks-match'
 function Loading3D() {
   const t = useT(tanksMatchMessages)
   return (
-    <div className="flex w-full items-center justify-center rounded-[14px] bg-[#0c1720] text-sm text-muted-foreground" style={{ aspectRatio: '3 / 2' }}>
+    <div className="flex w-full items-center justify-center rounded-[14px] bg-arena text-sm text-muted-foreground" style={{ aspectRatio: '3 / 2' }}>
       {t('loading3d')}
     </div>
   )
@@ -44,7 +44,7 @@ function Scene3DFailed({ onBackTo2D }: { onBackTo2D: () => void }) {
   const t = useT(tanksMatchMessages)
   return (
     <div
-      className="flex w-full flex-col items-center justify-center gap-3 rounded-[14px] bg-[#0c1720] px-6 text-center text-sm text-muted-foreground"
+      className="flex w-full flex-col items-center justify-center gap-3 rounded-[14px] bg-arena px-6 text-center text-sm text-muted-foreground"
       style={{ aspectRatio: '3 / 2' }}
     >
       <p>{t('load3dFailed')}</p>

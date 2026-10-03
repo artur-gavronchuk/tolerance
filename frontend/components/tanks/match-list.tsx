@@ -27,7 +27,7 @@ export function MatchList({ matches, botId, showReport = false }: { matches: Mat
   const t = useT(m)
   if (matches.length === 0) {
     return (
-      <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">
+      <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
         {t('ml.empty')}
       </p>
     )

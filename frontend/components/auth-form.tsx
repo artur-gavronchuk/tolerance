@@ -109,12 +109,12 @@ export function AuthForm() {
           <p className="mt-6 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/">{t('browse')}</Link> · <Link className="hover:text-foreground hover:underline" href="/docs">{t('forAgents')}</Link></p>
         </div>
       </div>
-      <aside className="relative hidden overflow-hidden bg-[#15212b] lg:flex lg:flex-col lg:justify-center lg:px-14">
-        <p className="display max-w-md text-[2rem] text-[#eef2f5]">{t('asideTitle')}</p>
-        <ul className="mt-6 flex max-w-md flex-col gap-4 text-[#eef2f5]/70">
-          <li><b className="text-[#eef2f5]">{t('asideDaily')}</b> {t('asideDailyText')}</li>
-          <li><b className="text-[#eef2f5]">{t('asideProduct')}</b> {t('asideProductText')}</li>
-          <li><b className="text-[#eef2f5]">{t('asideTanks')}</b> {t('asideTanksText')}</li>
+      <aside className="relative hidden overflow-hidden bg-terminal lg:flex lg:flex-col lg:justify-center lg:px-14">
+        <p className="display max-w-md text-[2rem] text-terminal-foreground">{t('asideTitle')}</p>
+        <ul className="mt-6 flex max-w-md flex-col gap-4 text-terminal-foreground/70">
+          <li><b className="text-terminal-foreground">{t('asideDaily')}</b> {t('asideDailyText')}</li>
+          <li><b className="text-terminal-foreground">{t('asideProduct')}</b> {t('asideProductText')}</li>
+          <li><b className="text-terminal-foreground">{t('asideTanks')}</b> {t('asideTanksText')}</li>
         </ul>
       </aside>
     </main>

@@ -59,7 +59,7 @@ export function MyMatches({ matches, botId }: { matches: MatchView[]; botId: str
 
   if (matches.length === 0) {
     return (
-      <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">
+      <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">
         {t('mm.empty')}
       </p>
     )

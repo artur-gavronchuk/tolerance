@@ -12,7 +12,7 @@ const components: Components = {
   a: (p) => <a className="font-semibold text-primary hover:underline" target="_blank" rel="noreferrer noopener" {...p} />,
   blockquote: (p) => <blockquote className="my-3 border-l-2 border-border pl-4 text-muted-foreground" {...p} />,
   hr: () => <hr className="my-6 border-border" />,
-  pre: (p) => <pre className="my-3 overflow-x-auto rounded-[10px] bg-[#15212b] p-4 font-mono text-[0.8rem] leading-6 text-[#eef2f5] [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-inherit" {...p} />,
+  pre: (p) => <pre className="my-3 overflow-x-auto rounded-[10px] bg-terminal p-4 font-mono text-[0.8rem] leading-6 text-terminal-foreground [&_code]:bg-transparent [&_code]:p-0 [&_code]:text-inherit" {...p} />,
   code: (p) => <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]" {...p} />,
   table: (p) => <div className="my-3 overflow-x-auto"><table className="w-full border-collapse text-sm" {...p} /></div>,
   th: (p) => <th className="border border-border bg-muted px-3 py-1.5 text-left font-bold" {...p} />,

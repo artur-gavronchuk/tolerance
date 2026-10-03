@@ -172,16 +172,16 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
         ) : replayState.kind === 'loading' ? (
           <Skeleton className="aspect-[3/2] w-full rounded-[18px]" />
         ) : replayState.kind === 'unsupported' ? (
-          <div className="rounded-[18px] border border-dashed border-input px-6 py-14 text-center text-sm text-muted-foreground">
+          <div className="rounded-[18px] border border-dashed border-strong px-6 py-14 text-center text-sm text-muted-foreground">
             {t('unsupported')}
           </div>
         ) : replayState.kind === 'error' ? (
-          <div className="flex flex-col items-center gap-4 rounded-[18px] border border-dashed border-input px-6 py-14 text-center">
+          <div className="flex flex-col items-center gap-4 rounded-[18px] border border-dashed border-strong px-6 py-14 text-center">
             <p className="text-sm text-destructive">{t('replayError', { message: replayState.message })}</p>
             <Button variant="outline" onClick={() => void loadReplay(id)}>{t('retry')}</Button>
           </div>
         ) : (
-          <div className="rounded-[18px] border border-dashed border-input px-6 py-14 text-center text-sm text-muted-foreground">
+          <div className="rounded-[18px] border border-dashed border-strong px-6 py-14 text-center text-sm text-muted-foreground">
             {t('replayExpired')}
           </div>
         )}

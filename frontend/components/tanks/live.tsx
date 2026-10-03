@@ -198,7 +198,7 @@ export function Live() {
 
   if (phase.kind === 'error') {
     return (
-      <p className="rounded-[18px] border border-dashed border-input px-6 py-14 text-center text-sm text-muted-foreground">
+      <p className="rounded-[18px] border border-dashed border-strong px-6 py-14 text-center text-sm text-muted-foreground">
         {t('liveError', { message: phase.message })}
       </p>
     )
@@ -206,7 +206,7 @@ export function Live() {
 
   if (phase.kind === 'empty') {
     return (
-      <div className="rounded-[18px] border border-dashed border-input px-6 py-14 text-center">
+      <div className="rounded-[18px] border border-dashed border-strong px-6 py-14 text-center">
         <p className="text-sm font-semibold text-muted-foreground">{t('noMatchesYet')}</p>
         <p className="mt-2 text-sm text-muted-foreground">
           {t('ladderStarts')}{' '}
@@ -221,7 +221,7 @@ export function Live() {
 
   if (phase.kind === 'waiting') {
     return (
-      <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-input bg-card text-center">
+      <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-strong bg-card text-center">
         <p className="font-mono text-2xl font-bold text-primary">{t('catchingUp')}</p>
         <p className="text-sm text-muted-foreground">{t('nextShortly')}</p>
       </div>
@@ -230,7 +230,7 @@ export function Live() {
 
   if (phase.kind === 'countdown') {
     return (
-      <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-input bg-card text-center">
+      <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-strong bg-card text-center">
         <p className="font-mono text-2xl font-bold text-primary">{t('startingIn', { n: phase.seconds })}</p>
         <p className="text-sm text-muted-foreground">{t('aboutToGoLive')}</p>
       </div>
