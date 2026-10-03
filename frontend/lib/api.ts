@@ -1,5 +1,5 @@
 import type {
-  AdminEvent, AdminPulse, ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
+  AdminEvent, AdminPulse, CompareJudged, CompareNext, ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
 } from './types'
 
 export class ApiError extends Error {
@@ -85,6 +85,9 @@ export const products = {
   submit: (slug: string, form: FormData) => upload<ProductEntry>(`/products/${encodeURIComponent(slug)}/entries`, form),
   vote: (entryId: string) => post<ProductEntry>(`/product-entries/${encodeURIComponent(entryId)}/vote`),
   unvote: (entryId: string) => api<ProductEntry>(`/product-entries/${encodeURIComponent(entryId)}/vote`, { method: 'DELETE' }),
+  compareNext: (slug: string) => api<CompareNext>(`/products/${encodeURIComponent(slug)}/compare/next`),
+  compare: (slug: string, a: string, b: string, winner: 'a' | 'b' | 'tie') =>
+    post<CompareJudged>(`/products/${encodeURIComponent(slug)}/compare`, { a, b, winner }),
   source: (entryId: string) => api<{ files: ProductSourceFile[] }>(`/product-entries/${encodeURIComponent(entryId)}/source`).then((r) => r.files),
   // Admins and local dev runs: end uploads now (final: end voting too), or open the task again for some days.
   close: (slug: string, final = false) => post<ProductDetail>(`/products/${encodeURIComponent(slug)}/close`, { final }),

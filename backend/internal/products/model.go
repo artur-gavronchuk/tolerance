@@ -95,6 +95,8 @@ type Entry struct {
 	MadeWith      string           `json:"made_with"`
 	Votes         int              `json:"votes"`
 	Voted         bool             `json:"voted"`
+	Score         *float64         `json:"score,omitempty"` // site tasks: Bradley-Terry score from blind comparisons
+	Comparisons   int              `json:"comparisons"`
 	Mine          bool             `json:"mine"`
 	CreatedAt     time.Time        `json:"created_at"`
 	FinishedAt    *time.Time       `json:"finished_at"`

@@ -111,8 +111,9 @@ func (s *Service) Activity(ctx context.Context, handle string) (Activity, error)
 }
 
 // productsOf lists the tasks the person took part in with the upload that counts for them. The counting rule and the
-// ranking rule mirror products.rankRule (cli: best upload, ranked by checks then votes; site: latest upload, ranked by
-// votes then checks). Entries stay hidden until the deadline, so open tasks carry no score.
+// ranking rule mirror products.rankRule (cli: best upload, ranked by checks then votes). Site tasks take their place from
+// products.SiteRanking (Bradley-Terry score of the blind comparisons). Entries stay hidden until the deadline, so open
+// tasks carry no score.
 func productsOf(ctx context.Context, tx pgx.Tx, userID string) ([]ProductEntry, error) {
 	rows, err := tx.Query(ctx, `
 		WITH counted AS (
@@ -157,7 +158,29 @@ func productsOf(ctx context.Context, tx pgx.Tx, userID string) ([]ProductEntry, 
 		}
 		out = append(out, p)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	for i, p := range out {
+		if p.Kind != products.KindSite || p.Phase == products.PhaseOpen {
+			continue
+		}
+		st, err := products.SiteRanking(ctx, tx, p.TaskSlug)
+		if err != nil {
+			return nil, err
+		}
+		for n, s := range st {
+			if s.EntryID == p.EntryID {
+				if p.Phase == products.PhaseFinal {
+					pl := n + 1
+					out[i].Place = &pl
+				}
+				break
+			}
+		}
+	}
+	return out, nil
 }
 
 func phaseOf(deadline time.Time) string {

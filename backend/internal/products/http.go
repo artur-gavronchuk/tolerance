@@ -187,6 +187,37 @@ func RegisterOwnerRoutes(mux *http.ServeMux, s *Service, devLogin bool) {
 		}
 		httpx.Respond(w, http.StatusCreated, e)
 	})
+	// GET /products/{slug}/compare/next: the next anonymous pair of sites for the caller to judge.
+	mux.HandleFunc("GET /api/v1/products/{slug}/compare/next", func(w http.ResponseWriter, r *http.Request) {
+		n, err := s.Next(r.Context(), identity.MustFromContext(r.Context()).UserID, r.PathValue("slug"))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, n)
+	})
+	// POST /products/{slug}/compare {"a", "b", "winner"}: one judgment per person per pair.
+	mux.HandleFunc("POST /api/v1/products/{slug}/compare", func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<10))
+		var body struct {
+			A      string `json:"a"`
+			B      string `json:"b"`
+			Winner string `json:"winner"`
+		}
+		if err == nil {
+			err = httpx.Decode(raw, &body)
+		}
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		j, err := s.Judge(r.Context(), identity.MustFromContext(r.Context()).UserID, r.PathValue("slug"), body.A, body.B, body.Winner)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, j)
+	})
 	mux.HandleFunc("POST /api/v1/product-entries/{id}/vote", func(w http.ResponseWriter, r *http.Request) {
 		e, err := s.Vote(r.Context(), identity.MustFromContext(r.Context()).UserID, r.PathValue("id"))
 		if err != nil {

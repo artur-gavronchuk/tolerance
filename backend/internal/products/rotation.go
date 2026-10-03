@@ -138,6 +138,9 @@ func rotate(ctx context.Context, tx pgx.Tx, force bool, actorID string) (string,
 		if _, err := tx.Exec(ctx, `UPDATE product_votes SET task_slug = $2 WHERE task_slug = $1`, slug, old); err != nil {
 			return "", err
 		}
+		if _, err := tx.Exec(ctx, `UPDATE product_judgments SET task_slug = $2 WHERE task_slug = $1`, slug, old); err != nil {
+			return "", err
+		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE product_tasks SET opens_at = $2, deadline = $3 WHERE slug = $1`, slug, opens, ws.AddDate(0, 0, 7)); err != nil {
 		return "", err
@@ -165,12 +168,20 @@ type Winner struct {
 func winnerOf(ctx context.Context, tx pgx.Tx, slug, kind string) (*Winner, error) {
 	pick, order := rankRule(kind)
 	var w Winner
+	where, args := "", []any{slug}
+	if kind == KindSite {
+		st, err := SiteRanking(ctx, tx, slug)
+		if err != nil || len(st) == 0 {
+			return nil, err
+		}
+		where, args = ` WHERE e.id = $2`, append(args, st[0].EntryID)
+	}
 	err := tx.QueryRow(ctx, `
 		SELECT e.id, u.handle, `+votesOf+`, e.passed, e.total FROM (
 			SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $1 AND status = 'done'
 			ORDER BY user_id, `+pick+`) e
-		JOIN users u ON u.id = e.user_id
-		ORDER BY `+order+` LIMIT 1`, slug).Scan(&w.EntryID, &w.Handle, &w.Votes, &w.Passed, &w.Total)
+		JOIN users u ON u.id = e.user_id`+where+`
+		ORDER BY `+order+` LIMIT 1`, args...).Scan(&w.EntryID, &w.Handle, &w.Votes, &w.Passed, &w.Total)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

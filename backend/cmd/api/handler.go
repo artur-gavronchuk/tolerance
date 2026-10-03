@@ -81,6 +81,8 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("POST /api/v1/products/start-next", session(owner))
 	api.Handle("POST /api/v1/products/{slug}/close", session(owner))
 	api.Handle("POST /api/v1/products/{slug}/reopen", session(owner))
+	api.Handle("GET /api/v1/products/{slug}/compare/next", session(owner))
+	api.Handle("POST /api/v1/products/{slug}/compare", session(owner))
 	api.Handle("POST /api/v1/product-entries/{id}/vote", session(owner))
 	api.Handle("DELETE /api/v1/product-entries/{id}/vote", session(owner))
 	api.Handle("GET /api/v1/product-entries/{id}/source", public)

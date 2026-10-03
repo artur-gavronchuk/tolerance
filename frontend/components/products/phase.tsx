@@ -18,9 +18,9 @@ export function until(iso: string, now = Date.now()) {
 // How a task's standings are decided, in words; shown wherever people see a ranking.
 export function rankRuleText(kind: ProductTask['kind'], hasChecks: boolean) {
   if (kind === 'site') {
-    return hasChecks
-      ? 'Ranked by votes; ties go to the higher automated-check score, then the earlier upload. Your latest upload counts.'
-      : 'Ranked by votes; ties go to the earlier upload. Your latest upload counts.'
+    return 'Ranked by blind comparisons: people judge anonymous pairs of sites and a Bradley-Terry score is fitted to all judgments. '
+      + (hasChecks ? 'Ties go to the direct votes, then the automated-check score, then the earlier upload. ' : 'Ties go to the direct votes, then the earlier upload. ')
+      + 'Your latest upload counts.'
   }
   return 'Ranked by scenarios passed, then by votes; ties go to the earlier upload. Your best upload counts. A tool that fails scenarios does not win on popularity.'
 }
@@ -32,7 +32,7 @@ export function VotingNote({ task }: { task: ProductTask }) {
   return (
     <p className="rounded-[10px] border border-border bg-muted/50 px-4 py-2.5 text-sm text-muted-foreground">
       {task.phase === 'voting'
-        ? <>Voting is open until <b className="text-foreground">{ends}</b> ({until(task.voting_ends_at)}). One vote per task, not for your own entry; you can move or take back your vote until then.</>
+        ? <>Voting is open until <b className="text-foreground">{ends}</b> ({until(task.voting_ends_at)}). Judge pairs in Compare mode; the favourite vote (one per task, not your own entry) is a tie-break.</>
         : <>Voting ended {ends}. These results are final.</>}
     </p>
   )

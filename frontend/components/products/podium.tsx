@@ -18,7 +18,7 @@ export function Podium({ task, entries }: { task: ProductTask; entries: ProductE
             <div className="px-1 pb-2 text-center">
               <div className="truncate font-semibold">{e.handle ? <HandleLink handle={e.handle} /> : '?'}{e.mine && <span className="font-normal text-muted-foreground"> (you)</span>}</div>
               <div className="truncate text-xs text-muted-foreground">
-                {e.votes} {e.votes === 1 ? 'vote' : 'votes'}{e.total > 0 && ` · ${e.passed}/${e.total}`}
+                {e.score != null && `${Math.round(e.score)} pts · `}{e.votes} {e.votes === 1 ? 'vote' : 'votes'}{e.total > 0 && ` · ${e.passed}/${e.total}`}
               </div>
             </div>
             <div className={`flex ${STEP[i]} items-center justify-center rounded-t-[14px] border border-b-0 ${i === 0 ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'}`}>

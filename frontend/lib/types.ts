@@ -177,8 +177,15 @@ export interface ProductEntry {
   id: string; task_slug: string; handle?: string; status: 'queued' | 'running' | 'done' | 'infra_error'
   passed: number; total: number; failure_reason: string | null; results: ProductScenarioResult[]
   log_tail?: string; made_with: string; votes: number; voted: boolean; mine: boolean
+  score?: number; comparisons: number // site tasks: Bradley-Terry score of the blind comparisons, and how many there were
   created_at: string; finished_at: string | null
 }
+
+// Blind comparison of sites (`/products/{slug}/compare`): ids only until the person has judged.
+export interface ComparePair { a: { id: string }; b: { id: string } }
+export interface CompareNext { pair: ComparePair | null; judged: number; target: number }
+export interface CompareRevealed { id: string; handle: string; made_with: string }
+export interface CompareJudged { a: CompareRevealed; b: CompareRevealed; winner: 'a' | 'b' | 'tie'; judged: number; target: number }
 
 export interface ProductDetail extends ProductTask { attempts_used: number; mine: ProductEntry[] }
 

@@ -126,7 +126,7 @@ export async function productShare(slug: string): Promise<Share | null> {
   if (!r) return null
   const { task, entries } = r
   const votes = entries.reduce((n, e) => n + e.votes, 0)
-  const leader = [...entries].sort((a, b) => b.votes - a.votes || b.passed - a.passed)[0]
+  const leader = entries[0] // the results come ranked by the task kind's rule
   const phase = task.phase === 'open' ? 'Open' : task.phase === 'voting' ? 'Voting' : 'Final'
   const stats: OgStat[] = [{ label: 'Entries', value: task.entry_count }]
   if (task.phase !== 'open') stats.push({ label: 'Votes', value: votes })

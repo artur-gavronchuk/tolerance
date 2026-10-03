@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -24,7 +25,8 @@ const votesOf = `(SELECT count(*) FROM product_votes v WHERE v.entry_id = e.id)`
 // rankRule is how a task's entries are counted and ordered.
 //   - cli: a person's best upload counts (most scenarios passed, earliest on ties). Ranked by scenarios passed,
 //     then votes: a tool that fails checks does not win on popularity, and the votes pick among the correct ones.
-//   - site: a person's latest upload counts. Ranked by votes, then automated checks (when the task has them).
+//   - site: a person's latest upload counts. Ranked by the Bradley-Terry score of the blind comparisons (see
+//     SiteRanking, which does the ordering in Go), then direct votes, then automated checks.
 //
 // Both end on the earlier upload.
 func rankRule(kind string) (pick, order string) {
@@ -61,12 +63,38 @@ func (s *Service) Results(ctx context.Context, slug, userID string) (Results, er
 			e.LogTail = "" // the participant's own output stays with them
 			r.Entries = append(r.Entries, e)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		rows.Close()
+		if r.Task.Kind == KindSite {
+			return rankSiteEntries(ctx, tx, slug, r.Entries)
+		}
+		return nil
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Results{}, httpx.NotFound()
 	}
 	return r, err
+}
+
+// rankSiteEntries puts a site task's entries into BT order and fills in their scores.
+func rankSiteEntries(ctx context.Context, tx pgx.Tx, slug string, entries []Entry) error {
+	st, err := SiteRanking(ctx, tx, slug)
+	if err != nil {
+		return err
+	}
+	pos := make(map[string]int, len(st))
+	for i, s := range st {
+		pos[s.EntryID] = i
+	}
+	for i := range entries {
+		s := st[pos[entries[i].ID]]
+		score := s.Score
+		entries[i].Score, entries[i].Comparisons = &score, s.Comparisons
+	}
+	sort.SliceStable(entries, func(a, b int) bool { return pos[entries[a].ID] < pos[entries[b].ID] })
+	return nil
 }
 
 // Vote records the caller's vote for a published entry. A person has one vote per task: voting for another

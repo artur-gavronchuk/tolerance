@@ -22,6 +22,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
   if (error) return <p role="alert" className="text-sm text-destructive">{error}</p>
   if (!res) return <Skeleton className="h-64 rounded-[14px]" />
   const { task, entries } = res
+  const bt = task.kind === 'site'
   const scored = entries.some((e) => e.total > 0) // sites without automated checks have no score column
 
   return (
@@ -29,7 +30,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
       <PageHeader
         kicker={<Link href={`/products/${slug}`} className="hover:text-foreground">{task.title}</Link>}
         title="Results"
-        actions={task.phase !== 'open' && <Button variant="outline" render={<Link href={`/products/${slug}`} />} nativeButton={false}>Gallery and voting</Button>}
+        actions={task.phase !== 'open' && <Button variant="outline" render={<Link href={`/products/${slug}`} />} nativeButton={false}>Compare and gallery</Button>}
       >
         <span className="mr-2 inline-block align-middle"><PhaseBadge phase={task.phase} /></span>
         {task.phase === 'open'
@@ -55,6 +56,8 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
                   <TableHead className="w-10">#</TableHead>
                   <TableHead>Player</TableHead>
                   {scored && <TableHead className="text-right">{task.kind === 'site' ? 'Checks' : 'Score'}</TableHead>}
+                  {bt && <TableHead className="text-right" title="Bradley-Terry score from blind comparisons; 1000 is the average site">Score</TableHead>}
+                  {bt && <TableHead className="text-right" title="Blind comparisons this site took part in">Judged</TableHead>}
                   <TableHead className="text-right">Votes</TableHead>
                   <TableHead className="w-24" />
                 </TableRow>
@@ -68,6 +71,8 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
                       {e.made_with && <div className="truncate text-xs text-muted-foreground">{e.made_with}</div>}
                     </TableCell>
                     {scored && <TableCell className="text-right font-mono font-bold">{e.total > 0 ? `${e.passed}/${e.total}` : '-'}</TableCell>}
+                    {bt && <TableCell className="text-right font-mono font-bold">{e.score != null ? Math.round(e.score) : '-'}</TableCell>}
+                    {bt && <TableCell className="text-right font-mono">{e.comparisons}</TableCell>}
                     <TableCell className="text-right font-mono">{e.votes}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">

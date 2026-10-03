@@ -6,6 +6,7 @@ import { Upload } from 'lucide-react'
 import { Markdown } from '@/components/daily/markdown'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { AdminBar } from '@/components/products/admin-bar'
+import { Compare } from '@/components/products/compare'
 import { EntryCard } from '@/components/products/entry-card'
 import { EntryGallery } from '@/components/products/gallery'
 import { PhaseBadge, VotingNote, rankRuleText } from '@/components/products/phase'
@@ -113,6 +114,7 @@ function Published({ task, slug, viewer, signedIn }: { task: ProductDetail; slug
         Entries{res && ` (${res.entries.length})`}
       </SectionTitle>
       <VotingNote task={task} />
+      {task.kind === 'site' && task.phase === 'voting' && <Compare slug={slug} signedIn={signedIn} />}
       <p className="max-w-2xl text-sm text-muted-foreground">{rankRuleText(task.kind, task.scenario_count > 0)}</p>
       {voteError && <p role="alert" className="text-sm text-destructive">{voteError}</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
