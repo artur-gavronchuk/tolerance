@@ -4,10 +4,29 @@ import { PageHeader } from '@/components/page-header'
 import { CopyBlock } from '@/components/copy-block'
 import { CLI } from '@/lib/brand'
 import { InstallCli } from '@/components/tanks/install-cli'
+import { getT } from '@/lib/i18n/server'
+import { tanksDocsMessages as m } from '@/lib/i18n/messages/tanks-docs'
 
-export const metadata: Metadata = {
-  title: 'Docs',
-  description: 'How to get a bot into the tanks ladder, the engine rules, the bot protocol, and how rating works.',
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(m)
+  return { title: t('metaTitle'), description: t('metaDescription') }
+}
+
+// Renders <c>code</c>, <b>emphasis</b> and <l>link</l> markup from the message tables.
+function Rich({ s, href, vars }: { s: string; href?: string; vars?: Record<string, string> }) {
+  const text = s.replace(/\{(\w+)\}/g, (all, k: string) => vars?.[k] ?? all)
+  const parts = text.split(/(<c>.*?<\/c>|<b>.*?<\/b>|<l>.*?<\/l>)/g)
+  return (
+    <>
+      {parts.map((p, i) => {
+        const inner = p.slice(3, -4).replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        if (p.startsWith('<c>')) return <code key={i}>{inner}</code>
+        if (p.startsWith('<b>')) return <span key={i} className="font-medium text-foreground">{inner}</span>
+        if (p.startsWith('<l>')) return <Link key={i} className="text-primary hover:underline" href={href ?? '#'}>{inner}</Link>
+        return p
+      })}
+    </>
+  )
 }
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
@@ -23,267 +42,149 @@ function Code({ children }: { children: string }) {
   return <pre className="overflow-x-auto rounded-[10px] border border-border bg-muted p-4 font-mono text-[0.8rem] leading-6 text-foreground">{children}</pre>
 }
 
-const RULES: [string, string][] = [
-  ['Field size', '60 × 40'],
-  ['Tick rate', '10 ticks/s'],
-  ['Match length', '1200 ticks (2 minutes)'],
-  ['Physics substeps per tick', '4'],
-  ['Tank radius', '1.0'],
-  ['Forward speed', '5 units/s'],
-  ['Reverse speed', '3 units/s'],
-  ['Hull turn rate', '2.5 rad/s'],
-  ['Turret turn rate', '4 rad/s'],
-  ['Reload time', '10 ticks'],
-  ['Muzzle offset (shell spawn point)', '1.3 from tank centre'],
-  ['Shell speed', '24 units/s'],
-  ['Shell lifetime', '30 ticks'],
-  ['Shell damage', '25'],
-  ['Max HP', '100'],
-  ['Heal pickup amount', '+35 HP (capped at max HP)'],
-  ['Heal pickup respawn', '150 ticks after being taken'],
-  ['Shrinking zone', 'starts tick 800, radius 37 → radius 6 by tick 1100, then holds'],
-  ['Zone damage', '1 HP/tick while outside it'],
-]
+const RULE_COUNT = 19
+const TOC_IDS = ['quick-start', 'coordinates', 'rules', 'protocol', 'timing', 'logs', 'statuses', 'package', 'qualifying', 'rating', 'local'] as const
+const STATUS_IDS = ['ok', 'crashed', 'timeout', 'invalid'] as const
 
-const TOC: [string, string][] = [
-  ['quick-start', 'Quick start'],
-  ['coordinates', 'Coordinates'],
-  ['rules', 'Rules'],
-  ['protocol', 'Protocol'],
-  ['timing', 'Timing'],
-  ['logs', 'Logs'],
-  ['statuses', 'Statuses'],
-  ['package', 'Package and limits'],
-  ['qualifying', 'Qualifying checks'],
-  ['rating', 'Rating'],
-  ['local', 'Playing locally'],
-]
+const UL = 'flex list-disc flex-col gap-1.5 pl-5'
+const H = 'font-semibold text-foreground'
 
-const STATUSES: [string, string][] = [
-  ['ok', 'Answered normally for the whole match (or until it died).'],
-  ['crashed', 'The process exited before the match ended.'],
-  ['timeout', 'Missed the ready deadline, or ran out of the time budget.'],
-  ['invalid', 'Sent more than 1000 non-command stdout lines.'],
-]
-
-export default function TanksDocsPage() {
+export default async function TanksDocsPage() {
+  const t = await getT(m)
+  const rich = (k: Parameters<typeof t>[0], href?: string, vars?: Record<string, string>) => <Rich s={t(k)} href={href} vars={vars} />
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
-      <PageHeader title="Docs">
-        Your bot is a process. The platform sends it the match state once per tick over stdin and reads your move
-        back over stdout. Everyone plays with full information — there is no fog of war.
-      </PageHeader>
+      <PageHeader title={t('title')}>{t('intro')}</PageHeader>
 
-      <nav aria-label="On this page" className="mt-8 flex flex-wrap gap-2">
-        {TOC.map(([id, label]) => (
+      <nav aria-label={t('onThisPage')} className="mt-8 flex flex-wrap gap-2">
+        {TOC_IDS.map((id) => (
           <a key={id} href={`#${id}`} className="rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
-            {label}
+            {t(`toc.${id}`)}
           </a>
         ))}
       </nav>
 
-      <Section id="quick-start" title="Quick start">
-        <p>Nothing to install. Everything happens on the <Link className="text-primary hover:underline" href="/app/tanks">My bot</Link> page.</p>
-        <p className="font-semibold text-foreground">1. Download a starter kit</p>
-        <p>
-          Pick Python or JavaScript. The zip holds a working bot, <code>bot.json</code>, this game&apos;s rules as{' '}
-          <code>GAME.md</code> and a short README.
-        </p>
-        <p className="font-semibold text-foreground">2. Give the folder to your coding agent</p>
-        <p>
-          Open it in Claude Code, Cursor, Codex or any agent and ask it to read <code>GAME.md</code> and improve the bot:
-          keep <code>bot.json</code> valid, use only the standard library, aim to beat as many house bots as you can. The exact prompt
-          is on the My bot page. Or edit the bot by hand.
-        </p>
-        <p className="font-semibold text-foreground">3. Zip it and upload</p>
-        <p>
-          Zip the folder (a <code>.tar.gz</code> works too) and drop it on the My bot page. Each version gets a trial
-          match against a house bot, then plays the ladder; the check results and replays are right there, so the
-          platform is your test harness. Paste what went wrong back to your agent and upload the next version.
-        </p>
+      <Section id="quick-start" title={t('qs.title')}>
+        <p>{rich('qs.lead', '/app/tanks')}</p>
+        <p className={H}>{t('qs.h1')}</p>
+        <p>{rich('qs.p1')}</p>
+        <p className={H}>{t('qs.h2')}</p>
+        <p>{rich('qs.p2')}</p>
+        <p className={H}>{t('qs.h3')}</p>
+        <p>{rich('qs.p3')}</p>
       </Section>
 
-      <Section id="coordinates" title="Coordinate system">
-        <p>
-          The field is 60 (width, x) by 40 (height, y) units. <code>(0,0)</code> is the bottom-left corner; x grows
-          right, y grows up. Angles are radians in <code>(-π, π]</code>: 0 points along +x, positive angles turn
-          counter-clockwise. Walls (including the field edge) are axis-aligned rectangles: <code>{'{x, y, w, h}'}</code>,{' '}
-          with <code>x, y</code> at the bottom-left corner.
-        </p>
+      <Section id="coordinates" title={t('coord.title')}>
+        <p>{rich('coord.p')}</p>
       </Section>
 
-      <Section id="rules" title="Rules (engine tanks/1)">
+      <Section id="rules" title={t('rules.title')}>
         <div className="overflow-hidden rounded-[10px] border border-border">
           <table className="w-full text-left text-sm">
             <tbody>
-              {RULES.map(([label, value]) => (
-                <tr key={label} className="border-b border-border last:border-0 odd:bg-muted/40">
-                  <td className="px-3 py-2 font-medium text-foreground">{label}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{value}</td>
+              {Array.from({ length: RULE_COUNT }, (_, i) => (
+                <tr key={i} className="border-b border-border last:border-0 odd:bg-muted/40">
+                  <td className="px-3 py-2 font-medium text-foreground">{t(`rule.${i}.l` as 'rule.0.l')}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{t(`rule.${i}.v` as 'rule.0.v')}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p>
-          There is no inertia: your effective speed is <code>move × max speed</code> every tick, not a force. A dead
-          tank&apos;s wreck takes no part in tank-tank or tank-wall pushing, and shells pass through it. Your own
-          shells never hit you.
-        </p>
-        <p>
-          Placement once the match ends: alive beats dead; among the alive, higher HP wins, then higher damage dealt;
-          among the dead, whoever died later wins, then higher damage dealt. Exact ties share a place.
-        </p>
+        <p>{rich('rules.p1')}</p>
+        <p>{t('rules.p2')}</p>
       </Section>
 
-      <Section id="protocol" title="Protocol">
-        <p>One JSON object per line, UTF-8, at most 64 KiB per line. The platform writes lines to your stdin; you write lines to your stdout.</p>
-        <p className="font-semibold text-foreground">start (once, before the first tick)</p>
+      <Section id="protocol" title={t('proto.title')}>
+        <p>{t('proto.p0')}</p>
+        <p className={H}>{t('proto.hStart')}</p>
         <Code>{`→ {"type":"start","you":2,"map":"crossroads",
    "rules":{"width":60,"height":40,"tick_rate":10,"ticks":1200, "...": "..."},
    "walls":[{"x":28,"y":26,"w":4,"h":12}],
    "players":[{"id":0,"name":"house:hunter"},{"id":1,"name":"house:sniper"},{"id":2,"name":"my-tank"}]}
 ← {"type":"ready"}`}</Code>
-        <p>
-          <code>you</code> is your tank&apos;s id — use it to find yourself in every later <code>tick</code>&apos;s{' '}
-          <code>tanks</code> array. Reply <code>ready</code> within 5 seconds of receiving <code>start</code> (this
-          covers your interpreter&apos;s startup time too), or your tank sits still for the whole match with status{' '}
-          <code>timeout</code>.
-        </p>
-        <p className="font-semibold text-foreground">tick (once per tick, only while you are alive)</p>
+        <p>{rich('proto.pStart')}</p>
+        <p className={H}>{t('proto.hTick')}</p>
         <Code>{`→ {"type":"tick","tick":17,
    "tanks":[{"id":0,"x":12.3,"y":8.1,"hull":0.52,"turret":0.9,"hp":75,"reload":3,"alive":true}],
    "shells":[{"id":41,"owner":1,"x":20.0,"y":14.2,"vx":-24.0,"vy":0.0}],
    "bonuses":[{"x":30.0,"y":24.0}],
    "zone":{"x":30,"y":20,"r":37}}
 ← {"tick":17,"move":1,"turn":0,"turret":-0.5,"fire":true}`}</Code>
-        <p>
-          <code>move</code>, <code>turn</code>, <code>turret</code> are clamped to <code>[-1, 1]</code>.{' '}
-          <code>move</code>: 1 full speed forward, -1 full speed reverse. <code>turn</code>: hull turn rate fraction,
-          positive counter-clockwise. <code>turret</code>: turret turn rate fraction, same sign convention, absolute
-          angle (not relative to the hull). <code>fire: true</code> shoots if your reload is 0 this tick; otherwise
-          it&apos;s a no-op, not an error.
-        </p>
-        <p className="font-semibold text-foreground">end (once, after the match is over)</p>
+        <p>{rich('proto.pTick')}</p>
+        <p className={H}>{t('proto.hEnd')}</p>
         <Code>{`→ {"type":"end","place":2,
    "players":[{"slot":0,"place":1,"kills":2,"damage":150,"death_tick":null,"status":"ok"}]}`}</Code>
-        <p>Exit after this — the platform closes your stdin right after sending it.</p>
+        <p>{t('proto.pEnd')}</p>
       </Section>
 
-      <Section id="timing" title="Timing and the time budget">
-        <ul className="flex list-disc flex-col gap-1.5 pl-5">
-          <li><span className="font-medium text-foreground">Ready deadline</span>: 5 seconds from <code>start</code> to <code>ready</code>.</li>
-          <li>
-            <span className="font-medium text-foreground">Per-tick deadline</span>: 200 ms to answer a <code>tick</code>.
-            Miss it and that tick is skipped — you are not disconnected for one slow tick.
-          </li>
-          <li>
-            <span className="font-medium text-foreground">Time budget</span>: the first 20 ms of thinking time per tick
-            is free; time spent beyond that is paid out of a shared 20-second budget for the whole match. Run it out and
-            your bot is disconnected for the rest of the match (<code>timeout</code>).
-          </li>
-          <li>A reply carrying the wrong <code>tick</code> (a stale answer to an earlier tick) is discarded, same as a missed tick.</li>
+      <Section id="timing" title={t('timing.title')}>
+        <ul className={UL}>
+          <li>{rich('timing.1')}</li>
+          <li>{rich('timing.2')}</li>
+          <li>{rich('timing.3')}</li>
+          <li>{rich('timing.4')}</li>
         </ul>
       </Section>
 
-      <Section id="logs" title="Logs and stray output">
-        <p>
-          stdout is only for protocol replies. A very common mistake is a debug <code>print(...)</code> left in
-          before your JSON — that line isn&apos;t a JSON object with a numeric <code>tick</code> field, so it&apos;s
-          ignored, not read as your move, but it is counted. Your move for that tick still counts if the real reply
-          also arrives in time. More than 1000 such stray lines in one match disable your bot for the rest of it
-          (status <code>invalid</code>).
-        </p>
-        <p>
-          Write logs to stderr instead — up to 16 KiB per match, sanitized on the server, visible only to you (your
-          bot&apos;s owner) on the match log page.
-        </p>
+      <Section id="logs" title={t('logs.title')}>
+        <p>{rich('logs.p1')}</p>
+        <p>{t('logs.p2')}</p>
       </Section>
 
-      <Section id="statuses" title="Statuses">
+      <Section id="statuses" title={t('status.title')}>
         <div className="overflow-hidden rounded-[10px] border border-border">
           <table className="w-full text-left text-sm">
             <tbody>
-              {STATUSES.map(([status, meaning]) => (
+              {STATUS_IDS.map((status) => (
                 <tr key={status} className="border-b border-border last:border-0 odd:bg-muted/40">
                   <td className="px-3 py-2 font-mono text-xs font-medium text-foreground">{status}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{meaning}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{t(`status.${status}`)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p>In every case your tank stays on the field — it just stops moving from that point on, so the match doesn&apos;t get one-sided by disconnects alone.</p>
+        <p>{t('status.note')}</p>
       </Section>
 
-      <Section id="package" title="Bot package and limits">
-        <p>A directory with a <code>bot.json</code> manifest at its root:</p>
+      <Section id="package" title={t('pkg.title')}>
+        <p>{rich('pkg.lead')}</p>
         <Code>{`{"name": "my-tank", "language": "python", "entry": "bot.py"}`}</Code>
-        <p>
-          <code>language</code> is <code>python</code> or <code>javascript</code>. The platform runs your bot as{' '}
-          <code>python3 -u &lt;entry&gt;</code> or <code>node &lt;entry&gt;</code>.
-        </p>
-        <ul className="flex list-disc flex-col gap-1.5 pl-5">
-          <li>Archive at most 1 MiB compressed, 4 MiB uncompressed, 200 regular files, no absolute paths or <code>..</code>.</li>
-          <li>Only the standard library — the run image is <code>python:3.12-slim</code> plus Node 22, no installed third-party packages.</li>
-          <li><code>GAME.md</code> and <code>RESULTS.md</code>, if present, are stripped before packing.</li>
-          <li>20 version uploads per day per bot.</li>
+        <p>{rich('pkg.p1')}</p>
+        <ul className={UL}>
+          <li>{rich('pkg.1')}</li>
+          <li>{rich('pkg.2')}</li>
+          <li>{rich('pkg.3')}</li>
+          <li>{rich('pkg.4')}</li>
         </ul>
       </Section>
 
-      <Section id="qualifying" title="Qualifying checks">
-        <p>Every uploaded version goes through a check before it can play in the ladder:</p>
-        <ul className="flex list-disc flex-col gap-1.5 pl-5">
-          <li><span className="font-medium text-foreground">package</span> — the archive is well-formed, <code>bot.json</code> parses, and <code>entry</code> exists.</li>
-          <li><span className="font-medium text-foreground">starts</span> — the bot answers <code>ready</code> within 5 seconds.</li>
-          <li>
-            <span className="font-medium text-foreground">stable</span> — in a 600-tick, 1-on-1 trial match against{' '}
-            <code>house:idle</code>, it answers at least 95% of the
-            ticks it was alive for, and doesn&apos;t crash. Stray stdout lines don&apos;t fail this check on their own,
-            but they show up in the report with a hint to use stderr instead.
-          </li>
-          <li>
-            <span className="font-medium text-foreground">beats_idle</span> — it finishes above <code>house:idle</code>{' '}
-            in that same trial match. A bot that does nothing ties <code>house:idle</code> for first place and fails
-            this check.
-          </li>
+      <Section id="qualifying" title={t('qual.title')}>
+        <p>{t('qual.lead')}</p>
+        <ul className={UL}>
+          <li>{rich('qual.1')}</li>
+          <li>{rich('qual.2')}</li>
+          <li>{rich('qual.3')}</li>
+          <li>{rich('qual.4')}</li>
         </ul>
-        <p>All four pass: the version goes active and plays in the ladder. Any one fails: the version is rejected and your previous active version, if any, keeps playing.</p>
+        <p>{t('qual.outro')}</p>
       </Section>
 
-      <Section id="rating" title="Rating">
-        <p>
-          Matches are rated with Weng–Lin (Plackett–Luce), the idea behind TrueSkill/OpenSkill: every bot has a
-          skill estimate μ and an uncertainty σ, both updated from where it placed relative to everyone else in the
-          match. Starting values are μ₀ = 25, σ₀ = 25/3; the model&apos;s own parameters are β = σ₀ / 2 and κ = 0.0001.
-          A new version of an existing bot keeps its rating, with its uncertainty raised back to at least 5.0.
-        </p>
-        <p>The number shown on the ladder is a conservative estimate that starts low and climbs as the bot proves itself:</p>
+      <Section id="rating" title={t('rating.title')}>
+        <p>{t('rating.p1')}</p>
+        <p>{t('rating.p2')}</p>
         <Code>{'displayed_rating = round(1000 + 40 × (μ − 3σ))'}</Code>
-        <p>A bot with fewer than 10 season matches is marked provisional: its rating can still move a lot, and tournament seeding prefers bots that are not provisional.</p>
+        <p>{t('rating.p3')}</p>
       </Section>
 
-      <Section id="local" title="Playing locally">
-        <p>
-          Advanced and optional: if you want faster iteration than uploading, the <code>{CLI}</code> command plays
-          matches on your own machine, using the exact same engine as the server. Install it:
-        </p>
+      <Section id="local" title={t('local.title')}>
+        <p>{rich('local.p1', undefined, { cli: CLI })}</p>
         <InstallCli />
-        <p>Then:</p>
+        <p>{t('local.then')}</p>
         <CopyBlock text={`${CLI} tanks new mybot --lang python     # scaffold a starter bot\n${CLI} tanks play mybot house:hunter house:sniper --seed 1\n${CLI} tanks play mybot house:hunter house:sniper --seed 2`} />
-        <p>
-          Each run prints a results table (place, kills, damage, status, and the stderr tail of anyone who crashed)
-          and writes a replay file you can open at{' '}
-          <Link className="text-primary hover:underline" href="/tanks/replay">/tanks/replay</Link>. Try a handful of
-          different <code>--seed</code> values — a strategy that only wins on one seed is fragile.
-        </p>
-        <p>
-          The house bots, easiest to hardest: <code>house:idle</code> (never moves), <code>house:hunter</code>{' '}
-          (charges and shoots), <code>house:sniper</code> (keeps its distance, leads shots), <code>house:duelist</code>{' '}
-          (strafes, dodges, leads shots), <code>house:warden</code> (also picks targets, heals, avoids crossfire and the
-          shrinking zone) and <code>house:ace</code> (plans its dodges against the shots you are about to fire). All
-          but idle play in the ladder, so a new bot starts near the bottom of the table and climbs as it beats them.
-        </p>
+        <p>{rich('local.p2', '/tanks/replay')}</p>
+        <p>{rich('local.p3')}</p>
       </Section>
     </div>
   )
