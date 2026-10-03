@@ -225,12 +225,17 @@ func (s *Service) Zip(ctx context.Context, entryID string) ([]byte, error) {
 	var data []byte
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var deadline time.Time
-		if err := tx.QueryRow(ctx, `SELECT e.zip, t.deadline FROM product_entries e JOIN product_tasks t ON t.slug = e.task_slug
-			WHERE e.id = $1 AND e.status = 'done'`, entryID).Scan(&data, &deadline); err != nil {
+		var kind string
+		if err := tx.QueryRow(ctx, `SELECT e.zip, t.deadline, t.kind FROM product_entries e JOIN product_tasks t ON t.slug = e.task_slug
+			WHERE e.id = $1 AND e.status = 'done'`, entryID).Scan(&data, &deadline, &kind); err != nil {
 			return err
 		}
 		if !published(deadline) {
 			return httpx.NotFound()
+		}
+		// Sites are judged blind while voting is open; their source would give the author away.
+		if kind == KindSite && phaseOf(deadline) == PhaseVoting {
+			return httpx.Forbidden("Source and downloads of sites open when voting ends")
 		}
 		return nil
 	})

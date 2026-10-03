@@ -68,7 +68,12 @@ func (s *Service) Results(ctx context.Context, slug, userID string) (Results, er
 		}
 		rows.Close()
 		if r.Task.Kind == KindSite {
-			return rankSiteEntries(ctx, tx, slug, r.Entries)
+			if err := rankSiteEntries(ctx, tx, slug, r.Entries); err != nil {
+				return err
+			}
+			if r.Task.Phase == PhaseVoting {
+				blindEntries(r.Entries)
+			}
 		}
 		return nil
 	})
@@ -76,6 +81,20 @@ func (s *Service) Results(ctx context.Context, slug, userID string) (Results, er
 		return Results{}, httpx.NotFound()
 	}
 	return r, err
+}
+
+// blindEntries strips what could sway a blind vote from a site task's entries while voting is open: other
+// people's authors, tools, checks, scores and vote counts, and the standings order. Your own entry stays whole.
+func blindEntries(entries []Entry) {
+	for i := range entries {
+		e := &entries[i]
+		if e.Mine {
+			continue
+		}
+		e.Handle, e.MadeWith, e.Passed, e.Total, e.Votes, e.Score, e.Comparisons = "", "", 0, 0, 0, nil, 0
+		e.Results = []ScenarioResult{}
+	}
+	sort.Slice(entries, func(a, b int) bool { return entries[a].ID < entries[b].ID })
 }
 
 // rankSiteEntries puts a site task's entries into BT order and fills in their scores.
