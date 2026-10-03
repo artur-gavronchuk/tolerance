@@ -7,7 +7,9 @@ import { Check, X } from 'lucide-react'
 import { SectionTitle } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { StackName, displayStack } from '@/components/daily/stack-label'
 import { api, ApiError, friendlyMessage } from '@/lib/api'
+import { useMe } from '@/lib/use-me'
 import type { Profile, ProfileDay } from '@/lib/types'
 
 // The last 12 weeks as a grid of days, GitHub-style: solved, tried, or empty.
@@ -20,12 +22,23 @@ function Calendar({ days }: { days: ProfileDay[] }) {
     const day = t.toISOString().slice(0, 10)
     cells.push({ day, d: byDay.get(day) })
   }
+  const played = cells.filter((c) => c.d).length
   return (
-    <div className="grid grid-flow-col grid-rows-7 justify-start gap-1">
-      {cells.map(({ day, d }) => (
-        <div key={day} title={d ? `${day}: ${d.passed_tests}/${d.total_tests}` : day}
-          className={`size-3 rounded-[3px] ${!d ? 'bg-muted' : d.status === 'passed' ? 'bg-success' : 'bg-primary/40'}`} />
-      ))}
+    <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-8">
+      <div className="grid w-full max-w-xs grid-flow-col grid-cols-12 grid-rows-7 gap-1 sm:max-w-sm">
+        {cells.map(({ day, d }) => (
+          <div key={day} title={d ? `${day}: ${d.passed_tests}/${d.total_tests}` : day}
+            className={`aspect-square rounded-[4px] ${!d ? 'bg-muted' : d.status === 'passed' ? 'bg-success' : 'bg-primary/40'}`} />
+        ))}
+      </div>
+      <div className="space-y-2 text-sm text-muted-foreground">
+        <p><span className="font-mono font-bold text-foreground">{played}</span> of the last 84 days played</p>
+        <ul className="space-y-1 text-xs">
+          <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] bg-success" />Solved</li>
+          <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] bg-primary/40" />Tried</li>
+          <li className="flex items-center gap-2"><span className="size-3 rounded-[3px] bg-muted" />No attempt</li>
+        </ul>
+      </div>
     </div>
   )
 }
@@ -40,6 +53,7 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function ProfileView({ handle }: { handle: string }) {
+  const { me } = useMe()
   const [p, setP] = useState<Profile | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [missing, setMissing] = useState(false)
@@ -54,13 +68,19 @@ export function ProfileView({ handle }: { handle: string }) {
   if (error) return <p role="alert" className="text-sm text-destructive">{error}</p>
   if (!p) return <Skeleton className="h-64 rounded-[14px]" />
 
+  const isMe = me?.user.handle.toLowerCase() === p.handle.toLowerCase()
+  const tools = [...new Set(p.tools.map(displayStack))]
+
   return (
     <div className="space-y-10">
       <header className="space-y-2">
-        <h1 className="display text-[2.1rem] break-words sm:text-[2.75rem]">{p.handle}</h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h1 className="display text-[2.1rem] break-words sm:text-[2.75rem]">{p.handle}</h1>
+          {isMe && <Badge>This is you</Badge>}
+        </div>
         <p className="text-sm text-muted-foreground">
           Joined {p.joined_at.slice(0, 10)}
-          {p.tools.length > 0 && <> · works with {p.tools.join(', ')}</>}
+          {tools.length > 0 && <> · works with {tools.join(', ')}</>}
         </p>
       </header>
 
@@ -73,7 +93,7 @@ export function ProfileView({ handle }: { handle: string }) {
 
       <section>
         <SectionTitle>Last 12 weeks</SectionTitle>
-        <div className="overflow-x-auto rounded-[14px] border border-border bg-card p-4"><Calendar days={p.days} /></div>
+        <div className="rounded-[14px] border border-border bg-card p-4 sm:p-5"><Calendar days={p.days} /></div>
       </section>
 
       <section>
@@ -90,7 +110,7 @@ export function ProfileView({ handle }: { handle: string }) {
                 <span className="font-mono text-sm font-bold">
                   {d.score != null ? d.score : `${d.passed_tests}/${d.total_tests}`}
                 </span>
-                {d.made_with && <Badge variant="outline">{d.made_with}</Badge>}
+                {d.made_with && <Badge variant="outline"><StackName madeWith={d.made_with} /></Badge>}
                 <span className="text-xs text-muted-foreground">{d.attempts} attempt{d.attempts === 1 ? '' : 's'}</span>
               </li>
             ))}
