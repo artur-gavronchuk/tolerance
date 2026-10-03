@@ -5,10 +5,10 @@ import Link from 'next/link'
 import { Code2, Swords, Trophy } from 'lucide-react'
 import { Countdown } from '@/components/daily/countdown'
 import { Countdown as TanksCountdown } from '@/components/tanks/countdown'
-import { api, products } from '@/lib/api'
+import { api, products, tanks } from '@/lib/api'
 import { fmtScore } from '@/components/daily/daily-board'
 import { useMe } from '@/lib/use-me'
-import type { Daily, MyTanks, ProductDetail, Showcase } from '@/lib/types'
+import type { Daily, MyTanks, ProductDetail, Showcase, SeasonDetail } from '@/lib/types'
 
 type Tile = { key: string; icon: typeof Code2; label: string; href: string; headline: React.ReactNode; sub: React.ReactNode }
 
@@ -22,7 +22,7 @@ async function dailyTile(): Promise<Tile> {
   if (best) headline = optimize ? `Best score ${fmtScore(best.score)}` : `Best ${best.passed_tests}/${best.total_tests} tests`
   else if (d.my && d.my.attempts_used > 0) headline = `${d.my.attempts_used} upload${d.my.attempts_used === 1 ? '' : 's'}, no result yet`
   return {
-    key: 'daily', icon: Code2, label: 'Task of the day', href: '/', headline: <span title={d.task.title}>{headline}</span>,
+    key: 'daily', icon: Code2, label: 'Task of the day', href: '/#today', headline: <span title={d.task.title}>{headline}</span>,
     sub: d.is_open ? <>Closes in <Countdown closesAt={d.closes_at} /></> : 'Closed for today',
   }
 }
@@ -61,7 +61,8 @@ async function productTile(): Promise<Tile> {
 }
 
 async function tanksTile(): Promise<Tile> {
-  const [mine, show] = await Promise.allSettled([api<MyTanks>('/me/tanks'), api<Showcase>('/tanks/showcase')])
+  // The showcase ladder is cut to the top 10, so the rank comes from the full season standings.
+  const [mine, show, season] = await Promise.allSettled([api<MyTanks>('/me/tanks'), api<Showcase>('/tanks/showcase'), tanks.season('current')])
   if (mine.status === 'rejected' && show.status === 'rejected') throw mine.reason
   const bot = mine.status === 'fulfilled' ? mine.value.bot : null
   const s = show.status === 'fulfilled' ? show.value : null
@@ -69,7 +70,8 @@ async function tanksTile(): Promise<Tile> {
   if (mine.status === 'rejected') headline = 'Tanks arena'
   else if (!bot) headline = 'No bot yet'
   else {
-    const rank = s?.ladder.find((l) => l.bot_id === bot.id)?.rank
+    const standings: SeasonDetail['standings'] = season.status === 'fulfilled' ? season.value.standings : (s?.ladder ?? [])
+    const rank = standings.find((l) => l.bot_id === bot.id)?.rank
     headline = <>{rank ? `#${rank} · ` : ''}{bot.name} <span className="font-mono">{Math.round(bot.rating)}</span></>
   }
   let sub: React.ReactNode = !bot && mine.status === 'fulfilled' ? 'Build one with your agent' : 'See the ladder'
