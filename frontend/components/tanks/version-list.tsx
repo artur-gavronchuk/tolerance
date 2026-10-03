@@ -3,6 +3,7 @@ import { Check, Loader2, X } from 'lucide-react'
 import { BotBadge } from './bot-badge'
 import type { VersionView } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { CopyReportButton } from './copy-report-button'
 
 const STATUS_TEXT: Record<VersionView['status'], string> = {
   pending: 'checking…',
@@ -91,9 +92,14 @@ export function VersionList({ versions }: { versions: VersionView[] }) {
             <BotBadge source={v.source} />
             <StatusBadge status={v.status} />
             {v.check_match_id && (
-              <Link href={`/tanks/matches/${v.check_match_id}`} className="ml-auto text-xs font-semibold text-primary hover:underline">
-                Watch trial replay
-              </Link>
+              <span className="ml-auto flex flex-wrap items-center gap-3">
+                {v.status !== 'pending' && (
+                  <CopyReportButton matchIds={[v.check_match_id]} size="xs" variant="ghost" label="Copy trial report" />
+                )}
+                <Link href={`/tanks/matches/${v.check_match_id}`} className="text-xs font-semibold text-primary hover:underline">
+                  Watch trial replay
+                </Link>
+              </span>
             )}
           </div>
           {v.status === 'pending' && <PendingNote />}

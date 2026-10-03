@@ -94,4 +94,17 @@ func RegisterOwnerRoutes(mux *http.ServeMux, s *Service) {
 		}
 		httpx.Respond(w, http.StatusOK, l)
 	})
+
+	// The report is plain text for pasting into a coding agent, not JSON.
+	mux.HandleFunc("GET /api/v1/me/tanks/matches/{id}/report", func(w http.ResponseWriter, r *http.Request) {
+		text, err := s.MatchReport(r.Context(), identity.MustFromContext(r.Context()).UserID, r.PathValue("id"))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(text))
+	})
 }

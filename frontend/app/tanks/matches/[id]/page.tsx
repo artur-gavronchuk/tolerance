@@ -11,7 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { api, ApiError } from '@/lib/api'
 import { fetchReplay, type Replay } from '@/lib/tanks/replay'
-import type { MatchView } from '@/lib/types'
+import type { MatchView, MyTanks } from '@/lib/types'
+import { CopyReportButton } from '@/components/tanks/copy-report-button'
 
 function ratingDelta(before: number | null, after: number | null): string {
   if (before == null || after == null) return '—'
@@ -33,6 +34,7 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
   const [error, setError] = useState<string | null>(null)
   const [replayState, setReplayState] = useState<ReplayState>({ kind: 'idle' })
   const [copied, setCopied] = useState(false)
+  const [mine, setMine] = useState(false) // the signed-in viewer owns a bot in this match
   const aliveRef = useRef(true)
 
   const loadReplay = useCallback(async (matchId: string) => {
@@ -57,6 +59,10 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       .then((m) => {
         if (!aliveRef.current) return
         setMatch(m)
+        // Anonymous visitors get a 401 here; that just means no report button.
+        void api<MyTanks>('/me/tanks')
+          .then((t) => { if (aliveRef.current && t.bot && m.players.some((p) => p.bot_id === t.bot!.id)) setMine(true) })
+          .catch(() => {})
         if (m.has_replay) void loadReplay(id)
         else setReplayState({ kind: 'expired' })
       })
@@ -107,10 +113,13 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
         }
         title={ranked.map((p) => p.name).join(' vs ')}
         actions={
-          <Button variant="outline" onClick={copyLink}>
-            {copied ? <Check /> : <Copy />}
-            {copied ? 'Copied' : 'Copy link'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {mine && match.status === 'finished' && <CopyReportButton matchIds={[id]} />}
+            <Button variant="outline" onClick={copyLink}>
+              {copied ? <Check /> : <Copy />}
+              {copied ? 'Copied' : 'Copy link'}
+            </Button>
+          </div>
         }
       >
         <span className="font-mono text-sm">{match.map} · seed {match.seed} · {match.kind}</span>

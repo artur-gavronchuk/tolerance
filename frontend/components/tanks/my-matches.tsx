@@ -7,6 +7,7 @@ import { api } from '@/lib/api'
 import { ago } from '@/lib/format'
 import type { MatchLog, MatchView } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { CopyReportButton } from './copy-report-button'
 
 function place(mv: MatchView, botId: string): string {
   const mine = mv.players.find((p) => p.bot_id === botId)
@@ -63,6 +64,7 @@ export function MyMatches({ matches, botId }: { matches: MatchView[]; botId: str
                 vs {opponents(m, botId)}
               </Link>
               <span className="shrink-0 text-xs text-muted-foreground">{m.finished_at ? ago(m.finished_at) : m.status}</span>
+              <CopyReportButton matchIds={[m.id]} size="xs" variant="ghost" label="Copy report" className="shrink-0" />
               <button type="button" onClick={() => void toggle(m.id)} aria-expanded={isOpen} aria-controls={`match-log-${m.id}`}
                 className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline">
                 My bot&apos;s log<ChevronDown className={cn('size-3.5 transition-transform', isOpen && 'rotate-180')} />

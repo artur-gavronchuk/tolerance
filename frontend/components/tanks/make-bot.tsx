@@ -8,7 +8,7 @@ import type { VersionView } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 // Keep in step with tanks.AgentPrompt in backend/internal/games/tanks/starter.go (the starter kit's README).
-export const BOT_PROMPT = `Read GAME.md in this folder, then improve the tank bot (bot.py or bot.js, whichever is here) so it beats the house bots hunter and sniper. Keep bot.json valid and keep the same entry file. Use only the standard library of the language. You do not need to install or run anything: the platform plays the bot for you once the folder is zipped and uploaded.`
+export const BOT_PROMPT = `Read GAME.md in this folder, then improve the tank bot (bot.py or bot.js, whichever is here) so it beats the house bots hunter and sniper. Keep bot.json valid and keep the same entry file. Use only the standard library of the language. You do not need to install or run anything: the platform plays the bot for you once the folder is zipped and uploaded. After each upload I will paste you a match report from the site (what hit you, how many shots landed, where the tank got stuck, the bot's stderr): read it, work out what went wrong and fix the bot.`
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -56,8 +56,9 @@ export function MakeBot({ onUploaded }: { onUploaded: (v: VersionView) => void }
         <Step n={3} title="Zip the folder and upload it">
           <UploadVersion onUploaded={onUploaded} />
           <p className="text-xs text-muted-foreground">
-            Each version gets a trial match, then plays the ladder. Read the check results and replays below, paste
-            what went wrong back to your agent and upload the next version. The{' '}
+            Each version gets a trial match, then plays the ladder. Below, press &ldquo;Copy report for your agent&rdquo;
+            next to a match (or &ldquo;Copy last 5 matches&rdquo;), paste it to your agent and upload the next version.
+            Replays show the same matches visually. The{' '}
             <Link href="/tanks/docs" className="font-semibold text-primary hover:underline">docs</Link> have the rules.
           </p>
         </Step>

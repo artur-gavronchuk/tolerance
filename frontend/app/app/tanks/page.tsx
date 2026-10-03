@@ -7,17 +7,20 @@ import { PageHeader, SectionTitle } from '@/components/page-header'
 import { MakeBot } from '@/components/tanks/make-bot'
 import { BotNameForm } from '@/components/tanks/bot-name-form'
 import { MyMatches } from '@/components/tanks/my-matches'
+import { CopyReportButton } from '@/components/tanks/copy-report-button'
 import { VersionList } from '@/components/tanks/version-list'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, friendlyMessage } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import type { MyTanks } from '@/lib/types'
 
-// Whether anything on this page is still moving: a version's check hasn't
-// resolved yet. Polling stops the moment it has, so a finished page sits still
-// instead of hitting the API forever.
-function needsPoll(data: MyTanks | null): boolean {
-  return !!data && data.versions.some((v) => v.status === 'pending')
+// While a version's check is pending the page refreshes every 3 s; afterwards every 10 s so new ladder matches
+// show up without a reload. Polling only runs while the tab is visible.
+const FAST_POLL_MS = 3000
+const SLOW_POLL_MS = 10000
+
+function pollInterval(data: MyTanks | null): number {
+  return data && data.versions.some((v) => v.status === 'pending') ? FAST_POLL_MS : SLOW_POLL_MS
 }
 
 export default function TanksPage() {
@@ -34,13 +37,19 @@ export default function TanksPage() {
     }
   }, [])
 
-  const poll = needsPoll(data)
+  const pollMs = pollInterval(data)
   useEffect(() => {
     void load()
-    if (!poll) return
-    const t = setInterval(() => { void load() }, 3000)
-    return () => clearInterval(t)
-  }, [load, poll])
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') void load()
+    }, pollMs)
+    const onVisible = () => { if (document.visibilityState === 'visible') void load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [load, pollMs])
 
   if (!me) return null
 
@@ -107,6 +116,15 @@ export default function TanksPage() {
             {data.bot && (
               <section>
                 <SectionTitle>My recent matches</SectionTitle>
+                {data.matches.length > 0 && (
+                  <div className="mb-3 space-y-1">
+                    <CopyReportButton matchIds={data.matches.slice(0, 5).map((m) => m.id)} label="Copy last 5 matches"
+                      variant="secondary" />
+                    <p className="text-xs text-muted-foreground">
+                      Reports are plain text: what happened to your tank, tick by tick. Paste them to your agent before it writes the next version.
+                    </p>
+                  </div>
+                )}
                 <MyMatches matches={data.matches} botId={data.bot.id} />
               </section>
             )}
