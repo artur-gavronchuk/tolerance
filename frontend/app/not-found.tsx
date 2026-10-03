@@ -1,11 +1,12 @@
 import Link from 'next/link'
+import { SiteFooter } from '@/components/public/site-footer'
 import { SiteHeader } from '@/components/public/site-header'
 import { Button } from '@/components/ui/button'
 
 export default function NotFound() {
   return (
     <div className="flex min-h-dvh flex-col">
-      <SiteHeader />
+      <SiteHeader returnTo="/" />
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 py-16 sm:px-6">
         <p className="font-mono text-sm text-muted-foreground">404</p>
         <h1 className="display mt-2 text-[2.6rem]">Nothing here</h1>
@@ -16,6 +17,7 @@ export default function NotFound() {
           <Button variant="outline" render={<Link href="/tanks" />} nativeButton={false}>Tanks</Button>
         </div>
       </main>
+      <SiteFooter />
     </div>
   )
 }

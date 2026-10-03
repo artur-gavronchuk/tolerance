@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { Brand } from '@/components/brand'
-import { loginHref, rememberPath } from '@/components/public/return-path'
+import { loginHref } from '@/components/public/return-path'
 import { Button } from '@/components/ui/button'
 import { post } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
@@ -31,16 +31,12 @@ const TANKS_NAV = [
 
 const STREAK_HELP = 'Days in a row with a passing daily result; next task at 00:00 UTC'
 
-export function SiteHeader() {
+// returnTo overrides the post-sign-in destination, for pages whose own URL is not a place to return to (404).
+export function SiteHeader({ returnTo }: { returnTo?: string }) {
   const { me, loading } = useMe()
   const pathname = usePathname()
   const stripRef = useRef<HTMLDivElement>(null)
   const inTanks = pathname === '/tanks' || pathname.startsWith('/tanks/') || pathname.startsWith('/app/tanks')
-
-  // Remember where the visitor is, so /login can send them back after sign-in.
-  useEffect(() => {
-    rememberPath(pathname + window.location.search)
-  }, [pathname])
 
   // Keep the active tab of the mobile strip in view.
   useEffect(() => {
@@ -99,17 +95,17 @@ export function SiteHeader() {
               </button>
             </>
           ) : (
-            <Button render={<Link href={loginHref(pathname)} />} nativeButton={false}>Sign in</Button>
+            <Button render={<Link href={loginHref(returnTo ?? pathname)} />} nativeButton={false}>Sign in</Button>
           )}
         </div>
       </div>
-      <div className="relative border-t border-border sm:hidden">
-        <div ref={stripRef} className="relative flex h-11 items-center gap-1 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="border-t border-border sm:hidden">
+        <div ref={stripRef} className="flex h-11 items-center gap-1 overflow-x-auto pl-4 [mask-image:linear-gradient(to_right,#000_calc(100%-2rem),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {SITE_NAV.map((item) => link(item, SITE_NAV))}
           {me?.can_admin && link({ label: 'Admin', href: '/admin' }, SITE_NAV)}
-          <span aria-hidden className="w-4 shrink-0" />
+          {/* As wide as the fade, so the last tab clears it at the end of the scroll. */}
+          <span aria-hidden className="w-8 shrink-0" />
         </div>
-        <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent" />
       </div>
       {inTanks && (
         <div className="border-t border-border">
