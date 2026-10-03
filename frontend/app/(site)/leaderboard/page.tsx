@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api, friendlyMessage } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import type { OverallRow } from '@/lib/types'
+import { HandleLink } from '@/components/daily/handle-link'
 
 export default function LeaderboardPage() {
   const { me } = useMe()
@@ -39,7 +40,7 @@ export default function LeaderboardPage() {
             {rows.map((r) => (
               <TableRow key={r.place} className={mine(r) ? 'bg-accent' : undefined}>
                 <TableCell className="font-mono text-muted-foreground">{r.place}</TableCell>
-                <TableCell className="max-w-[10rem] truncate font-semibold sm:max-w-none">{r.handle}</TableCell>
+                <TableCell className="max-w-[10rem] truncate font-semibold sm:max-w-none"><HandleLink handle={r.handle} /></TableCell>
                 <TableCell className="text-right font-mono font-bold">{r.points}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">{r.solved_days}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">🔥 {r.current_streak}</TableCell>

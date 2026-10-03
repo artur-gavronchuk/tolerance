@@ -71,6 +71,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/daily/", public)
 	api.Handle("/api/v1/days", public)
 	api.Handle("/api/v1/leaderboard", public)
+	api.Handle("/api/v1/users/", public)
 	api.Handle("/api/v1/tasks/", public)
 	api.Handle("/api/v1/tanks/", public)
 

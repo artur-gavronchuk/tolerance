@@ -1,5 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { DailyRow } from '@/lib/types'
+import { HandleLink } from '@/components/daily/handle-link'
 
 export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: string; optimize?: boolean }) {
   if (rows.length === 0) {
@@ -27,7 +28,7 @@ export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: stri
           {rows.map((r) => (
             <TableRow key={r.place} className={mine(r) ? 'bg-accent' : undefined}>
               <TableCell className="font-mono text-muted-foreground">{r.place}</TableCell>
-              <TableCell className="font-semibold">{r.handle}</TableCell>
+              <TableCell className="font-semibold"><HandleLink handle={r.handle} /></TableCell>
               <TableCell className="text-muted-foreground">{r.made_with || '—'}</TableCell>
               <TableCell className="text-right font-mono font-bold">{result(r)}</TableCell>
               <TableCell className="text-right font-mono text-muted-foreground">{time(r.submitted_at)}</TableCell>
@@ -40,7 +41,7 @@ export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: stri
           <li key={r.place} className={`flex items-center gap-3 p-3 ${mine(r) ? 'bg-accent' : ''}`}>
             <span className="w-5 shrink-0 font-mono text-sm text-muted-foreground">{r.place}</span>
             <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">{r.handle}</p>
+              <p className="truncate font-semibold"><HandleLink handle={r.handle} /></p>
               <p className="truncate text-xs text-muted-foreground">{r.made_with || '—'} · {time(r.submitted_at)}</p>
             </div>
             <span className="shrink-0 font-mono text-lg font-bold">{result(r)}</span>

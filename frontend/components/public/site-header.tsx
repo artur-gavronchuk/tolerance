@@ -61,10 +61,11 @@ export function SiteHeader() {
         <div className="ml-auto flex items-center gap-2">
           {loading ? null : me ? (
             <>
-              <span className="flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm" title="Current streak">
+              <Link href={`/u/${encodeURIComponent(me.user.handle)}`} title="My profile"
+                className="flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm hover:border-primary">
                 <span className="max-w-[8rem] truncate font-bold">{me.user.handle}</span>
                 <span className="font-mono text-xs text-muted-foreground">🔥 {me.streak.current}</span>
-              </span>
+              </Link>
               <button onClick={() => void signOut()} aria-label="Sign out" title="Sign out"
                 className="flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
                 <LogOut className="size-4" />

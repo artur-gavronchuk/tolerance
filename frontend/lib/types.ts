@@ -118,3 +118,19 @@ export interface ProductEntry {
 export interface ProductDetail extends ProductTask { attempts_used: number; mine: ProductEntry[] }
 
 export interface ProductResults { task: ProductTask; entries: ProductEntry[] }
+
+// A person's public page (`/users/{handle}`).
+export interface ProfileDay {
+  day: string
+  task: { slug: string; title: string; language: 'go' | 'python'; difficulty: number }
+  status: 'passed' | 'failed'
+  passed_tests: number; total_tests: number; score: number | null
+  made_with: string; attempts: number
+}
+
+export interface Profile {
+  handle: string; joined_at: string
+  streak: { current: number; best: number }
+  solved_days: number; played_days: number; place: number | null
+  tools: string[]; days: ProfileDay[]
+}
