@@ -1,0 +1,2 @@
+{"slug": "py-text-table-unicode", "title": "Text tables break on wide and combining characters", "difficulty": 2,
+ "agent_timeout_s": 900, "sandbox_timeout_s": 120, "hidden_tests": 6}

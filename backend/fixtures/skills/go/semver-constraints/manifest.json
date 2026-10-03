@@ -1,0 +1,2 @@
+{"slug": "go-semver-constraints", "title": "Version constraints resolve to the wrong release", "difficulty": 3,
+ "agent_timeout_s": 1200, "sandbox_timeout_s": 120, "hidden_tests": 6}

@@ -1,0 +1,2 @@
+{"slug": "py-cron-next-fire", "title": "Cron scheduler fires on the wrong days", "difficulty": 3,
+ "agent_timeout_s": 900, "sandbox_timeout_s": 120, "hidden_tests": 6}

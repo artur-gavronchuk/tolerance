@@ -1,0 +1,2 @@
+{"slug": "go-batcher-flush-ordering", "title": "Batcher flushes early, out of order, and deadlocks", "difficulty": 3,
+ "agent_timeout_s": 1200, "sandbox_timeout_s": 120, "hidden_tests": 6}
