@@ -1,18 +1,19 @@
 name: deploy
 
-# Two ways in:
-#   - automatic, after `ci` succeeds on main (path-based: only the
-#     component(s) whose files actually changed since the last deployed
-#     commit are built and released, with a canary phase by default);
-#   - manual, via the Actions UI (workflow_dispatch), for a specific
-#     component, a specific ref/sha (redeploy an old tag for a rollback —
+# Manual only (workflow_dispatch from the Actions UI) during the active
+# build phase: merges to main no longer deploy. The workflow_run handling
+# below is kept so automatic deploys can be switched back on by restoring
+# the trigger:
+#   workflow_run:
+#     workflows: [ci]
+#     types: [completed]
+# component `auto` is path-based: only the component(s) whose files changed
+# since the last deployed commit are built and released. Also takes a
+# specific component, a specific ref/sha (redeploy an old tag for a rollback —
 #     the build step skips the build entirely if that tag's image already
 #     exists in GHCR), with canary on/off, and for promote/abort/rollback on
 #     an in-flight or previous release without building anything.
 on:
-  workflow_run:
-    workflows: [ci]
-    types: [completed]
   workflow_dispatch:
     inputs:
       component:
@@ -27,7 +28,7 @@ on:
       canary:
         description: Run a canary phase before promoting (deploy action only)
         type: boolean
-        default: true
+        default: false
       action:
         description: deploy | promote | abort | rollback
         type: choice
@@ -131,7 +132,7 @@ jobs:
             sha="${IN_REF:-$(git rev-parse HEAD)}"
             sha="$(git rev-parse "$sha")"
             component="${IN_COMPONENT:-auto}"
-            canary="${IN_CANARY:-true}"
+            canary="${IN_CANARY:-false}"
             action="${IN_ACTION:-deploy}"
           fi
 

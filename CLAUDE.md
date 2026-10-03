@@ -95,7 +95,15 @@ pnpm build
 
 CI (`.github/workflows/ci.yml`) runs `go vet`/`gofmt`/`go test -race` with
 `ARENA_TEST_REQUIRE_DOCKER=1` for backend, `pnpm typecheck && pnpm build` for
-frontend. Match that locally before claiming work is done.
+frontend. Match that locally before claiming work is done. The 375px `mobile`
+job runs only on a manual dispatch of `ci`.
+
+**Active build phase (since 2026-10-03):** speed of building the product comes
+first. Merges to `main` do not deploy — `deploy.yml` is `workflow_dispatch`
+only, canary off by default. "Done" means it works locally (`make test`,
+`make up`, the flow run end to end), not a green deploy. Don't add ops work
+(canary, monitoring, alerting, scaling) unless asked; keep specs and plans
+short and review once per feature, not per task.
 
 ### Docker-dependent tests
 
@@ -344,7 +352,7 @@ clock on the same 30s loop that sweeps stalled qualification runs.
 - Commit subjects: English, imperative, sentence case, no `feat:`-style prefixes.
 - Prose docs and specs in `docs/` are in Russian; code, comments and commit
   messages are in English. Match whichever you are editing.
-- Migrations must be backward compatible (expand/contract): canary releases run
-  old and new backend code against the same schema side by side. Never edit or
-  rename a migration file once it exists on `main` — add a new one instead;
-  CI's `migration-guard` job enforces this (see README.md's "Релизы").
+- Never edit or rename a migration file once it exists on `main` — production
+  has run it; add a new one instead. CI's `migration-guard` job enforces this
+  on PRs (see README.md's "Релизы"). Expand/contract backward compatibility is
+  not required while canary releases are off; bring it back with them.
