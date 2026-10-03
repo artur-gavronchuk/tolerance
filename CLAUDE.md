@@ -38,30 +38,24 @@ overrides the superpowers skills and any default habits:
 
 **tolerance** (site https://tolerance.cc; the CLI is still called `arena`, env
 vars are `ARENA_*`, the database is `arena`). Since 2026-10-03 the product is
-upload-based — the platform never talks to users' agents:
+upload-based — the platform never talks to users' agents. Two modes:
 
 1. **Task of the day** (built): one coding task per UTC day. The user downloads
    the repo, has their own agent fix it, uploads a zip or a patch; the platform
    runs the hidden tests in the Docker sandbox. Daily/overall leaderboards,
    streaks, 3 attempts a day.
-2. **Product tasks** (built, `internal/products`, `backend/fixtures/products`):
-   one "product of the week" (Monday→Monday UTC, picked lazily by
-   `rotation.go`, alternating site/cli; then 3 days of voting). `kind=cli` entries are scored by I/O
-   scenarios in the sandbox (`run_product` job); `kind=site` entries are a
-   zip of static files, served from `/api/v1/product-entries/{id}/site/…`
-   with CSP `sandbox` (opaque origin; `cmd/api` refuses non-GET requests with
-   `Origin: null`). After the deadline entries are published and voted on.
-   Link to `site/index.html`, not `site/`: Next strips the trailing slash.
-3. **Tanks** (`internal/games`): users download a starter kit zip, have their
+2. **Tanks** (`internal/games`): users download a starter kit zip, have their
    agent improve it, upload a zip; check match, ladder, monthly seasons
    (per-season ratings), weekly single-elimination tournaments, plain-text
    match reports for pasting back to the agent.
 
-Also: `/agents` (`internal/stacks`, results grouped by normalized `made_with`),
-`/u/[handle]` (+ `internal/profiles` for products/tanks activity), `/admin`
-(`internal/admin`, pulse; admin = `identity.CanAdmin`: admin role, or anyone
-when `ARENA_DEV_LOGIN=true` — the same rule gates product close/start-next and
-"start a tournament now").
+Also: `/u/[handle]` (+ `internal/profiles` for tanks bots and the main `made_with`
+stack; `made_with` itself is a free-text field on submissions, normalized for
+display in `internal/profiles/stack.go` and `components/daily/stack-label.tsx`),
+`/admin` (`internal/admin`, pulse; admin = `identity.CanAdmin`: admin role, or
+anyone when `ARENA_DEV_LOGIN=true` — the same rule gates "start a tournament now").
+Products ("product of the week") and the `/agents` stacks page were removed on
+2026-10-03; they live in the commit history.
 
 This repository is public: `backend/fixtures/*` tasks are practice tasks. The
 real hidden tasks live in the private repo `artur-gavronchuk/arena-tasks`.
@@ -117,16 +111,13 @@ backend/internal/games       tanks: bots, versions, check, ladder, match runner,
 backend/internal/identity    OAuth (GitHub/Google), dev login, sessions, RequireSession
 backend/internal/platform    db, dbtest, httpx, jobs queue, limits, sanitize, …
 backend/fixtures             practice tasks (`_hidden/` = hidden tests — task content, never delete)
-backend/internal/products    weekly product tasks: rotation, entries, scenario runner (runner_site.py = Playwright), votes
-backend/internal/stacks      made_with → (tool, model) normalizer, /stacks
-backend/internal/profiles    /users/{handle}/activity
+backend/internal/profiles    /users/{handle}/activity, made_with normalizer
 backend/internal/admin       /admin/pulse, /admin/recent
-frontend/app                 / (today), /day/[day], /days, /leaderboard, /agents, /products/*, /u/*, /admin, /tanks/*, /app/tanks
+frontend/app                 / (today), /day/[day], /days, /leaderboard, /u/*, /admin, /tanks/*, /app/tanks
 frontend/lib                 types.ts (API types), api.ts (fetching)
 ```
 
-Session cookie routes: `/api/v1/me`, `/submissions*`, `/me/tanks*`, product
-uploads/votes, `/admin/*`. Everything
+Session cookie routes: `/api/v1/me`, `/submissions*`, `/me/tanks*`, `/admin/*`. Everything
 else (`/daily*`, `/days`, `/leaderboard`, `/tasks/{slug}/repo.zip`,
 `/tanks/*`, `/connector/download`) is public.
 
