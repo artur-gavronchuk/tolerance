@@ -50,7 +50,31 @@ def step(page, s):
         else:
             raise AssertionError("expected %s (+-%s), got %s" % (s["value"], s.get("tolerance", 0.0), got))
     elif op == "press":
-        loc.first.press(s["key"], timeout=STEP_MS)
+        if loc is None:
+            page.keyboard.press(s["key"])  # the focused element
+        else:
+            loc.first.press(s["key"], timeout=STEP_MS)
+    elif op == "type":
+        loc.first.press_sequentially(s["value"], delay=s.get("delay", 0), timeout=STEP_MS)
+    elif op == "dblclick":
+        loc.first.dblclick(timeout=STEP_MS)
+    elif op == "drag":
+        loc.first.drag_to(page.locator(s["target"]).first, timeout=STEP_MS)
+    elif op == "set_time":
+        # Date.now() and new Date() return this instant (an ISO string with Z or an offset); timers keep running.
+        page.clock.set_fixed_time(s["time"])
+    elif op == "expect_js":
+        # Trusted platform expression evaluated in the page; its JSON result must equal "value".
+        got = None
+        for _ in range(STEP_MS // 100):
+            got = page.evaluate(s["expr"])
+            if got == s["value"]:
+                break
+            page.wait_for_timeout(100)
+        else:
+            raise AssertionError("expected %s, got %s" % (json.dumps(s["value"]), json.dumps(got)))
+    elif op == "expect_hidden":
+        expect(loc.first).to_be_hidden(timeout=STEP_MS)
     elif op == "expect_text":
         expect(loc.first).to_contain_text(s["text"], timeout=STEP_MS)
     elif op == "expect_visible":
@@ -74,7 +98,10 @@ with sync_playwright() as p:
     browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
     for sc in spec["scenarios"]:
         ok = False
-        ctx = browser.new_context(viewport={"width": sc.get("viewport") or 1024, "height": 768})
+        opts = {"viewport": {"width": sc.get("viewport") or 1024, "height": 768}}
+        if sc.get("timezone"):
+            opts["timezone_id"] = sc["timezone"]
+        ctx = browser.new_context(**opts)
         try:
             page = ctx.new_page()
             page.on("pageerror", lambda e: print("  pageerror:", str(e)[:200]))

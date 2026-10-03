@@ -1,0 +1,10 @@
+{
+  "slug": "calc",
+  "title": "calc: a line-by-line expression calculator",
+  "summary": "Build a command-line calculator that evaluates expressions and variable assignments from stdin with correct precedence, strict errors and deep nesting.",
+  "kind": "cli",
+  "image": "arena-skill-python:1",
+  "command": "python3 main.py",
+  "timeout_s": 180,
+  "days": 7
+}

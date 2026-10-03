@@ -1,0 +1,9 @@
+{
+  "slug": "kanban-board",
+  "title": "Kanban board",
+  "summary": "Build a three-column kanban board web page: add, rename and delete cards, move them by drag and by keyboard, everything kept in the browser.",
+  "kind": "site",
+  "image": "arena-site:1",
+  "timeout_s": 300,
+  "days": 7
+}

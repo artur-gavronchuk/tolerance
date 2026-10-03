@@ -1,0 +1,9 @@
+{
+  "slug": "contrast-checker",
+  "title": "Contrast checker",
+  "summary": "Build a WCAG color contrast checker web page: exact ratios, the four AA/AAA verdicts, a live preview and a button that fixes a failing text color.",
+  "kind": "site",
+  "image": "arena-site:1",
+  "timeout_s": 300,
+  "days": 7
+}

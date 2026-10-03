@@ -55,6 +55,7 @@ type Scenario struct {
 
 	// Site kind: browser steps (see runner_site.py), optionally at a viewport width.
 	Viewport int               `json:"viewport,omitempty"`
+	Timezone string            `json:"timezone,omitempty"`
 	Steps    []json.RawMessage `json:"steps,omitempty"`
 }
 

@@ -1,0 +1,1411 @@
+[
+ {
+  "name": "a new habit starts at zero",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=habit]",
+    "count": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=habit-name]').textContent",
+    "value": "Read"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "0"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "0"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=rate]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "0%"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => { const b = h && h.querySelector('[data-testid=day-2026-03-10]'); return b ? b.getAttribute('aria-pressed') : null; })([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "false"
+   }
+  ]
+ },
+ {
+  "name": "Enter adds a habit, the input is cleared, blank names are refused",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "   "
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=habit]",
+    "count": 0
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "  Stretch  "
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=habit-name-input]",
+    "key": "Enter"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=habit]",
+    "count": 1
+   },
+   {
+    "op": "expect_value",
+    "selector": "[data-testid=habit-name-input]",
+    "value": ""
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=habit-name]').textContent",
+    "value": "Stretch"
+   }
+  ]
+ },
+ {
+  "name": "names are shown as text, never as HTML",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "<i>x</i><img src=x onerror=window.__pwned=1>"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=habit-name]').textContent",
+    "value": "<i>x</i><img src=x onerror=window.__pwned=1>"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.__pwned === undefined && !document.querySelector('[data-testid=habit] i, [data-testid=habit-name] img')",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "each habit shows the last 14 days up to today, and no future days",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=habit] button[data-testid^=day-]",
+    "count": 14
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-03-10]",
+    "count": 1
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-02-25]",
+    "count": 1
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-02-24]",
+    "count": 0
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-03-11]",
+    "count": 0
+   }
+  ]
+ },
+ {
+  "name": "ticking today sets the streak to 1 and ticking again clears it",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => { const b = h && h.querySelector('[data-testid=day-2026-03-10]'); return b ? b.getAttribute('aria-pressed') : null; })([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => { const b = h && h.querySelector('[data-testid=day-2026-03-10]'); return b ? b.getAttribute('aria-pressed') : null; })([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "false"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "0"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "0"
+   }
+  ]
+ },
+ {
+  "name": "consecutive days build a streak, removing a middle day breaks it",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-08]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-09]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-09]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   }
+  ]
+ },
+ {
+  "name": "the streak stays alive when today is not done yet",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-08]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-09]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "2"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "2"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   }
+  ]
+ },
+ {
+  "name": "the streak is 0 once yesterday and today are both missed, the best one stays",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-07]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-08]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "0"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "2"
+   }
+  ]
+ },
+ {
+  "name": "the best streak is the longest run in the whole history",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-02-26]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-02-27]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-02-28]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-01]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-02]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-08]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-09]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "5"
+   }
+  ]
+ },
+ {
+  "name": "a run across a month boundary",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-02T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-02-27]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-02-28]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-01]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-02]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "4"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "4"
+   }
+  ]
+ },
+ {
+  "name": "a run across 29 February in a leap year",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2028-03-02T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2028-02-29]",
+    "count": 1
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2028-02-28]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2028-02-29]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2028-03-01]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2028-03-02]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "4"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "4"
+   }
+  ]
+ },
+ {
+  "name": "there is no 29 February in 2026",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-02T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-02-29]",
+    "count": 0
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-02-28]",
+    "count": 1
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-03-01]",
+    "count": 1
+   }
+  ]
+ },
+ {
+  "name": "a run across New Year",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-01-02T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2025-12-30]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2025-12-31]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-01-01]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-01-02]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "4"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "4"
+   }
+  ]
+ },
+ {
+  "name": "a run over the day the clocks change (23-hour day)",
+  "timezone": "America/New_York",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-09T16:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-07]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-08]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-09]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=habit] button[data-testid^=day-]",
+    "count": 14
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-03-08]",
+    "count": 1
+   }
+  ]
+ },
+ {
+  "name": "a run over the day the clocks go back (25-hour day)",
+  "timezone": "America/New_York",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-11-03T17:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-11-01]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-11-02]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-11-03]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-11-01]",
+    "count": 1
+   }
+  ]
+ },
+ {
+  "name": "today is the local date, not the UTC date (west of Greenwich)",
+  "timezone": "America/Los_Angeles",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T03:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-03-09]",
+    "count": 1
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-03-10]",
+    "count": 0
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-09]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   }
+  ]
+ },
+ {
+  "name": "today is the local date, not the UTC date (east of Greenwich)",
+  "timezone": "Pacific/Auckland",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-09T23:30:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-03-10]",
+    "count": 1
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-03-09]",
+    "count": 1
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-03-11]",
+    "count": 0
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   }
+  ]
+ },
+ {
+  "name": "the completion rate over the visible 14 days",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-09]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-04]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=rate]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "21%"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-03]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-02]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-01]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-02-28]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=rate]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "50%"
+   }
+  ]
+ },
+ {
+  "name": "a single day is 7%",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-01]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=rate]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "7%"
+   }
+  ]
+ },
+ {
+  "name": "habits and ticks survive a reload",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-08]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-09]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Run"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=habit]",
+    "count": 2
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Run\"))",
+    "value": "0"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Run\"))",
+    "value": "0"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => { const b = h && h.querySelector('[data-testid=day-2026-03-09]'); return b ? b.getAttribute('aria-pressed') : null; })([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => { const b = h && h.querySelector('[data-testid=day-2026-03-07]'); return b ? b.getAttribute('aria-pressed') : null; })([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "false"
+   }
+  ]
+ },
+ {
+  "name": "the streak moves on with the calendar",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-09T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-09]"
+   },
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => { const b = h && h.querySelector('[data-testid=day-2026-03-10]'); return b ? b.getAttribute('aria-pressed') : null; })([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "false"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "2"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "2"
+   },
+   {
+    "op": "set_time",
+    "time": "2026-03-12T12:00:00Z"
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "0"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "2"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => { const b = h && h.querySelector('[data-testid=day-2026-03-10]'); return b ? b.getAttribute('aria-pressed') : null; })([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "true"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=day-2026-02-26]",
+    "count": 0
+   }
+  ]
+ },
+ {
+  "name": "habits are independent",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Run"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=habit]:has([data-testid=habit-name]:text-is(\"Read\")) [data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=habit]:has([data-testid=habit-name]:text-is(\"Read\")) [data-testid=day-2026-03-09]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=habit]:has([data-testid=habit-name]:text-is(\"Run\")) [data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "2"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "2"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Run\"))",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Run\"))",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => { const b = h && h.querySelector('[data-testid=day-2026-03-09]'); return b ? b.getAttribute('aria-pressed') : null; })([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Run\"))",
+    "value": "false"
+   }
+  ]
+ },
+ {
+  "name": "the summary counts habits done today",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Run"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Write"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=today-summary]",
+    "text": "0/3"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=habit]:has([data-testid=habit-name]:text-is(\"Read\")) [data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=habit]:has([data-testid=habit-name]:text-is(\"Write\")) [data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=today-summary]",
+    "text": "2/3"
+   }
+  ]
+ },
+ {
+  "name": "deleting a habit removes it for good",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Run"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=habit]:has([data-testid=habit-name]:text-is(\"Read\")) [data-testid=delete-habit]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=habit]",
+    "count": 1
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=habit]",
+    "count": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=habit-name]').textContent",
+    "value": "Run"
+   }
+  ]
+ },
+ {
+  "name": "a day can be ticked with the keyboard",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=day-2026-03-10]",
+    "key": "Enter"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => { const b = h && h.querySelector('[data-testid=day-2026-03-10]'); return b ? b.getAttribute('aria-pressed') : null; })([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(h => h ? h.querySelector('[data-testid=best-streak]').textContent.trim() : null)([...document.querySelectorAll('[data-testid=habit]')].find(h => h.querySelector('[data-testid=habit-name]').textContent === \"Read\"))",
+    "value": "1"
+   }
+  ]
+ },
+ {
+  "name": "works on a phone: three habits, no horizontal scroll",
+  "timezone": "UTC",
+  "steps": [
+   {
+    "op": "set_time",
+    "time": "2026-03-10T12:00:00Z"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Read"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Run"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=habit-name-input]",
+    "value": "Write a very long habit name that keeps going and going"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-habit]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=habit]:has([data-testid=habit-name]:text-is(\"Read\")) [data-testid=day-2026-03-10]"
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=day-2026-02-25]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=add-habit]"
+   }
+  ],
+  "viewport": 375
+ }
+]

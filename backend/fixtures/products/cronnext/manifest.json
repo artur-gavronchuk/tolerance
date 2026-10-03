@@ -1,0 +1,10 @@
+{
+  "slug": "cronnext",
+  "title": "cronnext: when does a cron job run next?",
+  "summary": "Build a command-line tool that prints the next N run times of a cron expression, with the day-of-month/day-of-week rule, leap years and clean error handling.",
+  "kind": "cli",
+  "image": "arena-skill-python:1",
+  "command": "python3 main.py",
+  "timeout_s": 180,
+  "days": 7
+}
