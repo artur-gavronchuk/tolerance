@@ -1,7 +1,7 @@
 // Package account is the privacy side of a user: "download my data" and "delete my account".
 //
 // Deletion runs in one transaction and decides per table:
-//   - personal data (identities, sessions, upload link, notifications, email, handle): deleted or replaced;
+//   - personal data (identities, analytics events, sessions, upload link, notifications, email, handle): deleted or replaced;
 //   - what the user made for the daily task (submissions): deleted, so leaderboards and streaks recompute;
 //   - tank bots: deactivated (hidden_at) and anonymized (name, source archives, logs, season owner label), but
 //     the bot, its versions and match_players rows stay so other players' past matches and replays still
@@ -41,6 +41,7 @@ var exportQueries = []struct{ key, sql string }{
 	{"submissions", `SELECT coalesce(jsonb_agg(to_jsonb(s) ORDER BY s.created_at), '[]') FROM submissions s WHERE s.user_id = $1`},
 	{"notifications", `SELECT coalesce(jsonb_agg(to_jsonb(n) ORDER BY n.created_at), '[]') FROM notifications n WHERE n.user_id = $1`},
 	{"notify_state", `SELECT coalesce((SELECT to_jsonb(n) FROM notify_state n WHERE n.user_id = $1), 'null')`},
+	{"events", `SELECT coalesce(jsonb_agg(to_jsonb(e) ORDER BY e.at), '[]') FROM events e WHERE e.user_id = $1`},
 	{"tank_bots", `SELECT coalesce(jsonb_agg(to_jsonb(b) ORDER BY b.created_at), '[]') FROM game_bots b WHERE b.owner_user_id = $1`},
 	{"tank_bot_versions", `SELECT coalesce(jsonb_agg((to_jsonb(v) - 'archive') || jsonb_build_object('archive_base64', encode(v.archive, 'base64')) ORDER BY v.created_at), '[]')
 		FROM bot_versions v JOIN game_bots b ON b.id = v.bot_id WHERE b.owner_user_id = $1`},
@@ -89,6 +90,7 @@ func (s *Service) Delete(ctx context.Context, userID, confirmHandle string) erro
 				payload->>'submission_id' IN (SELECT id FROM submissions WHERE user_id = $1) OR
 				payload->>'version_id' IN (SELECT v.id FROM bot_versions v JOIN game_bots b ON b.id = v.bot_id WHERE b.owner_user_id = $1))`,
 			`DELETE FROM submissions WHERE user_id = $1`,
+			`DELETE FROM events WHERE user_id = $1`,
 			`DELETE FROM notifications WHERE user_id = $1`,
 			`DELETE FROM notify_state WHERE user_id = $1`,
 			`DELETE FROM upload_links WHERE user_id = $1`,

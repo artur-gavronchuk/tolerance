@@ -47,7 +47,7 @@ export default async function PrivacyPage() {
       <p className="mt-5 text-[0.95rem] leading-7 text-muted-foreground">{t('intro', { product: PRODUCT })}</p>
 
       <Section title={t('storeTitle')}>
-        <List items={[t('store1'), t('store2'), t('store3'), t('store4', { days: LOG_DAYS })]} />
+        <List items={[t('store1'), t('store2'), t('store3'), t('store4', { days: LOG_DAYS }), t('store5')]} />
       </Section>
 
       <Section title={t('whyTitle')}>
