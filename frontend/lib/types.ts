@@ -167,7 +167,11 @@ export interface ProductTask {
   slug: string; title: string; summary: string; kind: 'cli' | 'site'; phase: 'open' | 'voting' | 'final'
   opens_at: string; deadline: string; voting_ends_at: string; scenario_count: number; attempts: number; entry_count: number
   task_md?: string
+  winner?: { entry_id: string; handle: string; votes: number; passed: number; total: number }
 }
+
+// `/products`: every task that has opened, newest first, plus what is known about the ones still to come.
+export interface ProductList { items: ProductTask[]; upcoming: { count: number; next_kind?: 'cli' | 'site'; next_opens_at: string } }
 
 export interface ProductEntry {
   id: string; task_slug: string; handle?: string; status: 'queued' | 'running' | 'done' | 'infra_error'

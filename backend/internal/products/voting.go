@@ -175,7 +175,7 @@ func minTime(a, b time.Time) time.Time {
 func (s *Service) setDeadline(ctx context.Context, actorID, slug, action string, next func(old time.Time) time.Time) error {
 	return s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var old time.Time
-		if err := tx.QueryRow(ctx, `SELECT deadline FROM product_tasks WHERE slug = $1 AND active FOR UPDATE`, slug).Scan(&old); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT deadline FROM product_tasks WHERE slug = $1 AND active AND opens_at IS NOT NULL FOR UPDATE`, slug).Scan(&old); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return httpx.NotFound()
 			}

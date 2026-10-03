@@ -1,5 +1,5 @@
 import type {
-  ProductDetail, ProductEntry, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
+  ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
 } from './types'
 
 export class ApiError extends Error {
@@ -79,7 +79,7 @@ export async function upload<T>(path: string, form: FormData): Promise<T> {
 
 // Product tasks.
 export const products = {
-  list: () => api<{ items: ProductTask[] }>('/products').then((r) => r.items),
+  list: () => api<ProductList>('/products'),
   get: (slug: string) => api<ProductDetail>(`/products/${encodeURIComponent(slug)}`),
   results: (slug: string) => api<ProductResults>(`/products/${encodeURIComponent(slug)}/results`),
   submit: (slug: string, form: FormData) => upload<ProductEntry>(`/products/${encodeURIComponent(slug)}/entries`, form),
@@ -88,6 +88,7 @@ export const products = {
   source: (entryId: string) => api<{ files: ProductSourceFile[] }>(`/product-entries/${encodeURIComponent(entryId)}/source`).then((r) => r.files),
   // Admins and local dev runs: end uploads now (final: end voting too), or open the task again for some days.
   close: (slug: string, final = false) => post<ProductDetail>(`/products/${encodeURIComponent(slug)}/close`, { final }),
+  startNext: () => post<ProductDetail>('/products/start-next'),
   reopen: (slug: string, days = 7) => post<ProductDetail>(`/products/${encodeURIComponent(slug)}/reopen`, { days }),
 }
 

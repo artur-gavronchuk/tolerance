@@ -16,12 +16,12 @@ import (
 // RegisterPublicRoutes mounts the routes anyone can call; the viewer (if signed in) only personalises them.
 func RegisterPublicRoutes(mux *http.ServeMux, s *Service, viewer func(r *http.Request) string) {
 	mux.HandleFunc("GET /api/v1/products", func(w http.ResponseWriter, r *http.Request) {
-		items, err := s.List(r.Context())
+		l, err := s.List(r.Context())
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
 		}
-		httpx.Respond(w, http.StatusOK, map[string]any{"items": items})
+		httpx.Respond(w, http.StatusOK, l)
 	})
 	mux.HandleFunc("GET /api/v1/products/{slug}", func(w http.ResponseWriter, r *http.Request) {
 		d, err := s.Get(r.Context(), r.PathValue("slug"), viewer(r))
@@ -122,6 +122,25 @@ func RegisterOwnerRoutes(mux *http.ServeMux, s *Service, devLogin bool) {
 			httpx.Respond(w, http.StatusOK, d)
 		}
 	}
+	// POST /products/start-next: end uploads of the open task and start the next one now (the Monday rotation, early).
+	mux.HandleFunc("POST /api/v1/products/start-next", func(w http.ResponseWriter, r *http.Request) {
+		a := identity.MustFromContext(r.Context())
+		if !CanAdmin(devLogin, a.Role) {
+			httpx.WriteError(w, r, httpx.Forbidden("Admin role required"))
+			return
+		}
+		slug, err := s.StartNext(r.Context(), a.UserID)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		d, err := s.Get(r.Context(), slug, a.UserID)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, d)
+	})
 	// POST /products/{slug}/close {"final": bool}: end uploads now (and, with final, the voting window too).
 	mux.HandleFunc("POST /api/v1/products/{slug}/close", adminTask(func(r *http.Request, uid, slug string) error {
 		var body struct {

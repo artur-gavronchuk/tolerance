@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -21,11 +20,12 @@ type manifest struct {
 	Image    string `json:"image"`
 	Command  string `json:"command"`
 	TimeoutS int    `json:"timeout_s"`
-	Days     int    `json:"days"`
+	Days     int    `json:"days"`  // unused: every task runs for a calendar week
+	Order    int    `json:"order"` // optional: lower goes first when the rotation picks the next task
 }
 
 // Sync loads <dir>/<slug>/{manifest.json,TASK.md,scenarios.json} and upserts them. A task's window (opens_at,
-// deadline) is set when it first appears and kept on later syncs; a task that left the directory is
+// deadline) is never set here: the weekly rotation (rotation.go) picks one task at a time; a task that left the directory is
 // deactivated, its entries stay.
 func Sync(ctx context.Context, pool *db.Pool, dir string) (int, error) {
 	dirs, err := filepath.Glob(filepath.Join(dir, "*", "manifest.json"))
@@ -64,9 +64,6 @@ func Sync(ctx context.Context, pool *db.Pool, dir string) (int, error) {
 		default:
 			return 0, fmt.Errorf("products: %s: kind must be cli or site", mf)
 		}
-		if l.m.Days <= 0 {
-			l.m.Days = 7
-		}
 		md, err := os.ReadFile(filepath.Join(base, "TASK.md"))
 		if err != nil {
 			return 0, err
@@ -99,17 +96,16 @@ func Sync(ctx context.Context, pool *db.Pool, dir string) (int, error) {
 	err = pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		for _, l := range all {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO product_tasks (slug, title, summary, kind, task_md, image, command, timeout_s, scenarios, deadline)
+				INSERT INTO product_tasks (slug, title, summary, kind, task_md, image, command, timeout_s, scenarios, ord)
 				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 				ON CONFLICT (slug) DO UPDATE SET title = $2, summary = $3, kind = $4, task_md = $5, image = $6, command = $7,
-				    timeout_s = $8, scenarios = $9, active = true, synced_at = now()`,
-				l.m.Slug, l.m.Title, l.m.Summary, l.m.Kind, l.md, l.m.Image, l.m.Command, l.m.TimeoutS, l.scenarios,
-				time.Now().UTC().Add(time.Duration(l.m.Days)*24*time.Hour)); err != nil {
+				    timeout_s = $8, scenarios = $9, ord = $10, active = true, synced_at = now()`,
+				l.m.Slug, l.m.Title, l.m.Summary, l.m.Kind, l.md, l.m.Image, l.m.Command, l.m.TimeoutS, l.scenarios, l.m.Order); err != nil {
 				return fmt.Errorf("products: sync %s: %w", l.m.Slug, err)
 			}
 			slugs = append(slugs, l.m.Slug)
 		}
-		_, err := tx.Exec(ctx, `UPDATE product_tasks SET active = false WHERE active AND NOT (slug = ANY($1))`, slugs)
+		_, err := tx.Exec(ctx, `UPDATE product_tasks SET active = false WHERE active AND NOT frozen AND NOT (slug = ANY($1))`, slugs)
 		return err
 	})
 	return len(all), err

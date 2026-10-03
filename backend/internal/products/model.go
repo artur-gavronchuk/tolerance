@@ -78,6 +78,7 @@ type Task struct {
 	Attempts      int       `json:"attempts"`
 	EntryCount    int       `json:"entry_count"`
 	TaskMD        string    `json:"task_md,omitempty"`
+	Winner        *Winner   `json:"winner,omitempty"` // the list fills it for final tasks
 }
 
 // Entry is one scored upload. Handle is only filled for published entries.

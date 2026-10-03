@@ -63,9 +63,13 @@ func (w *Worker) Run(ctx context.Context, concurrency int) {
 
 func (w *Worker) loop(ctx context.Context, owner string, maintain bool) {
 	var tick *time.Ticker
+	svc := NewService(w.pool)
 	if maintain {
 		tick = time.NewTicker(30 * time.Second)
 		defer tick.Stop()
+		if err := svc.EnsureWeek(ctx); err != nil && ctx.Err() == nil {
+			w.log.Error("start the week's product task", "err", err)
+		}
 	}
 	for {
 		job, err := w.queue.Claim(ctx, owner, []string{JobKind}, 15*time.Minute)
@@ -86,6 +90,9 @@ func (w *Worker) loop(ctx context.Context, owner string, maintain bool) {
 		case <-tc:
 			if err := w.SweepStuck(ctx); err != nil {
 				w.log.Error("sweep stuck entries", "err", err)
+			}
+			if err := svc.EnsureWeek(ctx); err != nil {
+				w.log.Error("start the week's product task", "err", err)
 			}
 		case <-time.After(2 * time.Second):
 		}

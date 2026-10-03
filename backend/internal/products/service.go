@@ -57,9 +57,18 @@ func scanTask(row scanner) (Task, error) {
 	return t, nil
 }
 
-// List returns the active tasks, newest first.
-func (s *Service) List(ctx context.Context) ([]Task, error) {
-	out := []Task{}
+// Listing is the public list: every task that has opened (this week's, last week's in voting, the archive),
+// newest first, plus what is known about the tasks still to come.
+type Listing struct {
+	Items    []Task   `json:"items"`
+	Upcoming Upcoming `json:"upcoming"`
+}
+
+func (s *Service) List(ctx context.Context) (Listing, error) {
+	if err := s.EnsureWeek(ctx); err != nil {
+		return Listing{}, err
+	}
+	out := Listing{Items: []Task{}}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT `+taskCols+` FROM product_tasks t WHERE t.active AND t.opens_at <= now() ORDER BY t.opens_at DESC, t.slug`)
 		if err != nil {
@@ -71,9 +80,21 @@ func (s *Service) List(ctx context.Context) ([]Task, error) {
 			if err != nil {
 				return err
 			}
-			out = append(out, t)
+			out.Items = append(out.Items, t)
 		}
-		return rows.Err()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		rows.Close()
+		for i, t := range out.Items {
+			if t.Phase == PhaseFinal {
+				if out.Items[i].Winner, err = winnerOf(ctx, tx, t.Slug, t.Kind); err != nil {
+					return err
+				}
+			}
+		}
+		out.Upcoming, err = upcoming(ctx, tx)
+		return err
 	})
 	return out, err
 }
