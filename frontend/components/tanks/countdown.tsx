@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useT } from '@/lib/i18n/client'
+import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 
 // "3d 04:12:09" / "04:12:09" until `to`, counted against the server's clock: `serverNow` is the `now` the API
 // sent with the data, so a viewer with a skewed clock still sees the right number. Renders `done` once past.
-export function Countdown({ to, serverNow, done = 'now' }: { to: string; serverNow?: string; done?: string }) {
+export function Countdown({ to, serverNow, done, }: { to: string; serverNow?: string; done?: string }) {
+  const t = useT(m)
   const [offset] = useState(() => (serverNow ? new Date(serverNow).getTime() - Date.now() : 0))
   const [now, setNow] = useState<number | null>(null)
   useEffect(() => {
@@ -13,14 +16,14 @@ export function Countdown({ to, serverNow, done = 'now' }: { to: string; serverN
     return () => clearInterval(t)
   }, [offset])
   if (now == null) return <span className="font-mono">--:--:--</span>
-  return <span className="font-mono tabular-nums">{formatLeft(new Date(to).getTime() - now, done)}</span>
+  return <span className="font-mono tabular-nums">{formatLeft(new Date(to).getTime() - now, done ?? t('countdown.now'), t('countdown.d'))}</span>
 }
 
-export function formatLeft(ms: number, done = 'now'): string {
+export function formatLeft(ms: number, done: string, dayUnit: string): string {
   const s = Math.floor(ms / 1000)
   if (s <= 0) return done
   const p = (n: number) => String(n).padStart(2, '0')
   const d = Math.floor(s / 86400)
   const hms = `${p(Math.floor((s % 86400) / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`
-  return d > 0 ? `${d}d ${hms}` : hms
+  return d > 0 ? `${d}${dayUnit} ${hms}` : hms
 }

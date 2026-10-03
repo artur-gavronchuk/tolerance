@@ -1,14 +1,19 @@
+'use client'
+
 import Link from 'next/link'
 import { HandleLink } from '@/components/daily/handle-link'
 import { BotBadge } from './bot-badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useT } from '@/lib/i18n/client'
+import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 import type { LeaderboardEntry } from '@/lib/types'
 
 function Provisional() {
+  const t = useT(m)
   return (
-    <span title="Fewer than 10 season matches: the rating can still move a lot"
+    <span title={t('lb.provisionalTitle')}
       className="rounded-full border border-border px-1.5 py-px text-[0.65rem] font-semibold text-muted-foreground">
-      provisional
+      {t('lb.provisional')}
     </span>
   )
 }
@@ -21,27 +26,28 @@ function winRate(e: LeaderboardEntry): string {
 // full season ladder). Renders as a real table from sm up; a stacked row list
 // below it, so it stays readable at 375px instead of scrolling sideways.
 export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
+  const t = useT(m)
   if (entries.length === 0) {
     return (
       <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">
-        No ranked bots yet.
+        {t('lb.empty')}
       </p>
     )
   }
   return (
     <>
       {entries.some((e) => e.provisional) && (
-        <p className="mb-3 text-xs text-muted-foreground">Provisional: fewer than 10 season matches, so the rating can still move a lot.</p>
+        <p className="mb-3 text-xs text-muted-foreground">{t('lb.provisionalNote')}</p>
       )}
       <Table className="hidden sm:table">
         <TableHeader>
           <TableRow>
             <TableHead className="w-10">#</TableHead>
-            <TableHead>Bot</TableHead>
-            <TableHead className="text-right">Rating</TableHead>
-            <TableHead className="text-right">Matches</TableHead>
-            <TableHead className="text-right">Wins</TableHead>
-            <TableHead className="text-right">Win rate</TableHead>
+            <TableHead>{t('lb.bot')}</TableHead>
+            <TableHead className="text-right">{t('lb.rating')}</TableHead>
+            <TableHead className="text-right">{t('lb.matches')}</TableHead>
+            <TableHead className="text-right">{t('lb.wins')}</TableHead>
+            <TableHead className="text-right">{t('lb.winRate')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -54,7 +60,7 @@ export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
                   <BotBadge source={e.source} house={e.house} />
                   {e.provisional && <Provisional />}
                 </Link>
-                {e.owner && <span className="ml-2 text-xs text-muted-foreground">by <HandleLink handle={e.owner} /></span>}
+                {e.owner && <span className="ml-2 text-xs text-muted-foreground">{t('lb.by')} <HandleLink handle={e.owner} /></span>}
               </TableCell>
               <TableCell className="text-right font-mono font-bold">{e.rating}</TableCell>
               <TableCell className="text-right font-mono text-muted-foreground">{e.matches}</TableCell>
@@ -75,7 +81,7 @@ export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
                 {e.provisional && <Provisional />}
               </Link>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {e.owner && <><HandleLink handle={e.owner} /> · </>}{e.matches} matches · {e.wins} wins · {winRate(e)}
+                {e.owner && <><HandleLink handle={e.owner} /> · </>}{t('lb.rowStats', { matches: e.matches, wins: e.wins, rate: winRate(e) })}
               </p>
             </div>
             <span className="shrink-0 font-mono text-lg font-bold">{e.rating}</span>

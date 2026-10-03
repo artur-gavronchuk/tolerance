@@ -10,10 +10,14 @@ import { MatchList } from '@/components/tanks/match-list'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, ApiError } from '@/lib/api'
+import { useT } from '@/lib/i18n/client'
+import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
+import { formatDate } from '@/lib/i18n/core'
 import type { BotProfile, MatchView, MyTanks } from '@/lib/types'
 
 export default function BotPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const tr = useT(m)
   const [bot, setBot] = useState<BotProfile | null>(null)
   const [matches, setMatches] = useState<MatchView[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -22,7 +26,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
   useEffect(() => {
     void api<BotProfile>(`/tanks/bots/${id}`)
       .then(setBot)
-      .catch((e) => setError((e as ApiError).status === 404 ? 'There is no bot with this id.' : (e as ApiError).message))
+      .catch((e) => setError((e as ApiError).status === 404 ? tr('bot.notFound') : (e as ApiError).message))
     void api<{ items: MatchView[] }>(`/tanks/matches?bot_id=${id}&limit=20`)
       .then((r) => setMatches(r.items))
       .catch(() => setMatches([]))
@@ -30,14 +34,14 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
     void api<MyTanks>('/me/tanks')
       .then((t) => setMine(t.bot?.id === id))
       .catch(() => setMine(false))
-  }, [id])
+  }, [id, tr])
 
   if (error) {
     return (
       <div className="mx-auto max-w-3xl space-y-4 px-4 py-14 sm:px-6">
         <p role="alert" className="text-destructive">{error}</p>
         <Button variant="outline" render={<Link href="/tanks" />} nativeButton={false}>
-          <ArrowLeft />Back to tanks
+          <ArrowLeft />{tr('bot.back')}
         </Button>
       </div>
     )
@@ -51,13 +55,20 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
     )
   }
 
+  const resultLabel = (r: string) => {
+    if (r === 'Champion' || r === 'In progress' || r === 'Runner-up' || r === 'Semifinalist' || r === 'Quarterfinalist') return tr(`result.${r}`)
+    const out = /^Out in round (\d+)$/.exec(r)
+    return out ? tr('result.out', { n: out[1] }) : r
+  }
+  const versionStatus = (s: string) =>
+    s === 'active' || s === 'rejected' || s === 'pending' || s === 'retired' ? tr(`vstatus.${s}`) : s
   const winRate = bot.matches > 0 ? `${Math.round((bot.wins / bot.matches) * 100)}%` : '—'
   const stats: [string, string | number][] = [
-    ['Season rating', bot.rating],
-    ['Lifetime rating', bot.lifetime_rating],
-    ['Season matches', bot.matches],
-    ['Season wins', bot.wins],
-    ['Win rate', winRate],
+    [tr('bot.seasonRating'), bot.rating],
+    [tr('bot.lifetimeRating'), bot.lifetime_rating],
+    [tr('bot.seasonMatches'), bot.matches],
+    [tr('bot.seasonWins'), bot.wins],
+    [tr('bot.winRate'), winRate],
   ]
 
   return (
@@ -65,7 +76,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
       <PageHeader
         kicker={
           <Link href="/tanks/leaderboard" className="inline-flex items-center gap-1.5 hover:text-foreground">
-            <ArrowLeft className="size-4" />Ladder
+            <ArrowLeft className="size-4" />{tr('bot.ladder')}
           </Link>
         }
         title={
@@ -75,8 +86,8 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
           </span>
         }
       >
-        {bot.rank > 0 ? <>Rank #{bot.rank} in season {bot.season.name}.</> : <>Not ranked in season {bot.season.name} yet.</>}
-        {bot.owner && <> By <HandleLink handle={bot.owner} />.</>}
+        {bot.rank > 0 ? <>{tr('bot.rank', { rank: bot.rank, season: bot.season.name })}</> : <>{tr('bot.unranked', { season: bot.season.name })}</>}
+        {bot.owner && <> {tr('bot.by')} <HandleLink handle={bot.owner} />.</>}
       </PageHeader>
 
       <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -89,10 +100,10 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
       </div>
 
       <section className="mt-10">
-        <SectionTitle>Tournaments</SectionTitle>
+        <SectionTitle>{tr('bot.tournaments')}</SectionTitle>
         {bot.tournaments.length === 0 ? (
           <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">
-            Has not played a tournament yet. The top 8 of the season ladder qualify.
+            {tr('bot.noTournaments')}
           </p>
         ) : (
           <ul className="divide-y divide-border rounded-[14px] border border-border">
@@ -100,10 +111,10 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
               <li key={t.tournament_id}>
                 <Link href={`/tanks/tournaments/${t.tournament_id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 text-sm hover:bg-muted/50">
                   <span className="min-w-0 flex-1 truncate font-semibold">{t.name}</span>
-                  <span className="font-mono text-xs text-muted-foreground">seed #{t.seed}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{tr('bot.seed', { n: t.seed })}</span>
                   <span className={t.champion ? 'inline-flex items-center gap-1 font-bold' : 'text-muted-foreground'}>
                     {t.champion && <Trophy className="size-3.5 text-warning" />}
-                    {t.result}
+                    {resultLabel(t.result)}
                   </span>
                 </Link>
               </li>
@@ -114,13 +125,13 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
 
       {bot.seasons.length > 0 && (
         <section className="mt-10">
-          <SectionTitle>Past seasons</SectionTitle>
+          <SectionTitle>{tr('bot.pastSeasons')}</SectionTitle>
           <ul className="divide-y divide-border rounded-[14px] border border-border">
             {bot.seasons.map((x) => (
               <li key={x.season_id}>
                 <Link href={`/tanks/seasons/${x.season_id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 text-sm hover:bg-muted/50">
                   <span className="min-w-0 flex-1 truncate font-semibold">{x.name}</span>
-                  <span className="font-mono text-xs text-muted-foreground">{x.matches} matches · {x.wins} wins</span>
+                  <span className="font-mono text-xs text-muted-foreground">{tr('bot.matchesWins', { matches: x.matches, wins: x.wins })}</span>
                   <span className="font-mono font-bold">#{x.rank}</span>
                   <span className="font-mono text-muted-foreground">{x.rating}</span>
                 </Link>
@@ -131,7 +142,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
       )}
 
       <section className="mt-10">
-        <SectionTitle>Versions</SectionTitle>
+        <SectionTitle>{tr('bot.versions')}</SectionTitle>
         <ul className="divide-y divide-border rounded-[14px] border border-border">
           {bot.versions.map((v) => (
             <li key={v.number} className="flex flex-wrap items-center gap-3 p-4 text-sm">
@@ -142,17 +153,17 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
                   v.status === 'active' ? 'font-semibold text-success' : v.status === 'rejected' ? 'text-destructive' : 'text-muted-foreground'
                 }
               >
-                {v.status}
+                {versionStatus(v.status)}
               </span>
-              <span className="ml-auto text-xs text-muted-foreground">{new Date(v.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+              <span className="ml-auto text-xs text-muted-foreground">{formatDate(tr.locale, v.created_at)}</span>
             </li>
           ))}
-          {bot.versions.length === 0 && <li className="p-4 text-sm text-muted-foreground">No versions yet.</li>}
+          {bot.versions.length === 0 && <li className="p-4 text-sm text-muted-foreground">{tr('bot.noVersions')}</li>}
         </ul>
       </section>
 
       <section className="mt-10">
-        <SectionTitle>Recent matches</SectionTitle>
+        <SectionTitle>{tr('bot.recent')}</SectionTitle>
         {matches == null ? <Skeleton className="h-64 rounded-[14px]" /> : <MatchList matches={matches} botId={id} showReport={mine} />}
       </section>
     </div>

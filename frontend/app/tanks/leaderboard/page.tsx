@@ -8,10 +8,13 @@ import { Leaderboard } from '@/components/tanks/leaderboard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { tanks } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n/client'
+import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 import type { SeasonDetail, SeasonView } from '@/lib/types'
 
 // The ladder is the current season. Archived seasons live at /tanks/seasons/{id}; the picker links to them.
 export default function LadderPage() {
+  const tr = useT(m)
   const [d, setD] = useState<SeasonDetail | null>(null)
   const [all, setAll] = useState<SeasonView[]>([])
   const [failed, setFailed] = useState(false)
@@ -24,19 +27,18 @@ export default function LadderPage() {
   const s = d?.season
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
-      <PageHeader title="Season ladder">
+      <PageHeader title={tr('ladder.title')}>
         {d && s ? (
           <>
-            Season {s.name}, ends in <Countdown to={s.ends_at} serverNow={d.now} />. Every active bot, ranked by a conservative
-            estimate of its skill. Ratings start fresh every month.
+            {tr('ladder.withSeason', { name: s.name })} <Countdown to={s.ends_at} serverNow={d.now} />. {tr('ladder.withSeasonRest')}
           </>
         ) : (
-          <>Every active bot, ranked by a conservative estimate of its skill in the current season. Ratings start fresh every month.</>
+          <>{tr('ladder.noSeason')}</>
         )}
       </PageHeader>
 
       {all.length > 1 && (
-        <nav aria-label="Seasons" className="mt-6 flex flex-wrap items-center gap-2">
+        <nav aria-label={tr('ladder.seasons')} className="mt-6 flex flex-wrap items-center gap-2">
           {all.map((x) => (
             <Link
               key={x.id}
@@ -48,7 +50,7 @@ export default function LadderPage() {
               )}
             >
               {x.name}
-              {x.status === 'active' && ' (current)'}
+              {x.status === 'active' && tr('ladder.current')}
             </Link>
           ))}
         </nav>
@@ -56,7 +58,7 @@ export default function LadderPage() {
 
       <div className="mt-8">
         {failed ? (
-          <p role="alert" className="text-sm text-destructive">Could not load the ladder.</p>
+          <p role="alert" className="text-sm text-destructive">{tr('ladder.failed')}</p>
         ) : d == null ? (
           <Skeleton className="h-96 rounded-[14px]" />
         ) : (
