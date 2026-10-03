@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { PageHeader } from '@/components/page-header'
-import { Badge } from '@/components/ui/badge'
+import { PhaseBadge } from '@/components/products/phase'
 import { Skeleton } from '@/components/ui/skeleton'
 import { friendlyMessage, products } from '@/lib/api'
 import type { ProductTask } from '@/lib/types'
@@ -30,13 +30,15 @@ export default function ProductsPage() {
           <Link key={t.slug} href={`/products/${t.slug}`}
             className="block min-w-0 rounded-[14px] border border-border bg-card p-5 transition-colors hover:bg-muted/50">
             <div className="flex items-center gap-2">
-              <Badge variant={t.phase === 'open' ? 'default' : 'secondary'}>{t.phase === 'open' ? 'Open' : 'Voting'}</Badge>
+              <PhaseBadge phase={t.phase} />
               <span className="text-xs text-muted-foreground">{t.kind === 'site' ? 'Website' : `${t.scenario_count} scenarios`} · {t.entry_count} entries</span>
             </div>
             <h2 className="heading mt-3 text-lg break-words">{t.title}</h2>
             <p className="mt-1.5 text-sm text-muted-foreground">{t.summary}</p>
             <p className="mt-3 text-xs text-muted-foreground">
-              {t.phase === 'open' ? 'Deadline' : 'Closed'} {new Date(t.deadline).toLocaleString()}
+              {t.phase === 'open' ? `Deadline ${new Date(t.deadline).toLocaleString()}`
+                : t.phase === 'voting' ? `Voting until ${new Date(t.voting_ends_at).toLocaleString()}`
+                : `Final results, voting ended ${new Date(t.voting_ends_at).toLocaleString()}`}
             </p>
           </Link>
         ))}

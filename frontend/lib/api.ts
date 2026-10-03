@@ -1,5 +1,5 @@
 import type {
-  ProductDetail, ProductEntry, ProductResults, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
+  ProductDetail, ProductEntry, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
 } from './types'
 
 export class ApiError extends Error {
@@ -84,6 +84,11 @@ export const products = {
   results: (slug: string) => api<ProductResults>(`/products/${encodeURIComponent(slug)}/results`),
   submit: (slug: string, form: FormData) => upload<ProductEntry>(`/products/${encodeURIComponent(slug)}/entries`, form),
   vote: (entryId: string) => post<ProductEntry>(`/product-entries/${encodeURIComponent(entryId)}/vote`),
+  unvote: (entryId: string) => api<ProductEntry>(`/product-entries/${encodeURIComponent(entryId)}/vote`, { method: 'DELETE' }),
+  source: (entryId: string) => api<{ files: ProductSourceFile[] }>(`/product-entries/${encodeURIComponent(entryId)}/source`).then((r) => r.files),
+  // Admins and local dev runs: end uploads now (final: end voting too), or open the task again for some days.
+  close: (slug: string, final = false) => post<ProductDetail>(`/products/${encodeURIComponent(slug)}/close`, { final }),
+  reopen: (slug: string, days = 7) => post<ProductDetail>(`/products/${encodeURIComponent(slug)}/reopen`, { days }),
 }
 
 // Agent stacks: which tool + model combinations do best at the daily task.

@@ -64,7 +64,7 @@ export interface StackRow {
 export interface OverallRow { place: number; handle: string; points: number; solved_days: number; current_streak: number }
 
 export interface User { id: string; email: string; handle: string; role: 'user' | 'admin'; created_at: string }
-export interface Me { user: User; streak: { current: number; best: number } }
+export interface Me { user: User; streak: { current: number; best: number }; can_admin?: boolean }
 
 // Tanks: the public ladder, matches and bot profiles (`/tanks/*`, `/me/tanks*`).
 export type BotSource = 'agent' | 'upload' | 'house'
@@ -164,8 +164,8 @@ export interface MatchLog { match_id: string; slot: number; stderr: string }
 export interface ProductScenarioResult { name: string; passed: boolean }
 
 export interface ProductTask {
-  slug: string; title: string; summary: string; kind: 'cli' | 'site'; phase: 'open' | 'voting'
-  opens_at: string; deadline: string; scenario_count: number; attempts: number; entry_count: number
+  slug: string; title: string; summary: string; kind: 'cli' | 'site'; phase: 'open' | 'voting' | 'final'
+  opens_at: string; deadline: string; voting_ends_at: string; scenario_count: number; attempts: number; entry_count: number
   task_md?: string
 }
 
@@ -177,6 +177,8 @@ export interface ProductEntry {
 }
 
 export interface ProductDetail extends ProductTask { attempts_used: number; mine: ProductEntry[] }
+
+export interface ProductSourceFile { path: string; size: number; content?: string; truncated?: boolean; binary?: boolean }
 
 export interface ProductResults { task: ProductTask; entries: ProductEntry[] }
 

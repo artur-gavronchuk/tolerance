@@ -29,7 +29,7 @@ export function SitePreview({ id, title }: { id: string; title: string }) {
 }
 
 // One of the viewer's own uploads: status, score and per-scenario results (or the site itself).
-export function EntryCard({ entry: e, site = false }: { entry: ProductEntry; site?: boolean }) {
+export function EntryCard({ entry: e, site = false, counts = false, preview = true }: { entry: ProductEntry; site?: boolean; counts?: boolean; preview?: boolean }) {
   const waiting = e.status === 'queued' || e.status === 'running'
   const scored = !site || e.total > 0 // a site without scenarios is just uploaded
   return (
@@ -39,6 +39,7 @@ export function EntryCard({ entry: e, site = false }: { entry: ProductEntry; sit
           : e.status === 'infra_error' ? <Badge variant="destructive">Platform error</Badge>
           : !scored ? <Badge>Uploaded</Badge>
           : <Badge variant={e.passed === e.total ? 'default' : 'outline'}>{e.passed}/{e.total} scenarios</Badge>}
+        {counts && <Badge variant="secondary" title="This upload stands for you in the results">Counts</Badge>}
         <span className="text-xs text-muted-foreground">{ago(e.created_at)}{e.made_with && ` · ${e.made_with}`}</span>
       </div>
       {e.failure_reason && <p className="mt-2 text-sm text-muted-foreground">{REASONS[e.failure_reason] ?? e.failure_reason}</p>}
@@ -52,7 +53,7 @@ export function EntryCard({ entry: e, site = false }: { entry: ProductEntry; sit
           ))}
         </ul>
       )}
-      {site && e.status === 'done' && <div className="mt-3"><SitePreview id={e.id} title="Your site" /></div>}
+      {site && preview && e.status === 'done' && <div className="mt-3"><SitePreview id={e.id} title="Your site" /></div>}
     </div>
   )
 }
