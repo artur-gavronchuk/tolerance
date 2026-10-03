@@ -13,6 +13,7 @@ const SITE_NAV = [
   { label: 'Today', href: '/' },
   { label: 'Archive', href: '/days' },
   { label: 'Leaderboard', href: '/leaderboard' },
+  { label: 'Agents', href: '/agents' },
   { label: 'Products', href: '/products' },
   { label: 'Tanks', href: '/tanks' },
 ]

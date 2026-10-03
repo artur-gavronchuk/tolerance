@@ -73,7 +73,10 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
       <div className="space-y-2">
         <Label htmlFor="made-with">Made with <span className="font-normal text-muted-foreground">(optional)</span></Label>
         <Input id="made-with" value={madeWith} maxLength={100} placeholder="Claude Code + Opus"
-          onChange={(e) => setMadeWith(e.target.value)} />
+          list="made-with-suggestions" onChange={(e) => setMadeWith(e.target.value)} />
+        <datalist id="made-with-suggestions">
+          {['Claude Code + Opus', 'Claude Code + Sonnet', 'Codex CLI + GPT-5', 'Cursor + Claude Sonnet', 'Cursor + GPT-5', 'Aider + DeepSeek', 'Gemini CLI', 'Cline + Claude Sonnet', 'GitHub Copilot', 'Windsurf', 'OpenHands', 'Custom agent'].map((o) => <option key={o} value={o} />)}
+        </datalist>
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className="flex flex-wrap items-center gap-3">

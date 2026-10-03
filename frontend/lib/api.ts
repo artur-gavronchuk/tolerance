@@ -1,4 +1,4 @@
-import type { ProductDetail, ProductEntry, ProductResults, ProductTask } from './types'
+import type { ProductDetail, ProductEntry, ProductResults, ProductTask, StackRow } from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public retryAfterSec?: number) {
@@ -82,4 +82,10 @@ export const products = {
   results: (slug: string) => api<ProductResults>(`/products/${encodeURIComponent(slug)}/results`),
   submit: (slug: string, form: FormData) => upload<ProductEntry>(`/products/${encodeURIComponent(slug)}/entries`, form),
   vote: (entryId: string) => post<ProductEntry>(`/product-entries/${encodeURIComponent(entryId)}/vote`),
+}
+
+// Agent stacks: which tool + model combinations do best at the daily task.
+export const stacks = {
+  overall: (days?: number) => api<{ items: StackRow[] }>(`/stacks${days ? `?days=${days}` : ''}`).then((r) => r.items),
+  forDay: (day: string) => api<{ items: StackRow[] }>(`/daily/${day}/stacks`).then((r) => r.items),
 }

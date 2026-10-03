@@ -52,6 +52,15 @@ export interface DayListItem {
   solvers: number
 }
 
+// Agent stacks (`/stacks`, `/daily/{day}/stacks`): free-text "made with" normalized to (tool, model).
+// solve_rate, avg_tests_share and avg_attempts_to_pass only count bugfix days, null when there are none.
+export interface StackRow {
+  tool: string; model: string; label: string
+  users: number; days_attempted: number; bugfix_days: number; optimize_days: number; days_solved: number
+  avg_points: number // 0-100 per day, same scale as the overall leaderboard
+  solve_rate: number | null; avg_tests_share: number | null; avg_attempts_to_pass: number | null
+}
+
 export interface OverallRow { place: number; handle: string; points: number; solved_days: number; current_streak: number }
 
 export interface User { id: string; email: string; handle: string; role: 'user' | 'admin'; created_at: string }
