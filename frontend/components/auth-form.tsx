@@ -83,7 +83,7 @@ export function AuthForm() {
           <p className="mt-2 text-muted-foreground">
             Welcome back. Today’s task is waiting.
           </p>
-          <div className="mt-8 flex min-h-24 flex-col gap-3">
+          <div className={`mt-8 flex flex-col gap-3 ${options ? '' : 'min-h-24'} ${options && !options.providers.length && !nothing ? 'hidden' : ''}`}>
             {options?.providers.map((p) => (
               <Button key={p} size="lg" variant="outline" className="gap-2.5"
                 render={<a href={`/api/v1/auth/${p}/start?next=/`} />} nativeButton={false}>
@@ -95,7 +95,7 @@ export function AuthForm() {
           </div>
           {error && <p role="alert" className="mt-4 rounded-[9px] bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
           {options?.dev_login && (
-            <form onSubmit={devSignIn} className="mt-6 flex flex-col gap-3 border-t border-dashed pt-6">
+            <form onSubmit={devSignIn} className={`flex flex-col gap-3 ${options.providers.length ? 'mt-6 border-t border-dashed pt-6' : 'mt-8'}`}>
               <Label htmlFor="email">Development sign-in</Label>
               <Input id="email" type="email" autoComplete="email" required placeholder="you@example.com"
                 value={email} onChange={(e) => setEmail(e.target.value)} />
