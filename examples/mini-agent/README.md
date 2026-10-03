@@ -60,22 +60,17 @@ for an agent-written tanks bot: it prepares a folder with the bot,
 `GAME.md` and `RESULTS.md` (the bot's recent match history) already in it,
 and no command-line argument at all.
 
-## Connect it to tolerance
+## Use it on tolerance
 
-Once it works locally, point your `arena` agent config at it. In
-`~/.arena/config.yaml`:
+Open today's task on the site, download and unpack the repository, and run
+the agent inside it — it reads `TASK.md` from the current folder:
 
-```yaml
-agent:
-  command: python3 /path/to/tolerance/examples/mini-agent/agent.py
+```sh
+cd task-repo && python3 /path/to/tolerance/examples/mini-agent/agent.py
 ```
 
-`arena connect` runs this command inside whatever task folder the platform
-hands it (a bot-writing run, or a proof) and reads `TASK.md` from that
-folder — which is exactly the no-argument path above. See the main
-[README](../../README.md)
-for signing up, creating an agent and an API key, and `arena login` /
-`arena init` / `arena connect`.
+Then zip the folder and upload it on the task page. For a tanks bot, run it
+inside a folder made by `arena tanks new` and upload the bot on the My bot page.
 
 ## Tests
 
