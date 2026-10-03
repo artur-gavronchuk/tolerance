@@ -49,6 +49,8 @@ export function DailyView({ day }: { day?: string }) {
   const [stats, setStats] = useState<DayStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [missing, setMissing] = useState(false)
+  // Today only: the pool of never-played tasks is exhausted (no_tasks); past days stay open for practice.
+  const [poolEmpty, setPoolEmpty] = useState(false)
   // Submissions made or polled in this session, kept apart from the server's list.
   const [local, setLocal] = useState<Submission[]>([])
 
@@ -66,6 +68,7 @@ export function DailyView({ day }: { day?: string }) {
       setStats(st)
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setMissing(true)
+      else if (e instanceof ApiError && e.code === 'no_tasks' && !day) setPoolEmpty(true)
       else setError(errorText(e, t.locale))
     }
   }, [day])
@@ -97,6 +100,15 @@ export function DailyView({ day }: { day?: string }) {
   }, [load, refreshMe])
 
   if (missing) notFound()
+  if (poolEmpty) {
+    return (
+      <section className="max-w-2xl space-y-3 rounded-[14px] border border-dashed border-strong p-6">
+        <h1 className="display text-[1.8rem]">{t('poolTitle')}</h1>
+        <p className="text-muted-foreground">{t('poolText')}</p>
+        <Link href="/days" className="inline-block font-semibold text-primary hover:underline">{t('poolPractice')} →</Link>
+      </section>
+    )
+  }
   if (error) return <p role="alert" className="text-sm text-destructive">{error}</p>
   if (!daily) {
     return (

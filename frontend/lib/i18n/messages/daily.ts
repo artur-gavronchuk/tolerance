@@ -44,6 +44,9 @@ export const dailyMessages = defineMessages({
 
     kickerArchive: 'Archive · {day} ·',
     allDays: 'all days',
+    poolTitle: 'No new task today',
+    poolText: 'Every task in the pool has already been a daily task, and their hidden tests are public now, so none of them is reused for scoring. A new one appears when the pool is refilled. Meanwhile every past day is open for practice: uploads there are checked the same way but do not count.',
+    poolPractice: 'Practice on past days',
     kickerToday: 'Task of the day · {day}',
     closesIn: 'Closes in',
     closedPractice: 'Closed. Uploads here are practice and do not count.',
@@ -182,6 +185,9 @@ export const dailyMessages = defineMessages({
 
     kickerArchive: 'Архив · {day} ·',
     allDays: 'все дни',
+    poolTitle: 'Новой задачи сегодня нет',
+    poolText: 'Все задачи из пула уже были задачами дня, и их скрытые тесты опубликованы, поэтому повторно для рейтинга они не выдаются. Новая появится, когда пул пополнится. А пока любой прошлый день открыт для практики: решения проверяются так же, но в рейтинг не идут.',
+    poolPractice: 'Практика на прошлых днях',
     kickerToday: 'Задача дня · {day}',
     closesIn: 'Закроется через',
     closedPractice: 'Закрыто. Загрузки здесь — тренировка и не засчитываются.',

@@ -46,8 +46,9 @@ func NewService(pool *db.Pool) *Service {
 	return &Service{pool: pool, overall: ttlcache.Cache[struct{}, []OverallRow]{TTL: 15 * time.Second}}
 }
 
-// ErrNoTasks means the catalog has no active task to assign.
-var ErrNoTasks = httpx.New(http.StatusServiceUnavailable, "no_tasks", "No task is available today")
+// ErrNoTasks means no unused active task is left to assign to today (the pool is exhausted). Past tasks stay
+// open for practice; nothing is spent.
+var ErrNoTasks = httpx.New(http.StatusServiceUnavailable, "no_tasks", "No new task today: every task has already been played. Past days are open for practice.")
 
 // TaskFor returns the slug of the task assigned to day, assigning one when day is today and none is set
 // yet. For any other day without a task it returns pgx.ErrNoRows.
@@ -64,10 +65,14 @@ func (s *Service) TaskFor(ctx context.Context, day string) (string, error) {
 		if err == nil || !errors.Is(err, pgx.ErrNoRows) || day != Today() {
 			return err
 		}
+		// Only a task that has never been a daily task: a used task has had its hidden tests and passing
+		// solutions published (Reveal), so it stays practice-only forever. ON CONFLICT keeps two concurrent
+		// first requests of the day on one slug.
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO daily_tasks (day, task_slug)
-			SELECT $1::date, t.slug FROM tasks t WHERE t.active
-			ORDER BY (SELECT max(d.day) FROM daily_tasks d WHERE d.task_slug = t.slug) ASC NULLS FIRST, t.slug
+			SELECT $1::date, t.slug FROM tasks t
+			WHERE t.active AND NOT EXISTS (SELECT 1 FROM daily_tasks d WHERE d.task_slug = t.slug)
+			ORDER BY t.slug
 			LIMIT 1
 			ON CONFLICT (day) DO NOTHING`, day)
 		if err != nil {
