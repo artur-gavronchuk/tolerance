@@ -63,6 +63,9 @@ export function SiteHeader() {
         <div className="ml-auto flex items-center gap-2">
           {loading ? null : me ? (
             <>
+              {me.can_admin && (
+                <Link href="/admin" className="hidden h-9 items-center rounded-full px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground sm:flex">Admin</Link>
+              )}
               <Link href={`/u/${encodeURIComponent(me.user.handle)}`} title="My profile"
                 className="flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm hover:border-primary">
                 <span className="max-w-[8rem] truncate font-bold">{me.user.handle}</span>
@@ -80,6 +83,7 @@ export function SiteHeader() {
       </div>
       <div className="flex h-11 items-center gap-1 overflow-x-auto border-t border-border px-4 sm:hidden">
         {SITE_NAV.map((item) => link(item, SITE_NAV))}
+        {me?.can_admin && link({ label: 'Admin', href: '/admin' }, SITE_NAV)}
       </div>
       {inTanks && (
         <div className="flex h-11 items-center gap-1 overflow-x-auto border-t border-border px-4 sm:px-6">

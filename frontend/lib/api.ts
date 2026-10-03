@@ -1,5 +1,5 @@
 import type {
-  ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
+  AdminEvent, AdminPulse, ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
 } from './types'
 
 export class ApiError extends Error {
@@ -107,4 +107,9 @@ export const tanks = {
     api<{ items: TournamentView[]; now: string }>(`/tanks/tournaments${status ? `?status=${status}` : ''}`),
   tournament: (id: string) => api<TournamentView>(`/tanks/tournaments/${encodeURIComponent(id)}`),
   startTournament: (size?: number) => post<TournamentView>('/tanks/tournaments', size ? { size } : {}),
+}
+
+export const admin = {
+  pulse: () => api<AdminPulse>('/admin/pulse'),
+  recent: () => api<{ items: AdminEvent[] }>('/admin/recent').then((r) => r.items),
 }

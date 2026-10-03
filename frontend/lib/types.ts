@@ -221,3 +221,36 @@ export interface ActivityStack { tool: string; model: string; label: string; cou
 export interface Activity {
   handle: string; stack: ActivityStack | null; products: ActivityProduct[]; bots: ActivityBot[]
 }
+
+// /admin: the owner's pulse of the platform (GET /admin/pulse, GET /admin/recent).
+export interface AdminPoint { day: string; value: number }
+export interface AdminPulse {
+  generated_at: string
+  users: { total: number; new_today: number; new_7d: number; active_today: number; signup_series: AdminPoint[] }
+  daily: {
+    task_slug: string; task_kind: string; task_title: string
+    today: Record<string, number>
+    unique_solvers: number; infra_rate_7d: number; submissions_7d: number; median_seconds: number | null
+    submission_series: AdminPoint[]; user_series: AdminPoint[]
+  }
+  products: {
+    task_slug: string; task_title: string; task_kind: string
+    opens_at: string | null; deadline: string | null
+    entries: number; by_status: Record<string, number>; votes: number
+    next_kind: string; upcoming: number
+  }
+  tanks: {
+    bots_total: number; bots_active: number; uploads_today: number; rejected_today: number
+    matches_last_hour: Record<string, number>
+    tournament: { id: string; name: string; status: string } | null
+    ladder: { rank: number; bot_id: string; name: string; owner: string; rating: number; matches: number }[]
+  }
+  health: {
+    jobs: { kind: string; state: string; count: number }[]
+    oldest_queued_seconds: number | null
+    retried_jobs: number; failed_jobs: number
+    stuck: { kind: string; id: string; status: string; age_minutes: number; href: string }[]
+    infra_errors: { at: string; kind: string; id: string; reason: string }[]
+  }
+}
+export interface AdminEvent { at: string; type: 'signup' | 'submission' | 'product_entry' | 'bot_version' | 'tournament'; title: string; detail: string; status: string; href: string }

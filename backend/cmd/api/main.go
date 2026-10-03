@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	adminpkg "tolerance/internal/admin"
 	"tolerance/internal/daily"
 	"tolerance/internal/games"
 	"tolerance/internal/games/match"
@@ -66,7 +67,7 @@ func main() {
 
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), daily: dailySvc,
-		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: products.NewService(pool), stacks: stacks.NewService(pool), profiles: profiles.NewService(pool),
+		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: products.NewService(pool), admin: adminpkg.NewService(pool), stacks: stacks.NewService(pool), profiles: profiles.NewService(pool),
 		limiter:   ratelimit.New(nil),
 		providers: providersFromConfig(cfg),
 	}

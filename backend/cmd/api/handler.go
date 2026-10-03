@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	adminpkg "tolerance/internal/admin"
 	"tolerance/internal/daily"
 	"tolerance/internal/games"
 	"tolerance/internal/identity"
@@ -32,6 +33,7 @@ type deps struct {
 	submissions *submissions.Service
 	games       *games.Service
 	products    *products.Service
+	admin       *adminpkg.Service
 	stacks      *stacks.Service
 	profiles    *profiles.Service
 	limiter     *ratelimit.Limiter
@@ -42,14 +44,16 @@ func newHandler(cfg config, d deps) http.Handler {
 	owner := http.NewServeMux()
 	identity.RegisterMeRoute(owner, d.users, func(ctx context.Context, userID string) (map[string]any, error) {
 		st, err := d.daily.StreakOf(ctx, userID)
-		return map[string]any{"streak": st, "can_admin": products.CanAdmin(cfg.devLogin, identity.MustFromContext(ctx).Role)}, err
+		return map[string]any{"streak": st, "can_admin": identity.CanAdmin(cfg.devLogin, identity.MustFromContext(ctx).Role)}, err
 	})
 	submissions.RegisterOwnerRoutes(owner, d.submissions)
 	games.RegisterOwnerRoutes(owner, d.games)
 	products.RegisterOwnerRoutes(owner, d.products, cfg.devLogin)
 
+	pulse := http.NewServeMux()
 	admin := http.NewServeMux()
 	games.RegisterAdminRoutes(admin, d.games)
+	adminpkg.RegisterRoutes(pulse, d.admin)
 
 	public := http.NewServeMux()
 	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
@@ -92,6 +96,9 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/tanks/", public)
 	// Starting a tournament now: admins, or anyone signed in when the dev login is on (local runs).
 	api.Handle("POST /api/v1/tanks/tournaments", session(adminOrDev(cfg.devLogin)(admin)))
+
+	api.Handle("GET /api/v1/admin/pulse", session(adminOrDev(cfg.devLogin)(pulse)))
+	api.Handle("GET /api/v1/admin/recent", session(adminOrDev(cfg.devLogin)(pulse)))
 
 	top := http.NewServeMux()
 	top.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

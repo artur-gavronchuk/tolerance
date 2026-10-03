@@ -7,6 +7,10 @@ import (
 	"tolerance/internal/platform/httpx"
 )
 
+// CanAdmin reports whether a signed-in caller of the given role may use admin features: an admin, or anyone on a
+// local run with the dev login on (ARENA_DEV_LOGIN, which is refused next to secure cookies).
+func CanAdmin(devLogin bool, role string) bool { return devLogin || role == "admin" }
+
 func RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if MustFromContext(r.Context()).Role != "admin" {

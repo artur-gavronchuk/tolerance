@@ -97,7 +97,7 @@ func serveSite(s *Service, viewer func(r *http.Request) string) http.HandlerFunc
 
 // CanAdmin reports whether the signed-in caller may close and reopen tasks: an admin, or anyone on a local
 // run with dev login on.
-func CanAdmin(devLogin bool, role string) bool { return devLogin || role == "admin" }
+func CanAdmin(devLogin bool, role string) bool { return identity.CanAdmin(devLogin, role) }
 
 // RegisterOwnerRoutes mounts the session-protected routes.
 func RegisterOwnerRoutes(mux *http.ServeMux, s *Service, devLogin bool) {
