@@ -177,6 +177,14 @@ export interface ProductTask {
 // `/products`: every task that has opened, newest first, plus what is known about the ones still to come.
 export interface ProductList { items: ProductTask[]; upcoming: { count: number; next_kind?: 'cli' | 'site'; next_opens_at: string } }
 
+// Site entries: informational signals from the scoring run; never part of the ranking.
+export interface A11yCounts { critical: number; serious: number; moderate: number; minor: number }
+export interface SiteQuality {
+  a11y?: { desktop: A11yCounts; mobile: A11yCounts; top_rules: string[] }
+  perf?: { bytes: number; requests: number; dcl_ms: number; load_ms: number; errors: number }
+  mobile?: { overflow: boolean; small_targets: number }
+}
+
 export interface ProductEntry {
   id: string; task_slug: string; handle?: string; status: 'queued' | 'running' | 'done' | 'infra_error'
   passed: number; total: number; failure_reason: string | null; results: ProductScenarioResult[]
@@ -184,6 +192,7 @@ export interface ProductEntry {
   bench_spread_ms: number | null // cli: ± half the range of the kept samples
   log_tail?: string; made_with: string; votes: number; voted: boolean; mine: boolean
   score?: number; comparisons: number // site tasks: Bradley-Terry score of the blind comparisons, and how many there were
+  quality?: SiteQuality | null // site: null while hidden (blind voting, others' entries) or when the scan produced nothing
   created_at: string; finished_at: string | null
 }
 

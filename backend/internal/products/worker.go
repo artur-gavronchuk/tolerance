@@ -31,6 +31,11 @@ var runnerSitePy []byte
 const (
 	resultsMarker = "@@RESULTS@@"
 	benchMarker   = "@@BENCH@@"
+	qualityMarker = "@@QUALITY@@"
+
+	// Sites without scenarios are still scanned for quality, in the default site image.
+	defaultSiteImage   = "arena-site:1"
+	defaultSiteTimeout = 120
 )
 
 type Worker struct {
@@ -163,12 +168,20 @@ func (w *Worker) RunEntry(ctx context.Context, id string) error {
 		return err
 	}
 	var scs []Scenario
-	if err := json.Unmarshal(scenarios, &scs); err != nil || len(scs) == 0 {
+	if err := json.Unmarshal(scenarios, &scs); err != nil || (len(scs) == 0 && kind != KindSite) {
 		return fmt.Errorf("products: entry %s: task has no scenarios", id)
+	}
+	if kind == KindSite {
+		if image == "" {
+			image = defaultSiteImage
+		}
+		if timeoutS <= 0 {
+			timeoutS = defaultSiteTimeout
+		}
 	}
 	files, err := submissions.ReadZip(zipData)
 	if err != nil {
-		return w.finish(ctx, id, scs, nil, nil, "", "invalid_zip")
+		return w.finish(ctx, id, scs, nil, nil, nil, "", "invalid_zip")
 	}
 
 	dir, err := os.MkdirTemp(w.workDir, "product-")
@@ -226,13 +239,13 @@ func (w *Worker) RunEntry(ctx context.Context, id string) error {
 		return err
 	}
 	if res.TimedOut {
-		return w.finish(ctx, id, scs, nil, nil, res.Output, ReasonTimeout)
+		return w.finish(ctx, id, scs, nil, nil, nil, res.Output, ReasonTimeout)
 	}
 	passed, ok := parseResults(res.Output)
 	if !ok {
-		return w.finish(ctx, id, scs, nil, nil, res.Output, ReasonNoResults)
+		return w.finish(ctx, id, scs, nil, nil, nil, res.Output, ReasonNoResults)
 	}
-	return w.finish(ctx, id, scs, passed, parseBench(res.Output), res.Output, "")
+	return w.finish(ctx, id, scs, passed, parseBench(res.Output), parseQuality(res.Output), res.Output, "")
 }
 
 // parseResults reads the runner's marker line: scenario name -> passed.
@@ -276,8 +289,25 @@ func parseBench(out string) *benchScore {
 	return nil
 }
 
+// parseQuality reads the site runner's quality marker line (informational signals, stored as is); nil when
+// there is none or it is not a JSON object.
+func parseQuality(out string) []byte {
+	for _, line := range strings.Split(out, "\n") {
+		i := strings.Index(line, qualityMarker)
+		if i < 0 {
+			continue
+		}
+		var m map[string]json.RawMessage
+		raw := strings.TrimSpace(line[i+len(qualityMarker):])
+		if json.Unmarshal([]byte(raw), &m) == nil && len(m) > 0 {
+			return []byte(raw)
+		}
+	}
+	return nil
+}
+
 // finish writes the verdict; only an entry this run moved to running gets one (the stuck sweep may have won).
-func (w *Worker) finish(ctx context.Context, id string, scs []Scenario, passed map[string]bool, bench *benchScore, output, reason string) error {
+func (w *Worker) finish(ctx context.Context, id string, scs []Scenario, passed map[string]bool, bench *benchScore, quality []byte, output, reason string) error {
 	results := make([]ScenarioResult, 0, len(scs))
 	n := 0
 	for _, sc := range scs {
@@ -297,14 +327,14 @@ func (w *Worker) finish(ctx context.Context, id string, scs []Scenario, passed m
 	}
 	var kept []string
 	for _, l := range strings.Split(output, "\n") {
-		if !strings.Contains(l, resultsMarker) && !strings.Contains(l, benchMarker) {
+		if !strings.Contains(l, resultsMarker) && !strings.Contains(l, benchMarker) && !strings.Contains(l, qualityMarker) {
 			kept = append(kept, l)
 		}
 	}
 	logTail := sanitize.CleanLog(strings.TrimSpace(strings.Join(kept, "\n")), maxLogTail)
 	return w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `UPDATE product_entries SET status = 'done', failure_reason = NULLIF($2, ''), results = $3, passed = $4,
-			total = $5, log_tail = $6, bench_ms = $7, bench_spread_ms = $8, finished_at = now() WHERE id = $1 AND status = 'running'`, id, reason, body, n, len(scs), logTail, benchMS, spreadMS)
+			total = $5, log_tail = $6, bench_ms = $7, bench_spread_ms = $8, quality = $9, finished_at = now() WHERE id = $1 AND status = 'running'`, id, reason, body, n, len(scs), logTail, benchMS, spreadMS, quality)
 		return err
 	})
 }

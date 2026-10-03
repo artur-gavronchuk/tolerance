@@ -195,28 +195,17 @@ func (s *Service) Create(ctx context.Context, userID, slug, filename string, dat
 		if used >= limits.Cap(AttemptsPerTask) {
 			return httpx.New(http.StatusTooManyRequests, "attempts_exhausted", "All attempts for this task are used")
 		}
-		if kind == KindSite && total == 0 {
-			// Nothing to run: a site is done once its zip holds an index.html, and votes decide.
+		if kind == KindSite {
 			if _, ok := files["index.html"]; !ok {
 				return invalid("The zip needs an index.html at its root (or inside a single top-level folder)")
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO product_entries (id, task_slug, user_id, zip, made_with, status, finished_at)
-				VALUES ($1,$2,$3,$4,$5,'done',now())`, id, slug, userID, data, madeWith); err != nil {
-				return err
-			}
-		} else {
-			if kind == KindSite {
-				if _, ok := files["index.html"]; !ok {
-					return invalid("The zip needs an index.html at its root (or inside a single top-level folder)")
-				}
-			}
-			if _, err := tx.Exec(ctx, `INSERT INTO product_entries (id, task_slug, user_id, zip, made_with, total) VALUES ($1,$2,$3,$4,$5,$6)`,
-				id, slug, userID, data, madeWith, total); err != nil {
-				return err
-			}
-			if _, err := jobs.Enqueue(ctx, tx, JobKind, RunPayload{EntryID: id}, ""); err != nil {
-				return err
-			}
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO product_entries (id, task_slug, user_id, zip, made_with, total) VALUES ($1,$2,$3,$4,$5,$6)`,
+			id, slug, userID, data, madeWith, total); err != nil {
+			return err
+		}
+		if _, err := jobs.Enqueue(ctx, tx, JobKind, RunPayload{EntryID: id}, ""); err != nil {
+			return err
 		}
 		if err := audit.Record(ctx, tx, audit.Event{ActorID: userID, Action: "product_entry.created", AggregateKind: "product_entry", AggregateID: id,
 			RequestID: httpx.RequestID(ctx)}); err != nil {

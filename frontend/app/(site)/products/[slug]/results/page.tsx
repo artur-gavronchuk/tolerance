@@ -6,6 +6,7 @@ import { Download } from 'lucide-react'
 import { HandleLink } from '@/components/daily/handle-link'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { BenchTime, fastestOf } from '@/components/products/bench'
+import { QualitySummary } from '@/components/products/quality'
 import { Podium } from '@/components/products/podium'
 import { PhaseBadge, RankingHow, VotingNote, isBlind, rankSummary, usePT, utc } from '@/components/products/phase'
 import { useResults } from '@/components/products/use-results'
@@ -70,6 +71,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
                   {timed && <TableHead className="text-right" title={t('bench.hint')}>{t('res.speed')}</TableHead>}
                   {bt && <TableHead className="text-right" title={t('res.scoreHint')}>{t('res.score')}</TableHead>}
                   {bt && <TableHead className="text-right" title={t('res.judgedHint')}>{t('res.judged')}</TableHead>}
+                  {bt && <TableHead className="hidden md:table-cell">{t('quality.col')}</TableHead>}
                   <TableHead className="text-right">{t('res.votes')}</TableHead>
                   <TableHead className="w-24" />
                 </TableRow>
@@ -86,6 +88,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
                     {timed && <TableCell className="text-right font-mono"><BenchTime ms={e.bench_ms} spread={e.bench_spread_ms} fastest={fastest} /></TableCell>}
                     {bt && <TableCell className="text-right font-mono font-bold">{e.score != null ? Math.round(e.score) : '-'}</TableCell>}
                     {bt && <TableCell className="text-right font-mono">{e.comparisons}</TableCell>}
+                    {bt && <TableCell className="hidden md:table-cell"><QualitySummary quality={e.quality} /></TableCell>}
                     <TableCell className="text-right font-mono">{e.votes}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">

@@ -59,7 +59,7 @@ export function rankSummary(t: PT, kind: ProductTask['kind']) {
 
 // How a task's standings are decided, in words (one rule, stated once); shown inside the disclosure.
 export function rankRuleText(t: PT, kind: ProductTask['kind'], hasChecks: boolean) {
-  if (kind === 'site') return t('rank.siteRule') + (hasChecks ? t('rank.siteRuleChecks') : '') + t('rank.siteRuleEnd')
+  if (kind === 'site') return t('rank.siteRule') + (hasChecks ? t('rank.siteRuleChecks') : '') + t('rank.siteRuleEnd') + t('rank.qualityNote')
   return t('rank.cliRule')
 }
 

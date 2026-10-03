@@ -11,6 +11,7 @@ import { SitePreview } from './entry-card'
 import { SourceViewer } from './source-viewer'
 import { VoteButton } from './vote-button'
 import { usePT } from './phase'
+import { QualitySummary } from './quality'
 
 // Everything published for a task, one card per person: the live site or the scenario results, the author,
 // the automated score and the vote control. Rank numbers are the current standings. While a site task is in
@@ -57,6 +58,7 @@ export function EntryGallery({ task, entries, signedIn, busy, onToggleVote }: {
             )}
             <VoteButton entry={e} phase={task.phase} signedIn={signedIn} busy={busy === e.id} hideCount={blind} onToggle={() => onToggleVote(e)} />
           </div>
+          {site && (!blind || e.mine) && <QualitySummary quality={e.quality} />}
           {!site && (
             <ul className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
               {e.results.map((r) => (

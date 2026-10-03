@@ -101,6 +101,7 @@ type Entry struct {
 	Score         *float64         `json:"score,omitempty"` // site tasks: Bradley-Terry score from blind comparisons
 	Comparisons   int              `json:"comparisons"`
 	Mine          bool             `json:"mine"`
+	Quality       json.RawMessage  `json:"quality"` // site: informational signals (see runner_site.py), null when none or still hidden
 	CreatedAt     time.Time        `json:"created_at"`
 	FinishedAt    *time.Time       `json:"finished_at"`
 }
@@ -113,18 +114,21 @@ type RunPayload struct {
 type scanner interface{ Scan(...any) error }
 
 // entryCols expects the alias e for product_entries, u for users, $1 = the viewer's user id.
-const entryCols = `e.id, e.task_slug, u.handle, e.status, e.passed, e.bench_ms, e.bench_spread_ms, e.total, e.failure_reason, e.results, e.log_tail, e.made_with,
+const entryCols = `e.id, e.task_slug, u.handle, e.status, e.passed, e.bench_ms, e.bench_spread_ms, e.total, e.failure_reason, e.results, e.log_tail, e.made_with, e.quality,
 	(SELECT count(*) FROM product_votes v WHERE v.entry_id = e.id),
 	EXISTS (SELECT 1 FROM product_votes v WHERE v.entry_id = e.id AND v.user_id = $1), e.user_id = $1, e.created_at, e.finished_at`
 
 func scanEntry(row scanner) (Entry, error) {
 	var e Entry
-	var results []byte
+	var results, quality []byte
 	if err := row.Scan(&e.ID, &e.TaskSlug, &e.Handle, &e.Status, &e.Passed, &e.BenchMS, &e.BenchSpreadMS, &e.Total, &e.FailureReason, &results, &e.LogTail,
-		&e.MadeWith, &e.Votes, &e.Voted, &e.Mine, &e.CreatedAt, &e.FinishedAt); err != nil {
+		&e.MadeWith, &quality, &e.Votes, &e.Voted, &e.Mine, &e.CreatedAt, &e.FinishedAt); err != nil {
 		return Entry{}, err
 	}
 	e.CreatedAt = e.CreatedAt.UTC()
+	if len(quality) > 0 {
+		e.Quality = quality
+	}
 	if e.FinishedAt != nil {
 		t := e.FinishedAt.UTC()
 		e.FinishedAt = &t

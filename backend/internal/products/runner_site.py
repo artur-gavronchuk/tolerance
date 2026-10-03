@@ -4,6 +4,7 @@
 import functools
 import http.server
 import json
+import statistics
 import threading
 
 from playwright.sync_api import sync_playwright, expect
@@ -93,6 +94,95 @@ def step(page, s):
         raise AssertionError("unknown op " + op)
 
 
+AXE = "/opt/axe.min.js"
+IMPACTS = ("critical", "serious", "moderate", "minor")
+TARGETS_JS = """() => {
+  const sel = 'a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link],[tabindex]:not([tabindex="-1"])';
+  let n = 0;
+  for (const el of document.querySelectorAll(sel)) {
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.display === 'contents') continue;
+    if (cs.display === 'inline' && el.tagName === 'A') continue; // inline links in text are exempt (WCAG 2.5.8)
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (r.width < 24 || r.height < 24) n++;
+  }
+  return n;
+}"""
+
+
+def axe_scan(browser, width):
+    """Violations of one page load at a viewport width: counts by impact and a rule -> affected nodes map."""
+    ctx = browser.new_context(viewport={"width": width, "height": 768})
+    try:
+        page = ctx.new_page()
+        page.goto(base + "/", timeout=STEP_MS * 2, wait_until="load")
+        page.wait_for_timeout(300)
+        page.add_script_tag(path=AXE)
+        res = page.evaluate("axe.run(document).then(r => r.violations.map(v => ({id: v.id, impact: v.impact, n: v.nodes.length})))")
+        counts = {k: 0 for k in IMPACTS}
+        rules = {}
+        for v in res:
+            counts[v["impact"] if v["impact"] in counts else "minor"] += 1
+            rules[v["id"]] = rules.get(v["id"], 0) + v["n"]
+        out = {"counts": counts, "rules": rules}
+        if width <= 480:
+            out["overflow"] = bool(page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth"))
+            out["small_targets"] = page.evaluate(TARGETS_JS)
+        return out
+    finally:
+        ctx.close()
+
+
+def perf_load(browser):
+    ctx = browser.new_context(viewport={"width": 1024, "height": 768})
+    try:
+        page = ctx.new_page()
+        size = [0, 0]
+        errors = []
+
+        def on_response(r):
+            size[1] += 1
+            try:
+                size[0] += len(r.body())
+            except Exception:
+                pass
+
+        page.on("response", on_response)
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        page.goto(base + "/", timeout=STEP_MS * 2, wait_until="load")
+        page.wait_for_timeout(500)
+        nav = page.evaluate("(() => { const n = performance.getEntriesByType('navigation')[0]; return [n.domContentLoadedEventEnd, n.loadEventEnd]; })()")
+        return {"bytes": size[0], "requests": size[1], "dcl_ms": nav[0], "load_ms": nav[1], "errors": len(errors)}
+    finally:
+        ctx.close()
+
+
+def quality(browser):
+    """Objective signals for voters (never part of the score): accessibility, load performance, mobile fit."""
+    q = {}
+    try:
+        desk, mob = axe_scan(browser, 1024), axe_scan(browser, 375)
+        rules = {}
+        for scan in (desk, mob):
+            for k, n in scan["rules"].items():
+                rules[k] = rules.get(k, 0) + n
+        top = [k for k, _ in sorted(rules.items(), key=lambda kv: (-kv[1], kv[0]))[:5]]
+        q["a11y"] = {"desktop": desk["counts"], "mobile": mob["counts"], "top_rules": top}
+        q["mobile"] = {"overflow": mob["overflow"], "small_targets": mob["small_targets"]}
+    except Exception as e:
+        print("quality a11y:", str(e).strip().splitlines()[0][:200])
+    try:
+        loads = [perf_load(browser) for _ in range(3)]
+        med = lambda k: round(statistics.median(l[k] for l in loads))
+        q["perf"] = {"bytes": med("bytes"), "requests": med("requests"), "dcl_ms": med("dcl_ms"),
+                     "load_ms": med("load_ms"), "errors": loads[0]["errors"]}
+    except Exception as e:
+        print("quality perf:", str(e).strip().splitlines()[0][:200])
+    return q
+
+
 results = []
 with sync_playwright() as p:
     browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
@@ -114,5 +204,8 @@ with sync_playwright() as p:
         finally:
             ctx.close()
         results.append({"name": sc["name"], "passed": ok})
+    q = quality(browser)
     browser.close()
+if q:
+    print("@@QUALITY@@" + json.dumps(q))
 print("@@RESULTS@@" + json.dumps(results))

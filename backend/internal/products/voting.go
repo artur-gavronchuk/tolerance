@@ -86,7 +86,7 @@ func (s *Service) Results(ctx context.Context, slug, userID string) (Results, er
 }
 
 // blindEntries strips what could sway a blind vote from a site task's entries while voting is open: other
-// people's authors, tools, checks, scores and vote counts, and the standings order. Your own entry stays whole.
+// people's authors, tools, checks, quality signals, scores and vote counts, and the standings order. Your own entry stays whole.
 func blindEntries(entries []Entry) {
 	for i := range entries {
 		e := &entries[i]
@@ -95,6 +95,7 @@ func blindEntries(entries []Entry) {
 		}
 		e.Handle, e.MadeWith, e.Passed, e.Total, e.Votes, e.Score, e.Comparisons = "", "", 0, 0, 0, nil, 0
 		e.Results = []ScenarioResult{}
+		e.Quality = nil
 	}
 	sort.Slice(entries, func(a, b int) bool { return entries[a].ID < entries[b].ID })
 }

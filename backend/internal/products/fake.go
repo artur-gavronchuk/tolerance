@@ -23,6 +23,7 @@ func (PassAll) Run(_ context.Context, req sandbox.Request) (sandbox.Result, erro
 	var spec struct {
 		Scenarios []Scenario `json:"scenarios"`
 		Bench     any        `json:"bench"`
+		Command   string     `json:"command"`
 	}
 	if err := json.Unmarshal(raw, &spec); err != nil {
 		return sandbox.Result{}, err
@@ -33,6 +34,10 @@ func (PassAll) Run(_ context.Context, req sandbox.Request) (sandbox.Result, erro
 	}
 	body, err := json.Marshal(rs)
 	out := resultsMarker + string(body) + "\n"
+	if spec.Command == "" && spec.Bench == nil { // a site: made-up quality signals so the UI has something to show locally
+		out += qualityMarker + `{"a11y":{"desktop":{"critical":0,"serious":1,"moderate":2,"minor":0},"mobile":{"critical":0,"serious":1,"moderate":2,"minor":1},"top_rules":["color-contrast","label"]},` +
+			`"perf":{"bytes":48210,"requests":3,"dcl_ms":42,"load_ms":57,"errors":0},"mobile":{"overflow":false,"small_targets":2}}` + "\n"
+	}
 	if spec.Bench != nil { // a made-up time so the bench UI has something to show locally
 		ms := 150 + rand.IntN(900)
 		out += fmt.Sprintf("%s{\"ms\": %d, \"spread_ms\": %d}\n", benchMarker, ms, ms/20+rand.IntN(10))
