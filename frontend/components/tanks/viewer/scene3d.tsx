@@ -6,6 +6,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { eventsBetween, snapshotAt, SLOT_COLORS, type Snapshot } from '@/lib/tanks/playback'
 import type { Clock } from '@/lib/tanks/playback'
 import type { Replay } from '@/lib/tanks/replay'
+import { useT } from '@/lib/i18n/client'
+import { tanksMatchMessages } from '@/lib/i18n/messages/tanks-match'
 
 // Engine coordinates are (x, y) on a 60x40 field, y up, angles measured
 // CCW from +x. Three's field sits on the XZ plane (y is height): engine
@@ -519,6 +521,7 @@ export default function Scene3D({ replay, clock, selectedSlot, onSelect, onUnsup
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [replay, clock])
 
+  const t = useT(tanksMatchMessages)
   const names = replay.players
   const followedName = selectedSlot != null ? names.find((p) => p.slot === selectedSlot)?.name : null
 
@@ -531,12 +534,12 @@ export default function Scene3D({ replay, clock, selectedSlot, onSelect, onUnsup
           onClick={() => onSelect?.(null)}
           className="absolute left-2.5 top-2.5 rounded-full bg-black/55 px-3 py-1 text-xs font-semibold text-white backdrop-blur hover:bg-black/70"
         >
-          Following {followedName} · click to release
+          {t('following', { name: followedName })}
         </button>
       )}
       {unsupported && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#0c1720] px-6 text-center text-sm text-muted-foreground">
-          Your browser doesn&apos;t support WebGL, so 3D isn&apos;t available. Switch back to the 2D view.
+          {t('noWebgl')}
         </div>
       )}
     </div>

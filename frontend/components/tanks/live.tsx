@@ -7,6 +7,8 @@ import type { LiveView } from '@/lib/types'
 import { fetchReplay, type Replay } from '@/lib/tanks/replay'
 import { ReplayPlayer } from './viewer/replay-player'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useT } from '@/lib/i18n/client'
+import { tanksMatchMessages } from '@/lib/i18n/messages/tanks-match'
 
 // Backoff for retrying after a fetch failure or an empty broadcast schedule
 // (no ladder match has aired yet) - doubles each consecutive miss, capped at
@@ -46,6 +48,7 @@ type Phase =
 // actually change what's airing never remounts the renderer - important in
 // 3D, where a remount recreates the WebGL context.
 export function Live() {
+  const t = useT(tanksMatchMessages)
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' })
   const matchIdRef = useRef<string | null>(null)
   const replayRef = useRef<Replay | null>(null)
@@ -195,7 +198,7 @@ export function Live() {
   if (phase.kind === 'error') {
     return (
       <p className="rounded-[18px] border border-dashed border-input px-6 py-14 text-center text-sm text-muted-foreground">
-        Couldn&apos;t reach the live broadcast: {phase.message}
+        {t('liveError', { message: phase.message })}
       </p>
     )
   }
@@ -203,13 +206,13 @@ export function Live() {
   if (phase.kind === 'empty') {
     return (
       <div className="rounded-[18px] border border-dashed border-input px-6 py-14 text-center">
-        <p className="text-sm font-semibold text-muted-foreground">No matches yet.</p>
+        <p className="text-sm font-semibold text-muted-foreground">{t('noMatchesYet')}</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          The ladder starts running once a bot is registered.{' '}
+          {t('ladderStarts')}{' '}
           <Link href="/tanks/docs" className="font-semibold text-primary hover:underline">
-            Read the docs
+            {t('readDocs')}
           </Link>{' '}
-          to get one in.
+          {t('toGetOneIn')}
         </p>
       </div>
     )
@@ -218,8 +221,8 @@ export function Live() {
   if (phase.kind === 'waiting') {
     return (
       <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-input bg-card text-center">
-        <p className="font-mono text-2xl font-bold text-primary">Catching up…</p>
-        <p className="text-sm text-muted-foreground">The next match will start shortly.</p>
+        <p className="font-mono text-2xl font-bold text-primary">{t('catchingUp')}</p>
+        <p className="text-sm text-muted-foreground">{t('nextShortly')}</p>
       </div>
     )
   }
@@ -227,8 +230,8 @@ export function Live() {
   if (phase.kind === 'countdown') {
     return (
       <div className="flex aspect-[3/2] w-full flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-input bg-card text-center">
-        <p className="font-mono text-2xl font-bold text-primary">Starting in {phase.seconds}…</p>
-        <p className="text-sm text-muted-foreground">The next match is about to go live.</p>
+        <p className="font-mono text-2xl font-bold text-primary">{t('startingIn', { n: phase.seconds })}</p>
+        <p className="text-sm text-muted-foreground">{t('aboutToGoLive')}</p>
       </div>
     )
   }

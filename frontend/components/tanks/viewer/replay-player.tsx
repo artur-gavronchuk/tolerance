@@ -9,17 +9,24 @@ import { Controls } from './controls'
 import { Scoreboard } from './scoreboard'
 import { EventFeed } from './event-feed'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n/client'
+import { tanksMatchMessages } from '@/lib/i18n/messages/tanks-match'
 
 // Loaded only once the viewer actually switches to 3D — three.js and its
 // OrbitControls add real weight, and most visits never leave the 2D
 // default, so this keeps that weight out of /tanks' first-load JS.
+function Loading3D() {
+  const t = useT(tanksMatchMessages)
+  return (
+    <div className="flex w-full items-center justify-center rounded-[14px] bg-[#0c1720] text-sm text-muted-foreground" style={{ aspectRatio: '3 / 2' }}>
+      {t('loading3d')}
+    </div>
+  )
+}
+
 const Scene3D = dynamic(() => import('./scene3d'), {
   ssr: false,
-  loading: () => (
-    <div className="flex w-full items-center justify-center rounded-[14px] bg-[#0c1720] text-sm text-muted-foreground" style={{ aspectRatio: '3 / 2' }}>
-      Loading 3D…
-    </div>
-  ),
+  loading: () => <Loading3D />,
 })
 
 // A rejected dynamic-import chunk fetch (e.g. a flaky network mid-deploy)
@@ -33,6 +40,25 @@ const Scene3D = dynamic(() => import('./scene3d'), {
 // around <Scene3D> below (inside the '3d'-only branch), so it fully
 // unmounts and resets whenever the view switches away — the natural way
 // back in is just toggling to 2D and back to 3D again.
+function Scene3DFailed({ onBackTo2D }: { onBackTo2D: () => void }) {
+  const t = useT(tanksMatchMessages)
+  return (
+    <div
+      className="flex w-full flex-col items-center justify-center gap-3 rounded-[14px] bg-[#0c1720] px-6 text-center text-sm text-muted-foreground"
+      style={{ aspectRatio: '3 / 2' }}
+    >
+      <p>{t('load3dFailed')}</p>
+      <button
+        type="button"
+        onClick={onBackTo2D}
+        className="rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+      >
+        {t('backTo2d')}
+      </button>
+    </div>
+  )
+}
+
 class Scene3DBoundary extends Component<{ onBackTo2D: () => void; children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false }
   static getDerivedStateFromError() {
@@ -41,19 +67,7 @@ class Scene3DBoundary extends Component<{ onBackTo2D: () => void; children: Reac
   render() {
     if (this.state.hasError) {
       return (
-        <div
-          className="flex w-full flex-col items-center justify-center gap-3 rounded-[14px] bg-[#0c1720] px-6 text-center text-sm text-muted-foreground"
-          style={{ aspectRatio: '3 / 2' }}
-        >
-          <p>Couldn&apos;t load the 3D view.</p>
-          <button
-            type="button"
-            onClick={this.props.onBackTo2D}
-            className="rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90"
-          >
-            Back to 2D
-          </button>
-        </div>
+        <Scene3DFailed onBackTo2D={this.props.onBackTo2D} />
       )
     }
     return this.props.children
@@ -115,6 +129,7 @@ export function ReplayPlayer({ replay, startTick = 0, live = false, autoPlay = t
   autoPlay?: boolean
   onEnd?: () => void
 }) {
+  const t = useT(tanksMatchMessages)
   const clock = useMemo(() => {
     const c = new Clock(replay)
     c.seek(startTick)
@@ -159,7 +174,7 @@ export function ReplayPlayer({ replay, startTick = 0, live = false, autoPlay = t
   // the browser can't do 3D, just that this one fetch failed.)
   function handleUnsupported() {
     setViewMode('2d')
-    setNotice("3D isn't available in this browser — showing 2D instead.")
+    setNotice(t('no3d'))
     saveViewMode('2d')
   }
   function handleSceneLoadBack() {

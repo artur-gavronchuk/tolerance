@@ -13,6 +13,8 @@ import { api, ApiError } from '@/lib/api'
 import { fetchReplay, type Replay } from '@/lib/tanks/replay'
 import type { MatchView, MyTanks } from '@/lib/types'
 import { CopyReportButton } from '@/components/tanks/copy-report-button'
+import { useT } from '@/lib/i18n/client'
+import { tanksMatchMessages } from '@/lib/i18n/messages/tanks-match'
 
 function ratingDelta(before: number | null, after: number | null): string {
   if (before == null || after == null) return '—'
@@ -29,6 +31,7 @@ type ReplayState =
   | { kind: 'error'; message: string }
 
 export default function MatchPage({ params }: { params: Promise<{ id: string }> }) {
+  const t = useT(tanksMatchMessages)
   const { id } = use(params)
   const [match, setMatch] = useState<MatchView | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -49,9 +52,9 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
     } catch (e) {
       if (!aliveRef.current) return
       if (e instanceof ApiError && e.status === 404) setReplayState({ kind: 'expired' })
-      else setReplayState({ kind: 'error', message: e instanceof ApiError ? e.message : 'Could not load the replay.' })
+      else setReplayState({ kind: 'error', message: e instanceof ApiError ? e.message : t('replayLoadFailed') })
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     aliveRef.current = true
@@ -68,12 +71,12 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       })
       .catch((e) => {
         if (!aliveRef.current) return
-        setError(e instanceof ApiError && e.status === 404 ? 'There is no match with this id.' : (e as ApiError).message)
+        setError(e instanceof ApiError && e.status === 404 ? t('noMatch') : (e as ApiError).message)
       })
     return () => {
       aliveRef.current = false
     }
-  }, [id, loadReplay])
+  }, [id, loadReplay, t])
 
   async function copyLink() {
     try {
@@ -88,7 +91,7 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       <div className="mx-auto max-w-3xl space-y-4 px-4 py-14 sm:px-6">
         <p role="alert" className="text-destructive">{error}</p>
         <Button variant="outline" render={<Link href="/tanks" />} nativeButton={false}>
-          <ArrowLeft />Back to tanks
+          <ArrowLeft />{t('backToTanks')}
         </Button>
       </div>
     )
@@ -110,7 +113,7 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       <PageHeader
         kicker={
           <Link href="/tanks" className="inline-flex items-center gap-1.5 hover:text-foreground">
-            <ArrowLeft className="size-4" />Tanks
+            <ArrowLeft className="size-4" />{t('tanks')}
           </Link>
         }
         title={ranked.map((p) => p.name).join(' vs ')}
@@ -119,27 +122,27 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
             {mine && match.status === 'finished' && <CopyReportButton matchIds={[id]} />}
             <Button variant="outline" onClick={copyLink}>
               {copied ? <Check /> : <Copy />}
-              {copied ? 'Copied' : 'Copy link'}
+              {copied ? t('copied') : t('copyLink')}
             </Button>
           </div>
         }
       >
-        <span className="font-mono text-sm">{match.map} · seed {match.seed} · {match.kind}</span>
+        <span className="font-mono text-sm">{match.map} · {t('seed')} {match.seed} · {match.kind}</span>
       </PageHeader>
 
       {/* On a phone the replay comes first; with 3-8 players the table would push it far down. */}
       <div className="mt-8 flex flex-col">
       <section className="order-2 mt-8 md:order-1 md:mt-0">
-        <SectionTitle aside={<span>Kills = tanks destroyed</span>}>Result</SectionTitle>
+        <SectionTitle aside={<span>{t('killsHint')}</span>}>{t('result')}</SectionTitle>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Place</TableHead>
-              <TableHead>Bot</TableHead>
-              <TableHead className="text-right">Kills</TableHead>
-              <TableHead className="text-right">Damage</TableHead>
-              <TableHead>Status</TableHead>
-              {hasRating && <TableHead className="text-right">Rating</TableHead>}
+              <TableHead>{t('place')}</TableHead>
+              <TableHead>{t('bot')}</TableHead>
+              <TableHead className="text-right">{t('kills')}</TableHead>
+              <TableHead className="text-right">{t('damage')}</TableHead>
+              <TableHead>{t('status')}</TableHead>
+              {hasRating && <TableHead className="text-right">{t('rating')}</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -169,17 +172,16 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
           <Skeleton className="aspect-[3/2] w-full rounded-[18px]" />
         ) : replayState.kind === 'unsupported' ? (
           <div className="rounded-[18px] border border-dashed border-input px-6 py-14 text-center text-sm text-muted-foreground">
-            Your browser can&apos;t open replays here — it&apos;s missing gzip decompression support. Try a
-            recent version of Chrome, Firefox, Safari or Edge.
+            {t('unsupported')}
           </div>
         ) : replayState.kind === 'error' ? (
           <div className="flex flex-col items-center gap-4 rounded-[18px] border border-dashed border-input px-6 py-14 text-center">
-            <p className="text-sm text-destructive">Couldn&apos;t load the replay: {replayState.message}</p>
-            <Button variant="outline" onClick={() => void loadReplay(id)}>Retry</Button>
+            <p className="text-sm text-destructive">{t('replayError', { message: replayState.message })}</p>
+            <Button variant="outline" onClick={() => void loadReplay(id)}>{t('retry')}</Button>
           </div>
         ) : (
           <div className="rounded-[18px] border border-dashed border-input px-6 py-14 text-center text-sm text-muted-foreground">
-            Replay expired. Replays are kept for 3 days unless the match is featured.
+            {t('replayExpired')}
           </div>
         )}
       </div>

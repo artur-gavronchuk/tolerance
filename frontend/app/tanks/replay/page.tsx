@@ -8,8 +8,11 @@ import { Button } from '@/components/ui/button'
 import { CLI } from '@/lib/brand'
 import { cn } from '@/lib/utils'
 import { parseReplayFile, type Replay } from '@/lib/tanks/replay'
+import { useT } from '@/lib/i18n/client'
+import { tanksMatchMessages } from '@/lib/i18n/messages/tanks-match'
 
 export default function ReplayFilePage() {
+  const t = useT(tanksMatchMessages)
   const [replay, setReplay] = useState<Replay | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -21,14 +24,14 @@ export default function ReplayFilePage() {
       setReplay(r)
       setError(null)
     } catch {
-      setError(`Could not read that file. Expected a replay written by \`${CLI} tanks play\` (.json or .json.gz).`)
+      setError(t('fileReadError', { cli: CLI }))
     }
   }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
-      <PageHeader title="Open a replay">
-        Play back a match recorded on your own machine with <code>{CLI} tanks play</code>.
+      <PageHeader title={t('openReplay')}>
+        {t('openReplayLead')} <code>{CLI} tanks play</code>.
       </PageHeader>
 
       {!replay && (
@@ -48,12 +51,12 @@ export default function ReplayFilePage() {
         >
           <Upload className="size-8 text-muted-foreground" />
           <div>
-            <p className="font-semibold">Drop a replay file here</p>
+            <p className="font-semibold">{t('dropHere')}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              or choose a <code>tanks-replay.json</code> or <code>.json.gz</code> file
+              {t('orChoose')} <code>tanks-replay.json</code> {t('orChooseMid')} <code>.json.gz</code> {t('orChooseEnd')}
             </p>
           </div>
-          <Button onClick={() => inputRef.current?.click()}>Choose file</Button>
+          <Button onClick={() => inputRef.current?.click()}>{t('chooseFile')}</Button>
           <input
             ref={inputRef}
             type="file"
@@ -70,7 +73,7 @@ export default function ReplayFilePage() {
 
       {replay && (
         <div className="mt-8 space-y-4">
-          <Button variant="outline" onClick={() => setReplay(null)}>Open another file</Button>
+          <Button variant="outline" onClick={() => setReplay(null)}>{t('openAnother')}</Button>
           <ReplayPlayer replay={replay} />
         </div>
       )}

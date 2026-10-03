@@ -1,11 +1,13 @@
 import { SLOT_COLORS } from '@/lib/tanks/playback'
 import type { ReplayEvent, ReplayPlayer } from '@/lib/tanks/replay'
+import { useT } from '@/lib/i18n/client'
+import { tanksMatchMessages } from '@/lib/i18n/messages/tanks-match'
 
-function describe(e: ReplayEvent, players: ReplayPlayer[]): string | null {
-  const name = (slot: number) => players.find((p) => p.slot === slot)?.name ?? `tank ${slot}`
-  if (e.e === 'hit' && e.b != null) return `${name(e.a)} hit ${name(e.b)} −${e.d ?? 0}`
-  if (e.e === 'kill' && e.b != null) return e.a === -1 ? `The zone destroyed ${name(e.b)}` : `${name(e.a)} destroyed ${name(e.b)}`
-  if (e.e === 'heal') return `${name(e.a)} picked up a repair kit${e.d != null ? ` (+${e.d})` : ''}`
+function describe(e: ReplayEvent, players: ReplayPlayer[], t: ReturnType<typeof useT<typeof tanksMatchMessages.en>>): string | null {
+  const name = (slot: number) => players.find((p) => p.slot === slot)?.name ?? t('tank', { slot })
+  if (e.e === 'hit' && e.b != null) return t('evHit', { a: name(e.a), b: name(e.b), d: e.d ?? 0 })
+  if (e.e === 'kill' && e.b != null) return e.a === -1 ? t('evZoneKill', { b: name(e.b) }) : t('evKill', { a: name(e.a), b: name(e.b) })
+  if (e.e === 'heal') return e.d != null ? t('evHealAmount', { a: name(e.a), d: e.d }) : t('evHeal', { a: name(e.a) })
   return null
 }
 
@@ -13,14 +15,15 @@ function describe(e: ReplayEvent, players: ReplayPlayer[]): string | null {
 // ticker. "shot" is deliberately excluded: it fires on every reload and
 // would drown out the events people actually want to read.
 export function EventFeed({ events, players }: { events: ReplayEvent[]; players: ReplayPlayer[] }) {
+  const t = useT(tanksMatchMessages)
   const rows = events
-    .map((e, i) => ({ e, text: describe(e, players), key: `${e.t}-${e.e}-${e.a}-${e.b ?? ''}-${i}` }))
+    .map((e, i) => ({ e, text: describe(e, players, t), key: `${e.t}-${e.e}-${e.a}-${e.b ?? ''}-${i}` }))
     .filter((r): r is { e: ReplayEvent; text: string; key: string } => r.text != null)
   return (
     <div className="rounded-[12px] border border-border bg-card p-3">
-      <p className="mb-2 text-xs font-bold text-muted-foreground">Recent events</p>
+      <p className="mb-2 text-xs font-bold text-muted-foreground">{t('recentEvents')}</p>
       {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing yet.</p>
+        <p className="text-sm text-muted-foreground">{t('nothingYet')}</p>
       ) : (
         <ul className="space-y-1.5">
           {rows.slice(0, 8).map((r) => (

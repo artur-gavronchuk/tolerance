@@ -1,6 +1,8 @@
 import { SLOT_COLORS, type TankState } from '@/lib/tanks/playback'
 import type { ReplayPlayer } from '@/lib/tanks/replay'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n/client'
+import { tanksMatchMessages } from '@/lib/i18n/messages/tanks-match'
 
 // selectedSlot/onSelect are optional and only meaningful to the 3D viewer's
 // Follow camera (task 15): clicking a row picks which tank it chases.
@@ -12,12 +14,13 @@ export function Scoreboard({ players, tanks, killsBySlot, selectedSlot, onSelect
   selectedSlot?: number | null
   onSelect?: (slot: number | null) => void
 }) {
+  const t = useT(tanksMatchMessages)
   const sorted = [...players].sort((a, b) => a.slot - b.slot)
   return (
     <div className="rounded-[12px] border border-border bg-card p-3">
       <p className="mb-2 flex items-baseline justify-between gap-2 text-xs font-bold text-muted-foreground">
-        <span>Tanks</span>
-        <span className="font-normal">health bar · kills</span>
+        <span>{t('scoreboardTanks')}</span>
+        <span className="font-normal">{t('healthKills')}</span>
       </p>
       <ul className="space-y-2.5">
         {sorted.map((p) => {
@@ -38,7 +41,7 @@ export function Scoreboard({ players, tanks, killsBySlot, selectedSlot, onSelect
                   style={{ width: `${hp}%`, backgroundColor: alive ? color : 'var(--muted-foreground)' }}
                 />
               </span>
-              <span title="Kills" className="w-6 shrink-0 text-right font-mono text-xs tabular-mono text-muted-foreground">
+              <span title={t('killsTitle')} className="w-6 shrink-0 text-right font-mono text-xs tabular-mono text-muted-foreground">
                 {killsBySlot[p.slot] ?? 0}
               </span>
             </>
@@ -67,7 +70,7 @@ export function Scoreboard({ players, tanks, killsBySlot, selectedSlot, onSelect
           )
         })}
       </ul>
-      <p className="mt-2.5 text-[0.7rem] text-muted-foreground">Number on the right: kills (tanks destroyed). Struck-through name: tank destroyed.</p>
+      <p className="mt-2.5 text-[0.7rem] text-muted-foreground">{t('scoreboardNote')}</p>
     </div>
   )
 }
