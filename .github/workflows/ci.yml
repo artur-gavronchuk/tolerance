@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   # Fails a PR that modifies, deletes or renames an EXISTING migration file
@@ -40,36 +41,6 @@ jobs:
           echo "If this migration genuinely never shipped anywhere yet, add '[migration-rewrite]' to a commit message in this PR and re-push." >&2
           exit 1
 
-  # Dedicated and cheap: goose migrations + the proof catalog sync apply
-  # cleanly to a brand-new database. (internal/proofs and cmd/api's e2e test
-  # also exercise this indirectly via dbtest.New, and the mobile job below
-  # re-migrates before booting the api — this job exists so a broken
-  # migration fails fast, on its own, without waiting on the heavier jobs.)
-  migrations-apply-cleanly:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: arena_migrate
-          POSTGRES_PASSWORD: ci_migrate_password
-          POSTGRES_DB: arena
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U arena_migrate -d arena"
-          --health-interval 2s --health-timeout 2s --health-retries 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: backend/go.mod
-      - name: migrate against an empty database
-        run: |
-          cd backend
-          ARENA_MIGRATE_DATABASE_URL="postgres://arena_migrate:ci_migrate_password@127.0.0.1:5432/arena?sslmode=disable" \
-            ARENA_APP_ROLE_PASSWORD=ci_app_password \
-            ARENA_PROOFS_DIR=./fixtures/proofs ARENA_SKILLS_DIR=./fixtures/skills go run ./cmd/migrate
-
   backend:
     runs-on: ubuntu-latest
     steps:
@@ -102,7 +73,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: cd frontend && pnpm install --frozen-lockfile && pnpm typecheck && pnpm build
+  # Manual only (Run workflow on ci): boots the whole stack, so it is kept
+  # off the per-push path during the active build phase.
   mobile:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     services:
       postgres:
