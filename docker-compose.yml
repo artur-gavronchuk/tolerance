@@ -82,6 +82,10 @@ services:
         API_URL: http://api:8080
     image: tolerance-web:local
     restart: unless-stopped
+    environment:
+      # Read at runtime by server components (share metadata and images).
+      API_URL: http://api:8080
+      ARENA_PUBLIC_URL: ${ARENA_PUBLIC_URL:-http://localhost:3000}
     ports:
       - "127.0.0.1:${WEB_PORT:-3000}:3000"
     depends_on:
