@@ -30,6 +30,8 @@ export default function ProductsPage() {
   const voting = list?.items.filter((t) => t.phase === 'voting') ?? []
   const archive = list?.items.filter((t) => t.phase === 'final') ?? []
   const next = list?.upcoming
+  // With nothing open the first voting task is the big call to action, so the cards below skip it.
+  const votingRest = open.length === 0 ? voting.slice(1) : voting
 
   return (
     <div className="space-y-8">
@@ -66,11 +68,11 @@ export default function ProductsPage() {
         </section>
       ))}
 
-      {voting.length > 0 && (
+      {votingRest.length > 0 && (
         <section>
-          <SectionTitle>Voting now</SectionTitle>
+          <SectionTitle>{open.length === 0 ? 'Also in voting' : 'Voting now'}</SectionTitle>
           <div className="grid gap-4 sm:grid-cols-2">
-            {voting.map((t) => (
+            {votingRest.map((t) => (
               <Link key={t.slug} href={`/products/${t.slug}`}
                 className="block min-w-0 rounded-[14px] border border-border bg-card p-5 transition-colors hover:bg-muted/50">
                 <div className="flex flex-wrap items-center gap-2">

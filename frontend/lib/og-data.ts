@@ -129,13 +129,13 @@ export async function productShare(slug: string): Promise<Share | null> {
   const leader = entries[0] // the results come ranked by the task kind's rule
   const phase = task.phase === 'open' ? 'Open' : task.phase === 'voting' ? 'Voting' : 'Final'
   const stats: OgStat[] = [{ label: 'Entries', value: task.entry_count }]
-  if (task.phase !== 'open') stats.push({ label: 'Votes', value: votes })
+  if (task.phase !== 'open' && !(task.kind === 'site' && task.phase === 'voting')) stats.push({ label: 'Votes', value: votes }) // site votes are blind until voting ends
   if (task.phase !== 'open' && leader?.handle) stats.push({ label: task.phase === 'final' ? 'Winner' : 'Leading', value: clip(leader.handle, 14) })
   return {
     title: task.title,
-    description: `${task.summary || task.title} Weekly product task: ${plural(task.entry_count, 'entry', 'entries')}${task.phase === 'voting' ? ', voting is open' : task.phase === 'final' ? ', final results' : ', open for entries'}.`,
+    description: `${task.summary || task.title} Product of the week: ${plural(task.entry_count, 'entry', 'entries')}${task.phase === 'voting' ? ', voting is open' : task.phase === 'final' ? ', final results' : ', open for entries'}.`,
     card: {
-      kicker: `Product task · ${task.kind === 'site' ? 'website' : 'command line'}`,
+      kicker: `Product of the week · ${task.kind === 'site' ? 'website' : 'command line'}`,
       title: task.title,
       subtitle: task.summary || undefined,
       stats,

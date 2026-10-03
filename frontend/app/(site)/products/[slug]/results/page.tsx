@@ -23,8 +23,8 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
   if (!res) return <Skeleton className="h-64 rounded-[14px]" />
   const { task, entries } = res
   const bt = task.kind === 'site'
-  const blind = isBlind(task) // automated checks and source stay hidden while sites are judged blind
-  const scored = entries.some((e) => e.total > 0) && !blind // sites without automated checks have no score column
+  const blind = isBlind(task) // standings, authors, checks and source stay hidden while sites are judged blind
+  const scored = entries.some((e) => e.total > 0) // sites without automated checks have no score column
 
   return (
     <div className="space-y-8">
@@ -44,7 +44,12 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
       {task.phase !== 'open' && entries.length === 0 && (
         <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">Nobody entered this task.</p>
       )}
-      {entries.length > 0 && (
+      {blind && (
+        <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">
+          The standings stay hidden while voting is open, so they do not sway the picks. They appear here {utc(task.voting_ends_at)}.
+        </p>
+      )}
+      {!blind && entries.length > 0 && (
         <>
           <section>
             <SectionTitle aside={task.phase === 'final' ? 'Final' : 'Provisional until voting ends'}>Podium</SectionTitle>
@@ -81,10 +86,8 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
                         {task.phase === 'voting' && !e.mine && (
                           <VoteButton compact entry={e} phase={task.phase} signedIn={!!me} busy={busy === e.id} onToggle={() => void toggleVote(e)} />
                         )}
-                        {!blind && (
-                          <Button size="icon" variant="ghost" aria-label="Download source" title="Download source"
-                            render={<a href={`/api/v1/product-entries/${e.id}/zip`} />} nativeButton={false}><Download /></Button>
-                        )}
+                        <Button size="icon" variant="ghost" aria-label="Download source" title="Download source"
+                          render={<a href={`/api/v1/product-entries/${e.id}/zip`} />} nativeButton={false}><Download /></Button>
                       </div>
                     </TableCell>
                   </TableRow>

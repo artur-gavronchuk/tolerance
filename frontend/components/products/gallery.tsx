@@ -10,9 +10,9 @@ import { SourceViewer } from './source-viewer'
 import { VoteButton } from './vote-button'
 
 // Everything published for a task, one card per person: the live site or the scenario results, the author,
-// the automated score and the vote control (checks and source stay hidden while the blind vote is on). Rank numbers are the current standings. While a site task is in
-// its voting phase the gallery is blind: stable shuffled order, no ranks, authors or vote counts, so it doesn't
-// undo the blind comparison above it.
+// the automated score and the vote control. Rank numbers are the current standings. While a site task is in
+// its voting phase the gallery is blind: stable shuffled order, no ranks, authors, vote counts, checks or
+// source, so it doesn't undo the blind comparison above it.
 export function EntryGallery({ task, entries, signedIn, busy, onToggleVote }: {
   task: ProductTask
   entries: ProductEntry[]

@@ -26,12 +26,13 @@ export function VoteCta({ task, signedIn }: { task: ProductTask; signedIn: boole
     products.compareNext(task.slug).then(setNext).catch(() => {})
   }, [site, signedIn, task.slug])
 
+  // Only signed-in people have a pair count; everybody else gets a plain label. A target of 0 means there is
+  // nothing to compare yet, which is not the same as being done.
   const left = next ? Math.max(0, next.target - next.judged) : 0
-  const done = site && next != null && left === 0
+  const done = site && next != null && next.target > 0 && left === 0
   const label = done ? 'See the entries'
-    : !site ? 'Vote now'
-    : left > 0 ? `Vote now: judge ${left} ${left === 1 ? 'pair' : 'pairs'}`
-    : 'Vote now: judge pairs'
+    : site && left > 0 ? `Vote now: judge ${left} ${left === 1 ? 'pair' : 'pairs'}`
+    : 'Vote now'
   const ends = useUntil(task.voting_ends_at)
   return (
     <section className="rounded-[14px] border border-primary/40 bg-card p-6">

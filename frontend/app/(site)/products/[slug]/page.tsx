@@ -57,7 +57,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
       <PageHeader
         kicker={<Link href="/products" className="hover:text-foreground">Product of the week</Link>}
         title={task.title}
-        actions={<Button variant="outline" render={<Link href={`/products/${slug}/results`} />} nativeButton={false}>Results</Button>}
+        actions={!isBlind(task) && <Button variant="outline" render={<Link href={`/products/${slug}/results`} />} nativeButton={false}>Results</Button>}
       >
         <span className="mr-2 inline-block align-middle"><PhaseBadge phase={task.phase} /></span>
         {open ? 'Uploads close' : 'Uploads closed'} {utc(task.deadline)}
@@ -111,7 +111,7 @@ function Published({ task, slug, viewer, signedIn }: { task: ProductDetail; slug
   const { res, error, voteError, busy, toggleVote } = useResults(slug, viewer, true)
   return (
     <section className="space-y-4">
-      <SectionTitle aside={<Link className="font-semibold text-primary hover:underline" href={`/products/${slug}/results`}>Podium and table</Link>}>
+      <SectionTitle aside={isBlind(task) ? undefined : <Link className="font-semibold text-primary hover:underline" href={`/products/${slug}/results`}>Podium and table</Link>}>
         Entries{res && ` (${res.entries.length})`}
       </SectionTitle>
       <VotingNote task={task} />
