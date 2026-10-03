@@ -6,6 +6,7 @@ package botpkg
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
@@ -92,17 +93,116 @@ func isMacJunk(clean string) bool {
 	return base == ".DS_Store" || strings.HasPrefix(base, "._")
 }
 
-// readArchive decompresses and parses a tar.gz, dropping macOS junk, enforcing MaxArchive, MaxUnpacked and
+// zipMagic is the signature a zip archive starts with (a local file header; an empty zip starts with the
+// end-of-central-directory record instead).
+var (
+	zipMagic      = []byte("PK\x03\x04")
+	zipEmptyMagic = []byte("PK\x05\x06")
+)
+
+// readArchive parses a bot archive - a zip if it starts with the zip signature, a tar.gz otherwise - and
+// applies the same limits and path rules to both.
+func readArchive(archive []byte) ([]entry, error) {
+	if bytes.HasPrefix(archive, zipMagic) || bytes.HasPrefix(archive, zipEmptyMagic) {
+		return readZip(archive)
+	}
+	return readTarGz(archive)
+}
+
+// cleanArchivePath normalizes one raw archive entry name. skip is true for the archive root and macOS
+// junk; an absolute path, "..", or a backslash anywhere in the raw name is an *Error.
+func cleanArchivePath(raw string) (clean string, skip bool, err error) {
+	clean = path.Clean(strings.TrimSuffix(filepath.ToSlash(raw), "/"))
+	if clean == "." {
+		return "", true, nil // the archive root itself
+	}
+	if isMacJunk(clean) {
+		return "", true, nil
+	}
+	if path.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, "../") || strings.Contains(raw, `\`) {
+		return "", false, errf("bot archive: illegal path %q", raw)
+	}
+	return clean, false, nil
+}
+
+// readZip is readTarGz's counterpart for a zip: it enforces MaxArchive, MaxUnpacked (on bytes actually
+// decompressed, not on sizes the central directory claims) and MaxFiles, and refuses the same illegal
+// paths, duplicates, collisions and symlinks.
+func readZip(archive []byte) ([]entry, error) {
+	if len(archive) > MaxArchive {
+		return nil, errf("bot archive: compressed size exceeds %d bytes", MaxArchive)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		return nil, errf("bot archive: not a valid zip archive")
+	}
+	if len(zr.File) > MaxFiles*4 {
+		return nil, errf("bot archive: more than %d files", MaxFiles)
+	}
+
+	var entries []entry
+	seen := make(map[string]struct{})
+	fileCount := 0
+	var total int64
+	for _, f := range zr.File {
+		clean, skip, err := cleanArchivePath(f.Name)
+		if err != nil {
+			return nil, err
+		}
+		if skip {
+			continue
+		}
+		if _, dup := seen[clean]; dup {
+			return nil, errf("bot archive: duplicate path %q in archive", clean)
+		}
+		seen[clean] = struct{}{}
+
+		isDir := f.FileInfo().IsDir()
+		if !isDir && !f.Mode().IsRegular() {
+			return nil, errf("bot archive: %q is not a regular file or directory", clean)
+		}
+
+		var data []byte
+		if !isDir {
+			fileCount++
+			if fileCount > MaxFiles {
+				return nil, errf("bot archive: more than %d files", MaxFiles)
+			}
+			rc, err := f.Open()
+			if err != nil {
+				return nil, errf("bot archive: corrupt zip entry %q: %v", clean, err)
+			}
+			data, err = io.ReadAll(io.LimitReader(rc, MaxUnpacked-total+1))
+			rc.Close()
+			if err != nil {
+				return nil, errf("bot archive: corrupt zip entry %q: %v", clean, err)
+			}
+			total += int64(len(data))
+			if total > MaxUnpacked {
+				return nil, errf("bot archive: unpacked size exceeds %d bytes", MaxUnpacked)
+			}
+		}
+		entries = append(entries, entry{name: clean, isDir: isDir, data: data})
+	}
+
+	if err := checkPathCollisions(entries); err != nil {
+		return nil, err
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
+	return entries, nil
+}
+
+// readTarGz decompresses and parses a tar.gz, dropping macOS junk, enforcing MaxArchive, MaxUnpacked and
 // MaxFiles, and refusing illegal paths (absolute, "..", a backslash anywhere in the raw name), duplicate
 // paths, path collisions (a file used as another entry's parent directory), and non-file/non-directory
 // entries. It does not look at bot.json at all - that is validate's job, once wrapper stripping has run.
-func readArchive(archive []byte) ([]entry, error) {
+func readTarGz(archive []byte) ([]entry, error) {
 	if len(archive) > MaxArchive {
 		return nil, errf("bot archive: compressed size exceeds %d bytes", MaxArchive)
 	}
 	gz, err := gzip.NewReader(bytes.NewReader(archive))
 	if err != nil {
-		return nil, errf("bot archive: not a valid gzip archive")
+		return nil, errf("bot archive: not a valid zip or tar.gz archive")
 	}
 	defer gz.Close()
 
@@ -124,15 +224,12 @@ func readArchive(archive []byte) ([]entry, error) {
 			return nil, errf("bot archive: corrupt tar entry: %v", err)
 		}
 
-		clean := path.Clean(strings.TrimSuffix(filepath.ToSlash(h.Name), "/"))
-		if clean == "." {
-			continue // the archive root itself
+		clean, skip, err := cleanArchivePath(h.Name)
+		if err != nil {
+			return nil, err
 		}
-		if isMacJunk(clean) {
+		if skip {
 			continue
-		}
-		if path.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, "../") || strings.Contains(h.Name, `\`) {
-			return nil, errf("bot archive: illegal path %q", h.Name)
 		}
 		if _, dup := seen[clean]; dup {
 			return nil, errf("bot archive: duplicate path %q in archive", clean)
@@ -315,7 +412,7 @@ func validate(archive []byte) (Manifest, []entry, error) {
 	return m, entries, nil
 }
 
-// Validate checks an uploaded archive and returns its manifest. Accepts tar.gz. Rules: ≤ MaxArchive
+// Validate checks an uploaded archive and returns its manifest. Accepts tar.gz or zip. Rules: ≤ MaxArchive
 // compressed, ≤ MaxUnpacked and ≤ MaxFiles after ignoring macOS junk (__MACOSX/..., any "._*" file,
 // .DS_Store); regular files and directories only; no absolute paths or "..". If every remaining entry sits
 // under one top-level directory, that directory is stripped. bot.json must exist at the (stripped) root,
