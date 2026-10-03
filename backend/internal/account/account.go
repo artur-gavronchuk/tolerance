@@ -1,7 +1,7 @@
 // Package account is the privacy side of a user: "download my data" and "delete my account".
 //
 // Deletion runs in one transaction and decides per table:
-//   - personal data (identities, analytics events, sessions, upload link, notifications, email, handle): deleted or replaced;
+//   - personal data (identities, analytics events, fair-play signals/hashes/reports, sessions, upload link, notifications, email, handle): deleted or replaced;
 //   - what the user made for the daily task (submissions): deleted, so leaderboards and streaks recompute;
 //   - tank bots: deactivated (hidden_at) and anonymized (name, source archives, logs, season owner label), but
 //     the bot, its versions and match_players rows stay so other players' past matches and replays still
@@ -42,6 +42,14 @@ var exportQueries = []struct{ key, sql string }{
 	{"notifications", `SELECT coalesce(jsonb_agg(to_jsonb(n) ORDER BY n.created_at), '[]') FROM notifications n WHERE n.user_id = $1`},
 	{"notify_state", `SELECT coalesce((SELECT to_jsonb(n) FROM notify_state n WHERE n.user_id = $1), 'null')`},
 	{"events", `SELECT coalesce(jsonb_agg(to_jsonb(e) ORDER BY e.at), '[]') FROM events e WHERE e.user_id = $1`},
+	{"fairplay_downloads", `SELECT coalesce(jsonb_agg(to_jsonb(d) ORDER BY d.first_at), '[]') FROM fairplay_downloads d WHERE d.user_id = $1`},
+	{"fairplay_seen", `SELECT coalesce(jsonb_agg(to_jsonb(s) ORDER BY s.first_at), '[]') FROM fairplay_seen s WHERE s.user_id = $1`},
+	{"fairplay_uploads", `SELECT coalesce(jsonb_agg(to_jsonb(u) ORDER BY u.created_at), '[]') FROM fairplay_uploads u WHERE u.user_id = $1`},
+	{"fairplay_flags", `SELECT coalesce(jsonb_agg(to_jsonb(f) ORDER BY f.created_at), '[]') FROM fairplay_flags f WHERE f.user_id = $1`},
+	{"fairplay_reports_filed", `SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY r.created_at), '[]') FROM fairplay_reports r WHERE r.reporter_id = $1`},
+	// Reports about the user: the reporter's identity and free text belong to the reporter and are left out.
+	{"fairplay_reports_about_me", `SELECT coalesce(jsonb_agg(jsonb_build_object('reason', r.reason, 'status', r.status, 'created_at', r.created_at) ORDER BY r.created_at), '[]')
+		FROM fairplay_reports r WHERE r.target_kind = 'user' AND r.target_id = $1`},
 	{"tank_bots", `SELECT coalesce(jsonb_agg(to_jsonb(b) ORDER BY b.created_at), '[]') FROM game_bots b WHERE b.owner_user_id = $1`},
 	{"tank_bot_versions", `SELECT coalesce(jsonb_agg((to_jsonb(v) - 'archive') || jsonb_build_object('archive_base64', encode(v.archive, 'base64')) ORDER BY v.created_at), '[]')
 		FROM bot_versions v JOIN game_bots b ON b.id = v.bot_id WHERE b.owner_user_id = $1`},
@@ -84,13 +92,23 @@ func (s *Service) Delete(ctx context.Context, userID, confirmHandle string) erro
 		if !strings.EqualFold(strings.TrimSpace(confirmHandle), handle) {
 			return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "Type your handle to confirm", "handle", "mismatch")
 		}
+		// Fair play: the user's own signals, hashed IPs/devices and reports by and about them go. Flags raised on
+		// other users that name this one (shared device/IP, near-duplicate) go too, as they hold the old handle.
+		// Free text in someone else's report that mentions the handle cannot be found reliably and stays.
+		if _, err := tx.Exec(ctx, `DELETE FROM fairplay_flags WHERE user_id = $1 OR detail->>'other_id' = $1 OR jsonb_exists(detail->'users', $2)`, userID, handle); err != nil {
+			return err
+		}
 		for _, q := range []string{
 			// Queued runs of what is about to disappear.
 			`DELETE FROM jobs WHERE state = 'queued' AND (
 				payload->>'submission_id' IN (SELECT id FROM submissions WHERE user_id = $1) OR
 				payload->>'version_id' IN (SELECT v.id FROM bot_versions v JOIN game_bots b ON b.id = v.bot_id WHERE b.owner_user_id = $1))`,
 			`DELETE FROM submissions WHERE user_id = $1`,
-			`DELETE FROM events WHERE user_id = $1`,
+			`DELETE FROM events WHERE user_id = $1`, // the tombstone row stays, so ON DELETE CASCADE does not fire
+			`DELETE FROM fairplay_downloads WHERE user_id = $1`,
+			`DELETE FROM fairplay_seen WHERE user_id = $1`,
+			`DELETE FROM fairplay_uploads WHERE user_id = $1`,
+			`DELETE FROM fairplay_reports WHERE reporter_id = $1 OR (target_kind = 'user' AND target_id = $1)`,
 			`DELETE FROM notifications WHERE user_id = $1`,
 			`DELETE FROM notify_state WHERE user_id = $1`,
 			`DELETE FROM upload_links WHERE user_id = $1`,
