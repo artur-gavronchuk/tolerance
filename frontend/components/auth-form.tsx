@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Brand } from '@/components/brand'
 import { api, post, ApiError } from '@/lib/api'
+import { lastPath, safeReturnPath } from '@/components/public/return-path'
 import type { AuthProviders } from '@/lib/types'
 
 const errors: Record<string, string> = {
@@ -45,9 +46,12 @@ export function AuthForm() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [next, setNext] = useState('/')
 
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get('error')
+    const q = new URLSearchParams(window.location.search)
+    setNext(safeReturnPath(q.get('next')) ?? lastPath() ?? '/')
+    const code = q.get('error')
     if (code) setError(Object.hasOwn(errors, code) ? errors[code] : 'Sign-in failed. Try again.')
     api<AuthProviders>('/auth/providers')
       .then(setOptions)
@@ -64,7 +68,7 @@ export function AuthForm() {
     setError(null)
     try {
       await post('/auth/dev', { email })
-      router.replace('/')
+      router.replace(next)
     } catch (err) {
       const a = err as ApiError
       setError(a.status === 429 ? errors.rate_limited : a.message)
@@ -81,12 +85,12 @@ export function AuthForm() {
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">
           <h1 className="display text-[2.2rem]">Sign in</h1>
           <p className="mt-2 text-muted-foreground">
-            Welcome back. Today’s task is waiting.
+            Sign in to submit, vote or enter a bot. New here? The same buttons create your account.
           </p>
           <div className={`mt-8 flex flex-col gap-3 ${options ? '' : 'min-h-24'} ${options && !options.providers.length && !nothing ? 'hidden' : ''}`}>
             {options?.providers.map((p) => (
               <Button key={p} size="lg" variant="outline" className="gap-2.5"
-                render={<a href={`/api/v1/auth/${p}/start?next=/`} />} nativeButton={false}>
+                render={<a href={`/api/v1/auth/${p}/start?next=${encodeURIComponent(next)}`} />} nativeButton={false}>
                 <ProviderIcon id={p} />
                 {labels[p]}
               </Button>
@@ -106,15 +110,16 @@ export function AuthForm() {
           <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
             By continuing you accept the <Link className="font-semibold text-foreground underline underline-offset-2" href="/terms">terms and fair play rules</Link>.
           </p>
-          <p className="mt-6 text-sm text-muted-foreground">
-            New here? The same buttons create your account.
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/tanks">Watch the tanks arena</Link></p>
+          <p className="mt-6 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/">Just looking? Browse without an account</Link></p>
         </div>
       </div>
       <aside className="relative hidden overflow-hidden bg-[#15212b] lg:flex lg:flex-col lg:justify-center lg:px-14">
-        <p className="display max-w-md text-[2rem] text-[#eef2f5]">One task a day. Hidden tests decide.</p>
-        <p className="mt-4 max-w-md text-[#eef2f5]/70">Give the repository to your coding agent, upload what it wrote, and see how many hidden tests pass.</p>
+        <p className="display max-w-md text-[2rem] text-[#eef2f5]">Three ways to put your agent to the test.</p>
+        <ul className="mt-6 flex max-w-md flex-col gap-4 text-[#eef2f5]/70">
+          <li><b className="text-[#eef2f5]">Task of the day.</b> One repo, hidden tests decide. Upload what your agent wrote.</li>
+          <li><b className="text-[#eef2f5]">Product of the week.</b> Your agent builds a tool or a site, people vote.</li>
+          <li><b className="text-[#eef2f5]">Tanks arena.</b> Your agent writes a bot, bots fight on a public ladder.</li>
+        </ul>
       </aside>
     </main>
   )
