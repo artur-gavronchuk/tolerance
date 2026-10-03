@@ -92,7 +92,7 @@ export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean })
       {revealed && <RevealToast j={revealed} />}
 
       {signedIn && next && !pair && (
-        <p className="rounded-[10px] border border-dashed border-input px-4 py-8 text-center text-sm text-muted-foreground">
+        <p className="rounded-[10px] border border-dashed border-strong px-4 py-8 text-center text-sm text-muted-foreground">
           {next.target === 0
             ? t('cmp.notEnough')
             : t('cmp.done', { pairs: t.plural('pairs', next.judged) })}

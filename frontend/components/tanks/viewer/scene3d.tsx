@@ -526,7 +526,7 @@ export default function Scene3D({ replay, clock, selectedSlot, onSelect, onUnsup
   const followedName = selectedSlot != null ? names.find((p) => p.slot === selectedSlot)?.name : null
 
   return (
-    <div className="relative w-full overflow-hidden rounded-[14px] bg-[#0c1720]" style={{ aspectRatio: '3 / 2' }}>
+    <div className="relative w-full overflow-hidden rounded-[14px] bg-arena" style={{ aspectRatio: '3 / 2' }}>
       <div ref={containerRef} className="absolute inset-0" />
       {followedName && (
         <button
@@ -538,7 +538,7 @@ export default function Scene3D({ replay, clock, selectedSlot, onSelect, onUnsup
         </button>
       )}
       {unsupported && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#0c1720] px-6 text-center text-sm text-muted-foreground">
+        <div className="absolute inset-0 flex items-center justify-center bg-arena px-6 text-center text-sm text-muted-foreground">
           {t('noWebgl')}
         </div>
       )}

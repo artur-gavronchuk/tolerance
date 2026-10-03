@@ -46,7 +46,7 @@ export function MainStack() {
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">{children}</p>
+  return <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{children}</p>
 }
 
 const MEDAL = ['text-warning', 'text-muted-foreground', 'text-[#b4784a]']

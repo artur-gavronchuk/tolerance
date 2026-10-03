@@ -311,7 +311,7 @@ export function Canvas2D({ replay, clock }: { replay: Replay; clock: Clock }) {
   }, [replay, clock])
 
   return (
-    <div ref={containerRef} className="relative w-full overflow-hidden rounded-[14px] bg-[#0c1720]" style={{ aspectRatio: '3 / 2' }}>
+    <div ref={containerRef} className="relative w-full overflow-hidden rounded-[14px] bg-arena" style={{ aspectRatio: '3 / 2' }}>
       <canvas ref={canvasRef} className="block h-full w-full" />
     </div>
   )

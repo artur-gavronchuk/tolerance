@@ -24,7 +24,7 @@ export default function DaysPage() {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!items && !error && <Skeleton className="h-64 rounded-[14px]" />}
       {items && items.length === 0 && (
-        <div className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">
+        <div className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">
           <p>{t('archiveEmpty')}</p>
           <Link href="/" className="mt-3 inline-block font-semibold text-primary hover:underline">{t('backToToday')}</Link>
         </div>

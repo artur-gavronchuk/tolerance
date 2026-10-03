@@ -81,7 +81,7 @@ export function VersionList({ versions }: { versions: VersionView[] }) {
   const t = useT(m)
   if (versions.length === 0) {
     return (
-      <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">
+      <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">
         {t('ver.empty')}
       </p>
     )

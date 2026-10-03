@@ -170,7 +170,7 @@ export function DailyView({ day }: { day?: string }) {
           </SectionTitle>
           {share && <div className="mb-3"><ShareResult text={share} /></div>}
           {subs.length === 0 ? (
-            <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">{t('nothingYet')}</p>
+            <p className="rounded-[14px] border border-dashed border-strong px-5 py-8 text-center text-sm text-muted-foreground">{t('nothingYet')}</p>
           ) : (
             <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
               {subs.map((s) => <SubmissionCard key={s.id} sub={s} onUpdate={update} />)}

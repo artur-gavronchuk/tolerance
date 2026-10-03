@@ -31,6 +31,13 @@
   --color-background: var(--background);
   --color-ink: var(--ink);
   --color-ink-foreground: var(--ink-foreground);
+  --color-border-strong: var(--border-strong);
+  --color-mark-check: var(--mark-check);
+  --color-terminal: var(--terminal);
+  --color-terminal-foreground: var(--terminal-foreground);
+  --color-terminal-success: var(--terminal-success);
+  --color-terminal-accent: var(--terminal-accent);
+  --color-arena: var(--arena);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -41,7 +48,8 @@
 }
 
 /* Cool paper, navy ink, one signal blue. Pass and fail get their own hues
-   and nothing else competes with them. */
+   and nothing else competes with them. Text pairs hold 4.5:1 and control
+   borders 3:1 in both themes; the design system artifact lists the ratios. */
 :root {
   color-scheme: light;
   --background: #f4f6f8;
@@ -58,16 +66,24 @@
   --muted-foreground: #5b6b78;
   --accent: #e8eefc;
   --accent-foreground: #1e3fa8;
-  --destructive: #c2413a;
+  --destructive: #b5362f;
   --border: #dfe6eb;
-  --input: #d3dce3;
+  --border-strong: #d3dce3;
+  --input: #8796a3;
   --ring: #2753db;
   --success: #2e7d5b;
   --success-foreground: #ffffff;
-  --warning: #a86a12;
+  --warning: #9a6010;
   --warning-foreground: #ffffff;
   --ink: #15212b;
   --ink-foreground: #f4f6f8;
+  --mark-check: #6f8ff5;
+  /* Terminal surfaces (copy blocks, the intro panel) stay navy in both themes. */
+  --terminal: #15212b;
+  --terminal-foreground: #eef2f5;
+  --terminal-success: #8fd6b0;
+  --terminal-accent: #8fb4ff;
+  --arena: #0c1720;
   --radius: 0.625rem;
 }
 
@@ -88,9 +104,10 @@
     --muted-foreground: #8d9ca8;
     --accent: #182444;
     --accent-foreground: #b9c9fb;
-    --destructive: #ee6b62;
+    --destructive: #f27a71;
     --border: #23303b;
-    --input: #2d3b47;
+    --border-strong: #2d3b47;
+    --input: #5d707f;
     --ring: #7394f7;
     --success: #52ba8a;
     --success-foreground: #07170f;
@@ -98,12 +115,18 @@
     --warning-foreground: #1d1203;
     --ink: #e4eaef;
     --ink-foreground: #0d141a;
+    --mark-check: #2753db;
   }
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
+  }
+  /* Links and other plain focus targets: the same solid blue ring as the controls. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
   body {
     @apply bg-background text-foreground;

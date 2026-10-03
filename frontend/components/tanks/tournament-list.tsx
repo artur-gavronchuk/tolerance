@@ -19,7 +19,7 @@ export function TournamentList({ items, empty }: { items: TournamentView[]; empt
   const t = useT(m)
   if (items.length === 0) {
     return (
-      <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">{empty ?? t('tl.empty')}</p>
+      <p className="rounded-[14px] border border-dashed border-strong px-5 py-10 text-center text-sm text-muted-foreground">{empty ?? t('tl.empty')}</p>
     )
   }
   return (
