@@ -90,6 +90,9 @@ func (s *Service) ScheduleTick(ctx context.Context, concurrency int, interval ti
 			}
 		}
 		rng.Shuffle(len(players), func(i, j int) { players[i], players[j] = players[j], players[i] })
+		if len(players) > 4 {
+			players = players[:4] // a match seats at most four; more house bots than that take turns
+		}
 
 		id, err := s.createLadderMatch(ctx, tx, rng, players)
 		if err != nil {

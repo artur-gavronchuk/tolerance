@@ -256,6 +256,13 @@ export default function TanksDocsPage() {
           <Link className="text-primary hover:underline" href="/tanks/replay">/tanks/replay</Link>. Try a handful of
           different <code>--seed</code> values — a strategy that only wins on one seed is fragile.
         </p>
+        <p>
+          The house bots, easiest to hardest: <code>house:idle</code> (never moves), <code>house:hunter</code>{' '}
+          (charges and shoots), <code>house:sniper</code> (keeps its distance, leads shots), <code>house:duelist</code>{' '}
+          (strafes, dodges, leads shots), <code>house:warden</code> (also picks targets, heals, avoids crossfire and the
+          shrinking zone) and <code>house:ace</code> (plans its dodges against the shots you are about to fire). All
+          but idle play in the ladder, so a new bot starts in the middle of the table and has to climb past them.
+        </p>
       </Section>
     </div>
   )

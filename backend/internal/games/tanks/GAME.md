@@ -186,6 +186,14 @@ stderr tail of anyone who crashed) and writes a replay file you can open at
 `/tanks/replay`. Try a handful of different `--seed` values — a strategy
 that only wins on one seed is fragile.
 
+The house bots, easiest to hardest: `house:idle` (never moves), `house:hunter`
+(charges and shoots), `house:sniper` (keeps its distance, leads shots),
+`house:duelist` (strafes, dodges, leads shots), `house:warden` (also picks
+targets, heals, avoids crossfire and the shrinking zone) and `house:ace`
+(plans its dodges against the shots you are about to fire). All but idle
+play in the ladder, so a new bot starts in the middle of the table and has to
+climb past them.
+
 ## 10. Joining the tournament
 
 Every uploaded or agent-written version goes through `Qualify` before it can
