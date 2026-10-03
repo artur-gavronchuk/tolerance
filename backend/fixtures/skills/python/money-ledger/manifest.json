@@ -1,0 +1,2 @@
+{"slug": "py-money-ledger", "title": "Money ledger rounds, splits and balances wrongly", "difficulty": 3,
+ "agent_timeout_s": 900, "sandbox_timeout_s": 120, "hidden_tests": 6}

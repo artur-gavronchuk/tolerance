@@ -1,0 +1,2 @@
+{"slug": "go-wallet-event-projection", "title": "Wallet projection breaks on out-of-order events", "difficulty": 3,
+ "agent_timeout_s": 1200, "sandbox_timeout_s": 120, "hidden_tests": 6}

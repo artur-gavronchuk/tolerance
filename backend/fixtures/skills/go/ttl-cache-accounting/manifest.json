@@ -1,0 +1,2 @@
+{"slug": "go-ttl-cache-accounting", "title": "TTL cache loses track of cost and expiry", "difficulty": 3,
+ "agent_timeout_s": 1200, "sandbox_timeout_s": 120, "hidden_tests": 6}

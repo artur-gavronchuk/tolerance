@@ -1,0 +1,2 @@
+{"slug": "py-csv-rfc4180", "title": "CSV reader and writer break on real-world files", "difficulty": 2,
+ "agent_timeout_s": 900, "sandbox_timeout_s": 120, "hidden_tests": 6}

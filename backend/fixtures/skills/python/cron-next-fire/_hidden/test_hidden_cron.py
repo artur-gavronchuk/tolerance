@@ -62,9 +62,34 @@ BAD_EXPRESSIONS = [
 ]
 
 
+MORE_BAD_EXPRESSIONS = [
+    # 7 is Sunday, but a range is checked before 7 is folded into 0
+    "0 0 * * 7-0", "0 0 * * 7-6", "0 0 * * sun-sat-mon", "0 0 * * fri-sun", "0 0 * * 0-8", "0 0 * * 8-9",
+    "0 0 * * 1/0", "0 0 * * 7/0", "0 0 * * mon-8", "0 0 * * */0", "0 0 1-31/0 * *", "0 0 * * 1/2/3",
+    "0 0 * 13-14 *", "0 0 * mon *", "0 0 jan * *", "* sun * * *", "@daily x", "@ daily", "@Reboot", "@",
+    "0 0 * * 7,8", "0 0 * * monday", "0 0 * * mo", "0 0 * jan- *", "0 0 * * *,", "0 0 ,1 * *",
+    "0 0 1 */ *", "0 0 * * 1 -", "0 0 1 - *", "60-61 * * * *", "0 0 * * 07-8", "0 0 * * ١",
+]
+
+
+GOOD_EXPRESSIONS = [
+    "0 0 * * 7", "0 0 * * 5-7", "0 0 * * 7-7", "0 0 * * sun-sat", "0 0 * * SAT", "0 0 1 JAN-dec *",
+    "0 0 * * 1/3", "0 0 * * */2", "0 0 */10 * *", "5/20 * * * *", "0 0 * * mon-7/2", "	0  0 * * *  ",
+    "@DAILY", "@Hourly", "0 0 31 * *", "0 0 1 */5 *",
+]
+
+
 def test_hidden_rejects_bad_expressions():
+    # a parser that refuses everything unusual must not pass: the valid tricky forms parse
+    refused = []
+    for expr in GOOD_EXPRESSIONS:
+        try:
+            parse(expr)
+        except CronError:
+            refused.append(expr)
+    assert refused == []
     accepted = []
-    for expr in BAD_EXPRESSIONS:
+    for expr in BAD_EXPRESSIONS + MORE_BAD_EXPRESSIONS:
         try:
             parse(expr)
         except CronError:
@@ -113,34 +138,49 @@ def test_hidden_calendar_edges():
     assert next_after(parse("0 0 1 feb,aug *"), D(2026, 8, 1)) == D(2027, 2, 1)
 
 
-EXPRESSIONS = [
-    "*/15 9-17 * * mon-fri",
-    "0 0 13 * fri",
-    "30 4 1,15 * *",
-    "0 */6 29-31 * *",
-    "5/20 22 */10 * 0",
-    "0 0 29 2 *",
-]
+# expression -> (minutes, hours, days, months, weekdays with 7 folded to 0, dom starts with *, dow starts with *),
+# worked out by hand from the contract; the oracle below does not use cronparse or schedule
+CASES = {
+    "*/15 9-17 * * mon-fri": ({0, 15, 30, 45}, set(range(9, 18)), set(range(1, 32)), set(range(1, 13)), {1, 2, 3, 4, 5}, True, False),
+    "0 0 13 * fri": ({0}, {0}, {13}, set(range(1, 13)), {5}, False, False),
+    "30 4 1,15 * *": ({30}, {4}, {1, 15}, set(range(1, 13)), set(range(7)), False, True),
+    "0 */6 29-31 * *": ({0}, {0, 6, 12, 18}, {29, 30, 31}, set(range(1, 13)), set(range(7)), False, True),
+    "5/20 22 */10 * 0": ({5, 25, 45}, {22}, {1, 11, 21, 31}, set(range(1, 13)), {0}, True, False),
+    "0 0 29 2 *": ({0}, {0}, {29}, {2}, set(range(7)), False, True),
+    "0 12 5,20 * 7": ({0}, {12}, {5, 20}, set(range(1, 13)), {0}, False, False),
+    "45 23 * 2-3 1/3": ({45}, {23}, set(range(1, 32)), {2, 3}, {0, 1, 4}, True, False),
+    "10 6 */3 * sat,sun": ({10}, {6}, set(range(1, 32, 3)), set(range(1, 13)), {6, 0}, True, False),
+}
+
+
+def oracle(case, t):
+    minutes, hours, days, months, weekdays, dom_star, dow_star = case
+    if t.month not in months or t.hour not in hours or t.minute not in minutes:
+        return False
+    dom, dow = t.day in days, t.isoweekday() % 7 in weekdays
+    return (dom and dow) if dom_star or dow_star else (dom or dow)
 
 
 def test_hidden_matches_agrees_with_next_after():
     start = D(2026, 1, 30, 22, 17, 41)
-    for expr in EXPRESSIONS:
+    for expr, case in CASES.items():
         s = parse(expr)
         fires = next_n(s, start, 8)
         assert fires == sorted(set(fires))
         for f in fires:
             assert f.second == 0 and f.microsecond == 0
             assert matches(s, f), (expr, f)
-        # nothing in between fires: scan minute by minute (coarsely over the leap-day gap)
+        # nothing in between fires: scan minute by minute (coarsely over the leap-day gap) against the oracle
         step = timedelta(minutes=1) if expr != "0 0 29 2 *" else timedelta(hours=1)
         t = start.replace(second=0, microsecond=0) + timedelta(minutes=1)
         limit = min(fires[-1], start + timedelta(days=60))
-        found = []
+        found, expected = [], []
         while t <= limit:
             if matches(s, t):
                 found.append(t)
+            if oracle(case, t):
+                expected.append(t)
             t += step
-        assert found == [f for f in fires if f <= limit], expr
+        assert found == expected == [f for f in fires if f <= limit], expr
         # seconds do not matter to matches()
         assert matches(s, fires[0].replace(second=59))
