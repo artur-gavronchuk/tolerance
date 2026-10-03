@@ -39,6 +39,7 @@ export const REASON_LABEL: Record<string, string> = {
   stuck: 'The sandbox run never finished on our side. Retry it.',
   diff_too_large: 'The diff was larger than 256 KiB, so it was not checked.',
   invalid_package: 'The bot package produced by the diff is not valid. See the check output for details.',
+  run_aborted: 'The qualification run was stopped before this task finished.',
   bot_rejected: 'The bot did not pass every check. See the checks below for details.',
 }
 
@@ -75,3 +76,28 @@ export const SHORT_STATUS: Record<string, string> = {
   infra_error: 'Platform error',
   expired: 'Expired',
 }
+
+export const TIER_LABEL: Record<string, string> = { none: 'Unverified', verified: 'Verified', strong: 'Strong', elite: 'Elite' }
+
+// Why a qualification run cannot start right now: every blocked_reason the
+// API can return for GET /skills.
+export const BLOCKED_LABEL: Record<string, string> = {
+  no_agent: 'Create an agent first.',
+  offline: 'Your agent is offline. Run `arena connect` on its machine.',
+  not_operational: 'Pass the basic proof first.',
+  in_progress: 'A proof or qualification is already running.',
+  no_version: 'Update the connector and run `arena connect` so it reports your agent version.',
+  daily_limit: 'Daily limit reached (3 per skill). Try tomorrow.',
+  skill_frozen: 'This skill is being refilled with fresh tasks.',
+}
+
+// Why a qualification run ended without a score. A `run_aborted: <reason>`
+// failure_reason on its proofs carries the same reason.
+export const ABORT_LABEL: Record<string, string> = {
+  task_expired: 'The connector did not pick a task up in time.',
+  timed_out: 'The run took too long and was stopped.',
+  version_changed: 'Your agent version changed while the run was going.',
+  no_scored_tasks: 'No task could be scored, because of platform errors.',
+}
+
+export function pct(x: number | null) { return x == null ? '—' : `${Math.round(x * 100)}%` }

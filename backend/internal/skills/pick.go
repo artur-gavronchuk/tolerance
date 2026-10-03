@@ -2,6 +2,10 @@ package skills
 
 import "math/rand"
 
+// TasksPerRun is how many tasks one qualification run consists of. A skill
+// with fewer active tasks cannot be qualified.
+const TasksPerRun = 3
+
 // Pick chooses n distinct task slugs from pool, preferring ones not in
 // recent. When fewer than n unseen tasks exist, the rest come from the
 // whole pool; when the pool itself is smaller than n, it is returned whole.

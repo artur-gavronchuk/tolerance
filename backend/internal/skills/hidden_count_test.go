@@ -21,7 +21,7 @@ func TestLoadCatalog_HiddenCountMustMatchManifest(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("python/skill.json", `{"slug": "python", "title": "Python", "language": "python", "image": "arena-skill-python:1", "run_cmd": "python -m pytest -q -rA -p no:cacheprovider"}`)
+	write("python/skill.json", `{"slug": "python", "title": "Python", "language": "python", "image": "arena-skill-python:1", "run_cmd": "python -m pytest -q -rA --show-capture=no -p no:cacheprovider"}`)
 	write("python/Dockerfile", "FROM python:3.12-alpine\n")
 	write("python/t1/manifest.json", `{"slug": "py-t1", "title": "T1", "difficulty": 1, "agent_timeout_s": 60, "sandbox_timeout_s": 60, "hidden_tests": 3}`)
 	write("python/t1/TASK.md", "Fix it.\n")

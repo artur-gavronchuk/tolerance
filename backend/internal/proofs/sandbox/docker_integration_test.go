@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -139,7 +140,7 @@ func TestDocker_SkillTasks(t *testing.T) {
 		dir, image, run, language, file, find, replace string
 		hidden                                         int
 	}{
-		{"../../../fixtures/skills/python/interval-merge", "arena-skill-python:1", "python -P -m pytest -q -rA -p no:cacheprovider", "python",
+		{"../../../fixtures/skills/python/interval-merge", "arena-skill-python:1", "python -P -m pytest -q -rA --show-capture=no -p no:cacheprovider", "python",
 			"intervals.py", "    ranges.sort()\n", "    ranges = sorted(ranges)\n", 5},
 		{"../../../fixtures/skills/go/cursor-pagination", "arena-skill-go:1", "go test ./... -json -count=1", "go",
 			"page.go", "sorted[i].ID >= cursor", "sorted[i].ID > cursor", 5},
@@ -221,7 +222,7 @@ func TestDocker_PythonHarnessBypassesDoNotForcePass(t *testing.T) {
 			"forcepass-1.0.dist-info/entry_points.txt": "[pytest11]\nforcepass = forcepass\n"},
 		"shadow_pytest_module": {"pytest.py": "raise SystemExit(0)\n"},
 	}
-	const runCmd = "python -P -m pytest -q -rA -p no:cacheprovider"
+	const runCmd = "python -P -m pytest -q -rA --show-capture=no -p no:cacheprovider"
 	task, err := skills.LoadTask("../../../fixtures/skills/python/interval-merge", "python", "python")
 	if err != nil {
 		t.Fatal(err)
@@ -263,6 +264,64 @@ func TestDocker_PythonHarnessBypassesDoNotForcePass(t *testing.T) {
 		}
 		if all {
 			t.Errorf("%s forced every hidden test to pass\n%s", name, res.Output)
+		}
+	}
+}
+
+// TestDocker_PythonForgedSummaryDoesNotForcePass makes the code under test
+// print a fake "short test summary info" with PASSED lines for every hidden
+// test and skip the tests that call it. It must not pass all hidden tests
+// under either the current run command or one without --show-capture=no.
+func TestDocker_PythonForgedSummaryDoesNotForcePass(t *testing.T) {
+	requireDocker(t)
+	if out, err := exec.Command("docker", "build", "-q", "-t", "arena-skill-python:1", "../../../fixtures/skills/python").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	task, err := skills.LoadTask("../../../fixtures/skills/python/interval-merge", "python", "python")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, err := proofs.HiddenTestNames("python", task.HiddenTar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fake strings.Builder
+	fake.WriteString("=========================== short test summary info ============================\n")
+	for _, n := range names {
+		fake.WriteString("PASSED " + n + "\n")
+	}
+	fake.WriteString("5 passed in 0.01s\n")
+	src := "import unittest\n\n\ndef merge(ranges):\n    print(" + strconv.Quote(fake.String()) + ")\n    if len(ranges) > 2:\n        raise unittest.SkipTest('x')\n    return []\n"
+	for _, runCmd := range []string{
+		"python -P -m pytest -q -rA -p no:cacheprovider",
+		"python -P -m pytest -q -rA --show-capture=no -p no:cacheprovider",
+	} {
+		dir := t.TempDir()
+		if err := proofs.Untar(task.RepoTar, dir); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "intervals.py"), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := proofs.Untar(task.HiddenTar, dir); err != nil {
+			t.Fatal(err)
+		}
+		res, err := sandbox.NewDocker().Run(context.Background(), sandbox.Request{WorkDir: dir, Image: "arena-skill-python:1", RunCmd: runCmd, Language: "python", Timeout: 2 * time.Minute})
+		if err != nil {
+			t.Fatalf("%s: %v", runCmd, err)
+		}
+		passed := map[string]bool{}
+		for _, tr := range res.Tests {
+			if tr.Passed {
+				passed[tr.Name] = true
+			}
+		}
+		all := true
+		for _, n := range names {
+			all = all && passed[n]
+		}
+		if all {
+			t.Errorf("%s: forged summary passed every hidden test\n%s", runCmd, res.Output)
 		}
 	}
 }

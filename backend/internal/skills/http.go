@@ -73,7 +73,7 @@ func RegisterOwnerRoutes(mux *http.ServeMux, pool *db.Pool, ratings RatingsSourc
 				if err := rows.Scan(&v.Slug, &v.Title, &v.Language, &v.Description, &v.PoolSize, &v.RunsToday); err != nil {
 					return err
 				}
-				v.Frozen = Frozen(v.PoolSize, minPool)
+				v.Frozen = Frozen(v.PoolSize, max(minPool, TasksPerRun))
 				items = append(items, v)
 			}
 			if err := rows.Err(); err != nil {

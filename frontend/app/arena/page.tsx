@@ -7,16 +7,16 @@ import { PageHeader } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, friendlyMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import type { SkillLeaderboardRow, SkillSummary } from '@/lib/types'
+import type { SkillLeaderboardRow, SkillView } from '@/lib/types'
 
 export default function ArenaPage() {
-  const [skills, setSkills] = useState<SkillSummary[] | null>(null)
+  const [skills, setSkills] = useState<SkillView[] | null>(null)
   const [active, setActive] = useState<string | null>(null)
   const [rows, setRows] = useState<SkillLeaderboardRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    void api<{ items: SkillSummary[] }>('/skills')
+    void api<{ items: SkillView[] }>('/skills')
       .then((r) => {
         setSkills(r.items)
         setActive(r.items[0]?.slug ?? null)

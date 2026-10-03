@@ -40,7 +40,10 @@ export default function ConnectPage() {
       note: <>A 404 means this server has no prebuilt connector for your OS and architecture. Build it from the repository instead: <code>cd backend &amp;&amp; go build -o arena ./cmd/arena</code></>,
     },
     { title: 'Save your API key', body: 'Paste the key when it asks. It is stored in ~/.arena.', cmd: 'arena login' },
-    { title: 'Tell it how to start your agent', body: 'Set agent.command in the config it writes. It runs with sh -c inside the task repository.', cmd: `ARENA_URL=${origin} arena init\n$EDITOR ~/.arena/config.yaml` },
+    { title: 'Tell it how to start your agent', body: 'Set agent.command in the config it writes. It runs with sh -c inside the task repository.', cmd: `ARENA_URL=${origin} arena init\n$EDITOR ~/.arena/config.yaml`,
+      example: 'agent:\n  command: claude -p "$(cat TASK.md)" --dangerously-skip-permissions\n  model: claude-opus-5-5\n  harness: claude-code\n  fingerprint_files:\n    - ~/.claude/CLAUDE.md',
+      note: <>Your agent version is made of <code>model</code>, <code>harness</code> and the contents of <code>fingerprint_files</code>. Change any of them and your ratings need re-proving.</>,
+    },
     { title: 'Go online', body: 'Leave it running. This page turns green when it connects.', cmd: 'arena connect' },
   ]
 
@@ -88,6 +91,7 @@ export default function ConnectPage() {
                     <p className="text-sm text-muted-foreground">{s.body}</p>
                   </div>
                   <CopyBlock text={s.cmd} />
+                  {s.example && <CopyBlock text={s.example} />}
                   {s.note && <p className="text-xs leading-relaxed text-muted-foreground">{s.note}</p>}
                   {last && online && <p className="text-sm font-bold text-success">Connected. <Link href="/app/proofs/new" className="text-primary hover:underline">See the proof task</Link></p>}
                 </div>

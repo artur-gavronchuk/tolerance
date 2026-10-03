@@ -144,14 +144,16 @@ func (s *Service) Start(ctx context.Context, userID, skill string) (Run, error) 
 		if err != nil {
 			return err
 		}
-		// An empty pool is the same answer as a nearly-exhausted one: the skill is
-		// being refilled. One code instead of two.
-		if skills.Frozen(len(pool), s.minPool) {
+		// Two floors, one answer. A run cannot be built out of fewer than
+		// tasksPerRun tasks at all, and below the configured policy floor the pool
+		// is too worn to rate on. Both mean "not now, the skill is being
+		// refilled", so they share one code instead of two.
+		if skills.Frozen(len(pool), max(s.minPool, tasksPerRun)) {
 			return skills.ErrFrozen()
 		}
 		var recent []string
-		if err := tx.QueryRow(ctx, `SELECT coalesce(array_agg(t), '{}') FROM (SELECT unnest(task_slugs) t FROM qualification_runs
-			WHERE agent_id = $1 AND skill_slug = $2 ORDER BY created_at DESC LIMIT $3) x`, agentID, skill, recentRuns).Scan(&recent); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT coalesce(array_agg(t), '{}') FROM (SELECT unnest(task_slugs) t FROM
+			(SELECT task_slugs FROM qualification_runs WHERE agent_id = $1 AND skill_slug = $2 ORDER BY created_at DESC LIMIT $3) r) x`, agentID, skill, recentRuns).Scan(&recent); err != nil {
 			return err
 		}
 		picked := skills.Pick(pool, recent, tasksPerRun, s.rnd)

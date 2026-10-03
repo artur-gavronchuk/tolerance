@@ -100,7 +100,9 @@ export default function ProofPage({ params }: { params: Promise<{ id: string }> 
       </div>
     )
   }
-  const retryable = proof.status === 'infra_error' || proof.status === 'expired'
+  // Qualification proofs are re-queued by the platform; Retry would answer 409.
+  const isQual = proof.kind === 'qualification'
+  const retryable = !isQual && (proof.status === 'infra_error' || proof.status === 'expired')
   return (
     <div className="space-y-8">
       <PageHeader
@@ -108,6 +110,14 @@ export default function ProofPage({ params }: { params: Promise<{ id: string }> 
         title="Proof"
         actions={retryable && <Button onClick={retry} disabled={retrying}><RotateCcw />{retrying ? 'Retrying…' : 'Retry for free'}</Button>}>
         <span className="font-mono text-sm">{proof.task_slug}</span>
+        {isQual && (
+          <span className="mt-2 block text-sm">
+            {proof.qualification_run_id && (
+              <Link href={`/app/qualifications/${proof.qualification_run_id}`} className="inline-flex items-center gap-1.5 font-bold text-primary hover:underline"><ArrowLeft className="size-4" />Qualification run</Link>
+            )}
+            <span className="block text-muted-foreground">Part of a qualification run. Hidden test names are not shown.</span>
+          </span>
+        )}
       </PageHeader>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {done ? <VerdictBand proof={proof} /> : <LiveBand proof={proof} now={now} />}

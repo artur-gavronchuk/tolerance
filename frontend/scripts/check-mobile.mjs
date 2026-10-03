@@ -79,17 +79,32 @@ try {
   }
   if (!finished?.finished_at) throw new Error(`proof ${proof.id} did not finish within 90s of being submitted`)
 
+  if (finished.status !== 'passed') throw new Error(`proof ${proof.id} ended ${finished.status}, qualification needs it to pass`)
   await check(owner, [`/app/proofs/${proof.id}`])
 
+  // Slice 2 pages. The proof above passed, so the agent is operational as
+  // soon as the connector reports a version.
+  await call('POST', '/connector/heartbeat', {
+    key,
+    data: { connector_version: 'ci', hostname: 'ci', version: { model: 'ci-model', harness: 'ci', config_digest: `ci-${run}` } },
+  })
+  const qrun = await call('POST', '/qualifications', { data: { skill: 'go' } })
+  await check(owner, ['/app/skills', `/app/qualifications/${qrun.id}`])
+  await check(anonymous, [`/agents/mobile-${run % 1_000_000}`])
+
   // A challenge page in its widest state: places, the task, the hidden test
-  // names and a published diff. The admin who creates it signs in with an email
-  // from ARENA_ADMIN_EMAILS (see the mobile job in .github/workflows/ci.yml).
+  // names and a published diff. It runs last and on its own owner, because
+  // creating the challenge claims go-cursor-pagination out of the go pool (which
+  // would freeze the skill for the qualification checks above) and because the
+  // owner above still has a qualification run holding its one proof slot.
   const admin = await browser.newContext({ viewport: { width: WIDTH, height: 800 } })
   const asAdmin = async (method, path, data) => {
     const res = await admin.request.fetch(`${BASE}/api/v1${path}`, { method, data })
     if (!res.ok()) throw new Error(`${method} ${path}: ${res.status()} ${await res.text()}`)
     return res.status() === 204 ? null : res.json()
   }
+  // The admin signs in with an email from ARENA_ADMIN_EMAILS (see the mobile job
+  // in .github/workflows/ci.yml).
   await asAdmin('POST', '/auth/dev', { email: 'admin@ci.local' })
   const slug = `ci-cup-${run}`
   await asAdmin('POST', '/admin/challenges', {
@@ -105,22 +120,34 @@ try {
   await asAdmin('POST', `/admin/challenges/${slug}/open`)
   await check(anonymous, [`/challenges/${slug}`, '/challenges'])
 
-  // The owner's agent enters, the connector answers, and the challenge closes
-  // and publishes — the page then carries standings, a task and a diff at once.
-  await call('POST', '/connector/heartbeat', {
-    key,
-    data: { connector_version: 'ci', hostname: 'ci', version: { model: 'ci-model', harness: 'ci-harness', config_digest: `d-${run}` } },
+  const entrant = await browser.newContext({ viewport: { width: WIDTH, height: 800 } })
+  const asEntrant = async (method, path, { data, key } = {}) => {
+    const res = await entrant.request.fetch(`${BASE}/api/v1${path}`, {
+      method,
+      data,
+      headers: key ? { Authorization: `Bearer ${key}` } : {},
+    })
+    if (!res.ok()) throw new Error(`${method} ${path}: ${res.status()} ${await res.text()}`)
+    return res.status() === 204 ? null : res.json()
+  }
+  await asEntrant('POST', '/auth/dev', { data: { email: `cup-${run}@example.com` } })
+  await asEntrant('POST', '/agent', { data: { name: `cup${run % 1_000_000}`, description: 'CI challenge check' } })
+  const cupKey = (await asEntrant('POST', '/agent/keys', { data: { name: 'ci' } })).key
+  await asEntrant('POST', '/connector/heartbeat', {
+    key: cupKey,
+    data: { connector_version: 'ci', hostname: 'ci', version: { model: 'ci-model', harness: 'ci', config_digest: `cup-${run}` } },
   })
-  const entry = await call('POST', `/challenges/${slug}/enter`, { data: { consent_publish: true } })
-  const task = await call('GET', '/connector/tasks/next?wait=5', { key })
+  const entry = await asEntrant('POST', `/challenges/${slug}/enter`, { data: { consent_publish: true } })
+  await check(entrant, ['/app/challenges'])
+  const task = await asEntrant('GET', '/connector/tasks/next?wait=5', { key: cupKey })
   if (task.proof_id !== entry.proof_id) throw new Error(`tasks/next returned ${task.proof_id}, expected ${entry.proof_id}`)
-  await call('POST', `/connector/proofs/${entry.proof_id}/result`, {
-    key,
+  await asEntrant('POST', `/connector/proofs/${entry.proof_id}/result`, {
+    key: cupKey,
     data: { diff, log_tail: 'entered\n', duration_ms: 1200, exit_code: 0 },
   })
   const entryDeadline = Date.now() + 90_000
   while (Date.now() < entryDeadline) {
-    const p = await call('GET', `/proofs/${entry.proof_id}`)
+    const p = await asEntrant('GET', `/proofs/${entry.proof_id}`)
     if (p.finished_at) break
     await new Promise((r) => setTimeout(r, 1000))
   }

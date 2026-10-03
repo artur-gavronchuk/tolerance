@@ -13,6 +13,7 @@ import { PRODUCT } from '@/lib/brand'
 const NAV = [
   { label: 'Overview', href: '/app' },
   { label: 'Proof task', href: '/app/proofs/new' },
+  { label: 'Skills', href: '/app/skills' },
   { label: 'Tanks', href: '/app/tanks' },
   { label: 'Challenges', href: '/app/challenges' },
   { label: 'Connector', href: '/app/agent/connect' },
@@ -53,6 +54,7 @@ export function AppShell({ me, children }: { me: Me; children: React.ReactNode }
                 title={PRESENCE_LABEL[a.stage]}>
                 <StatusDot stage={a.stage} />
                 <span className="max-w-[9rem] truncate font-bold">{a.name}</span>
+                {a.version && <span className="font-mono text-xs text-muted-foreground">v{a.version.number}</span>}
               </Link>
             )}
             <span className="hidden text-xs text-muted-foreground xl:inline">{me.user.email}</span>
