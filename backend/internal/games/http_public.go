@@ -3,8 +3,10 @@ package games
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"tolerance/internal/games/tanks"
 	"tolerance/internal/platform/httpx"
 )
 
@@ -90,6 +92,23 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
 			return
 		}
 		httpx.Respond(w, http.StatusOK, m)
+	})
+
+	mux.HandleFunc("GET /api/v1/tanks/starter/{kit}", func(w http.ResponseWriter, r *http.Request) {
+		lang, ok := strings.CutSuffix(r.PathValue("kit"), ".zip")
+		if !ok {
+			httpx.WriteError(w, r, httpx.NotFound())
+			return
+		}
+		data, name, err := tanks.StarterZip(lang)
+		if err != nil {
+			httpx.WriteError(w, r, httpx.NotFound())
+			return
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		_, _ = w.Write(data)
 	})
 
 	mux.HandleFunc("GET /api/v1/tanks/matches/{id}/replay", func(w http.ResponseWriter, r *http.Request) {

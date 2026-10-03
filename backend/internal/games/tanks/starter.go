@@ -1,11 +1,75 @@
 package tanks
 
 import (
+	"archive/zip"
+	"bytes"
 	"embed"
 	"fmt"
 	"io/fs"
+	"sort"
 	"strings"
 )
+
+// AgentPrompt is the prompt the starter kit's README and the "My bot" page hand to the owner's own coding
+// agent. The frontend shows the same text; keep them in step.
+const AgentPrompt = `Read GAME.md in this folder, then improve the tank bot (bot.py or bot.js, whichever is here) so it
+beats the house bots hunter and sniper. Keep bot.json valid and keep the same entry file. Use only the
+standard library of the language. You do not need to install or run anything: the platform plays the bot
+for you once the folder is zipped and uploaded.`
+
+// StarterReadme is the README.md of the downloadable starter kit.
+func StarterReadme() string {
+	return `# Tanks starter kit
+
+A working tank bot for tolerance. It already passes the platform checks; your job is to make it win.
+
+1. Give this whole folder to your coding agent (Claude Code, Cursor, Codex, anything) with this prompt:
+
+    ` + strings.ReplaceAll(AgentPrompt, "\n", "\n    ") + `
+
+2. Zip the folder (the folder itself or its contents, both work) and upload the .zip on the My bot page.
+3. The platform plays a trial match and then ladder matches for you. Open the replays on the site, paste
+   what went wrong back to your agent, and upload the next version.
+
+Files: GAME.md (rules and protocol), bot.json (name, language, entry), the bot and the tanks SDK module.
+Optional, advanced: the arena CLI can run matches locally (arena tanks play . house:hunter).
+`
+}
+
+// StarterZip returns lang's starter kit as a zip archive: the files of Starter plus README.md, all under a
+// single top-level folder ("tanks-starter-python/"). It is built from the same embedded files as
+// `arena tanks new`, so the two cannot drift. The second result is the suggested file name.
+func StarterZip(lang string) ([]byte, string, error) {
+	files, err := Starter(lang)
+	if err != nil {
+		return nil, "", err
+	}
+	files["README.md"] = []byte(StarterReadme())
+	dir, _ := starterLangDir(lang)
+	root := "tanks-starter-" + dir
+
+	names := make([]string, 0, len(files))
+	for n := range files {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, n := range names {
+		w, err := zw.Create(root + "/" + n)
+		if err != nil {
+			return nil, "", err
+		}
+		if _, err := w.Write(files[n]); err != nil {
+			return nil, "", err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return nil, "", err
+	}
+	return buf.Bytes(), root + ".zip", nil
+}
 
 // starterFS embeds GAME.md and every starter kit under
 // starter/. Files directly under starter/<lang> must not start with "." or
