@@ -18,7 +18,6 @@ import (
 
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/jobs"
-	"tolerance/internal/platform/metrics"
 	"tolerance/internal/proofs/sandbox"
 )
 
@@ -94,7 +93,6 @@ func (w *Worker) Run(ctx context.Context, concurrency int) {
 	if concurrency < 1 {
 		concurrency = 1
 	}
-	metrics.WorkerConcurrency.Set(float64(concurrency))
 	var wg sync.WaitGroup
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
@@ -121,9 +119,7 @@ func (w *Worker) loop(ctx context.Context, owner string, maintain bool) {
 			w.log.Error("jobs claim", "err", err)
 		}
 		if job != nil {
-			metrics.WorkersBusy.Inc()
 			w.handle(ctx, job)
-			metrics.WorkersBusy.Dec()
 			continue
 		}
 		if !maintain {
@@ -302,10 +298,8 @@ func (w *Worker) RunProof(ctx context.Context, proofID string) error {
 		return err
 	}
 
-	runStart := time.Now()
 	res, err := w.runner.Run(ctx, sandbox.Request{WorkDir: dir, Image: in.task.Image, RunCmd: in.task.RunCmd,
 		Language: in.task.Language, Timeout: time.Duration(in.task.SandboxTimeoutS) * time.Second})
-	metrics.SandboxRunSeconds.Observe(time.Since(runStart).Seconds())
 	if err != nil {
 		return err
 	}
@@ -422,7 +416,6 @@ func hasSymlink(dir string) bool {
 }
 
 func (w *Worker) finish(ctx context.Context, proofID, status, reason string, sr *SandboxResult) error {
-	metrics.ProofVerdicts.WithLabelValues(status).Inc()
 	var moved bool
 	err := w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		// Only a proof this run moved to running_sandbox gets a verdict: if the
@@ -448,7 +441,6 @@ func (w *Worker) MarkInfraError(ctx context.Context, proofID, reason string) err
 	if len(reason) > 500 {
 		reason = reason[:500]
 	}
-	metrics.ProofVerdicts.WithLabelValues(StatusInfraError).Inc()
 	var moved bool
 	err := w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var kind string

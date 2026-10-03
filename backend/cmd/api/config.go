@@ -14,52 +14,49 @@ import (
 )
 
 type config struct {
-	addr              string
-	databaseURL       string
-	workerDatabaseURL string
-	adminEmails       []string
-	secureCookies     bool
-	devLogin          bool
-	noLimits          bool // ARENA_NO_LIMITS: daily/hourly quotas off (local runs)
-	allowNonLoopback  bool
-	workDir           string
-	sandbox           string // "docker" | "fake"
-	connectorDir      string // prebuilt connector binaries; "" = none
-	publicURL         string
-	githubID          string
-	githubSecret      string
-	googleID          string
-	googleSecret      string
-	matchInterval     time.Duration
-	matchConcurrency  int
-	botImage          string
-	skillMinPool      int
+	addr             string
+	databaseURL      string
+	adminEmails      []string
+	secureCookies    bool
+	devLogin         bool
+	noLimits         bool // ARENA_NO_LIMITS: daily/hourly quotas off (local runs)
+	trustProxy       bool // ARENA_TRUST_PROXY: take the client IP from X-Real-IP
+	allowNonLoopback bool
+	workDir          string
+	sandbox          string // "docker" | "fake"
+	connectorDir     string // prebuilt connector binaries; "" = none
+	publicURL        string
+	githubID         string
+	githubSecret     string
+	googleID         string
+	googleSecret     string
+	matchInterval    time.Duration
+	matchConcurrency int
+	botImage         string
+	skillMinPool     int
 }
 
 func loadConfig() (config, error) {
 	cfg := config{
-		addr:        env("ARENA_ADDR", "127.0.0.1:8080"),
-		databaseURL: os.Getenv("ARENA_APP_DATABASE_URL"),
-		// Only used when ARENA_ROLE=worker (see main.go); every other role always connects as arena_app.
-		// Optional and may be empty - a worker then falls back to ARENA_APP_DATABASE_URL, which keeps an
-		// old worker (or one with ARENA_WORKER_ROLE_PASSWORD not yet set on its host) working unchanged.
-		workerDatabaseURL: os.Getenv("ARENA_WORKER_DATABASE_URL"),
-		secureCookies:     os.Getenv("ARENA_SECURE_COOKIES") == "true",
-		devLogin:          os.Getenv("ARENA_DEV_LOGIN") == "true",
-		noLimits:          os.Getenv("ARENA_NO_LIMITS") == "true",
-		allowNonLoopback:  os.Getenv("ARENA_ALLOW_NON_LOOPBACK") == "true",
-		workDir:           env("ARENA_WORK_DIR", os.TempDir()),
-		sandbox:           env("ARENA_SANDBOX", "docker"),
-		connectorDir:      os.Getenv("ARENA_CONNECTOR_DIR"),
-		publicURL:         os.Getenv("ARENA_PUBLIC_URL"),
-		githubID:          os.Getenv("ARENA_GITHUB_CLIENT_ID"),
-		githubSecret:      os.Getenv("ARENA_GITHUB_CLIENT_SECRET"),
-		googleID:          os.Getenv("ARENA_GOOGLE_CLIENT_ID"),
-		googleSecret:      os.Getenv("ARENA_GOOGLE_CLIENT_SECRET"),
-		matchInterval:     20 * time.Second,
-		matchConcurrency:  1,
-		botImage:          env("ARENA_BOT_IMAGE", "arena-bot-runtime:1"),
-		skillMinPool:      skills.MinPool,
+		addr:             env("ARENA_ADDR", "127.0.0.1:8080"),
+		databaseURL:      os.Getenv("ARENA_APP_DATABASE_URL"),
+		secureCookies:    os.Getenv("ARENA_SECURE_COOKIES") == "true",
+		devLogin:         os.Getenv("ARENA_DEV_LOGIN") == "true",
+		noLimits:         os.Getenv("ARENA_NO_LIMITS") == "true",
+		trustProxy:       os.Getenv("ARENA_TRUST_PROXY") == "true",
+		allowNonLoopback: os.Getenv("ARENA_ALLOW_NON_LOOPBACK") == "true",
+		workDir:          env("ARENA_WORK_DIR", os.TempDir()),
+		sandbox:          env("ARENA_SANDBOX", "docker"),
+		connectorDir:     os.Getenv("ARENA_CONNECTOR_DIR"),
+		publicURL:        os.Getenv("ARENA_PUBLIC_URL"),
+		githubID:         os.Getenv("ARENA_GITHUB_CLIENT_ID"),
+		githubSecret:     os.Getenv("ARENA_GITHUB_CLIENT_SECRET"),
+		googleID:         os.Getenv("ARENA_GOOGLE_CLIENT_ID"),
+		googleSecret:     os.Getenv("ARENA_GOOGLE_CLIENT_SECRET"),
+		matchInterval:    20 * time.Second,
+		matchConcurrency: 1,
+		botImage:         env("ARENA_BOT_IMAGE", "arena-bot-runtime:1"),
+		skillMinPool:     skills.MinPool,
 	}
 	if v := os.Getenv("ARENA_MATCH_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)

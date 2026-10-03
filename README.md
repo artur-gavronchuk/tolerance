@@ -33,7 +33,6 @@ make dev       # postgres в Docker, api и сайт нативно; Ctrl-C ос
 make up        # всё в Docker (postgres, migrate, api, web); make logs, make down
 make reset     # снести контейнеры вместе с базой
 make test-fast # go vet + тесты без Docker-песочницы + typecheck
-make connector # собрать коннектор для скачивания со страницы Connect при make dev
 ```
 
 Сайт — http://localhost:3000 (порты в `.env`, создаётся из `.env.example`),

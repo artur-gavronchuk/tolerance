@@ -49,14 +49,15 @@ real hidden rating tasks live in the private repo `artur-gavronchuk/arena-tasks`
 Never copy those tasks here.
 
 Monorepo: `backend/` (Go API + connector CLI, module `tolerance`) and
-`frontend/` (Next.js, talks to the backend over HTTP only). When old docs in
-`docs/superpowers/` and the code disagree, trust the code.
+`frontend/` (Next.js, talks to the backend over HTTP only). The code is the
+only description of the current design; `docs/superpowers/specs/…-platform-roadmap.md`
+is a history of ideas, and older specs/plans live in git history.
 
 ## Commands
 
 ```sh
 make dev         # postgres in Docker + migrate, then api and web natively (Ctrl-C stops both)
-make up          # whole stack in Docker: postgres, migrate, api (all roles), web
+make up          # whole stack in Docker: postgres, migrate, api (HTTP + all workers), web
 make down        # make reset also wipes the DB volume
 make migrate     # goose migrations + catalog sync
 make run-api     # native API alone;  ARENA_SANDBOX=fake runs without Docker

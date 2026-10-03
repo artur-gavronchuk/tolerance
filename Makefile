@@ -34,7 +34,7 @@ logs:
 
 # Fastest loop: postgres in Docker, api and web on the host (web hot-reloads;
 # restart `make dev` after Go changes). Ctrl-C stops both.
-dev: .env docker images db migrate
+dev: .env docker images db migrate connector
 	@trap 'kill 0' INT TERM; \
 	$(MAKE) --no-print-directory run-api & \
 	$(MAKE) --no-print-directory run-web & \
@@ -73,11 +73,10 @@ images:
 docker:
 	@docker info >/dev/null 2>&1 || (command -v colima >/dev/null && colima start) || (echo "Docker is not running"; exit 1)
 
+# The connector for this machine, served by GET /api/v1/connector/download in
+# native runs (the api image builds all four platforms itself).
 connector:
-	cd backend && for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do \
-		CGO_ENABLED=0 GOOS=$${target%/*} GOARCH=$${target#*/} go build -trimpath \
-			-o $(CONNECTOR_DIR)/arena-$${target%/*}-$${target#*/} ./cmd/arena || exit 1; \
-	done
+	cd backend && CGO_ENABLED=0 go build -trimpath -o $(CONNECTOR_DIR)/arena-$$(go env GOOS)-$$(go env GOARCH) ./cmd/arena
 
 # Everyday check: vet, the few remaining tests (integration ones skip without Docker), typecheck.
 test-fast:

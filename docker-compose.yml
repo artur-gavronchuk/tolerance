@@ -1,6 +1,6 @@
 # Local stack: `make up` (or `docker compose up --build`) → site on
 # :${WEB_PORT}, api on :${API_PORT}. `migrate` runs goose + catalog sync once
-# and exits; `api` is one process (ARENA_ROLE=all) serving HTTP and running
+# and exits; `api` is one process serving HTTP and running
 # the proof, qualification and tanks workers, so it needs docker.sock for the
 # sandbox and bot containers.
 #

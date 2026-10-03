@@ -16,7 +16,6 @@ import (
 
 	"tolerance/internal/platform/clientip"
 	"tolerance/internal/platform/httpx"
-	"tolerance/internal/platform/metrics"
 	"tolerance/internal/platform/ratelimit"
 )
 
@@ -90,7 +89,6 @@ func oauthStart(limiter *ratelimit.Limiter, cfg AuthConfig) http.HandlerFunc {
 			return
 		}
 		if !limiter.Allow("oauth:ip:"+clientIP(r, cfg.TrustProxy), 20, time.Minute) {
-			metrics.RateLimited("oauth_start")
 			http.Redirect(w, r, "/login?error=rate_limited", http.StatusFound)
 			return
 		}
@@ -117,11 +115,9 @@ func oauthCallback(s *Service, limiter *ratelimit.Limiter, cfg AuthConfig) http.
 		}
 		setOAuthCookie(w, "", -1, cfg.Secure) // single use, whatever happens next
 		fail := func(code string) {
-			metrics.OAuthLogin(name, code)
 			http.Redirect(w, r, "/login?error="+code, http.StatusFound)
 		}
 		if !limiter.Allow("oauth:ip:"+clientIP(r, cfg.TrustProxy), 20, time.Minute) {
-			metrics.RateLimited("oauth_callback")
 			fail("rate_limited")
 			return
 		}
@@ -157,7 +153,6 @@ func oauthCallback(s *Service, limiter *ratelimit.Limiter, cfg AuthConfig) http.
 			fail("oauth_failed")
 			return
 		}
-		metrics.OAuthLogin(name, "ok")
 		SetSessionCookie(w, token, cfg.Secure)
 		// st.Next was already validated by safeNext when the cookie was set,
 		// but the cookie is not signed, so re-check before trusting it here.

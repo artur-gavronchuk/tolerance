@@ -19,7 +19,6 @@ import (
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
-	"tolerance/internal/platform/metrics"
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/proofs"
 	"tolerance/internal/qualifications"
@@ -39,15 +38,9 @@ type deps struct {
 	games      *games.Service
 	limiter    *ratelimit.Limiter
 	providers  map[string]identity.Provider
-
-	// Global request-rate ceiling (see ratelimit_middleware.go), separate
-	// from limiter's fixed-window business rules above.
-	ipLimiter  *ratelimit.TokenBuckets
-	keyLimiter *ratelimit.TokenBuckets
-	longPoll   *ratelimit.ConcurrencyLimiter
 }
 
-func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
+func newHandler(cfg config, d deps) http.Handler {
 	owner := http.NewServeMux()
 	identity.RegisterMeRoute(owner, d.users, meAgent(d.agents, d.proofs))
 	agents.RegisterOwnerRoutes(owner, d.agents)
@@ -76,20 +69,17 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
 	identity.RegisterAuthRoutes(api, d.users, d.limiter, identity.AuthConfig{
-		Providers: d.providers, PublicURL: cfg.publicURL, DevLogin: cfg.devLogin, Secure: cfg.secureCookies, TrustProxy: scale.trustProxy,
+		Providers: d.providers, PublicURL: cfg.publicURL, DevLogin: cfg.devLogin, Secure: cfg.secureCookies, TrustProxy: cfg.trustProxy,
 	})
 	// Public: the owner downloads the connector before having it set up.
 	// The exact GET pattern wins over the key-protected /api/v1/connector/ prefix.
 	api.HandleFunc("GET /api/v1/connector/download", connectorDownload(cfg.connectorDir))
 	api.Handle("/api/v1/me", session(owner))
-	// businessLimits reads the session actor attached by session above, so it
-	// wraps owner from the inside, not the whole api mux from the outside.
-	limited := businessLimits(d.limiter, owner)
-	api.Handle("/api/v1/agent", session(limited))
-	api.Handle("/api/v1/agent/", session(limited))
+	api.Handle("/api/v1/agent", session(owner))
+	api.Handle("/api/v1/agent/", session(owner))
 	api.Handle("/api/v1/proof-tasks", session(owner))
-	api.Handle("/api/v1/proofs", session(limited))
-	api.Handle("/api/v1/proofs/", session(limited))
+	api.Handle("/api/v1/proofs", session(owner))
+	api.Handle("/api/v1/proofs/", session(owner))
 	api.Handle("/api/v1/skills", session(owner))
 	api.Handle("/api/v1/qualifications", session(owner))
 	api.Handle("/api/v1/qualifications/", session(owner))
@@ -104,7 +94,7 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	// key-protected /api/v1/connector/ prefix.
 	api.Handle("/api/v1/challenges", public)
 	api.Handle("/api/v1/challenges/", public)
-	api.Handle("POST /api/v1/challenges/{slug}/enter", session(limited))
+	api.Handle("POST /api/v1/challenges/{slug}/enter", session(owner))
 	api.Handle("/api/v1/me/challenges", session(owner))
 	// RequireAdmin reads the actor the session middleware attaches, so it sits
 	// inside session(), not outside it.
@@ -122,13 +112,8 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 		}
 		httpx.Respond(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
-	// /healthz above is mounted outside "/api/" and so is naturally exempt
-	// from globalRateLimit, which only wraps the api mux.
-	top.Handle("/api/", globalRateLimit(scale, d.ipLimiter, d.keyLimiter, d.longPoll, api))
-	// metrics.HTTPMiddleware must wrap top directly (no other r.WithContext
-	// hop in between) so it reads the real, routed r.Pattern; see its doc
-	// comment and withMiddleware's for why.
-	return withMiddleware(metrics.HTTPMiddleware(top), d.log, scale.trustProxy)
+	top.Handle("/api/", api)
+	return withMiddleware(top, d.log, cfg.trustProxy)
 }
 
 type statusWriter struct {
@@ -164,22 +149,11 @@ func withMiddleware(next http.Handler, log *slog.Logger, trustProxy bool) http.H
 		}
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		actorLog := &identity.ActorLog{}
-		ctx := identity.WithActorLog(r.Context(), actorLog)
-		ctx = metrics.WithRouteHolder(ctx)
-		r = r.WithContext(ctx)
+		r = r.WithContext(identity.WithActorLog(r.Context(), actorLog))
 		start := time.Now()
 		withRequestID.ServeHTTP(sw, r)
 		ms := time.Since(start).Milliseconds()
-		// Not r.Pattern: httpx.WithRequestID (and this closure's own
-		// r.WithContext just above) each hand the mux a different
-		// *http.Request value than the one held here, so the mux's
-		// mutation of r.Pattern is invisible on this r. metrics.HTTPMiddleware
-		// wraps the mux directly and records the real route into the
-		// context holder attached above instead; see its doc comment.
-		route := metrics.RouteFromContext(r.Context())
-		if route == "" {
-			route = "unmatched"
-		}
+		route := r.Method + " " + r.URL.Path
 		fields := []any{
 			"request_id", sw.Header().Get("X-Request-Id"),
 			"route", route,
