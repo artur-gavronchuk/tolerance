@@ -83,7 +83,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
                       {e.made_with && <div className="truncate text-xs text-muted-foreground">{e.made_with}</div>}
                     </TableCell>
                     {scored && <TableCell className="text-right font-mono font-bold">{e.total > 0 ? `${e.passed}/${e.total}` : '-'}</TableCell>}
-                    {timed && <TableCell className="text-right font-mono"><BenchTime ms={e.bench_ms} fastest={fastest} /></TableCell>}
+                    {timed && <TableCell className="text-right font-mono"><BenchTime ms={e.bench_ms} spread={e.bench_spread_ms} fastest={fastest} /></TableCell>}
                     {bt && <TableCell className="text-right font-mono font-bold">{e.score != null ? Math.round(e.score) : '-'}</TableCell>}
                     {bt && <TableCell className="text-right font-mono">{e.comparisons}</TableCell>}
                     <TableCell className="text-right font-mono">{e.votes}</TableCell>

@@ -180,7 +180,8 @@ export interface ProductList { items: ProductTask[]; upcoming: { count: number; 
 export interface ProductEntry {
   id: string; task_slug: string; handle?: string; status: 'queued' | 'running' | 'done' | 'infra_error'
   passed: number; total: number; failure_reason: string | null; results: ProductScenarioResult[]
-  bench_ms: number | null // cli: median benchmark time in ms (faster ranks higher); null when there is no time
+  bench_ms: number | null // cli: trimmed median benchmark time in ms (faster ranks higher); null when there is no time
+  bench_spread_ms: number | null // cli: ± half the range of the kept samples
   log_tail?: string; made_with: string; votes: number; voted: boolean; mine: boolean
   score?: number; comparisons: number // site tasks: Bradley-Terry score of the blind comparisons, and how many there were
   created_at: string; finished_at: string | null

@@ -47,7 +47,7 @@ export function EntryGallery({ task, entries, signedIn, busy, onToggleVote }: {
                     {e.mine && <span className="font-normal text-muted-foreground">{t('gallery.you')}</span>}
                   </div>
                   {e.made_with && <div className="truncate text-xs text-muted-foreground">{e.made_with}</div>}
-                  {!site && task.has_bench && <div className="text-xs"><BenchTime ms={e.bench_ms} fastest={fastest} className="font-mono" /></div>}
+                  {!site && task.has_bench && <div className="text-xs"><BenchTime ms={e.bench_ms} spread={e.bench_spread_ms} fastest={fastest} className="font-mono" /></div>}
                 </div>
               </>
             )}

@@ -255,25 +255,29 @@ func parseResults(out string) (map[string]bool, bool) {
 	return nil, false
 }
 
-// parseBench reads the runner's benchmark marker line: the median time in ms, nil when there is no score.
-func parseBench(out string) *float64 {
+// benchScore is the runner's benchmark result: the trimmed median time and its spread (± half the range), in ms.
+type benchScore struct{ MS, SpreadMS *float64 }
+
+// parseBench reads the runner's benchmark marker line; nil when there is no score.
+func parseBench(out string) *benchScore {
 	for _, line := range strings.Split(out, "\n") {
 		i := strings.Index(line, benchMarker)
 		if i < 0 {
 			continue
 		}
 		var b struct {
-			MS *float64 `json:"ms"`
+			MS       *float64 `json:"ms"`
+			SpreadMS *float64 `json:"spread_ms"`
 		}
 		if json.Unmarshal([]byte(line[i+len(benchMarker):]), &b) == nil && b.MS != nil && *b.MS > 0 {
-			return b.MS
+			return &benchScore{MS: b.MS, SpreadMS: b.SpreadMS}
 		}
 	}
 	return nil
 }
 
 // finish writes the verdict; only an entry this run moved to running gets one (the stuck sweep may have won).
-func (w *Worker) finish(ctx context.Context, id string, scs []Scenario, passed map[string]bool, benchMS *float64, output, reason string) error {
+func (w *Worker) finish(ctx context.Context, id string, scs []Scenario, passed map[string]bool, bench *benchScore, output, reason string) error {
 	results := make([]ScenarioResult, 0, len(scs))
 	n := 0
 	for _, sc := range scs {
@@ -287,6 +291,10 @@ func (w *Worker) finish(ctx context.Context, id string, scs []Scenario, passed m
 	if err != nil {
 		return err
 	}
+	var benchMS, spreadMS *float64
+	if bench != nil {
+		benchMS, spreadMS = bench.MS, bench.SpreadMS
+	}
 	var kept []string
 	for _, l := range strings.Split(output, "\n") {
 		if !strings.Contains(l, resultsMarker) && !strings.Contains(l, benchMarker) {
@@ -296,7 +304,7 @@ func (w *Worker) finish(ctx context.Context, id string, scs []Scenario, passed m
 	logTail := sanitize.CleanLog(strings.TrimSpace(strings.Join(kept, "\n")), maxLogTail)
 	return w.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `UPDATE product_entries SET status = 'done', failure_reason = NULLIF($2, ''), results = $3, passed = $4,
-			total = $5, log_tail = $6, bench_ms = $7, finished_at = now() WHERE id = $1 AND status = 'running'`, id, reason, body, n, len(scs), logTail, benchMS)
+			total = $5, log_tail = $6, bench_ms = $7, bench_spread_ms = $8, finished_at = now() WHERE id = $1 AND status = 'running'`, id, reason, body, n, len(scs), logTail, benchMS, spreadMS)
 		return err
 	})
 }

@@ -113,7 +113,7 @@ func (s *Service) Activity(ctx context.Context, handle string) (Activity, error)
 }
 
 // productsOf lists the tasks the person took part in with the upload that counts for them. The counting rule and the
-// ranking rule mirror products.rankRule (cli: best upload, ranked by checks, bench time, then votes). Site tasks take their place from
+// ranking rule mirror products.rankRule (cli: latest upload with the most checks passed, ranked by checks, bench time, then votes). Site tasks take their place from
 // products.SiteRanking (Bradley-Terry score of the blind comparisons). Entries stay hidden until the deadline, so open
 // tasks carry no score.
 func productsOf(ctx context.Context, tx pgx.Tx, userID string) ([]ProductEntry, error) {
@@ -127,9 +127,7 @@ func productsOf(ctx context.Context, tx pgx.Tx, userID string) ([]ProductEntry, 
 			  AND e.task_slug IN (SELECT task_slug FROM product_entries WHERE user_id = $1 AND status = 'done')
 			ORDER BY e.task_slug, e.user_id,
 			         (CASE WHEN t.kind = 'cli' THEN e.passed END) DESC NULLS LAST,
-			         (CASE WHEN t.kind = 'cli' THEN e.bench_ms END) ASC NULLS LAST,
-			         (CASE WHEN t.kind = 'site' THEN e.created_at END) DESC NULLS LAST,
-			         e.created_at),
+			         e.created_at DESC),
 		ranked AS (
 			SELECT c.*, row_number() OVER (PARTITION BY c.task_slug ORDER BY
 			         (CASE WHEN c.kind = 'cli' THEN c.passed ELSE c.votes END) DESC,

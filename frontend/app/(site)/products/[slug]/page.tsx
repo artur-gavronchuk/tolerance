@@ -27,9 +27,8 @@ function countedId(task: ProductDetail): string | null {
   const done = task.mine.filter((e) => e.status === 'done') // newest first
   if (done.length === 0) return null
   if (task.kind === 'site') return done[0].id
-  // best upload: most scenarios, then the faster benchmark, then the earlier one (the list is newest first)
-  const better = (a: ProductEntry, b: ProductEntry) => a.passed !== b.passed ? a.passed > b.passed : (a.bench_ms ?? Infinity) !== (b.bench_ms ?? Infinity) ? (a.bench_ms ?? Infinity) < (b.bench_ms ?? Infinity) : false
-  return done.reduce((best, e) => (better(best, e) ? best : e)).id
+  // the latest upload with the most scenarios passed (the list is newest first, so the first of the best wins)
+  return done.reduce((best, e) => (e.passed > best.passed ? e : best)).id
 }
 
 export default function ProductPage({ params }: { params: Promise<{ slug: string }> }) {

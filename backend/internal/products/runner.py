@@ -20,7 +20,9 @@ print("@@RESULTS@@" + json.dumps(results))
 
 # Benchmark: the task ships a generator (_scenarios/bench_gen.py OUTDIR) that writes plan.json and the input/expected
 # files. Every invocation's output must be right, otherwise there is no bench score. The score is the sum, over the
-# plan's cases, of the median wall time (ms) of one pass over the case's invocations.
+# plan's cases, of the trimmed median wall time (ms) of one pass over the case's invocations: the slowest and the fastest
+# sample are dropped (when there are at least 3) and the median of the rest taken. The spread is half the range of what is left,
+# summed the same way, so the score reads "ms ± spread".
 import os
 import statistics
 import sys
@@ -37,7 +39,7 @@ def bench(spec, cmd):
     subprocess.run([sys.executable, "_scenarios/bench_gen.py", out], check=True, timeout=60)
     plan = json.load(open(os.path.join(out, "plan.json")))
     deadline = time.monotonic() + BENCH_BUDGET_S
-    total = 0.0
+    total = spread = 0.0
     for case in plan:
         samples = []
         for i in range(runs + 1):  # the first pass is a warm-up and the correctness check
@@ -60,15 +62,19 @@ def bench(spec, cmd):
                 break
         if not samples:
             return None, "case %s: too slow to measure" % case["name"]
+        samples.sort()
+        if len(samples) >= 3:
+            samples = samples[1:-1]
         total += statistics.median(samples)
-    return total, ""
+        spread += (samples[-1] - samples[0]) / 2
+    return (total, spread), ""
 
 
 if spec.get("bench"):
     try:
-        ms, err = bench(spec["bench"], cmd)
+        score, err = bench(spec["bench"], cmd)
     except Exception as e:
-        ms, err = None, "benchmark could not run: %s" % e
+        score, err = None, "benchmark could not run: %s" % e
     if err:
         print("bench: " + err)
-    print("@@BENCH@@" + json.dumps({"ms": ms}))
+    print("@@BENCH@@" + json.dumps({"ms": score[0] if score else None, "spread_ms": score[1] if score else None}))

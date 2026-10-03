@@ -52,7 +52,7 @@ export function EntryCard({ entry: e, site = false, counts = false, preview = tr
         </ul>
       )}
       {bench && e.status === 'done' && scored && (
-        <p className="mt-3 text-sm"><span className="text-muted-foreground">{t('bench.label')}: </span><BenchTime ms={e.bench_ms} fastest={fastest} className="font-mono font-semibold" /></p>
+        <p className="mt-3 text-sm"><span className="text-muted-foreground">{t('bench.label')}: </span><BenchTime ms={e.bench_ms} spread={e.bench_spread_ms} fastest={fastest} className="font-mono font-semibold" /></p>
       )}
       {site && preview && e.status === 'done' && <div className="mt-3"><SitePreview id={e.id} title={t('entry.yourSite')} /></div>}
     </div>

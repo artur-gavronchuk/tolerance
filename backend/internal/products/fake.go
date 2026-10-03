@@ -34,7 +34,8 @@ func (PassAll) Run(_ context.Context, req sandbox.Request) (sandbox.Result, erro
 	body, err := json.Marshal(rs)
 	out := resultsMarker + string(body) + "\n"
 	if spec.Bench != nil { // a made-up time so the bench UI has something to show locally
-		out += fmt.Sprintf("%s{\"ms\": %d}\n", benchMarker, 150+rand.IntN(900))
+		ms := 150 + rand.IntN(900)
+		out += fmt.Sprintf("%s{\"ms\": %d, \"spread_ms\": %d}\n", benchMarker, ms, ms/20+rand.IntN(10))
 	}
 	return sandbox.Result{Output: out}, err
 }

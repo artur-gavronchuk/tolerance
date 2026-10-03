@@ -89,7 +89,8 @@ type Entry struct {
 	Handle        string           `json:"handle,omitempty"`
 	Status        string           `json:"status"`
 	Passed        int              `json:"passed"`
-	BenchMS       *float64         `json:"bench_ms"` // cli: median benchmark time; nil when there is none
+	BenchMS       *float64         `json:"bench_ms"`        // cli: trimmed median benchmark time; nil when there is none
+	BenchSpreadMS *float64         `json:"bench_spread_ms"` // cli: ± half the range of the kept samples
 	Total         int              `json:"total"`
 	FailureReason *string          `json:"failure_reason"`
 	Results       []ScenarioResult `json:"results"`
@@ -112,14 +113,14 @@ type RunPayload struct {
 type scanner interface{ Scan(...any) error }
 
 // entryCols expects the alias e for product_entries, u for users, $1 = the viewer's user id.
-const entryCols = `e.id, e.task_slug, u.handle, e.status, e.passed, e.bench_ms, e.total, e.failure_reason, e.results, e.log_tail, e.made_with,
+const entryCols = `e.id, e.task_slug, u.handle, e.status, e.passed, e.bench_ms, e.bench_spread_ms, e.total, e.failure_reason, e.results, e.log_tail, e.made_with,
 	(SELECT count(*) FROM product_votes v WHERE v.entry_id = e.id),
 	EXISTS (SELECT 1 FROM product_votes v WHERE v.entry_id = e.id AND v.user_id = $1), e.user_id = $1, e.created_at, e.finished_at`
 
 func scanEntry(row scanner) (Entry, error) {
 	var e Entry
 	var results []byte
-	if err := row.Scan(&e.ID, &e.TaskSlug, &e.Handle, &e.Status, &e.Passed, &e.BenchMS, &e.Total, &e.FailureReason, &results, &e.LogTail,
+	if err := row.Scan(&e.ID, &e.TaskSlug, &e.Handle, &e.Status, &e.Passed, &e.BenchMS, &e.BenchSpreadMS, &e.Total, &e.FailureReason, &results, &e.LogTail,
 		&e.MadeWith, &e.Votes, &e.Voted, &e.Mine, &e.CreatedAt, &e.FinishedAt); err != nil {
 		return Entry{}, err
 	}
