@@ -28,11 +28,22 @@ export interface Daily {
   task: TaskSummary
   attempts_per_day: number
   my: null | { attempts_used: number; best: Submission | null; submissions: Submission[] }
+  house: HouseResult[]
+}
+
+// A platform-run coding agent's result on the day (see "Beat the house").
+export interface HouseResult {
+  handle: string; name: string; made_with: string
+  state: 'pending' | 'running' | 'done' | 'error' | 'no_result'
+  passed: boolean; passed_tests: number; total_tests: number; score: number | null
+  people_beat: number; people_tied: number
+  vs_me: null | { result: 'beat' | 'tied' | 'behind'; gap: number }
 }
 
 export interface DailyRow {
   id?: string; place: number; handle: string; made_with: string
   passed_tests: number; total_tests: number; score: number | null; submitted_at: string
+  house?: boolean; house_name?: string // a platform agent: shown inline, place is 0
 }
 
 // Published once a day closes (`/daily/{day}/reveal`).

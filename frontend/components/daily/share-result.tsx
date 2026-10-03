@@ -8,7 +8,7 @@ import { useT } from '@/lib/i18n/client'
 import { dailyMessages } from '@/lib/i18n/messages/daily'
 
 // The day's result as Wordle-style text: one row of squares per finished attempt, one square per hidden test.
-export function shareText({ day, title, subs, streak, scoreWord = 'score' }: { day: string; title: string; subs: Submission[]; streak: number; scoreWord?: string }) {
+export function shareText({ day, title, subs, streak, scoreWord = 'score', house }: { day: string; title: string; subs: Submission[]; streak: number; scoreWord?: string; house?: string | null }) {
   const rows = subs
     .filter((s) => s.status === 'passed' || s.status === 'failed')
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
@@ -23,7 +23,7 @@ export function shareText({ day, title, subs, streak, scoreWord = 'score' }: { d
   const made = subs.find((s) => s.status === 'passed')?.made_with || subs.find((s) => s.made_with)?.made_with
   const footer = [streak > 0 ? `🔥 ${streak}` : '', made ?? ''].filter(Boolean).join(' · ')
   const url = typeof window === 'undefined' ? 'https://tolerance.cc' : window.location.origin
-  return [`tolerance · ${day}`, title, ...rows, footer, url].filter(Boolean).join('\n')
+  return [`tolerance · ${day}`, title, ...rows, house, footer, url].filter(Boolean).join('\n')
 }
 
 export function ShareResult({ text }: { text: string }) {

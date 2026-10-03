@@ -10,6 +10,7 @@ import { Countdown } from '@/components/daily/countdown'
 import { DailyBoard, fmtScore } from '@/components/daily/daily-board'
 import { DayRevealView } from '@/components/daily/day-reveal'
 import { DayStatsPanel } from '@/components/daily/day-stats'
+import { HouseStrip, houseShareLine } from '@/components/daily/house-strip'
 import { ShareResult, shareText } from '@/components/daily/share-result'
 import { SubmissionCard } from '@/components/daily/submission-card'
 import { TaskBadges } from '@/components/daily/task-header'
@@ -98,7 +99,7 @@ export function DailyView({ day }: { day?: string }) {
     ...local.filter((s) => !serverIds.has(s.id)),
     ...(daily.my?.submissions ?? []).map((s) => localById.get(s.id) ?? s),
   ]
-  const share = shareText({ day: daily.day, title: task.title, subs, streak: daily.is_open ? me?.streak.current ?? 0 : 0, scoreWord: t('shareScore') })
+  const share = shareText({ day: daily.day, title: task.title, subs, streak: daily.is_open ? me?.streak.current ?? 0 : 0, scoreWord: t('shareScore'), house: houseShareLine(daily.house ?? [], t) })
 
   return (
     <div className="space-y-10">
@@ -186,6 +187,7 @@ export function DailyView({ day }: { day?: string }) {
         <SectionTitle aside={practice ? t('finalStandings') : t('live')}>{t('leaderboard')}</SectionTitle>
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
           <div className="min-w-0">
+            <HouseStrip house={daily.house ?? []} optimize={task.kind === 'optimize'} />
             {rows == null ? <Skeleton className="h-48 rounded-[14px]" /> : <DailyBoard rows={rows} me={me?.user.handle} optimize={task.kind === 'optimize'} />}
           </div>
           {stats && <DayStatsPanel stats={stats} />}
