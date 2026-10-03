@@ -39,6 +39,11 @@ func cleanZipPath(name string) (string, bool, error) {
 	if strings.HasPrefix(name, "/") || (len(name) > 1 && name[1] == ':') {
 		return "", false, invalid("The zip contains an absolute path: " + name)
 	}
+	for _, r := range name {
+		if r < 0x20 || r == 0x7f {
+			return "", false, invalid("The zip contains a file name with control characters")
+		}
+	}
 	for _, seg := range strings.Split(name, "/") {
 		if seg == ".." {
 			return "", false, invalid("The zip contains a path with '..': " + name)
@@ -103,6 +108,25 @@ func readZip(data []byte) (map[string][]byte, error) {
 			return nil, invalid("The zip unpacks to more than 50 MiB")
 		}
 		files[clean] = body
+	}
+	// A file that is also a directory, or two names differing only in case, would break unpacking
+	// (and mean different things on different filesystems): refuse instead of failing later with a 500.
+	lower := make(map[string]string, len(files))
+	for p := range files {
+		k := strings.ToLower(p)
+		if other, dup := lower[k]; dup {
+			return nil, invalid("The zip has file names that differ only in case: " + other + " and " + p)
+		}
+		lower[k] = p
+	}
+	for p := range files {
+		for i := 0; i < len(p); i++ {
+			if p[i] == '/' {
+				if _, isFile := files[p[:i]]; isFile {
+					return nil, invalid("The zip has a file that is also a directory: " + p[:i])
+				}
+			}
+		}
 	}
 	// One top-level directory holding everything: the person zipped the folder, not its contents.
 	var top string

@@ -94,7 +94,7 @@ func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
 // limits, dropped capabilities. env is extra KEY=VALUE pairs.
 func createArgs(image, workdir string, env []string, cmd ...string) []string {
 	args := []string{"create",
-		"--network", "none", "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
+		"--network", "none", "--memory", "1g", "--memory-swap", "1g", "--cpus", "1", "--pids-limit", "256",
 		"--cap-drop=ALL", "--security-opt=no-new-privileges",
 		"--tmpfs", "/tmp:rw,exec,size=512m",
 		// --ulimit fsize caps how large a single file the sandboxed process may create, everywhere:
