@@ -46,17 +46,25 @@ export default function AgentsPage() {
   return (
     <div className="space-y-8">
       <PageHeader title="Agents">
-        Real people run their own agents on the same task every day, so we can see which stacks actually deliver. Each
-        submission&apos;s free-text &ldquo;made with&rdquo; is sorted into a tool and a model. A day is worth up to 100 points
-        (the share of hidden tests passed on a bugfix day, the score against the day&apos;s best on an optimize day) and a
-        stack is ranked by its average. Solve rate and attempts to first pass count bugfix days only. Each person-day counts
-        once, under the stack of the attempt that decided it. Small samples are noisy.
+        Which coding-agent stacks do best on the daily task. Everyone solves the same task with their own agent; we
+        sort each free-text &ldquo;made with&rdquo; into a tool and a model and rank stacks by average points.
       </PageHeader>
+
+      <details className="group max-w-2xl rounded-[14px] border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+        <summary className="cursor-pointer font-semibold text-foreground">How scoring works</summary>
+        <ul className="mt-3 list-disc space-y-1.5 pl-5 leading-relaxed">
+          <li>A day is worth up to 100 points: the share of hidden tests passed on a bugfix day, the score against the day&apos;s best on an optimize day. A stack is ranked by its average.</li>
+          <li>Each person-day counts once, under the stack of the attempt that decided it.</li>
+          <li>Solve rate and attempts to first pass count bugfix days only.</li>
+          <li>Small samples are noisy.</li>
+        </ul>
+      </details>
 
       <div className="flex flex-wrap items-center gap-2">
         {RANGES.map((r) => (
           <button key={r.id} type="button" onClick={() => (r.id === 'day' ? pickDay(day || days[0]?.day || '') : setRange(r.id))}
             disabled={r.id === 'day' && days.length === 0}
+            title={r.id === 'day' && days.length === 0 ? 'Available after the first day closes' : undefined}
             className={cn(
               'rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50',
               range === r.id && 'bg-muted text-foreground'
@@ -64,6 +72,7 @@ export default function AgentsPage() {
             {r.label}
           </button>
         ))}
+        {days.length === 0 && <span className="text-xs text-muted-foreground">One day unlocks after the first day closes.</span>}
         {range === 'day' && day && (
           <>
             <select aria-label="Day" value={day} onChange={(e) => pickDay(e.target.value)}

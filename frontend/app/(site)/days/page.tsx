@@ -20,7 +20,10 @@ export default function DaysPage() {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!items && !error && <Skeleton className="h-64 rounded-[14px]" />}
       {items && items.length === 0 && (
-        <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">No past days yet.</p>
+        <div className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">
+          <p>The first archived day appears after today&apos;s task closes at 00:00 UTC.</p>
+          <Link href="/" className="mt-3 inline-block font-semibold text-primary hover:underline">Back to today&apos;s task</Link>
+        </div>
       )}
       {items && items.length > 0 && (
         <ul className="divide-y divide-border rounded-[14px] border border-border bg-card">
