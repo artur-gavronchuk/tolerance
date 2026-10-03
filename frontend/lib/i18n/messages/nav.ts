@@ -23,7 +23,7 @@ export const navMessages = defineMessages({
   ru: {
     today: 'Сегодня',
     tanks: 'Танки',
-    leaderboard: 'Рейтинг',
+    leaderboard: 'Лидеры',
     archive: 'Архив',
     admin: 'Админка',
     live: 'Эфир',

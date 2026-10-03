@@ -78,9 +78,9 @@ export function SiteHeader({ returnTo }: { returnTo?: string }) {
   return (
     <header className="border-b border-border bg-card/80 backdrop-blur-sm">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6">
-        <Brand />
+        <div className="min-w-0 shrink overflow-hidden max-[400px]:[&_span]:hidden"><Brand /></div>
         <nav className="ml-1 hidden items-center gap-1 sm:flex">{SITE_NAV.map((item) => link(item, SITE_NAV))}</nav>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
           <LocaleSwitch />
           {loading ? null : me ? (
             <>
@@ -89,8 +89,9 @@ export function SiteHeader({ returnTo }: { returnTo?: string }) {
               )}
               <NotificationBell />
               <Link href={`/u/${encodeURIComponent(me.user.handle)}`} title={t('myProfile')}
-                className="flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm hover:border-primary">
-                <span className="max-w-[8rem] truncate font-bold">{me.user.handle}</span>
+                className="flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-sm hover:border-primary sm:gap-2 sm:px-3">
+                <span aria-hidden className="flex size-5 items-center justify-center rounded-full bg-muted text-[11px] font-bold uppercase sm:hidden">{me.user.handle.charAt(0)}</span>
+                <span className="hidden max-w-[8rem] truncate font-bold sm:inline">{me.user.handle}</span>
                 <span className="font-mono text-xs text-muted-foreground" title={t('streakHelp')}
                   aria-label={t('streakLabel', { n: me.streak.current, help: t('streakHelp') })}>🔥 {me.streak.current}</span>
               </Link>

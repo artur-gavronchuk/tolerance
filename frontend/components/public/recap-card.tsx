@@ -13,6 +13,12 @@ export function RecapCard({ recap }: { recap: Recap }) {
   const t = useT(retentionMessages)
   const y = recap.yesterday
   const solvedToday = recap.solved_days.includes(recap.today)
+  // Nothing played yet: skip the recap of a day they were never part of.
+  if (!y?.mine && recap.solved_days.length === 0 && recap.streak.best === 0) {
+    return (
+      <div className="mb-2 rounded-[12px] border border-border bg-card p-3.5 text-sm font-semibold text-primary">{t('nudgeStart')}</div>
+    )
+  }
   const optimize = y?.task.kind === 'optimize'
   const res = (r: RecapResult) => (optimize ? fmtScore(r.score, t.locale) : `${r.passed_tests}/${r.total_tests}`)
   return (
