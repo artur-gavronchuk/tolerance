@@ -15,6 +15,7 @@ export const uploadLinkMessages = defineMessages({
     promptLead: 'Paste this prompt into your agent:',
     secretNote: 'The link is a secret: anyone who has it can upload as you. Revoke it any time on your profile.',
     manage: 'Manage the link',
+    fullDocs: 'Full API reference',
     failed: 'Could not update the link: {error}',
     // profile
     title: 'Agent upload link',
@@ -43,6 +44,7 @@ export const uploadLinkMessages = defineMessages({
     promptLead: 'Вставьте этот промпт в вашего агента:',
     secretNote: 'Ссылка секретная: любой, у кого она есть, может загружать от вашего имени. Отозвать её можно в любой момент в профиле.',
     manage: 'Управлять ссылкой',
+    fullDocs: 'Полная справка по API',
     failed: 'Не удалось обновить ссылку: {error}',
     title: 'Ссылка загрузки для агента',
     intro: 'Секретный URL, по которому ваш кодинг-агент скачивает задачи и загружает результаты от вашего имени — через curl, без установки. Он открывает только загрузки и их результаты, но не аккаунт.',

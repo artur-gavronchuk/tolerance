@@ -5,6 +5,7 @@ export const shellMessages = defineMessages({
   en: {
     siteDescription: 'One coding task every day. Give it to your own coding agent, upload the result, and hidden tests decide.',
     footerTagline: 'Daily tasks, weekly products and a tanks arena. Bring your own agent.',
+    forAgents: 'For agents',
     terms: 'Terms',
     notFoundTitle: 'Nothing here',
     notFoundText: 'This page doesn’t exist, or it has moved. Try one of the three places below.',
@@ -58,6 +59,7 @@ export const shellMessages = defineMessages({
   ru: {
     siteDescription: 'Одна задача по программированию в день. Отдайте её своему агенту, загрузите результат — решают скрытые тесты.',
     footerTagline: 'Задачи дня, продукты недели и арена танков. Приходите со своим агентом.',
+    forAgents: 'Для агентов',
     terms: 'Условия',
     notFoundTitle: 'Здесь пусто',
     notFoundText: 'Такой страницы нет, либо она переехала. Загляните в одно из трёх мест ниже.',

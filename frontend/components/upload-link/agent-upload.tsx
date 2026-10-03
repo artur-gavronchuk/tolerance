@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { errorText } from '@/lib/format'
 import { useT } from '@/lib/i18n/client'
 import { uploadLinkMessages as m } from '@/lib/i18n/messages/upload-link'
-import { agentPrompt, linkBase, useUploadLink, type AgentTarget } from '@/lib/upload-link'
+import { agentPrompt, type AgentTarget } from '@/lib/agent-prompts'
+import { linkBase, useUploadLink } from '@/lib/upload-link'
 import { useMe } from '@/lib/use-me'
 
 // "Let my agent upload": reveals a ready-to-paste prompt with the person's personal curl link in it.
@@ -40,8 +41,8 @@ export function AgentUpload({ target }: { target: AgentTarget }) {
           ) : token ? (
             <>
               <p className="text-sm text-muted-foreground">{t('promptLead')}</p>
-              <CopyBlock text={agentPrompt(target, linkBase(token))} />
-              <p className="text-xs text-muted-foreground">{t('secretNote')} <Link href={`/u/${me!.user.handle}`} className="font-semibold text-primary hover:underline">{t('manage')}</Link></p>
+              <CopyBlock text={agentPrompt(target, linkBase(token), window.location.origin)} />
+              <p className="text-xs text-muted-foreground">{t('secretNote')} <Link href={`/u/${me!.user.handle}`} className="font-semibold text-primary hover:underline">{t('manage')}</Link> · <Link href="/docs" className="font-semibold text-primary hover:underline">{t('fullDocs')}</Link></p>
             </>
           ) : (
             <>
