@@ -54,8 +54,13 @@ export default async function TermsPage() {
 
       <Section title={t('fairTitle')}>
         <p>{t('fairLead')}</p>
-        <List items={[t('fair1'), t('fair2'), t('fair3'), t('fair4')]} />
+        <List items={[t('fair0'), t('fair1'), t('fair2'), t('fair3'), t('fair4')]} />
         <p>{t('fairAfter')}</p>
+      </Section>
+
+      <Section title={t('fairFlagsTitle')}>
+        <p>{t('fairFlags1')}</p>
+        <p>{t('fairFlags2')}</p>
       </Section>
 
       <Section title={t('publicTitle')}>

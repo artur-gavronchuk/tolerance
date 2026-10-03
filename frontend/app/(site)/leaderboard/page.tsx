@@ -8,6 +8,7 @@ import { api } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import type { OverallRow } from '@/lib/types'
 import { HandleLink } from '@/components/daily/handle-link'
+import { ReportButton } from '@/components/fairplay/report-button'
 import { errorText } from '@/lib/format'
 import { useT } from '@/lib/i18n/client'
 import { listingMessages } from '@/lib/i18n/messages/listings'
@@ -44,7 +45,7 @@ export default function LeaderboardPage() {
             {rows.map((r) => (
               <TableRow key={r.place} className={mine(r) ? 'bg-accent' : undefined}>
                 <TableCell className="font-mono text-muted-foreground">{r.place}</TableCell>
-                <TableCell className="max-w-[10rem] truncate font-semibold sm:max-w-none"><HandleLink handle={r.handle} /></TableCell>
+                <TableCell className="max-w-[10rem] truncate font-semibold sm:max-w-none"><HandleLink handle={r.handle} /> <ReportButton handle={r.handle} /></TableCell>
                 <TableCell className="text-right font-mono font-bold">{r.points}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">{r.solved_days}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">🔥 {r.current_streak}</TableCell>

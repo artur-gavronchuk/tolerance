@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"tolerance/internal/daily"
+	"tolerance/internal/fairplay"
 	"tolerance/internal/platform/audit"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
@@ -24,6 +25,8 @@ import (
 type Service struct {
 	pool  *db.Pool
 	daily *daily.Service
+	// OnUpload, when set, is told about every accepted upload (fair-play signals only; it must not block).
+	OnUpload func(ctx context.Context, u fairplay.Upload)
 }
 
 func NewService(pool *db.Pool, d *daily.Service) *Service { return &Service{pool: pool, daily: d} }
@@ -130,6 +133,9 @@ func (s *Service) Create(ctx context.Context, userID, taskSlug, filename string,
 	})
 	if err == nil && day != nil {
 		analytics.Track("daily.upload", userID, nil)
+	}
+	if err == nil && s.OnUpload != nil {
+		s.OnUpload(ctx, fairplay.Upload{Kind: "submission", ID: id, UserID: userID, TaskSlug: taskSlug, Day: day, Content: diff})
 	}
 	return out, err
 }

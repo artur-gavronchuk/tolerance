@@ -17,6 +17,7 @@ import (
 	adminpkg "tolerance/internal/admin"
 	"tolerance/internal/analytics"
 	"tolerance/internal/daily"
+	"tolerance/internal/fairplay"
 	"tolerance/internal/games"
 	"tolerance/internal/games/match"
 	"tolerance/internal/identity"
@@ -81,6 +82,9 @@ func main() {
 		limiter:   ratelimit.New(nil),
 		providers: providersFromConfig(cfg),
 	}
+
+	d.fairplay = fairplay.NewService(pool, os.Getenv("ARENA_FAIRPLAY_SECRET"))
+	d.submissions.OnUpload = d.fairplay.Observe
 
 	var wg sync.WaitGroup
 

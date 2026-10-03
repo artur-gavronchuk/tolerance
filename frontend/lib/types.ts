@@ -312,3 +312,17 @@ export interface NotificationList { items: AppNotification[]; unread: number }
 export interface ModUser { id: string; handle: string; email: string; role: string; created_at: string; banned_at: string | null; submissions: number; entries: number }
 export interface ModItem { kind: 'entry' | 'submission' | 'bot'; id: string; label: string; status: string; at: string; hidden_at: string | null }
 export interface ModLogItem { at: string; action: 'ban' | 'unban' | 'hide' | 'unhide'; kind: 'user' | 'entry' | 'submission' | 'bot'; id: string; label: string; actor: string; reason: string; active: boolean }
+
+// Fair play (`/admin/fairplay`, `POST /reports`).
+export type FairSignal = 'fast_solve' | 'burst' | 'shared_device' | 'shared_ip' | 'near_duplicate'
+export interface FairFlag { id: string; signal: FairSignal; score: number; detail: Record<string, unknown> }
+export interface FairItem {
+  subject_kind: 'submission'; subject_id: string; user_id: string; handle: string; banned: boolean; hidden: boolean
+  task_slug: string; day: string | null; solve_seconds: number | null; at: string; score: number; flags: FairFlag[]
+}
+export interface FairReport {
+  id: string; reporter: string; target_kind: 'user'; target_id: string; user_id: string; handle: string; label: string
+  banned: boolean; hidden: boolean; reason: string; details: string; at: string; others: number
+}
+export interface FairCluster { kind: 'ip' | 'device'; hash: string; users: { id: string; handle: string; banned: boolean }[] }
+export interface FairOverview { flags: FairItem[]; reports: FairReport[]; clusters: FairCluster[] }

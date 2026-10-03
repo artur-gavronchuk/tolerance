@@ -13,6 +13,7 @@ import { formatDateTime, type T } from '@/lib/i18n/core'
 import { adminMessages } from '@/lib/i18n/messages/admin'
 import { FunnelSection } from '@/components/admin/funnel'
 import { ModerationSection } from '@/components/admin/moderation'
+import { FairplaySection } from '@/components/admin/fairplay'
 import { useMe } from '@/lib/use-me'
 import { cn } from '@/lib/utils'
 import type { AdminEvent, AdminPoint, AdminPulse } from '@/lib/types'
@@ -84,6 +85,7 @@ export default function AdminPage() {
       )}
       {recent && <FeedSection items={recent} />}
       <FunnelSection />
+      <FairplaySection />
       <ModerationSection />
     </div>
   )

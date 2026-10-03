@@ -12,6 +12,7 @@ import (
 	adminpkg "tolerance/internal/admin"
 	"tolerance/internal/analytics"
 	"tolerance/internal/daily"
+	"tolerance/internal/fairplay"
 	"tolerance/internal/games"
 	"tolerance/internal/identity"
 	"tolerance/internal/moderation"
@@ -41,6 +42,7 @@ type deps struct {
 	products    *products.Service
 	admin       *adminpkg.Service
 	moderation  *moderation.Service
+	fairplay    *fairplay.Service
 	stacks      *stacks.Service
 	profiles    *profiles.Service
 	recap       *recap.Service
@@ -58,6 +60,7 @@ func newHandler(cfg config, d deps) http.Handler {
 		return map[string]any{"streak": st, "can_admin": identity.CanAdmin(cfg.devLogin, identity.MustFromContext(ctx).Role)}, err
 	})
 	submissions.RegisterOwnerRoutes(owner, d.submissions)
+	fairplay.RegisterOwnerRoutes(owner, d.fairplay, d.limiter)
 	games.RegisterOwnerRoutes(owner, d.games)
 	products.RegisterOwnerRoutes(owner, d.products, cfg.devLogin)
 	recap.RegisterOwnerRoutes(owner, d.recap)
@@ -70,6 +73,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	adminpkg.RegisterRoutes(pulse, d.admin)
 	moderation.RegisterRoutes(pulse, d.moderation)
 	analytics.RegisterAdminRoutes(pulse, d.analytics)
+	fairplay.RegisterAdminRoutes(pulse, d.fairplay)
 
 	public := http.NewServeMux()
 	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
@@ -121,6 +125,8 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/leaderboard", public)
 	api.Handle("/api/v1/stacks", public)
 	api.Handle("/api/v1/users/", public)
+	// Remember when a signed-in user first fetched a task repo (fair-play signal), then serve it as usual.
+	api.Handle("GET /api/v1/tasks/{slug}/repo.zip", d.fairplay.RecordDownload("task", identity.OptionalUserID(d.users))(public))
 	api.Handle("/api/v1/tasks/", public)
 	api.Handle("/api/v1/tanks/", public)
 	// Starting a tournament now: admins, or anyone signed in when the dev login is on (local runs).
@@ -130,6 +136,9 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("GET /api/v1/admin/recent", session(adminOrDev(cfg.devLogin)(pulse)))
 	api.Handle("GET /api/v1/admin/funnel", session(adminOrDev(cfg.devLogin)(pulse)))
 	api.Handle("/api/v1/admin/moderation/", session(adminOrDev(cfg.devLogin)(pulse)))
+	api.Handle("/api/v1/admin/fairplay", session(adminOrDev(cfg.devLogin)(pulse)))
+	api.Handle("/api/v1/admin/fairplay/", session(adminOrDev(cfg.devLogin)(pulse)))
+	api.Handle("POST /api/v1/reports", session(owner))
 
 	top := http.NewServeMux()
 	top.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +151,7 @@ func newHandler(cfg config, d deps) http.Handler {
 		}
 		httpx.Respond(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
-	top.Handle("/api/", api)
+	top.Handle("/api/", d.fairplay.Client(api, cfg.trustProxy, cfg.secureCookies))
 	return withMiddleware(top, d.log, cfg.trustProxy, d.limiter)
 }
 

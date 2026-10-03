@@ -115,3 +115,14 @@ export const retention = {
   notifications: () => api<NotificationList>('/me/notifications'),
   markNotificationsRead: () => post<{ ok: boolean }>('/me/notifications/read'),
 }
+
+// Fair play: reports from users, the admin queue.
+export const fairplay = {
+  report: (handle: string, reason: string, details: string) =>
+    post<{ ok: boolean }>('/reports', { target_kind: 'user', target: handle, reason, details }),
+  overview: () => api<import('./types').FairOverview>('/admin/fairplay'),
+  resolveFlags: (subjectId: string, status: 'dismissed' | 'actioned') =>
+    post<{ ok: boolean }>('/admin/fairplay/flags/resolve', { subject_kind: 'submission', subject_id: subjectId, status }),
+  resolveReport: (id: string, status: 'dismissed' | 'actioned') =>
+    post<{ ok: boolean }>(`/admin/fairplay/reports/${encodeURIComponent(id)}/resolve`, { status }),
+}
