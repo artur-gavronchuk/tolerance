@@ -152,6 +152,9 @@ export const tanksHomeMessages = defineMessages({
     'lb.wins': 'Wins',
     'lb.winRate': 'Win rate',
     'lb.by': 'by',
+    'lb.you': 'You: #{rank}',
+    'lb.topOf': 'Top {shown} of {total} bots',
+    'lb.showMore': 'Show more',
     'lb.rowStats': '{matches} matches · {wins} wins · {rate}',
 
     // countdown
@@ -324,6 +327,9 @@ export const tanksHomeMessages = defineMessages({
     'lb.wins': 'Победы',
     'lb.winRate': 'Доля побед',
     'lb.by': 'от',
+    'lb.you': 'Вы: №{rank}',
+    'lb.topOf': 'Первые {shown} из {total} ботов',
+    'lb.showMore': 'Показать ещё',
     'lb.rowStats': 'матчей: {matches} · побед: {wins} · {rate}',
 
     'countdown.now': 'сейчас',

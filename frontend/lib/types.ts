@@ -63,7 +63,8 @@ export interface DayListItem {
   solvers: number
 }
 
-export interface OverallRow { place: number; handle: string; points: number; solved_days: number; current_streak: number }
+export interface OverallPage { items: OverallRow[]; total: number; you: OverallRow | null }
+export interface OverallRow { place: number; tied: boolean; handle: string; points: number; solved_days: number; current_streak: number }
 
 export interface User { id: string; email: string; handle: string; role: 'user' | 'admin'; created_at: string }
 export interface Me { user: User; streak: { current: number; best: number }; can_admin?: boolean }
@@ -108,7 +109,7 @@ export interface SeasonView {
   winner: SeasonWinner | null
 }
 
-export interface SeasonDetail { season: SeasonView; standings: LeaderboardEntry[]; total: number; now: string }
+export interface SeasonDetail { season: SeasonView; standings: LeaderboardEntry[]; total: number; you: LeaderboardEntry | null; now: string }
 
 export interface BotSeasonResult { season_id: string; name: string; rank: number; rating: number; matches: number; wins: number }
 
@@ -210,7 +211,7 @@ export interface AdminPulse {
   tanks: {
     bots_total: number; bots_active: number; uploads_today: number; rejected_today: number
     matches_last_hour: Record<string, number>
-    tournament: { id: string; name: string; status: string } | null
+    tournament: { id: string; name: string; status: string; starts_at: string; open: boolean } | null
     ladder: { rank: number; bot_id: string; name: string; owner: string; rating: number; matches: number }[]
   }
   health: {

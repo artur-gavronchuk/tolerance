@@ -41,7 +41,7 @@ async function tanksTile(t: TT): Promise<Tile> {
   else if (!bot) headline = t('noBot')
   else {
     const standings: SeasonDetail['standings'] = season.status === 'fulfilled' ? season.value.standings : (s?.ladder ?? [])
-    const rank = standings.find((l) => l.bot_id === bot.id)?.rank
+    const rank = standings.find((l) => l.bot_id === bot.id)?.rank ?? (season.status === 'fulfilled' && season.value.you?.bot_id === bot.id ? season.value.you.rank : undefined)
     headline = <>{rank ? `#${rank} · ` : ''}{bot.name} <span className="font-mono">{Math.round(bot.rating)}</span></>
   }
   let sub: React.ReactNode = !bot && mine.status === 'fulfilled' ? t('buildOne') : t('seeLadder')

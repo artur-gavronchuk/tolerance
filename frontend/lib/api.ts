@@ -62,7 +62,7 @@ export async function upload<T>(path: string, form: FormData): Promise<T> {
 export const tanks = {
   showcase: () => api<Showcase>('/tanks/showcase'),
   seasons: () => api<{ items: SeasonView[] }>('/tanks/seasons').then((r) => r.items),
-  season: (id: string) => api<SeasonDetail>(`/tanks/seasons/${encodeURIComponent(id)}`),
+  season: (id: string, offset = 0, limit = 100) => api<SeasonDetail>(`/tanks/seasons/${encodeURIComponent(id)}?offset=${offset}&limit=${limit}`),
   tournaments: (status = '') =>
     api<{ items: TournamentView[]; now: string }>(`/tanks/tournaments${status ? `?status=${status}` : ''}`),
   tournament: (id: string) => api<TournamentView>(`/tanks/tournaments/${encodeURIComponent(id)}`),

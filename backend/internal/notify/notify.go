@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -223,14 +224,14 @@ func (s *Service) tanks(ctx context.Context, userID string) ([]candidate, error)
 				rows.Close()
 				return err
 			}
-			out = append(out, candidate{"tournament_soon:" + id, "tournament_soon", map[string]any{"id": id, "name": name, "starts_at": at.UTC()}, time.Now()})
+			out = append(out, candidate{"tournament_soon:" + id, "tournament_soon", map[string]any{"id": id, "name": name, "starts_at": at.UTC(), "open": strings.HasPrefix(name, "Open tournament")}, time.Now()})
 		}
 		rows.Close()
 		if err := rows.Err(); err != nil {
 			return err
 		}
 		rows, err = tx.Query(ctx, `
-			SELECT t.id, t.name, t.status, t.rounds, coalesce(t.finished_at, t.started_at, t.starts_at), coalesce(t.champion_bot_id = e.bot_id, false),
+			SELECT t.id, t.name, t.starts_at, t.status, t.rounds, coalesce(t.finished_at, t.started_at, t.starts_at), coalesce(t.champion_bot_id = e.bot_id, false),
 			  (SELECT max(p.round) FROM tanks_tournament_pairings p
 			     WHERE p.tournament_id = t.id AND p.status = 'finished' AND (p.bot_a = e.bot_id OR p.bot_b = e.bot_id)
 			       AND p.winner_bot_id IS DISTINCT FROM e.bot_id)
@@ -243,19 +244,20 @@ func (s *Service) tanks(ctx context.Context, userID string) ([]candidate, error)
 		for rows.Next() {
 			var id, name, status string
 			var rounds int
-			var at time.Time
+			var at, startsAt time.Time
 			var champion bool
 			var lost *int
-			if err := rows.Scan(&id, &name, &status, &rounds, &at, &champion, &lost); err != nil {
+			if err := rows.Scan(&id, &name, &startsAt, &status, &rounds, &at, &champion, &lost); err != nil {
 				return err
 			}
-			p := map[string]any{"id": id, "name": name, "bot": botName}
+			open := strings.HasPrefix(name, "Open tournament")
+			p := map[string]any{"id": id, "name": name, "bot": botName, "starts_at": startsAt.UTC(), "open": open}
 			out = append(out, candidate{"tournament_entered:" + id, "tournament_entered", p, at})
 			if champion {
 				out = append(out, candidate{"tournament_won:" + id, "tournament_won", p, at})
 			} else if status == "finished" && lost != nil {
 				out = append(out, candidate{"tournament_lost:" + id, "tournament_lost", map[string]any{
-					"id": id, "name": name, "bot": botName, "round": *lost, "rounds": rounds,
+					"id": id, "name": name, "bot": botName, "round": *lost, "rounds": rounds, "starts_at": startsAt.UTC(), "open": open,
 				}, at})
 			}
 		}

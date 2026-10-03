@@ -35,12 +35,16 @@ Do not modify or delete existing tests, and do not add test files. Keep the chan
 When you are done, the repository should build and the tests should pass.`
 
 // The task of the day (`day` omitted) or a past day (`day` = YYYY-MM-DD).
+const BOARD_PAGE = 200
+
 // Past days accept practice uploads: they do not count for the leaderboards.
 export function DailyView({ day }: { day?: string }) {
   const t = useT(dailyMessages)
   const { me, loading: meLoading, refresh: refreshMe } = useMe()
   const [daily, setDaily] = useState<Daily | null>(null)
   const [rows, setRows] = useState<DailyRow[] | null>(null)
+  const [total, setTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [stats, setStats] = useState<DayStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [missing, setMissing] = useState(false)
@@ -53,10 +57,11 @@ export function DailyView({ day }: { day?: string }) {
       setDaily(d)
       setError(null)
       const [lb, st] = await Promise.all([
-        api<{ items: DailyRow[] }>(`/daily/${d.day}/leaderboard`),
+        api<{ items: DailyRow[]; total: number }>(`/daily/${d.day}/leaderboard?limit=${BOARD_PAGE}`),
         api<DayStats>(`/daily/${d.day}/stats`),
       ])
       setRows(lb.items)
+      setTotal(lb.total)
       setStats(st)
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setMissing(true)
@@ -64,6 +69,20 @@ export function DailyView({ day }: { day?: string }) {
     }
   }, [day])
   useEffect(() => { void load() }, [load])
+
+  const showMore = async () => {
+    if (!daily || !rows) return
+    setLoadingMore(true)
+    try {
+      const lb = await api<{ items: DailyRow[]; total: number }>(`/daily/${daily.day}/leaderboard?offset=${rows.length}&limit=${BOARD_PAGE}`)
+      setRows([...rows, ...lb.items])
+      setTotal(lb.total)
+    } catch (e) {
+      setError(errorText(e, t.locale))
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const update = useCallback((s: Submission) => {
     setLocal((cur) => {
@@ -189,6 +208,15 @@ export function DailyView({ day }: { day?: string }) {
           <div className="min-w-0">
             <HouseStrip house={daily.house ?? []} optimize={task.kind === 'optimize'} />
             {rows == null ? <Skeleton className="h-48 rounded-[14px]" /> : <DailyBoard rows={rows} me={me?.user.handle} optimize={task.kind === 'optimize'} />}
+            {rows != null && total > rows.length && (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button type="button" onClick={() => void showMore()} disabled={loadingMore}
+                  className="rounded-full border border-input px-4 py-1.5 text-sm font-semibold hover:bg-muted disabled:opacity-60">
+                  {t('showMore')}
+                </button>
+                <span className="text-xs text-muted-foreground">{t('shownOf', { shown: rows.length, total })}</span>
+              </div>
+            )}
           </div>
           {stats && <DayStatsPanel stats={stats} />}
         </div>

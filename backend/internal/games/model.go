@@ -111,6 +111,7 @@ type LeaderboardEntry struct {
 	Owner          string `json:"owner"` // the owner's public handle; empty for house bots
 	// Provisional marks a bot with too few season matches for its rating to mean much yet.
 	Provisional bool `json:"provisional"`
+	ownerID     string
 }
 
 // ProvisionalMatches is how many season matches a bot needs before its rating stops being "provisional".

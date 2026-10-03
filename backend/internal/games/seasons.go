@@ -38,7 +38,8 @@ type SeasonView struct {
 type SeasonDetail struct {
 	Season    SeasonView         `json:"season"`
 	Standings []LeaderboardEntry `json:"standings"`
-	Total     int                `json:"total"` // bots in the standings; the HTTP route may return only the top ones
+	Total     int                `json:"total"` // bots in the standings; the HTTP route returns one slice
+	You       *LeaderboardEntry  `json:"you"`   // the signed-in viewer's best bot when outside the slice (HTTP route only)
 	Now       time.Time          `json:"now"`
 }
 
@@ -70,7 +71,7 @@ func seasonLadder(ctx context.Context, tx pgx.Tx, seasonID string, playedOnly bo
 	q := `
 		SELECT g.id, g.name, g.house, v.source, v.number, g.mu, g.sigma,
 		       coalesce(sr.mu, $2::float8), coalesce(sr.sigma, $3::float8), coalesce(sr.matches, 0), coalesce(sr.wins, 0),
-		       coalesce(u.handle, '')
+		       coalesce(u.handle, ''), coalesce(g.owner_user_id, '')
 		FROM game_bots g
 		JOIN bot_versions v ON v.id = g.active_version_id
 		LEFT JOIN tanks_season_ratings sr ON sr.season_id = $1 AND sr.bot_id = g.id
@@ -90,7 +91,7 @@ func seasonLadder(ctx context.Context, tx pgx.Tx, seasonID string, playedOnly bo
 		var e LeaderboardEntry
 		var lifeMu, lifeSigma float64
 		if err := rows.Scan(&e.BotID, &e.Name, &e.House, &e.Source, &e.Version, &lifeMu, &lifeSigma,
-			&e.Mu, &e.Sigma, &e.Matches, &e.Wins, &e.Owner); err != nil {
+			&e.Mu, &e.Sigma, &e.Matches, &e.Wins, &e.Owner, &e.ownerID); err != nil {
 			return nil, err
 		}
 		e.Rating = rating.Display(rating.Rating{Mu: e.Mu, Sigma: e.Sigma})
@@ -270,7 +271,7 @@ func frozenStandings(ctx context.Context, tx pgx.Tx, id string) ([]LeaderboardEn
 	rows, err := tx.Query(ctx, `
 		SELECT st.rank, st.bot_id, st.bot_name, st.owner, st.house, st.source, st.version,
 		       st.rating, st.mu, st.sigma, st.matches, st.wins,
-		       coalesce(round(1000 + 40 * (g.mu - 3 * g.sigma))::int, st.rating)
+		       coalesce(round(1000 + 40 * (g.mu - 3 * g.sigma))::int, st.rating), coalesce(g.owner_user_id, '')
 		FROM tanks_season_standings st JOIN game_bots g ON g.id = st.bot_id
 		WHERE st.season_id = $1 AND g.hidden_at IS NULL ORDER BY st.rank`, id)
 	if err != nil {
@@ -281,7 +282,7 @@ func frozenStandings(ctx context.Context, tx pgx.Tx, id string) ([]LeaderboardEn
 	for rows.Next() {
 		var e LeaderboardEntry
 		if err := rows.Scan(&e.Rank, &e.BotID, &e.Name, &e.Owner, &e.House, &e.Source, &e.Version,
-			&e.Rating, &e.Mu, &e.Sigma, &e.Matches, &e.Wins, &e.LifetimeRating); err != nil {
+			&e.Rating, &e.Mu, &e.Sigma, &e.Matches, &e.Wins, &e.LifetimeRating, &e.ownerID); err != nil {
 			return nil, err
 		}
 		e.Provisional = e.Matches < ProvisionalMatches

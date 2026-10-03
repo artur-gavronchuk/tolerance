@@ -317,7 +317,9 @@ func (s *Service) StreakOf(ctx context.Context, userID string) (Streak, error) {
 }
 
 type OverallRow struct {
+	id            string
 	Place         int    `json:"place"`
+	Tied          bool   `json:"tied"` // shares its place with the neighbour: every tiebreak key is equal
 	Handle        string `json:"handle"`
 	Points        int    `json:"points"`
 	SolvedDays    int    `json:"solved_days"`
@@ -331,6 +333,49 @@ type OverallRow struct {
 // The ranking reads every graded submission, so it is kept for 15 seconds (the profile page asks for it too).
 func (s *Service) Overall(ctx context.Context) ([]OverallRow, error) {
 	return s.overall.Get(struct{}{}, func() ([]OverallRow, error) { return s.computeOverall(ctx) })
+}
+
+// OverallPage is one slice of the overall board; You is the signed-in viewer's own row when it is not in the slice.
+type OverallPage struct {
+	Items []OverallRow `json:"items"`
+	Total int          `json:"total"`
+	You   *OverallRow  `json:"you"`
+}
+
+// OverallSlice returns rows [offset, offset+limit) of the overall board plus the viewer's row (userID may be "").
+func (s *Service) OverallSlice(ctx context.Context, offset, limit int, userID string) (OverallPage, error) {
+	all, err := s.Overall(ctx)
+	if err != nil {
+		return OverallPage{}, err
+	}
+	out := OverallPage{Items: []OverallRow{}, Total: len(all)}
+	if offset < len(all) {
+		out.Items = all[offset:min(offset+limit, len(all))]
+	}
+	if userID != "" {
+		for i, r := range all {
+			if r.id == userID {
+				if i < offset || i >= offset+limit {
+					r := r
+					out.You = &r
+				}
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
+// LeaderboardPage is one slice of a day's board; Total counts every row, house agents included.
+func (s *Service) LeaderboardPage(ctx context.Context, day string, offset, limit int) ([]Row, int, error) {
+	all, err := s.Leaderboard(ctx, day)
+	if err != nil {
+		return nil, 0, err
+	}
+	if offset >= len(all) {
+		return []Row{}, len(all), nil
+	}
+	return all[offset:min(offset+limit, len(all))], len(all), nil
 }
 
 func (s *Service) computeOverall(ctx context.Context) ([]OverallRow, error) {
@@ -369,6 +414,7 @@ func (s *Service) computeOverall(ctx context.Context) ([]OverallRow, error) {
 			if err := rows.Scan(&r.Handle, &id, &r.Points); err != nil {
 				return err
 			}
+			r.id = id
 			r.SolvedDays = len(m[id])
 			r.CurrentStreak = streakOf(m[id], today).Current
 			out = append(out, r)
@@ -391,11 +437,13 @@ func (s *Service) computeOverall(ctx context.Context) ([]OverallRow, error) {
 		}
 		return a.Handle < b.Handle
 	})
-	if len(out) > 100 {
-		out = out[:100]
-	}
+	// Equal points, solved days and streak share a place (1, 2, 2, 4); the handle only orders the rows.
 	for i := range out {
 		out[i].Place = i + 1
+		if i > 0 && out[i].Points == out[i-1].Points && out[i].SolvedDays == out[i-1].SolvedDays && out[i].CurrentStreak == out[i-1].CurrentStreak {
+			out[i].Place = out[i-1].Place
+			out[i].Tied, out[i-1].Tied = true, true
+		}
 	}
 	return out, nil
 }

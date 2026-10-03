@@ -28,7 +28,7 @@ func (s *seeder) notifications(ctx context.Context, tx pgx.Tx) error {
 		add(u, "seed:verdict:2", "daily_verdict", map[string]any{"day": s.today.AddDate(0, 0, -2).Format("2006-01-02"), "title": "Interval merge", "kind": "bugfix", "status": "failed", "passed": 3, "total": 5, "score": nil}, at.Add(-26*time.Hour), true)
 		add(u, "seed:final:1", "daily_final", map[string]any{"day": s.today.AddDate(0, 0, -1).Format("2006-01-02"), "title": "Fix the retry loop", "place": 1 + s.rng.Intn(80), "of": 180}, at.Add(-2*time.Hour), false)
 		if u.botID != "" {
-			add(u, "seed:tourn:1", "tournament_lost", map[string]any{"id": "seed_t0", "name": "Weekly tournament", "bot": u.handle, "round": 2, "rounds": 3}, at.Add(-20*time.Hour), false)
+			add(u, "seed:tourn:1", "tournament_lost", map[string]any{"id": "seed_t0", "name": "Weekly tournament", "starts_at": s.now.Add(-24 * time.Hour).UTC(), "open": false, "bot": u.handle, "round": 2, "rounds": 3}, at.Add(-20*time.Hour), false)
 		}
 	}
 	s.counts["notifications"] = len(rows)

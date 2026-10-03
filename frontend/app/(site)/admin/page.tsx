@@ -11,6 +11,7 @@ import { errorText } from '@/lib/i18n/messages/errors'
 import { useT } from '@/lib/i18n/client'
 import type { T } from '@/lib/i18n/core'
 import { adminMessages } from '@/lib/i18n/messages/admin'
+import { tournamentName } from '@/lib/i18n/messages/names'
 import { FunnelSection } from '@/components/admin/funnel'
 import { ModerationSection } from '@/components/admin/moderation'
 import { FairplaySection } from '@/components/admin/fairplay'
@@ -221,7 +222,7 @@ function TanksSection({ p }: { p: AdminPulse }) {
           <Statuses m={tk.matches_last_hour} order={['queued', 'running', 'finished', 'infra_error']} />
         </Tile>
         <Tile label={t('tournament')} value={<span className="text-lg">{tk.tournament ? stLabel(t, tk.tournament.status) : t('none')}</span>}
-          hint={tk.tournament ? <Link href={`/tanks/tournaments/${tk.tournament.id}`} className="text-primary hover:underline">{tk.tournament.name}</Link> : undefined} />
+          hint={tk.tournament ? <Link href={`/tanks/tournaments/${tk.tournament.id}`} className="text-primary hover:underline">{tournamentName(t.locale, tk.tournament)}</Link> : undefined} />
       </div>
       <div className="mt-3 rounded-[14px] border border-border bg-card">
         <Table>

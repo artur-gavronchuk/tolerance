@@ -65,6 +65,8 @@ export const dailyMessages = defineMessages({
     nothingYet: 'Nothing submitted yet.',
     leaderboard: 'Leaderboard',
     finalStandings: 'Final standings',
+    showMore: 'Show more',
+    shownOf: 'Showing {shown} of {total}',
     live: 'Live',
 
     yourSolution: 'Your solution (.zip or .patch)',
@@ -201,6 +203,8 @@ export const dailyMessages = defineMessages({
     nothingYet: 'Пока ничего не отправлено.',
     leaderboard: 'Рейтинг',
     finalStandings: 'Итоги',
+    showMore: 'Показать ещё',
+    shownOf: 'Показано {shown} из {total}',
     live: 'Идёт сейчас',
 
     yourSolution: 'Ваше решение (.zip или .patch)',

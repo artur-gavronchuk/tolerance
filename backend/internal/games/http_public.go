@@ -56,7 +56,7 @@ func RegisterAdminRoutes(mux *http.ServeMux, s *Service) {
 
 // RegisterPublicRoutes registers the tanks arena's public, unauthenticated routes: the season ladder, the
 // match feed and single matches (with replays), bot profiles, and the live broadcast schedule.
-func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
+func RegisterPublicRoutes(mux *http.ServeMux, s *Service, who func(*http.Request) string) {
 	mux.HandleFunc("GET /api/v1/tanks/matches", func(w http.ResponseWriter, r *http.Request) {
 		limit, err := parseLimit(r, 20, 50)
 		if err != nil {
@@ -142,7 +142,7 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
 
 	// {id} is a season id like "2026-10", or "current".
 	mux.HandleFunc("GET /api/v1/tanks/seasons/{id}", func(w http.ResponseWriter, r *http.Request) {
-		limit, err := parseLimit(r, 100, 500)
+		offset, limit, err := httpx.PageParams(r, 100, 500)
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
@@ -152,8 +152,19 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
 			httpx.WriteError(w, r, err)
 			return
 		}
-		if len(d.Standings) > limit { // Total keeps the real size
-			d.Standings = d.Standings[:limit]
+		// Total keeps the real size; You is the signed-in viewer's best-ranked bot when it is outside the slice.
+		if uid := who(r); uid != "" {
+			for _, e := range d.Standings {
+				if e.ownerID == uid {
+					e := e
+					d.You = &e
+					break
+				}
+			}
+		}
+		d.Standings = d.Standings[min(offset, len(d.Standings)):min(offset+limit, len(d.Standings))]
+		if d.You != nil && d.You.Rank > offset && d.You.Rank <= offset+limit {
+			d.You = nil
 		}
 		httpx.Respond(w, http.StatusOK, d)
 	})

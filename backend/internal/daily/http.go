@@ -28,12 +28,17 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service, who UserFunc, my MyFun
 		httpx.Respond(w, http.StatusOK, d)
 	})
 	mux.HandleFunc("GET /api/v1/daily/{day}/leaderboard", func(w http.ResponseWriter, r *http.Request) {
-		items, err := s.Leaderboard(r.Context(), r.PathValue("day"))
+		offset, limit, err := httpx.PageParams(r, 200, 500)
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
 		}
-		httpx.Respond(w, http.StatusOK, map[string]any{"items": items})
+		items, total, err := s.LeaderboardPage(r.Context(), r.PathValue("day"), offset, limit)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, map[string]any{"items": items, "total": total})
 	})
 	mux.HandleFunc("GET /api/v1/daily/{day}/reveal", func(w http.ResponseWriter, r *http.Request) {
 		rv, err := s.Reveal(r.Context(), r.PathValue("day"))
@@ -68,11 +73,16 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service, who UserFunc, my MyFun
 		httpx.Respond(w, http.StatusOK, map[string]any{"items": items})
 	})
 	mux.HandleFunc("GET /api/v1/leaderboard", func(w http.ResponseWriter, r *http.Request) {
-		items, err := s.Overall(r.Context())
+		offset, limit, err := httpx.PageParams(r, 100, 500)
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
 		}
-		httpx.Respond(w, http.StatusOK, map[string]any{"items": items})
+		page, err := s.OverallSlice(r.Context(), offset, limit, who(r))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, page)
 	})
 }

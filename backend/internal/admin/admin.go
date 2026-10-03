@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -57,9 +58,11 @@ type LadderRow struct {
 }
 
 type Tournament struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Status string `json:"status"`
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	Status   string    `json:"status"`
+	StartsAt time.Time `json:"starts_at"`
+	Open     bool      `json:"open"`
 }
 
 type Tanks struct {
@@ -252,13 +255,15 @@ func (s *Service) Pulse(ctx context.Context) (Pulse, error) {
 			return err
 		}
 		var tr Tournament
-		if err = optional(ctx, tx, `SELECT id, name, status FROM tanks_tournaments WHERE status <> 'cancelled'
+		if err = optional(ctx, tx, `SELECT id, name, status, starts_at FROM tanks_tournaments WHERE status <> 'cancelled'
 			ORDER BY (status = 'running') DESC, (status = 'scheduled') DESC,
 			         CASE WHEN status = 'scheduled' THEN starts_at END ASC, coalesce(finished_at, starts_at) DESC LIMIT 1`, nil,
-			&tr.ID, &tr.Name, &tr.Status); err != nil {
+			&tr.ID, &tr.Name, &tr.Status, &tr.StartsAt); err != nil {
 			return err
 		}
 		if tr.ID != "" {
+			tr.StartsAt = tr.StartsAt.UTC()
+			tr.Open = strings.HasPrefix(tr.Name, "Open tournament")
 			t.Tournament = &tr
 		}
 		if t.Ladder, err = ladderTop(ctx, tx, now); err != nil {

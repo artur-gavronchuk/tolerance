@@ -7,7 +7,7 @@ import { HandleLink } from '@/components/daily/handle-link'
 import { StackName } from '@/components/daily/stack-label'
 import { useT } from '@/lib/i18n/client'
 import { dailyMessages } from '@/lib/i18n/messages/daily'
-import { formatNumber, type Locale } from '@/lib/i18n/core'
+import { formatDateTime, formatNumber, type Locale } from '@/lib/i18n/core'
 
 export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: string; optimize?: boolean }) {
   const t = useT(dailyMessages)
@@ -40,7 +40,7 @@ export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: stri
               <TableCell className="font-semibold"><Player row={r} /> <HideButton kind="submission" id={r.id} /> {!r.house && <ReportButton handle={r.handle} />}</TableCell>
               <TableCell className="text-muted-foreground"><StackName madeWith={r.made_with} /></TableCell>
               <TableCell className="text-right font-mono font-bold">{result(r)}</TableCell>
-              <TableCell className="text-right font-mono text-muted-foreground">{time(r.submitted_at)}</TableCell>
+              <TableCell className="text-right font-mono text-muted-foreground">{time(t.locale, r.submitted_at)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -51,7 +51,7 @@ export function DailyBoard({ rows, me, optimize }: { rows: DailyRow[]; me?: stri
             <span className="w-5 shrink-0 font-mono text-sm text-muted-foreground">{r.house ? <Bot className="size-4" aria-hidden /> : r.place}</span>
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold"><Player row={r} /> <HideButton kind="submission" id={r.id} /> {!r.house && <ReportButton handle={r.handle} />}</p>
-              <p className="truncate text-xs text-muted-foreground"><StackName madeWith={r.made_with} /> · {time(r.submitted_at)}</p>
+              <p className="truncate text-xs text-muted-foreground"><StackName madeWith={r.made_with} /> · {time(t.locale, r.submitted_at)}</p>
             </div>
             <span className="shrink-0 font-mono text-lg font-bold">{result(r)}</span>
           </li>
@@ -80,6 +80,7 @@ export function fmtScore(v: number | null | undefined, locale: Locale = 'en') {
   return v == null ? '—' : formatNumber(locale, v, { maximumFractionDigits: 2 })
 }
 
-function time(iso: string) {
-  return new Date(iso).toISOString().slice(11, 16)
+// "02 Oct, 23:45 UTC": the date matters because a day's board spans midnight.
+function time(locale: Locale, iso: string) {
+  return formatDateTime(locale, iso, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
 }

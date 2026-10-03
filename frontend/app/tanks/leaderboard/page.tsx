@@ -8,6 +8,7 @@ import { Leaderboard } from '@/components/tanks/leaderboard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { tanks } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useMoreStandings } from '@/components/tanks/use-more-standings'
 import { seasonName } from '@/lib/i18n/messages/names'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
@@ -19,6 +20,7 @@ export default function LadderPage() {
   const [d, setD] = useState<SeasonDetail | null>(null)
   const [all, setAll] = useState<SeasonView[]>([])
   const [failed, setFailed] = useState(false)
+  const { more, loading } = useMoreStandings('current', d, setD)
 
   useEffect(() => {
     void tanks.season('current').then(setD).catch(() => setFailed(true))
@@ -50,7 +52,7 @@ export default function LadderPage() {
                 x.id === s?.id && 'bg-muted text-foreground',
               )}
             >
-              {x.name}
+              {seasonName(tr.locale, x.starts_at)}
               {x.status === 'active' && tr('ladder.current')}
             </Link>
           ))}
@@ -63,7 +65,7 @@ export default function LadderPage() {
         ) : d == null ? (
           <Skeleton className="h-96 rounded-[14px]" />
         ) : (
-          <Leaderboard entries={d.standings} />
+          <Leaderboard entries={d.standings} paging={{ total: d.total, you: d.you, onMore: () => void more(), loading }} />
         )}
       </div>
     </div>

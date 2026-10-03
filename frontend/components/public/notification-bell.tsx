@@ -8,6 +8,7 @@ import { fmtScore } from '@/components/daily/daily-board'
 import { retention } from '@/lib/api'
 import { useT } from '@/lib/i18n/client'
 import { formatDateTime, type T } from '@/lib/i18n/core'
+import { seasonNameFromId, tournamentName } from '@/lib/i18n/messages/names'
 import { notifyMessages } from '@/lib/i18n/messages/notify'
 import type { AppNotification, Recap } from '@/lib/types'
 
@@ -17,6 +18,11 @@ const POLL_MS = 60_000
 const today = () => new Date().toISOString().slice(0, 10)
 
 // Wording and target of one notification, from its type and stored params.
+// Stored payloads carry the English name; newer ones also carry starts_at/open to rebuild it in the reader's language.
+function tname(locale: TT['locale'], p: Record<string, unknown>) {
+  return tournamentName(locale, { name: String(p.name), starts_at: typeof p.starts_at === 'string' ? p.starts_at : '', open: p.open === true })
+}
+
 function render(t: TT, n: AppNotification): { text: string; href: string } {
   const p = n.params as Record<string, string | number>
   const num = (k: string) => Number(p[k] ?? 0)
@@ -32,17 +38,17 @@ function render(t: TT, n: AppNotification): { text: string; href: string } {
       return { text: t('dailyFinal', { title: String(p.title), place: num('place'), of: num('of') }), href: `/day/${p.day}` }
     case 'tournament_soon':
       return {
-        text: t('tournamentSoon', { name: String(p.name), time: formatDateTime(t.locale, String(p.starts_at), { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) }),
+        text: t('tournamentSoon', { name: tname(t.locale, p), time: formatDateTime(t.locale, String(p.starts_at), { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) }),
         href: `/tanks/tournaments/${p.id}`,
       }
     case 'tournament_entered':
-      return { text: t('tournamentEntered', { bot: String(p.bot), name: String(p.name) }), href: `/tanks/tournaments/${p.id}` }
+      return { text: t('tournamentEntered', { bot: String(p.bot), name: tname(t.locale, p) }), href: `/tanks/tournaments/${p.id}` }
     case 'tournament_won':
-      return { text: t('tournamentWon', { bot: String(p.bot), name: String(p.name) }), href: `/tanks/tournaments/${p.id}` }
+      return { text: t('tournamentWon', { bot: String(p.bot), name: tname(t.locale, p) }), href: `/tanks/tournaments/${p.id}` }
     case 'tournament_lost':
-      return { text: t('tournamentLost', { bot: String(p.bot), name: String(p.name), round: num('round'), rounds: num('rounds') }), href: `/tanks/tournaments/${p.id}` }
+      return { text: t('tournamentLost', { bot: String(p.bot), name: tname(t.locale, p), round: num('round'), rounds: num('rounds') }), href: `/tanks/tournaments/${p.id}` }
     case 'rank_drop':
-      return { text: t('rankDrop', { bot: String(p.bot), from: num('from'), to: num('to'), season: String(p.season) }), href: '/tanks/leaderboard' }
+      return { text: t('rankDrop', { bot: String(p.bot), from: num('from'), to: num('to'), season: seasonNameFromId(t.locale, String(p.season)) }), href: '/tanks/leaderboard' }
   }
 }
 

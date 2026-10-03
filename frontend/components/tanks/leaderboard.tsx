@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
 import type { LeaderboardEntry } from '@/lib/types'
+import { Button } from '@/components/ui/button'
 
 function Provisional() {
   const t = useT(m)
@@ -25,7 +26,9 @@ function winRate(e: LeaderboardEntry): string {
 // The ranking table, shared by /tanks (top 10) and /tanks/leaderboard (the
 // full season ladder). Renders as a real table from sm up; a stacked row list
 // below it, so it stays readable at 375px instead of scrolling sideways.
-export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
+export interface LeaderboardPaging { total: number; you: LeaderboardEntry | null; onMore: () => void; loading: boolean }
+
+export function Leaderboard({ entries, paging }: { entries: LeaderboardEntry[]; paging?: LeaderboardPaging }) {
   const t = useT(m)
   if (entries.length === 0) {
     return (
@@ -88,6 +91,29 @@ export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
           </li>
         ))}
       </ul>
+      {paging && <Paging shown={entries.length} {...paging} />}
     </>
+  )
+}
+
+// Footer of a long ladder: how much is shown, "Show more", and the viewer's own bot when it is further down.
+function Paging({ shown, total, you, onMore, loading }: LeaderboardPaging & { shown: number }) {
+  const t = useT(m)
+  return (
+    <div className="mt-3 space-y-3">
+      {you && (
+        <div className="flex items-center gap-3 rounded-[14px] border border-border bg-accent p-3">
+          <span className="shrink-0 font-mono text-sm font-semibold">{t('lb.you', { rank: you.rank })}</span>
+          <Link href={`/tanks/bots/${you.bot_id}`} className="min-w-0 flex-1 truncate font-semibold hover:text-primary">{you.name}</Link>
+          <span className="shrink-0 font-mono text-lg font-bold">{you.rating}</span>
+        </div>
+      )}
+      {total > shown && (
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <span className="text-sm text-muted-foreground">{t('lb.topOf', { shown, total })}</span>
+          <Button variant="outline" size="sm" onClick={onMore} disabled={loading}>{t('lb.showMore')}</Button>
+        </div>
+      )}
+    </div>
   )
 }

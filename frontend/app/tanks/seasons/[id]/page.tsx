@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, tanks } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useMoreStandings } from '@/components/tanks/use-more-standings'
 import { seasonName } from '@/lib/i18n/messages/names'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
@@ -27,6 +28,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
   const [d, setD] = useState<SeasonDetail | null>(null)
   const [all, setAll] = useState<SeasonView[]>([])
   const [error, setError] = useState<string | null>(null)
+  const { more, loading } = useMoreStandings(id, d, setD)
 
   useEffect(() => {
     setD(null)
@@ -105,10 +107,7 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
 
       <section className="mt-8">
         <SectionTitle>{s.status === 'active' ? tr('season.standingsSoFar') : tr('season.final')}</SectionTitle>
-        <Leaderboard entries={d.standings} />
-        {d.total > d.standings.length && (
-          <p className="mt-3 text-center text-sm text-muted-foreground">{tr('season.topOf', { shown: d.standings.length, total: d.total })}</p>
-        )}
+        <Leaderboard entries={d.standings} paging={{ total: d.total, you: d.you, onMore: () => void more(), loading }} />
       </section>
 
       {all.length > 1 && (

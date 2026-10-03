@@ -78,7 +78,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	tasks.RegisterPublicRoutes(public, d.pool)
 	analytics.RegisterPublicRoutes(public, d.analytics, identity.OptionalUserID(d.users), d.limiter, cfg.trustProxy)
 	profiles.RegisterPublicRoutes(public, d.profiles)
-	games.RegisterPublicRoutes(public, d.games)
+	games.RegisterPublicRoutes(public, d.games, identity.OptionalUserID(d.users))
 
 	// The personal upload link: the token in the URL is the credential (no session).
 	uploadlink.RegisterPublicRoutes(public, uploadlink.Deps{Links: d.uploadLinks, Pool: d.pool, Daily: d.daily, Submissions: d.submissions,
