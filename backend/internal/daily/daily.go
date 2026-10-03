@@ -258,11 +258,13 @@ func (s *Service) StreakOf(ctx context.Context, userID string) (Streak, error) {
 type OverallRow struct {
 	Place         int    `json:"place"`
 	Handle        string `json:"handle"`
+	Points        int    `json:"points"`
 	SolvedDays    int    `json:"solved_days"`
 	CurrentStreak int    `json:"current_streak"`
 }
 
-// Overall ranks people by days fully solved, then current streak, then handle.
+// Overall ranks people by points, then days fully solved, then current streak, then handle. A day is worth
+// up to 100 points: the share of hidden tests the person's best attempt that day passed.
 func (s *Service) Overall(ctx context.Context) ([]OverallRow, error) {
 	out := []OverallRow{}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
@@ -270,26 +272,39 @@ func (s *Service) Overall(ctx context.Context) ([]OverallRow, error) {
 		if err != nil {
 			return err
 		}
-		handles, err := tx.Query(ctx, `SELECT id, handle FROM users WHERE id = ANY($1)`, keys(m))
+		rows, err := tx.Query(ctx, `
+			SELECT u.handle, u.id, sum(best.points)::int FROM (
+				SELECT user_id, max(round(100.0 * passed_tests / total_tests)) AS points
+				FROM submissions
+				WHERE day IS NOT NULL AND status IN ('passed', 'failed') AND passed_tests > 0 AND total_tests > 0
+				GROUP BY user_id, day) best
+			JOIN users u ON u.id = best.user_id
+			GROUP BY u.id, u.handle`)
 		if err != nil {
 			return err
 		}
-		defer handles.Close()
+		defer rows.Close()
 		today := time.Now().UTC().Truncate(24 * time.Hour)
-		for handles.Next() {
-			var id, h string
-			if err := handles.Scan(&id, &h); err != nil {
+		for rows.Next() {
+			var r OverallRow
+			var id string
+			if err := rows.Scan(&r.Handle, &id, &r.Points); err != nil {
 				return err
 			}
-			out = append(out, OverallRow{Handle: h, SolvedDays: len(m[id]), CurrentStreak: streakOf(m[id], today).Current})
+			r.SolvedDays = len(m[id])
+			r.CurrentStreak = streakOf(m[id], today).Current
+			out = append(out, r)
 		}
-		return handles.Err()
+		return rows.Err()
 	})
 	if err != nil {
 		return nil, err
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
+		if a.Points != b.Points {
+			return a.Points > b.Points
+		}
 		if a.SolvedDays != b.SolvedDays {
 			return a.SolvedDays > b.SolvedDays
 		}
@@ -305,14 +320,6 @@ func (s *Service) Overall(ctx context.Context) ([]OverallRow, error) {
 		out[i].Place = i + 1
 	}
 	return out, nil
-}
-
-func keys(m map[string][]string) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
 }
 
 type RevealFile struct {

@@ -43,7 +43,7 @@ export interface DayListItem {
   solvers: number
 }
 
-export interface OverallRow { place: number; handle: string; solved_days: number; current_streak: number }
+export interface OverallRow { place: number; handle: string; points: number; solved_days: number; current_streak: number }
 
 export interface User { id: string; email: string; handle: string; role: 'user' | 'admin'; created_at: string }
 export interface Me { user: User; streak: { current: number; best: number } }
