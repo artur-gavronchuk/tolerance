@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ArrowDown, ExternalLink } from 'lucide-react'
+import { useLoginHref } from '@/components/public/return-path'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { friendlyMessage, products } from '@/lib/api'
@@ -15,6 +16,7 @@ type Verdict = 'a' | 'b' | 'tie'
 // Blind comparison: two anonymous sites side by side (tabs on a phone), a verdict, then the authors are
 // revealed and the next pair comes. The standings come from everybody's verdicts.
 export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean }) {
+  const loginTo = useLoginHref()
   const [next, setNext] = useState<CompareNext | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -81,7 +83,7 @@ export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean })
       </p>
 
       {!signedIn && (
-        <p className="text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" href="/login">Sign in</Link> to judge sites.</p>
+        <p className="text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" href={loginTo}>Sign in</Link> to judge sites.</p>
       )}
       {signedIn && !next && !error && <Skeleton className="h-80 rounded-[10px]" />}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

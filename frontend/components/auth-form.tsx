@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Brand } from '@/components/brand'
 import { api, post, ApiError } from '@/lib/api'
-import { lastPath, safeReturnPath } from '@/components/public/return-path'
+import { safeReturnPath } from '@/components/public/return-path'
 import type { AuthProviders } from '@/lib/types'
 
 const errors: Record<string, string> = {
@@ -50,7 +50,7 @@ export function AuthForm() {
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
-    setNext(safeReturnPath(q.get('next')) ?? lastPath() ?? '/')
+    setNext(safeReturnPath(q.get('next')) ?? '/')
     const code = q.get('error')
     if (code) setError(Object.hasOwn(errors, code) ? errors[code] : 'Sign-in failed. Try again.')
     api<AuthProviders>('/auth/providers')

@@ -1,6 +1,8 @@
-// Where to send people after sign-in. Same-site relative paths only, mirroring the backend's safeNext.
-const LAST = 'tolerance.lastPath'
+'use client'
 
+import { usePathname } from 'next/navigation'
+
+// Where to send people after sign-in. Same-site relative paths only, mirroring the backend's safeNext.
 export function safeReturnPath(next: string | null | undefined): string | null {
   if (!next || next.length > 512 || !next.startsWith('/') || next.startsWith('//')) return null
   for (let i = 0; i < next.length; i++) {
@@ -11,23 +13,12 @@ export function safeReturnPath(next: string | null | undefined): string | null {
   return next
 }
 
-// The page the visitor was on before they were sent to /login (kept by the site header on every navigation).
-export function rememberPath(path: string) {
-  try {
-    const p = safeReturnPath(path)
-    if (p) sessionStorage.setItem(LAST, p)
-  } catch {}
-}
-
-export function lastPath(): string | null {
-  try {
-    return safeReturnPath(sessionStorage.getItem(LAST))
-  } catch {
-    return null
-  }
-}
-
 export function loginHref(next: string | null | undefined): string {
   const p = safeReturnPath(next)
   return !p || p === '/' ? '/login' : `/login?next=${encodeURIComponent(p)}`
+}
+
+// A /login link that returns to the page it is rendered on.
+export function useLoginHref(): string {
+  return loginHref(usePathname())
 }

@@ -13,6 +13,7 @@ import { TournamentList } from '@/components/tanks/tournament-list'
 import { SectionTitle } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { loginHref } from '@/components/public/return-path'
 import { Skeleton } from '@/components/ui/skeleton'
 import { tanks } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
@@ -56,7 +57,7 @@ export default function TanksHome() {
             <li>Saturday top-8 tournament</li>
           </ul>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button size="lg" render={<Link href={me ? '/app/tanks' : '/login'} />} nativeButton={false}>
+            <Button size="lg" render={<Link href={me ? '/app/tanks' : loginHref('/app/tanks')} />} nativeButton={false}>
               Enter your bot
             </Button>
             <Button size="lg" variant="outline" render={<Link href="/tanks/docs" />} nativeButton={false}>

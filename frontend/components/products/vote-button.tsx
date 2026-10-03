@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { ThumbsUp } from 'lucide-react'
+import { useLoginHref } from '@/components/public/return-path'
 import { Button } from '@/components/ui/button'
 import type { ProductEntry, ProductTask } from '@/lib/types'
 
@@ -14,6 +15,7 @@ export function VoteButton({ entry: e, phase, signedIn, busy, onToggle, compact 
   compact?: boolean
   hideCount?: boolean
 }) {
+  const loginTo = useLoginHref()
   const count = compact || hideCount ? null : <span className="font-mono">{e.votes}</span>
   const label = (t: string) => (compact ? undefined : t)
   const name = e.voted ? 'Take back your vote' : 'Vote'
@@ -26,7 +28,7 @@ export function VoteButton({ entry: e, phase, signedIn, busy, onToggle, compact 
   }
   if (!signedIn) {
     return (
-      <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/login" />} title="Sign in to vote">
+      <Button size="sm" variant="outline" nativeButton={false} render={<Link href={loginTo} />} title="Sign in to vote">
         <ThumbsUp />{count}{label('Sign in to vote')}
       </Button>
     )

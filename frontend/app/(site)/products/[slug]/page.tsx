@@ -11,6 +11,7 @@ import { EntryCard } from '@/components/products/entry-card'
 import { EntryGallery } from '@/components/products/gallery'
 import { PhaseBadge, RankingHow, VotingNote, isBlind, utc } from '@/components/products/phase'
 import { useResults } from '@/components/products/use-results'
+import { useLoginHref } from '@/components/public/return-path'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,6 +31,7 @@ function countedId(task: ProductDetail): string | null {
 }
 
 export default function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
+  const loginTo = useLoginHref()
   const { slug } = use(params)
   const { me, loading: meLoading } = useMe()
   const [task, setTask] = useState<ProductDetail | null>(null)
@@ -90,7 +92,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
           </div>
         )}
         {open && !meLoading && !me && (
-          <p className="text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" href="/login">Sign in</Link> to upload your solution.</p>
+          <p className="text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" href={loginTo}>Sign in</Link> to upload your solution.</p>
         )}
         {open && me && <UploadForm slug={slug} site={task.kind === 'site'} disabled={task.attempts < 1000 && left <= 0} onDone={refresh} />}
         {!open && task.mine.length === 0 && (

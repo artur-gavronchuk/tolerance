@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { loginHref } from '@/components/public/return-path'
 import { SiteHeader } from '@/components/public/site-header'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,9 +14,10 @@ import { PRODUCT } from '@/lib/brand'
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
   const { me, loading, error, refresh } = useMe()
   const router = useRouter()
+  const pathname = usePathname()
   useEffect(() => {
-    if (!loading && (error?.status === 401 || (!me && !error))) router.replace('/login')
-  }, [me, loading, error, router])
+    if (!loading && (error?.status === 401 || (!me && !error))) router.replace(loginHref(pathname))
+  }, [me, loading, error, router, pathname])
   if (!loading && error && error.status !== 401) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4">
