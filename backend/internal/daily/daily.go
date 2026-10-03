@@ -314,3 +314,81 @@ func keys(m map[string][]string) []string {
 	}
 	return out
 }
+
+type RevealFile struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+type Solution struct {
+	Place       int       `json:"place"`
+	Handle      string    `json:"handle"`
+	MadeWith    string    `json:"made_with"`
+	SubmittedAt time.Time `json:"submitted_at"`
+	Diff        string    `json:"diff"`
+}
+
+// Reveal is what a day publishes once it closes: the hidden tests and the earliest fully passing
+// solutions.
+type Reveal struct {
+	HiddenTests []RevealFile `json:"hidden_tests"`
+	Solutions   []Solution   `json:"solutions"`
+}
+
+// ErrNotClosed means the day is still open and nothing is published yet.
+var ErrNotClosed = httpx.New(http.StatusForbidden, "day_open", "Hidden tests and solutions are published when the day closes")
+
+// Reveal returns a closed day's hidden tests and up to 10 solutions: each person's first fully passing
+// submission made while the day was open, earliest first.
+func (s *Service) Reveal(ctx context.Context, day string) (Reveal, error) {
+	if _, ok := ParseDay(day); !ok || day > Today() {
+		return Reveal{}, httpx.NotFound()
+	}
+	if day == Today() {
+		return Reveal{}, ErrNotClosed
+	}
+	out := Reveal{HiddenTests: []RevealFile{}, Solutions: []Solution{}}
+	var hiddenTar []byte
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT t.hidden_tar FROM daily_tasks d JOIN tasks t ON t.slug = d.task_slug WHERE d.day = $1`, day).
+			Scan(&hiddenTar); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `
+			SELECT handle, made_with, created_at, diff FROM (
+				SELECT DISTINCT ON (s.user_id) u.handle, s.made_with, s.created_at, s.diff
+				FROM submissions s JOIN users u ON u.id = s.user_id
+				WHERE s.day = $1 AND s.status = 'passed'
+				ORDER BY s.user_id, s.created_at ASC) first
+			ORDER BY created_at ASC, handle LIMIT 10`, day)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var sol Solution
+			if err := rows.Scan(&sol.Handle, &sol.MadeWith, &sol.SubmittedAt, &sol.Diff); err != nil {
+				return err
+			}
+			sol.SubmittedAt = sol.SubmittedAt.UTC()
+			sol.Place = len(out.Solutions) + 1
+			out.Solutions = append(out.Solutions, sol)
+		}
+		return rows.Err()
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Reveal{}, httpx.NotFound()
+	}
+	if err != nil {
+		return Reveal{}, err
+	}
+	files, err := tasks.ReadTar(hiddenTar)
+	if err != nil {
+		return Reveal{}, err
+	}
+	for p, body := range files {
+		out.HiddenTests = append(out.HiddenTests, RevealFile{Path: p, Content: string(body)})
+	}
+	sort.Slice(out.HiddenTests, func(i, j int) bool { return out.HiddenTests[i].Path < out.HiddenTests[j].Path })
+	return out, nil
+}

@@ -7,6 +7,7 @@ import { Download } from 'lucide-react'
 import { Markdown } from '@/components/daily/markdown'
 import { Countdown } from '@/components/daily/countdown'
 import { DailyBoard } from '@/components/daily/daily-board'
+import { DayRevealView } from '@/components/daily/day-reveal'
 import { SubmissionCard } from '@/components/daily/submission-card'
 import { TaskBadges } from '@/components/daily/task-header'
 import { UploadForm } from '@/components/daily/upload-form'
@@ -109,6 +110,7 @@ export function DailyView({ day }: { day?: string }) {
             <ol start={3} className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
               <li>Zip the edited repository, or save your change as a .patch, and upload it below.</li>
             </ol>
+            {!practice && <p className="mt-3 text-xs text-muted-foreground">When the day closes, the hidden tests and the first passing solutions are published.</p>}
             <Button className="mt-4 w-full" render={<a href={task.repo_url} download />} nativeButton={false}>
               <Download />Download repo
             </Button>
@@ -152,6 +154,8 @@ export function DailyView({ day }: { day?: string }) {
         <SectionTitle aside={practice ? 'Final standings' : 'Live'}>Leaderboard</SectionTitle>
         {rows == null ? <Skeleton className="h-48 rounded-[14px]" /> : <DailyBoard rows={rows} me={me?.user.handle} />}
       </section>
+
+      {practice && <DayRevealView day={daily.day} />}
     </div>
   )
 }

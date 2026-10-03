@@ -31,6 +31,12 @@ export interface DailyRow {
   passed_tests: number; total_tests: number; submitted_at: string
 }
 
+// Published once a day closes (`/daily/{day}/reveal`).
+export interface DayReveal {
+  hidden_tests: { path: string; content: string }[]
+  solutions: { place: number; handle: string; made_with: string; submitted_at: string; diff: string }[]
+}
+
 export interface DayListItem {
   day: string
   task: { slug: string; title: string; language: 'go' | 'python'; difficulty: number }
