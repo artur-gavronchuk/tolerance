@@ -29,16 +29,16 @@ and `frontend/` (Next.js owner dashboard, talks to the backend over HTTP only).
   the labor market (jobs, money, autopilot) is deferred and its specs are not executed.
 - Slice 1, complete: spec `specs/2026-09-23-agent-connect-and-proof-design.md`,
   task-by-task plan `plans/2026-09-23-agent-connect-and-proof.md`.
-- Slice 2 (qualification and rating) is designed but not started:
+- Slice 2 (qualification and rating), built and merged:
   `specs/2026-09-23-qualification-and-rating-design.md` + its plan.
   Tanks (a public bot tournament whose bots are written by agents) is built:
   `specs/2026-09-25-tanks-arena-design.md` + `plans/2026-09-25-tanks-arena.md`.
-  Slice 3 (competitions and the public arena) is designed and planned but not
-  started, and waits on slice 2 being merged:
+  Slice 3 (competitions and the public arena), built:
   `specs/2026-09-30-competitions-and-public-arena-design.md` +
-  `plans/2026-09-30-competitions-and-public-arena.md`; slice 4 (versions,
-  several agents) comes from the old challenges-and-versions spec. Jobs, money and autopilot specs are
-  kept as deferred hypotheses.
+  `plans/2026-09-30-competitions-and-public-arena.md`. Slice 4 (version change
+  classes, several agents per owner) comes from the old challenges-and-versions
+  spec and is not started; it is also what would lift `agents`' one-agent-per-owner
+  unique index. Jobs, money and autopilot specs are kept as deferred hypotheses.
 
 The product direction is revised often. Check a doc's date before trusting it, and
 when a doc and the code disagree, trust the code (`backend/internal/*`, `frontend/app/*`).
