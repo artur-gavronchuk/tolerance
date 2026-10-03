@@ -61,32 +61,23 @@ export default function TanksDocsPage() {
       </PageHeader>
 
       <Section id="quick-start" title="Quick start">
-        <p>Two ways to get a bot into the ladder, then upload it.</p>
-        <p className="font-semibold text-foreground">0. Install the <code>{CLI}</code> tool</p>
-        <InstallCli />
+        <p>Nothing to install. Everything happens on the <Link className="text-primary hover:underline" href="/app/tanks">My bot</Link> page.</p>
+        <p className="font-semibold text-foreground">1. Download a starter kit</p>
         <p>
-          One binary, no dependencies, for macOS and Linux. Or build it from the repository:{' '}
-          <code>cd backend &amp;&amp; go build -o {CLI} ./cmd/{CLI}</code>.
+          Pick Python or JavaScript. The zip holds a working bot, <code>bot.json</code>, this game&apos;s rules as{' '}
+          <code>GAME.md</code> and a short README.
         </p>
-        <p className="font-semibold text-foreground">1. Let your coding agent write it</p>
-        <CopyBlock text={`${CLI} tanks new mybot --lang python`} />
+        <p className="font-semibold text-foreground">2. Give the folder to your coding agent</p>
         <p>
-          Open <code>mybot</code> in Claude Code, Cursor, Codex or any agent, and ask it to write the bot following{' '}
-          <code>GAME.md</code>: keep <code>bot.json</code> valid, use only the standard library, test with{' '}
-          <code>{CLI} tanks play</code> against the house bots over several seeds, and aim to beat them. The prompt is on
-          the <Link className="text-primary hover:underline" href="/app/tanks">My bot</Link> page.
+          Open it in Claude Code, Cursor, Codex or any agent and ask it to read <code>GAME.md</code> and improve the bot:
+          keep <code>bot.json</code> valid, use only the standard library, aim to beat the house bots. The exact prompt
+          is on the My bot page. Or edit the bot by hand.
         </p>
-        <p className="font-semibold text-foreground">2. Write one by hand</p>
-        <CopyBlock text={`${CLI} tanks new mybot --lang python\n${CLI} tanks play mybot house:hunter house:sniper`} />
+        <p className="font-semibold text-foreground">3. Zip it and upload</p>
         <p>
-          <code>{CLI} tanks new</code> scaffolds a starter bot (Python or JavaScript). <code>{CLI} tanks play</code>{' '}
-          runs a match on your own machine in seconds and writes a replay file — open it at{' '}
-          <Link className="text-primary hover:underline" href="/tanks/replay">/tanks/replay</Link>. Both work without an
-          account or network access.
-        </p>
-        <p className="font-semibold text-foreground">Then upload it</p>
-        <p>
-          Pack your bot&apos;s folder as a <code>tar.gz</code> and upload it from the <Link className="text-primary hover:underline" href="/app/tanks">My bot</Link> page. It goes through the same checks as any other version.
+          Zip the folder (a <code>.tar.gz</code> works too) and drop it on the My bot page. Each version gets a trial
+          match against a house bot, then plays the ladder; the check results and replays are right there, so the
+          platform is your test harness. Paste what went wrong back to your agent and upload the next version.
         </p>
       </Section>
 
@@ -252,7 +243,12 @@ export default function TanksDocsPage() {
       </Section>
 
       <Section id="local" title="Playing locally">
-        <p>The <code>{CLI}</code> command plays matches on your own machine, using the exact same engine as the server:</p>
+        <p>
+          Advanced and optional: if you want faster iteration than uploading, the <code>{CLI}</code> command plays
+          matches on your own machine, using the exact same engine as the server. Install it:
+        </p>
+        <InstallCli />
+        <p>Then:</p>
         <CopyBlock text={`${CLI} tanks new mybot --lang python     # scaffold a starter bot\n${CLI} tanks play mybot house:hunter house:sniper --seed 1\n${CLI} tanks play mybot house:hunter house:sniper --seed 2`} />
         <p>
           Each run prints a results table (place, kills, damage, status, and the stderr tail of anyone who crashed)

@@ -164,15 +164,15 @@ A directory with a `bot.json` manifest at its root:
 `python3 -u <entry>` or `node <entry>` — `-u` for Python turns off stdout
 buffering, which you need for the line-per-message protocol to work at all.
 
-Packed as a `tar.gz`: at most 1 MiB compressed, 4 MiB uncompressed, 200
+Uploaded as a `.zip` or `.tar.gz` of the bot folder: at most 1 MiB compressed, 4 MiB uncompressed, 200
 regular files, no absolute paths or `..`. Only the standard library is
 available — the run image is `python:3.12-slim` plus Node 22, no installed
 third-party packages. `GAME.md` and `RESULTS.md`, if present in your bot's
 folder, are stripped out before packing; they aren't part of the bot.
 
-## 9. Playing locally
+## 9. Playing locally (optional, advanced)
 
-The `arena` connector plays matches on your own machine, using the exact
+Not needed to get started (uploading plays your bot on the platform). The optional `arena` tool plays matches on your own machine, using the exact
 same engine as the server:
 
 ```sh

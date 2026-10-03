@@ -4,10 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ExternalLink } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/page-header'
-import { BotGuideCard } from '@/components/tanks/bot-guide-card'
+import { MakeBot } from '@/components/tanks/make-bot'
 import { BotNameForm } from '@/components/tanks/bot-name-form'
 import { MyMatches } from '@/components/tanks/my-matches'
-import { UploadVersion } from '@/components/tanks/upload-version'
 import { VersionList } from '@/components/tanks/version-list'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, friendlyMessage } from '@/lib/api'
@@ -48,8 +47,8 @@ export default function TanksPage() {
   return (
     <div className="space-y-10">
       <PageHeader kicker="Your bot on the ladder" title="Tanks">
-        Have your coding agent write a bot, or write it by hand, then upload the archive — every version goes through
-        the same checks before it can join the ladder.
+        Download a starter kit, let your own coding agent improve it, zip the folder and upload it — the platform plays
+        every version for you and shows how it did.
       </PageHeader>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!data ? (
@@ -58,7 +57,7 @@ export default function TanksPage() {
           <Skeleton className="h-52 rounded-[14px]" />
         </div>
       ) : (
-        <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
+        <div>
           <div className="min-w-0 space-y-10">
             <section className="rounded-[14px] border border-border bg-card p-5">
               {data.bot ? (
@@ -88,7 +87,7 @@ export default function TanksPage() {
                 <>
                   <h2 className="heading text-xl">No bot yet</h2>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Upload a version and a bot is created for you automatically.
+                    Upload a version below and a bot is created for you automatically.
                     Pick a name now, or rename it later.
                   </p>
                   <div className="mt-4">
@@ -97,6 +96,8 @@ export default function TanksPage() {
                 </>
               )}
             </section>
+
+            <MakeBot onUploaded={() => void load()} />
 
             <section>
               <SectionTitle aside={data.versions.length > 0 ? `${data.versions.length} total` : undefined}>Versions</SectionTitle>
@@ -110,16 +111,6 @@ export default function TanksPage() {
               </section>
             )}
           </div>
-
-          <aside className="space-y-8">
-            <BotGuideCard />
-            <section className="rounded-[14px] border border-border bg-card p-5">
-              <h2 className="heading">Upload a version</h2>
-              <div className="mt-3">
-                <UploadVersion onUploaded={() => void load()} />
-              </div>
-            </section>
-          </aside>
         </div>
       )}
     </div>

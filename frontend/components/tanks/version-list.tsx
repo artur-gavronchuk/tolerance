@@ -46,6 +46,20 @@ function CheckList({ checks }: { checks: VersionView['checks'] }) {
   )
 }
 
+// What a freshly uploaded version is going through. The platform runs one trial
+// match against the house idle bot; the steps below are what it will report.
+function PendingNote() {
+  return (
+    <div className="mt-3 rounded-[10px] border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+      <p className="font-semibold text-foreground">Playing a trial match against the house bot…</p>
+      <p className="mt-1">
+        It checks that the package unpacks, the bot answers <span className="font-mono">ready</span>, survives the
+        whole match and beats the idle house tank. Results and the replay appear here in a few seconds.
+      </p>
+    </div>
+  )
+}
+
 function CheckLog({ text }: { text: string }) {
   if (!text) return null
   return (
@@ -78,10 +92,11 @@ export function VersionList({ versions }: { versions: VersionView[] }) {
             <StatusBadge status={v.status} />
             {v.check_match_id && (
               <Link href={`/tanks/matches/${v.check_match_id}`} className="ml-auto text-xs font-semibold text-primary hover:underline">
-                Trial match
+                Watch trial replay
               </Link>
             )}
           </div>
+          {v.status === 'pending' && <PendingNote />}
           <CheckList checks={v.checks} />
           <CheckLog text={v.check_log} />
         </li>
