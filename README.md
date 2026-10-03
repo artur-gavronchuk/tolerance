@@ -133,14 +133,15 @@ deploy/deploy.sh <ssh-host>  # с рабочей машины: пакует ре
 того же формата, что `backend/fixtures/skills`; другой образ, чем
 `arena-skill-go:1`/`arena-skill-python:1`, потребует своего шага сборки).
 При релизе backend воркфлоу забирает его по read-only deploy key
-(секрет `ARENA_TASKS_DEPLOY_KEY`) и кладёт на сервер в
+(секрет `ARENA_TASKS_DEPLOY_KEY`; пока секрета нет, шаг пропускается с
+предупреждением) и кладёт на сервер в
 `/opt/tolerance-tasks/skills` — вне `/opt/tolerance`, потому что
 `rsync --delete` из `deploy.sh` стёр бы всё, чего нет в публичном
-репозитории. В `.env` сервера обязательно
-`ARENA_SKILLS_SOURCE=/opt/tolerance-tasks/skills`: `release.sh migrate`
-без него отказывается работать, иначе `docker-compose.yml` подставил бы
-публичные учебные задачи, а рейтинг считался бы по задачам с известными
-ответами. Правка задач в `arena-tasks` сама деплой не запускает: после неё
+репозитории. В `.env` сервера нужен
+`ARENA_SKILLS_SOURCE=/opt/tolerance-tasks/skills`: без него
+`docker-compose.yml` подставляет публичные учебные задачи, и рейтинг
+считается по задачам с известными ответами — `release.sh migrate` в этом
+случае пишет предупреждение, но релиз не останавливает. Правка задач в `arena-tasks` сама деплой не запускает: после неё
 запустите `deploy` через `workflow_dispatch` с `component: backend`
 (каталог доставляется и синхронизируется `migrate`; образ с тем же sha не
 пересобирается).
