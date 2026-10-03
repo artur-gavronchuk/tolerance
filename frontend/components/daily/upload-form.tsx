@@ -1,14 +1,17 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Upload } from 'lucide-react'
+import { FileCheck, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { upload, friendlyMessage } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import type { Submission } from '@/lib/types'
 
 const MAX_BYTES = 5 << 20
+
+const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1 << 20 ? `${(n / 1024).toFixed(1)} KB` : `${(n / (1 << 20)).toFixed(2)} MB`)
 
 // taskSlug is sent only for practice uploads (a past day); for today's task
 // the backend defaults to it.
@@ -24,6 +27,11 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const exhausted = attemptsLeft !== undefined && attemptsLeft <= 0
+
+  function pick(f: File) {
+    setFile(f)
+    setError(null)
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -52,23 +60,40 @@ export function UploadForm({ taskSlug, attemptsLeft, onSubmitted }: {
 
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-4">
-      <div
-        className={`space-y-2 rounded-[10px] border border-dashed p-3 transition-colors ${dragging ? 'border-primary bg-accent' : 'border-input'}`}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault()
-          setDragging(false)
-          const f = e.dataTransfer.files?.[0]
-          if (f) { setFile(f); setError(null) }
-        }}>
-        <Label htmlFor="solution-file">Your result</Label>
-        <Input id="solution-file" ref={fileRef} type="file" accept=".zip,.patch,.diff"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <p className="text-xs text-muted-foreground">
-          Drop or pick a .zip of the edited repository or a .patch / .diff, up to 5 MB.
-        </p>
-        {file && <p className="truncate font-mono text-xs" title={file.name}>{file.name}</p>}
+      <div className="space-y-2">
+        <Label htmlFor="solution-file">Your solution (.zip or .patch)</Label>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragging(false)
+            if (busy) return
+            const f = e.dataTransfer.files?.[0]
+            if (f) pick(f)
+          }}
+          className={cn(
+            'flex w-full flex-col items-center gap-1.5 rounded-[12px] border-2 border-dashed px-4 py-6 text-center transition-colors disabled:opacity-60',
+            dragging ? 'border-primary bg-primary/5' : 'border-input hover:bg-muted/50',
+          )}>
+          {file ? <FileCheck className="size-5 text-success" /> : <Upload className="size-5 text-muted-foreground" />}
+          {file ? (
+            <>
+              <span className="max-w-full truncate font-mono text-sm font-bold" title={file.name}>{file.name}</span>
+              <span className="text-xs text-muted-foreground">{fmtSize(file.size)} · click or drop to replace</span>
+            </>
+          ) : (
+            <>
+              <span className="text-sm font-bold">Drop your file here, or click to choose</span>
+              <span className="text-xs text-muted-foreground">.zip of the edited repository, or a .patch / .diff, up to 5 MB</span>
+            </>
+          )}
+        </button>
+        <input id="solution-file" ref={fileRef} type="file" accept=".zip,.patch,.diff" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(f) }} />
       </div>
       <div className="space-y-2">
         <Label htmlFor="made-with">Made with <span className="font-normal text-muted-foreground">(optional)</span></Label>
