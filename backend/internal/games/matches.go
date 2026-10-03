@@ -279,37 +279,6 @@ func (s *Service) applyRatings(ctx context.Context, tx pgx.Tx, participants []pl
 	return before, after, nil
 }
 
-// leaderboardAll loads every active bot (except the idle house bot, which exists only for qualification
-// checks) and ranks them by their displayed rating in the current season, highest first.
-func (s *Service) leaderboardAll(ctx context.Context) ([]LeaderboardEntry, error) {
-	var out []LeaderboardEntry
-	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		season, err := ensureSeasonTx(ctx, tx)
-		if err != nil {
-			return err
-		}
-		out, err = seasonLadder(ctx, tx, season.ID, false)
-		return err
-	})
-	return out, err
-}
-
-// Leaderboard returns the top limit active bots by rating (or all of them, if limit <= 0 or larger than
-// the leaderboard).
-func (s *Service) Leaderboard(ctx context.Context, limit int) ([]LeaderboardEntry, error) {
-	all, err := s.leaderboardAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if limit > 0 && limit < len(all) {
-		all = all[:limit]
-	}
-	if all == nil {
-		all = []LeaderboardEntry{}
-	}
-	return all, nil
-}
-
 // Bot returns one bot's public profile: its leaderboard row (Rank 0 if it isn't listed there) and its
 // full version history, newest first.
 func (s *Service) Bot(ctx context.Context, id string) (BotProfile, error) {

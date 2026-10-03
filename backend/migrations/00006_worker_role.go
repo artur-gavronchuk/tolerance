@@ -14,17 +14,13 @@ func init() {
 	goose.AddMigrationContext(upWorkerRole, downWorkerRole)
 }
 
-// The sandbox worker (ARENA_ROLE=worker) connects as arena_worker instead of arena_app: it executes
-// untrusted agent diffs and tanks bots in Docker, and a container escape on a worker host must not hand
-// out arena_app's credentials (full application access, including sessions, OAuth identities and API key
-// hashes - see CLAUDE.md). Its password, like arena_app's, is never written into a migration file.
+// arena_worker is the least-privileged role for a sandbox worker host: it would execute untrusted diffs and
+// tanks bots in Docker, and a container escape there must not hand out arena_app's credentials (full
+// application access, including sessions and OAuth identities). Nothing connects as it today: cmd/api runs
+// everything as arena_app. Its password, like arena_app's, is never written into a migration file.
 //
-// Unlike arena_app, ARENA_WORKER_ROLE_PASSWORD is allowed to be empty: the production .env this ships
-// against does not have it yet (it is added by hand before this migration's grants matter there), and
-// dev/CI compose files don't set it either - ARENA_WORKER_DATABASE_URL then falls back to
-// ARENA_APP_DATABASE_URL (see cmd/api's config), so nothing actually connects as arena_worker until an
-// operator sets the password. An empty password leaves the role NOLOGIN rather than failing the whole
-// migration, which would otherwise block every deploy that hasn't rotated this in yet.
+// Unlike arena_app, ARENA_WORKER_ROLE_PASSWORD is allowed to be empty: an empty password leaves the role
+// NOLOGIN rather than failing the whole migration.
 const workerRolePasswordEnv = "ARENA_WORKER_ROLE_PASSWORD"
 
 func upWorkerRole(ctx context.Context, tx *sql.Tx) error {

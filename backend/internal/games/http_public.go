@@ -54,23 +54,9 @@ func RegisterAdminRoutes(mux *http.ServeMux, s *Service) {
 	})
 }
 
-// RegisterPublicRoutes registers the tanks arena's public, unauthenticated routes: the leaderboard, the
+// RegisterPublicRoutes registers the tanks arena's public, unauthenticated routes: the season ladder, the
 // match feed and single matches (with replays), bot profiles, and the live broadcast schedule.
 func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
-	mux.HandleFunc("GET /api/v1/tanks/leaderboard", func(w http.ResponseWriter, r *http.Request) {
-		limit, err := parseLimit(r, 100, 500)
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
-		}
-		items, err := s.Leaderboard(r.Context(), limit)
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
-		}
-		httpx.Respond(w, http.StatusOK, map[string]any{"items": items})
-	})
-
 	mux.HandleFunc("GET /api/v1/tanks/matches", func(w http.ResponseWriter, r *http.Request) {
 		limit, err := parseLimit(r, 20, 50)
 		if err != nil {

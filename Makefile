@@ -47,9 +47,9 @@ db: .env docker
 migrate:
 	cd backend && ARENA_MIGRATE_DATABASE_URL="postgres://arena_migrate:$(POSTGRES_PASSWORD)@127.0.0.1:$(PG_PORT)/arena?sslmode=disable" \
 		ARENA_APP_ROLE_PASSWORD="$(ARENA_APP_ROLE_PASSWORD)" \
-		ARENA_PROOFS_DIR=./fixtures/proofs ARENA_PRODUCTS_DIR=./fixtures/products ARENA_SKILLS_DIR=$(abspath $(or $(ARENA_SKILLS_SOURCE),backend/fixtures/skills)) go run ./cmd/migrate
+		ARENA_SKILLS_DIR=$(abspath $(or $(ARENA_SKILLS_SOURCE),backend/fixtures/skills)) go run ./cmd/migrate
 
-# Fake 30-day activity (500 people, submissions, products, tanks) for looking at pages and measuring queries.
+# Fake 30-day activity (500 people, submissions, tanks) for looking at pages and measuring queries.
 # Local database only; re-running replaces the earlier seed.
 seed:
 	cd backend && ARENA_MIGRATE_DATABASE_URL="postgres://arena_migrate:$(POSTGRES_PASSWORD)@127.0.0.1:$(PG_PORT)/arena?sslmode=disable" \
@@ -71,11 +71,9 @@ run-web:
 # Sandbox and bot runtime images the api starts containers from. Built only
 # when missing; `docker rmi` one to force a rebuild.
 images:
-	@docker image inspect arena-proof-go:1 >/dev/null 2>&1 || docker build -q -t arena-proof-go:1 backend/fixtures/proofs/go-fix-retry
 	@docker image inspect arena-skill-go:1 >/dev/null 2>&1 || docker build -q -t arena-skill-go:1 backend/fixtures/skills/go
 	@docker image inspect arena-skill-python:1 >/dev/null 2>&1 || docker build -q -t arena-skill-python:1 backend/fixtures/skills/python
 	@docker image inspect arena-bot-runtime:1 >/dev/null 2>&1 || docker build -q -t arena-bot-runtime:1 backend/internal/games/match/runtime
-	@docker image inspect arena-site:1 >/dev/null 2>&1 || docker build -q -t arena-site:1 backend/fixtures/products/_images/site
 
 docker:
 	@docker info >/dev/null 2>&1 || (command -v colima >/dev/null && colima start) || (echo "Docker is not running"; exit 1)

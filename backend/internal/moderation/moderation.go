@@ -1,4 +1,4 @@
-// Package moderation lets admins ban users and hide single product entries, daily submissions and tank bots.
+// Package moderation lets admins ban users and hide single daily submissions and tank bots.
 // The flags live in users.banned_at and <table>.hidden_at; public queries filter on them. A ban cascades
 // hidden_at (hidden_by_ban) onto the user's content, and an unban lifts only that. Every action is audited.
 package moderation
@@ -23,7 +23,7 @@ type Service struct{ pool *db.Pool }
 func NewService(pool *db.Pool) *Service { return &Service{pool: pool} }
 
 // kinds maps the API name of a hideable thing to its table.
-var kinds = map[string]string{"entry": "product_entries", "submission": "submissions", "bot": "game_bots"}
+var kinds = map[string]string{"submission": "submissions", "bot": "game_bots"}
 
 const maxReason = 500
 
@@ -65,7 +65,6 @@ func (s *Service) Ban(ctx context.Context, actorID, userID, reason string) error
 			`DELETE FROM sessions WHERE user_id = $1`,
 			`DELETE FROM upload_links WHERE user_id = $1`,
 			`UPDATE submissions SET hidden_at = now(), hidden_by_ban = true WHERE user_id = $1 AND hidden_at IS NULL`,
-			`UPDATE product_entries SET hidden_at = now(), hidden_by_ban = true WHERE user_id = $1 AND hidden_at IS NULL`,
 			`UPDATE game_bots SET hidden_at = now(), hidden_by_ban = true WHERE owner_user_id = $1 AND hidden_at IS NULL`,
 		} {
 			if _, err := tx.Exec(ctx, q, userID); err != nil {
@@ -93,7 +92,6 @@ func (s *Service) Unban(ctx context.Context, actorID, userID, reason string) err
 		}
 		for _, q := range []string{
 			`UPDATE submissions SET hidden_at = NULL, hidden_by_ban = false WHERE user_id = $1 AND hidden_by_ban`,
-			`UPDATE product_entries SET hidden_at = NULL, hidden_by_ban = false WHERE user_id = $1 AND hidden_by_ban`,
 			`UPDATE game_bots SET hidden_at = NULL, hidden_by_ban = false WHERE owner_user_id = $1 AND hidden_by_ban`,
 		} {
 			if _, err := tx.Exec(ctx, q, userID); err != nil {
@@ -107,7 +105,6 @@ func (s *Service) Unban(ctx context.Context, actorID, userID, reason string) err
 
 // labelSQL describes a hideable row for the audit log: who owns it and what it is.
 var labelSQL = map[string]string{
-	"entry":      `SELECT u.handle || ' / ' || e.task_slug FROM product_entries e JOIN users u ON u.id = e.user_id WHERE e.id = $1`,
 	"submission": `SELECT u.handle || ' / ' || coalesce(s.day::text, 'practice') FROM submissions s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
 	"bot":        `SELECT g.name FROM game_bots g WHERE g.id = $1`,
 }
@@ -115,7 +112,7 @@ var labelSQL = map[string]string{
 func (s *Service) SetHidden(ctx context.Context, actorID, kind, id, reason string, hide bool) error {
 	table, ok := kinds[kind]
 	if !ok {
-		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "kind must be entry, submission or bot", "kind", "invalid")
+		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "kind must be submission or bot", "kind", "invalid")
 	}
 	reason, err := cleanReason(reason)
 	if err != nil {
@@ -155,7 +152,6 @@ type UserRow struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	BannedAt    *time.Time `json:"banned_at"`
 	Submissions int        `json:"submissions"`
-	Entries     int        `json:"entries"`
 }
 
 // SearchUsers finds users by a handle or email fragment; an empty query lists the newest.
@@ -165,8 +161,7 @@ func (s *Service) SearchUsers(ctx context.Context, q string) ([]UserRow, error) 
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT u.id, u.handle, u.email, u.role, u.created_at, u.banned_at,
-			       (SELECT count(*) FROM submissions s WHERE s.user_id = u.id)::int,
-			       (SELECT count(*) FROM product_entries e WHERE e.user_id = u.id)::int
+			       (SELECT count(*) FROM submissions s WHERE s.user_id = u.id)::int
 			FROM users u
 			WHERE $1 = '' OR u.handle ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%'
 			ORDER BY (u.banned_at IS NOT NULL) DESC, u.created_at DESC LIMIT 20`, escapeLike(q))
@@ -176,7 +171,7 @@ func (s *Service) SearchUsers(ctx context.Context, q string) ([]UserRow, error) 
 		defer rows.Close()
 		for rows.Next() {
 			var r UserRow
-			if err := rows.Scan(&r.ID, &r.Handle, &r.Email, &r.Role, &r.CreatedAt, &r.BannedAt, &r.Submissions, &r.Entries); err != nil {
+			if err := rows.Scan(&r.ID, &r.Handle, &r.Email, &r.Role, &r.CreatedAt, &r.BannedAt, &r.Submissions); err != nil {
 				return err
 			}
 			r.CreatedAt = r.CreatedAt.UTC()
@@ -205,16 +200,13 @@ type Item struct {
 	HiddenAt *time.Time `json:"hidden_at"`
 }
 
-// ItemsOf lists a user's latest submissions, product entries and bot.
+// ItemsOf lists a user's latest submissions and bots.
 func (s *Service) ItemsOf(ctx context.Context, userID string) ([]Item, error) {
 	out := []Item{}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			(SELECT 'submission', id, coalesce(day::text, 'practice') || ' / ' || task_slug, status, created_at, hidden_at
 			   FROM submissions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20)
-			UNION ALL
-			(SELECT 'entry', id, task_slug, status, created_at, hidden_at
-			   FROM product_entries WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20)
 			UNION ALL
 			(SELECT 'bot', id, name, CASE WHEN active_version_id IS NULL THEN 'no active version' ELSE 'active' END, created_at, hidden_at
 			   FROM game_bots WHERE owner_user_id = $1)
@@ -243,7 +235,7 @@ func (s *Service) ItemsOf(ctx context.Context, userID string) ([]Item, error) {
 type LogItem struct {
 	At     time.Time `json:"at"`
 	Action string    `json:"action"` // ban | unban | hide | unhide
-	Kind   string    `json:"kind"`   // user | entry | submission | bot
+	Kind   string    `json:"kind"`   // user | submission | bot
 	ID     string    `json:"id"`
 	Label  string    `json:"label"`
 	Actor  string    `json:"actor"`
@@ -262,7 +254,6 @@ func (s *Service) Log(ctx context.Context) ([]LogItem, error) {
 			       CASE a.action
 			         WHEN 'moderation.ban' THEN coalesce((SELECT banned_at IS NOT NULL FROM users WHERE id = a.aggregate_id), false)
 			         WHEN 'moderation.hide' THEN coalesce(CASE a.aggregate_kind
-			           WHEN 'entry' THEN (SELECT hidden_at IS NOT NULL FROM product_entries WHERE id = a.aggregate_id)
 			           WHEN 'submission' THEN (SELECT hidden_at IS NOT NULL FROM submissions WHERE id = a.aggregate_id)
 			           WHEN 'bot' THEN (SELECT hidden_at IS NOT NULL FROM game_bots WHERE id = a.aggregate_id) END, false)
 			         ELSE false END

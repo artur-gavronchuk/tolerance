@@ -10,7 +10,6 @@ import (
 
 	"tolerance/internal/games"
 	"tolerance/internal/platform/db"
-	"tolerance/internal/products"
 	"tolerance/internal/tasks"
 )
 
@@ -38,33 +37,16 @@ func main() {
 		log.Fatalf("tasks: %v", err)
 	}
 
-	if dir := os.Getenv("ARENA_PRODUCTS_DIR"); dir != "" {
-		n, err := products.Sync(context.Background(), pool, dir)
-		if err != nil {
-			log.Fatalf("products: %v", err)
-		}
-		log.Printf("products: %d task(s) synced", n)
-	}
-
 	if err := games.Sync(context.Background(), pool); err != nil {
 		log.Fatalf("games: %v", err)
 	}
 	log.Printf("games: house bots synced")
 }
 
-// syncTasks loads both catalog layouts and upserts them in one pass, so a task that left every directory
-// is deactivated exactly once. ARENA_SKILLS_DIR is <language>/<task>/ with a skill.json per language (the
-// private rating catalog mounts here); ARENA_PROOFS_DIR is <task>/ with the image and command in each
-// manifest.
+// syncTasks loads the task catalog and upserts it. ARENA_SKILLS_DIR is <language>/<task>/ with a skill.json per
+// language (the private rating catalog mounts here).
 func syncTasks(ctx context.Context, pool *db.Pool) error {
 	var lists [][]tasks.Task
-	if dir := os.Getenv("ARENA_PROOFS_DIR"); dir != "" {
-		ts, err := tasks.LoadFlat(dir)
-		if err != nil {
-			return err
-		}
-		lists = append(lists, ts)
-	}
 	if dir := os.Getenv("ARENA_SKILLS_DIR"); dir != "" {
 		ts, err := tasks.LoadByLanguage(dir)
 		if err != nil {

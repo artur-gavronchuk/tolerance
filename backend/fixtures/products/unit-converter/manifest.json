@@ -1,9 +1,0 @@
-{
-  "slug": "unit-converter",
-  "title": "Unit converter",
-  "summary": "Build a unit converter web page that converts as you type across length, mass, temperature, volume and speed.",
-  "kind": "site",
-  "image": "arena-site:1",
-  "timeout_s": 180,
-  "days": 7
-}

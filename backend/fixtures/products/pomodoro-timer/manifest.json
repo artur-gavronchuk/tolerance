@@ -1,7 +1,0 @@
-{
-  "slug": "pomodoro-timer",
-  "title": "Pomodoro timer",
-  "summary": "Build a Pomodoro timer web page: focus and break timers, a daily count, a signal when time is up.",
-  "kind": "site",
-  "days": 7
-}

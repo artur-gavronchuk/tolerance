@@ -17,7 +17,6 @@ import (
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/ratelimit"
-	"tolerance/internal/products"
 	"tolerance/internal/submissions"
 	"tolerance/internal/tasks"
 )
@@ -82,14 +81,13 @@ type Deps struct {
 	Pool        *db.Pool
 	Daily       *daily.Service
 	Submissions *submissions.Service
-	Products    *products.Service
 	Games       *games.Service
 	Limiter     *ratelimit.Limiter
 	TrustProxy  bool
 }
 
 // RegisterPublicRoutes mounts /api/v1/u/{token}/…: the same actions as the session routes for daily
-// submissions, product entries and tanks bots, authenticated by the token alone.
+// submissions and tanks bots, authenticated by the token alone.
 func RegisterPublicRoutes(mux *http.ServeMux, d Deps) {
 	// route wraps h: it resolves the token to a user (401 on a bad or revoked token) and rate-limits by token.
 	route := func(pattern string, perMinute int, h func(w http.ResponseWriter, r *http.Request, uid string)) {
@@ -175,43 +173,6 @@ func RegisterPublicRoutes(mux *http.ServeMux, d Deps) {
 			return
 		}
 		httpx.Respond(w, http.StatusOK, sub)
-	})
-
-	// --- products ---
-	route("GET "+Prefix+"{token}/products/{slug}", read, func(w http.ResponseWriter, r *http.Request, uid string) {
-		out, err := d.Products.Get(r.Context(), r.PathValue("slug"), uid)
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
-		}
-		httpx.Respond(w, http.StatusOK, out)
-	})
-	route("POST "+Prefix+"{token}/products/{slug}", write, func(w http.ResponseWriter, r *http.Request, uid string) {
-		name, data, ok := readUpload(w, r, products.MaxUploadBytes)
-		if !ok {
-			return
-		}
-		e, err := d.Products.Create(r.Context(), uid, r.PathValue("slug"), name, data, r.FormValue("made_with"))
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
-		}
-		httpx.Respond(w, http.StatusCreated, map[string]any{"entry": e,
-			"status_url": Prefix + r.PathValue("token") + "/products/" + e.TaskSlug + "/entries/" + e.ID})
-	})
-	route("GET "+Prefix+"{token}/products/{slug}/entries/{id}", read, func(w http.ResponseWriter, r *http.Request, uid string) {
-		det, err := d.Products.Get(r.Context(), r.PathValue("slug"), uid)
-		if err != nil {
-			httpx.WriteError(w, r, err)
-			return
-		}
-		for _, e := range det.Mine {
-			if e.ID == r.PathValue("id") {
-				httpx.Respond(w, http.StatusOK, e)
-				return
-			}
-		}
-		httpx.WriteError(w, r, httpx.NotFound())
 	})
 
 	// --- tanks ---

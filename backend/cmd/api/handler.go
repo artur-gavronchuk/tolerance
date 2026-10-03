@@ -24,10 +24,8 @@ import (
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/platform/limits"
 	"tolerance/internal/platform/ratelimit"
-	"tolerance/internal/products"
 	"tolerance/internal/profiles"
 	"tolerance/internal/recap"
-	"tolerance/internal/stacks"
 	"tolerance/internal/submissions"
 	"tolerance/internal/tasks"
 	"tolerance/internal/uploadlink"
@@ -40,11 +38,9 @@ type deps struct {
 	daily       *daily.Service
 	submissions *submissions.Service
 	games       *games.Service
-	products    *products.Service
 	admin       *adminpkg.Service
 	moderation  *moderation.Service
 	fairplay    *fairplay.Service
-	stacks      *stacks.Service
 	profiles    *profiles.Service
 	recap       *recap.Service
 	notify      *notify.Service
@@ -64,7 +60,6 @@ func newHandler(cfg config, d deps) http.Handler {
 	submissions.RegisterOwnerRoutes(owner, d.submissions)
 	fairplay.RegisterOwnerRoutes(owner, d.fairplay, d.limiter)
 	games.RegisterOwnerRoutes(owner, d.games)
-	products.RegisterOwnerRoutes(owner, d.products, cfg.devLogin)
 	recap.RegisterOwnerRoutes(owner, d.recap)
 	notify.RegisterOwnerRoutes(owner, d.notify)
 	uploadlink.RegisterOwnerRoutes(owner, d.uploadLinks)
@@ -82,14 +77,12 @@ func newHandler(cfg config, d deps) http.Handler {
 	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
 	tasks.RegisterPublicRoutes(public, d.pool)
 	analytics.RegisterPublicRoutes(public, d.analytics, identity.OptionalUserID(d.users), d.limiter, cfg.trustProxy)
-	stacks.RegisterPublicRoutes(public, d.stacks)
 	profiles.RegisterPublicRoutes(public, d.profiles)
 	games.RegisterPublicRoutes(public, d.games)
-	products.RegisterPublicRoutes(public, d.products, identity.OptionalUserID(d.users))
 
 	// The personal upload link: the token in the URL is the credential (no session).
 	uploadlink.RegisterPublicRoutes(public, uploadlink.Deps{Links: d.uploadLinks, Pool: d.pool, Daily: d.daily, Submissions: d.submissions,
-		Products: d.products, Games: d.games, Limiter: d.limiter, TrustProxy: cfg.trustProxy})
+		Games: d.games, Limiter: d.limiter, TrustProxy: cfg.trustProxy})
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
@@ -109,25 +102,11 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/me/tanks/", session(owner))
 	api.Handle("/api/v1/submissions", session(owner))
 	api.Handle("/api/v1/submissions/", session(owner))
-	api.Handle("/api/v1/products", public)
-	api.Handle("/api/v1/products/", public)
-	api.Handle("POST /api/v1/products/{slug}/entries", session(owner))
-	api.Handle("POST /api/v1/products/start-next", session(owner))
-	api.Handle("POST /api/v1/products/{slug}/close", session(owner))
-	api.Handle("POST /api/v1/products/{slug}/reopen", session(owner))
-	api.Handle("GET /api/v1/products/{slug}/compare/next", session(owner))
-	api.Handle("POST /api/v1/products/{slug}/compare", session(owner))
-	api.Handle("POST /api/v1/product-entries/{id}/vote", session(owner))
-	api.Handle("DELETE /api/v1/product-entries/{id}/vote", session(owner))
-	api.Handle("GET /api/v1/product-entries/{id}/source", public)
-	api.Handle("GET /api/v1/product-entries/{id}/zip", public)
-	api.Handle("GET /api/v1/product-entries/{id}/site/{path...}", public)
 	api.Handle("POST /api/v1/events", public)
 	api.Handle("/api/v1/daily", public)
 	api.Handle("/api/v1/daily/", public)
 	api.Handle("/api/v1/days", public)
 	api.Handle("/api/v1/leaderboard", public)
-	api.Handle("/api/v1/stacks", public)
 	api.Handle("/api/v1/users/", public)
 	// Remember when a signed-in user first fetched a task repo (fair-play signal), then serve it as usual.
 	api.Handle("GET /api/v1/tasks/{slug}/repo.zip", d.fairplay.RecordDownload("task", identity.OptionalUserID(d.users))(public))
@@ -183,12 +162,7 @@ func withMiddleware(next http.Handler, log *slog.Logger, trustProxy bool, limite
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Cache-Control", "no-store")
 		}
-		// Uploaded sites run as an opaque origin (see products.siteCSP); never let them change state.
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("Origin") == "null" {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-		// Backstop for every state-changing call (votes, judgments, uploads): the per-feature quotas
+		// Backstop for every state-changing call (uploads, moderation): the per-feature quotas
 		// bound what is stored, this bounds how hard one address can hammer the handlers.
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions &&
 			strings.HasPrefix(r.URL.Path, "/api/") && !limits.Disabled() &&

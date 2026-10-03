@@ -1,4 +1,4 @@
-// Package profiles assembles a person's public activity across the three modes (products, tanks, stack) for
+// Package profiles assembles a person's public activity across the two modes (tanks and the "made with" stack) for
 // the profile page. It only reads; the daily part of the profile stays in internal/daily.
 package profiles
 
@@ -16,29 +16,11 @@ import (
 	"tolerance/internal/games/rating"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
-	"tolerance/internal/products"
-	"tolerance/internal/stacks"
 )
 
 type Service struct{ pool *db.Pool }
 
 func NewService(pool *db.Pool) *Service { return &Service{pool: pool} }
-
-type ProductEntry struct {
-	TaskSlug  string    `json:"task_slug"`
-	TaskTitle string    `json:"task_title"`
-	Kind      string    `json:"kind"`
-	Phase     string    `json:"phase"`
-	Deadline  time.Time `json:"deadline"`
-	EntryID   string    `json:"entry_id"`
-	Passed    int       `json:"passed"`   // automated checks; hidden (0) while the task is open
-	BenchMS   *float64  `json:"bench_ms"` // cli benchmark time; hidden while the task is open
-	Total     int       `json:"total"`
-	Votes     int       `json:"votes"`
-	Place     *int      `json:"place"`    // final standings only
-	Entrants  int       `json:"entrants"` // people in the standings
-	CreatedAt time.Time `json:"created_at"`
-}
 
 type BotTournament struct {
 	ID       string    `json:"id"`
@@ -72,10 +54,9 @@ type Stack struct {
 }
 
 type Activity struct {
-	Handle   string         `json:"handle"`
-	Stack    *Stack         `json:"stack"`
-	Products []ProductEntry `json:"products"`
-	Bots     []Bot          `json:"bots"`
+	Handle string `json:"handle"`
+	Stack  *Stack `json:"stack"`
+	Bots   []Bot  `json:"bots"`
 }
 
 func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
@@ -90,7 +71,7 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
 }
 
 func (s *Service) Activity(ctx context.Context, handle string) (Activity, error) {
-	a := Activity{Products: []ProductEntry{}, Bots: []Bot{}}
+	a := Activity{Bots: []Bot{}}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var userID string
 		err := tx.QueryRow(ctx, `SELECT id, handle FROM users WHERE lower(handle) = lower($1) AND banned_at IS NULL`, handle).Scan(&userID, &a.Handle)
@@ -100,9 +81,6 @@ func (s *Service) Activity(ctx context.Context, handle string) (Activity, error)
 		if err != nil {
 			return err
 		}
-		if a.Products, err = productsOf(ctx, tx, userID); err != nil {
-			return err
-		}
 		if a.Bots, err = botsOf(ctx, tx, userID); err != nil {
 			return err
 		}
@@ -110,90 +88,6 @@ func (s *Service) Activity(ctx context.Context, handle string) (Activity, error)
 		return err
 	})
 	return a, err
-}
-
-// productsOf lists the tasks the person took part in with the upload that counts for them. The counting rule and the
-// ranking rule mirror products.rankRule (cli: latest upload with the most checks passed, ranked by checks, bench time, then votes). Site tasks take their place from
-// products.SiteRanking (Bradley-Terry score of the blind comparisons). Entries stay hidden until the deadline, so open
-// tasks carry no score.
-func productsOf(ctx context.Context, tx pgx.Tx, userID string) ([]ProductEntry, error) {
-	rows, err := tx.Query(ctx, `
-		WITH counted AS (
-			SELECT DISTINCT ON (e.task_slug, e.user_id) e.id, e.task_slug, e.user_id, e.passed, e.bench_ms, e.total, e.created_at,
-			       t.kind, t.title, t.deadline,
-			       (SELECT count(*) FROM product_votes v WHERE v.entry_id = e.id) AS votes
-			FROM product_entries e JOIN product_tasks t ON t.slug = e.task_slug
-			WHERE e.status = 'done' AND e.hidden_at IS NULL AND t.active AND t.opens_at <= now()
-			  AND e.task_slug IN (SELECT task_slug FROM product_entries WHERE user_id = $1 AND status = 'done' AND hidden_at IS NULL)
-			ORDER BY e.task_slug, e.user_id,
-			         (CASE WHEN t.kind = 'cli' THEN e.passed END) DESC NULLS LAST,
-			         e.created_at DESC),
-		ranked AS (
-			SELECT c.*, row_number() OVER (PARTITION BY c.task_slug ORDER BY
-			         (CASE WHEN c.kind = 'cli' THEN c.passed ELSE c.votes END) DESC,
-			         (CASE WHEN c.kind = 'cli' THEN c.bench_ms END) ASC NULLS LAST,
-			         (CASE WHEN c.kind = 'cli' THEN c.votes ELSE c.passed END) DESC, c.created_at) AS place,
-			       count(*) OVER (PARTITION BY c.task_slug) AS entrants
-			FROM counted c)
-		SELECT task_slug, title, kind, deadline, id, passed, bench_ms, total, votes, place, entrants, created_at
-		FROM ranked WHERE user_id = $1 ORDER BY deadline DESC`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []ProductEntry{}
-	for rows.Next() {
-		var p ProductEntry
-		var votes, place, entrants int64
-		if err := rows.Scan(&p.TaskSlug, &p.TaskTitle, &p.Kind, &p.Deadline, &p.EntryID, &p.Passed, &p.BenchMS, &p.Total, &votes, &place, &entrants, &p.CreatedAt); err != nil {
-			return nil, err
-		}
-		p.Deadline, p.CreatedAt = p.Deadline.UTC(), p.CreatedAt.UTC()
-		p.Votes, p.Entrants = int(votes), int(entrants)
-		p.Phase = phaseOf(p.Deadline)
-		if p.Phase == products.PhaseOpen {
-			p.Passed, p.Total, p.Votes, p.Entrants, p.BenchMS = 0, 0, 0, 0, nil
-		}
-		if p.Phase == products.PhaseFinal {
-			pl := int(place)
-			p.Place = &pl
-		}
-		out = append(out, p)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	rows.Close()
-	for i, p := range out {
-		if p.Kind != products.KindSite || p.Phase == products.PhaseOpen {
-			continue
-		}
-		st, err := products.SiteRanking(ctx, tx, p.TaskSlug)
-		if err != nil {
-			return nil, err
-		}
-		for n, s := range st {
-			if s.EntryID == p.EntryID {
-				if p.Phase == products.PhaseFinal {
-					pl := n + 1
-					out[i].Place = &pl
-				}
-				break
-			}
-		}
-	}
-	return out, nil
-}
-
-func phaseOf(deadline time.Time) string {
-	now := time.Now()
-	switch {
-	case now.Before(deadline):
-		return products.PhaseOpen
-	case now.Before(deadline.Add(products.VotingWindow)):
-		return products.PhaseVoting
-	}
-	return products.PhaseFinal
 }
 
 // botsOf lists the person's tank bots with their rank on this month's ladder (same ordering as the leaderboard:
@@ -348,14 +242,12 @@ func summarize(ts []BotTournament) (titles int, best string) {
 	return
 }
 
-// stackOf is the person's most used normalized "made with" across daily submissions and product uploads. An
+// stackOf is the person's most used normalized "made with" across daily submissions. An
 // unrecognised stack ("Other") only wins when nothing else was ever named.
 func stackOf(ctx context.Context, tx pgx.Tx, userID string) (*Stack, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT lower(trim(made_with)), count(*) FROM (
-			SELECT made_with FROM submissions WHERE user_id = $1 AND day IS NOT NULL AND hidden_at IS NULL
-			UNION ALL SELECT made_with FROM product_entries WHERE user_id = $1 AND status = 'done' AND hidden_at IS NULL) m
-		WHERE trim(made_with) <> '' GROUP BY 1`, userID)
+		SELECT lower(trim(made_with)), count(*) FROM submissions
+		WHERE user_id = $1 AND day IS NOT NULL AND hidden_at IS NULL AND trim(made_with) <> '' GROUP BY 1`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +260,7 @@ func stackOf(ctx context.Context, tx pgx.Tx, userID string) (*Stack, error) {
 		if err := rows.Scan(&raw, &n); err != nil {
 			return nil, err
 		}
-		tool, model := stacks.Normalize(raw)
+		tool, model := Normalize(raw)
 		counts[key{tool, model}] += int(n)
 	}
 	if err := rows.Err(); err != nil {
@@ -376,7 +268,7 @@ func stackOf(ctx context.Context, tx pgx.Tx, userID string) (*Stack, error) {
 	}
 	var best *Stack
 	for k, n := range counts {
-		s := Stack{Tool: k.tool, Model: k.model, Label: stacks.Label(k.tool, k.model), Count: n}
+		s := Stack{Tool: k.tool, Model: k.model, Label: Label(k.tool, k.model), Count: n}
 		if best == nil || better(s, *best) {
 			best = &s
 		}

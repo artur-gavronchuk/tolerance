@@ -1,4 +1,4 @@
-// Package fairplay records signals that help humans spot cheating on the daily task and the product of the week:
+// Package fairplay records signals that help humans spot cheating on the daily task:
 // time from first download to upload, accounts sharing a (hashed) IP or device, near-identical solutions, bursts of
 // uploads. It also keeps the reports queue. Nothing here changes a verdict or punishes anyone; /admin shows the
 // flags and the actions reuse internal/moderation.

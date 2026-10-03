@@ -125,8 +125,7 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT f.id, f.subject_kind, f.subject_id, f.user_id, u.handle, u.banned_at IS NOT NULL,
-			       coalesce(CASE f.subject_kind WHEN 'submission' THEN (SELECT s.hidden_at IS NOT NULL FROM submissions s WHERE s.id = f.subject_id)
-			                                    ELSE (SELECT e.hidden_at IS NOT NULL FROM product_entries e WHERE e.id = f.subject_id) END, false),
+			       coalesce((SELECT s.hidden_at IS NOT NULL FROM submissions s WHERE s.id = f.subject_id), false),
 			       coalesce(x.task_slug, ''), x.day::text, x.solve_seconds, f.created_at, f.signal, f.score, f.detail
 			FROM fairplay_flags f JOIN users u ON u.id = f.user_id
 			LEFT JOIN fairplay_uploads x ON x.subject_kind = f.subject_kind AND x.subject_id = f.subject_id

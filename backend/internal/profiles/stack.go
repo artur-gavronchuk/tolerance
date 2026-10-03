@@ -1,7 +1,7 @@
-// Package stacks turns the free-text "made with" of daily submissions into canonical (tool, model) pairs and
-// reports which agent stacks actually do well at the daily task. Normalization happens at read time, so rules
-// can change without a migration.
-package stacks
+package profiles
+
+// Normalization of the free-text "made with" of daily submissions into canonical (tool, model) pairs happens
+// at read time, so rules can change without a migration.
 
 import (
 	"regexp"

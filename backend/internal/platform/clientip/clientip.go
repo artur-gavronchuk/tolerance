@@ -1,7 +1,7 @@
 // Package clientip resolves the real client address behind a reverse
 // proxy. It exists as its own small package (rather than living inside
 // internal/identity) so every module that authenticates a caller — cookie
-// sessions, API keys, and whatever comes next — can key rate limits and
+// sessions, upload-link tokens, and whatever comes next — can key rate limits and
 // audit logs on the same address, computed the same way.
 package clientip
 

@@ -1,0 +1,6 @@
+{
+  "slug": "go-fix-retry",
+  "title": "Fix exponential backoff in a Go retry helper",
+  "sandbox_timeout_s": 120,
+  "hidden_tests": 5
+}

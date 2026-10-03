@@ -75,8 +75,8 @@ func isUniqueViolation(err error, want string) bool {
 	return want == "" || pgErr.ConstraintName == want
 }
 
-// MyTanks assembles the caller's /tanks/me page: their bot (nil if they have none yet), its versions, its
-// agent's tanks-bot proof history, and its recent matches (empty until Task 10 fills match history in).
+// MyTanks assembles the caller's /tanks/me page: their bot (nil if they have none yet), its versions and its
+// recent matches.
 func (s *Service) MyTanks(ctx context.Context, userID string) (MyTanks, error) {
 	out := MyTanks{Versions: []VersionView{}, Matches: []MatchView{}}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {

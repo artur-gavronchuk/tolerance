@@ -15,7 +15,7 @@ import (
 
 type Event struct {
 	ActorID       string
-	ActorKind     string // "user" | "agent" | "system"; defaults to "user"
+	ActorKind     string // "user" | "system"; defaults to "user"
 	Action        string
 	AggregateKind string
 	AggregateID   string

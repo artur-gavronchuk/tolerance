@@ -11,8 +11,8 @@ const (
 	redacted = "[redacted]"
 )
 
-// The connector applies the same rules before sending; the server repeats
-// them because it must not trust its clients with what gets published.
+// These rules are applied server-side, whatever the client already did: the server must not trust its
+// clients with what gets published.
 var (
 	ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 

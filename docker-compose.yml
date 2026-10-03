@@ -34,8 +34,7 @@ services:
     environment:
       ARENA_MIGRATE_DATABASE_URL: postgres://arena_migrate:${POSTGRES_PASSWORD}@postgres:5432/arena?sslmode=disable
       ARENA_APP_ROLE_PASSWORD: ${ARENA_APP_ROLE_PASSWORD}
-      # The image carries fixtures/proofs (ARENA_PROOFS_DIR); the language catalog is mounted here, and
-      # ARENA_SKILLS_SOURCE can point it at the private arena-tasks repo.
+      # The language catalog is mounted here; ARENA_SKILLS_SOURCE can point it at the private arena-tasks repo.
       ARENA_SKILLS_DIR: /opt/arena/skills
     volumes:
       - ${ARENA_SKILLS_SOURCE:-./backend/fixtures/skills}:/opt/arena/skills:ro

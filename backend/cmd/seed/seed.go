@@ -16,7 +16,7 @@ type seedUser struct {
 	created           time.Time
 	skill             float64 // 0..1, how likely the agent gets a task right
 	activity          float64 // chance to show up on a given day
-	stacks            []string
+	madeWith          []string
 	botID             string
 }
 
@@ -56,9 +56,6 @@ func (s *seeder) cleanup(ctx context.Context, tx pgx.Tx) error {
 		`DELETE FROM notifications WHERE user_id IN ` + seedUsersSQL,
 		`DELETE FROM notify_state WHERE user_id IN ` + seedUsersSQL,
 		`DELETE FROM upload_links WHERE user_id IN ` + seedUsersSQL,
-		`DELETE FROM product_judgments WHERE user_id IN ` + seedUsersSQL,
-		`DELETE FROM product_votes WHERE user_id IN ` + seedUsersSQL,
-		`DELETE FROM product_entries WHERE user_id IN ` + seedUsersSQL,
 		`DELETE FROM submissions WHERE user_id IN ` + seedUsersSQL,
 		// Tanks: tournaments and matches that mention a seeded bot (or carry the seed prefix) go first.
 		`CREATE TEMP TABLE seed_tournaments ON COMMIT DROP AS SELECT id FROM tanks_tournaments
@@ -83,8 +80,6 @@ func (s *seeder) cleanup(ctx context.Context, tx pgx.Tx) error {
 			AND NOT EXISTS (SELECT 1 FROM tanks_season_standings x WHERE x.season_id = s.id)
 			AND NOT EXISTS (SELECT 1 FROM tanks_season_ratings x WHERE x.season_id = s.id)
 			AND NOT EXISTS (SELECT 1 FROM tanks_tournaments x WHERE x.season_id = s.id)`,
-		`UPDATE product_tasks SET opens_at = NULL, deadline = NULL
-			WHERE opens_at IS NOT NULL AND NOT frozen AND NOT EXISTS (SELECT 1 FROM product_entries e WHERE e.task_slug = product_tasks.slug)`,
 		`DELETE FROM users WHERE email LIKE '%` + emailDomain + `'`,
 	}
 	for _, q := range stmts {
@@ -187,9 +182,9 @@ func (s *seeder) users(ctx context.Context, tx pgx.Tx) error {
 		default:
 			u.activity = 0.1
 		}
-		u.stacks = []string{s.pickStack().label}
+		u.madeWith = []string{s.pickStack().label}
 		if s.rng.Intn(3) == 0 {
-			u.stacks = append(u.stacks, s.pickStack().label)
+			u.madeWith = append(u.madeWith, s.pickStack().label)
 		}
 		s.usersList = append(s.usersList, u)
 		rows = append(rows, []any{u.id, u.email, "user", u.created, u.handle})
@@ -281,7 +276,7 @@ func (s *seeder) daily(ctx context.Context, tx pgx.Tx) error {
 			if s.rng.Float64() > p {
 				continue
 			}
-			stack := u.stacks[s.rng.Intn(len(u.stacks))]
+			stack := u.madeWith[s.rng.Intn(len(u.madeWith))]
 			base := day.Add(time.Duration(s.rng.Intn(24*60-30)) * time.Minute)
 			if d == 0 {
 				span := int(s.now.Sub(day).Minutes()) - 5

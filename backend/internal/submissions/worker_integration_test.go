@@ -41,7 +41,7 @@ const goodDiff = `--- a/retry.go
  // Do calls fn until it succeeds or maxAttempts is used up.
 `
 
-// hiddenNames are the test functions in fixtures/proofs/go-fix-retry/_hidden.
+// hiddenNames are the test functions in testdata/go/go-fix-retry/_hidden.
 var hiddenNames = []string{"TestHidden_BackoffSequence", "TestHidden_BackoffCapsAtMax", "TestHidden_BackoffZeroAndNegative",
 	"TestHidden_DoStopsAtMaxAttempts", "TestHidden_DoReturnsContextErrorWhileWaiting"}
 
@@ -63,7 +63,7 @@ func setup(t *testing.T) fixture {
 	t.Helper()
 	d := dbtest.New(t)
 	ctx := context.Background()
-	ts, err := tasks.LoadFlat(filepath.Join("..", "..", "fixtures", "proofs"))
+	ts, err := tasks.LoadByLanguage("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestRunSubmission_Verdicts(t *testing.T) {
 		if s.Status != submissions.StatusPassed || s.PassedTests != 5 || len(s.Tests) != 5 || s.FinishedAt == nil || reason(s) != "" {
 			t.Fatalf("%+v", s)
 		}
-		if len(fake.Calls) != 1 || fake.Calls[0].Image != "arena-proof-go:1" {
+		if len(fake.Calls) != 1 || fake.Calls[0].Image != "arena-skill-go:1" {
 			t.Fatalf("runner not called with the task image: %+v", fake.Calls)
 		}
 		if _, err := os.Stat(fake.Calls[0].WorkDir); err == nil {

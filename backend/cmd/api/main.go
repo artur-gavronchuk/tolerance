@@ -27,11 +27,9 @@ import (
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/limits"
 	"tolerance/internal/platform/ratelimit"
-	"tolerance/internal/products"
 	"tolerance/internal/profiles"
 	"tolerance/internal/recap"
 	"tolerance/internal/sandbox"
-	"tolerance/internal/stacks"
 	"tolerance/internal/submissions"
 	"tolerance/internal/uploadlink"
 )
@@ -71,15 +69,14 @@ func main() {
 	}
 	gamesSvc := games.NewService(pool, launcher, log, games.Config{WorkDir: cfg.workDir})
 	dailySvc := daily.NewService(pool)
-	productsSvc := products.NewService(pool)
 	recapSvc := recap.NewService(pool, dailySvc)
 
 	analyticsSvc := analytics.NewService(pool)
 	analytics.Use(analyticsSvc)
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), daily: dailySvc,
-		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: productsSvc, admin: adminpkg.NewService(pool), moderation: moderation.NewService(pool), stacks: stacks.NewService(pool), profiles: profiles.NewService(pool),
-		uploadLinks: uploadlink.NewService(pool), account: account.NewService(pool), recap: recapSvc, notify: notify.NewService(pool, gamesSvc, productsSvc, recapSvc), analytics: analyticsSvc,
+		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, admin: adminpkg.NewService(pool), moderation: moderation.NewService(pool), profiles: profiles.NewService(pool),
+		uploadLinks: uploadlink.NewService(pool), account: account.NewService(pool), recap: recapSvc, notify: notify.NewService(pool, gamesSvc, recapSvc), analytics: analyticsSvc,
 		limiter:   ratelimit.New(nil),
 		providers: providersFromConfig(cfg),
 	}
@@ -100,16 +97,6 @@ func main() {
 		if cfg.sandbox == "fake" {
 			runner = sandbox.PassAll{}
 		}
-		var productRunner sandbox.Runner = runner
-		if cfg.sandbox == "fake" {
-			productRunner = products.PassAll{}
-		}
-		pw := products.NewWorker(pool, productRunner, cfg.workDir, log)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			pw.Run(ctx, 1)
-		}()
 		w := submissions.NewWorker(pool, runner, cfg.workDir, log)
 		wg.Add(1)
 		go func() {

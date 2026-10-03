@@ -1,7 +1,7 @@
-// Package botpkg validates and packs bot archives: what an owner uploads through the dashboard, what
-// `arena tanks submit` produces on their machine, or what the platform builds from an agent's diff. It is
-// the single gate for what a bot archive may contain. The connector uses PackDir, the server's upload path
-// uses Normalize, and the match runner uses Unpack to extract a bot before launching it. Stdlib only.
+// Package botpkg validates and packs bot archives: what an owner uploads through the dashboard or the
+// personal upload link, and what the local `arena tanks play` checks. It is the single gate for what a bot
+// archive may contain. The CLI uses PackDir, the server's upload path uses Normalize, and the match runner
+// uses Unpack to extract a bot before launching it. Stdlib only.
 package botpkg
 
 import (
@@ -511,7 +511,7 @@ func isSkippedDir(name string) bool {
 }
 
 // isSkippedFile reports whether a file (by base name) is dropped by PackDir: project docs that live
-// alongside a bot but aren't part of it, the connector's own log, and dotfiles.
+// alongside a bot but aren't part of it, an agent's own log, and dotfiles.
 func isSkippedFile(name string) bool {
 	if strings.HasPrefix(name, ".") {
 		return true

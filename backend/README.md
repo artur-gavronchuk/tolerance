@@ -3,8 +3,8 @@
 Go API: задача дня, загрузка решений, проверка скрытыми тестами в песочнице,
 таблицы, танки.
 
-- `internal/tasks` — каталог задач (`fixtures/skills/<lang>/<task>`,
-  `fixtures/proofs/<task>`; синхронизирует `cmd/migrate`), скачивание
+- `internal/tasks` — каталог задач (`fixtures/skills/<lang>/<task>`;
+  синхронизирует `cmd/migrate`), скачивание
   репозитория задачи zip-архивом.
 - `internal/daily` — назначение задачи дня, архив дней, таблицы, серии.
 - `internal/submissions` — загрузка решения (zip → diff через

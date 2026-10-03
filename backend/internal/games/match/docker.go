@@ -39,9 +39,9 @@ const staleBotContainerAge = 30 * time.Minute
 // DockerLauncher runs each bot in its own throwaway container: no network, 256 MiB, half a CPU, 64 pids,
 // all capabilities dropped, no-new-privileges, uid 65534, a read-only root filesystem, and a 16 MiB tmpfs
 // /tmp. Code is copied in with docker cp (the API may itself run in a container, so a bind mount of
-// Spec.Dir would not be visible to the daemon — the same reasoning as internal/proofs/sandbox.Docker),
+// Spec.Dir would not be visible to the daemon — the same reasoning as internal/sandbox.Docker),
 // stdin/stdout/stderr are attached with docker start -ai. Never use it for anything but untrusted bot code;
-// ProcessLauncher is for the connector and for trusted house-adjacent uses.
+// ProcessLauncher is for the local `arena tanks play` and for trusted house-adjacent uses.
 //
 // /bot is an anonymous volume, not part of the read-only rootfs, specifically so docker cp still has
 // somewhere to write the bot's files before the container starts — but the volume is initialized from the
@@ -91,7 +91,7 @@ func removeContainer(ctx context.Context, id string) error {
 
 // Launch creates a container for s, copies s.Dir into it and starts it attached. An error here means the
 // platform failed (docker create/cp/start itself failing, e.g. the image is missing) — same contract as
-// ProcessLauncher.Launch and internal/proofs/sandbox.Docker.Run.
+// ProcessLauncher.Launch and internal/sandbox.Docker.Run.
 func (d DockerLauncher) Launch(ctx context.Context, s Spec) (Bot, error) {
 	argv, err := Command(s.Language, s.Entry)
 	if err != nil {

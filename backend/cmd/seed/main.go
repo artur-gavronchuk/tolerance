@@ -1,6 +1,6 @@
 // Command seed fills a LOCAL database with deterministic fake activity over the last 30 days, so pages and
-// queries can be looked at (and measured) with realistic volume: ~500 people, daily submissions, product
-// weeks with entries and votes, tanks bots with ratings, matches and tournaments, notifications.
+// queries can be looked at (and measured) with realistic volume: ~500 people, daily submissions,
+// tanks bots with ratings, matches and tournaments, notifications.
 //
 //	go run ./cmd/seed --yes            (make seed)
 //
@@ -65,7 +65,6 @@ func main() {
 			{"cleanup", s.cleanup},
 			{"users", s.users},
 			{"daily", s.daily},
-			{"products", s.products},
 			{"tanks", s.tanks},
 			{"notifications", s.notifications},
 		}
@@ -88,7 +87,7 @@ func main() {
 
 func (s *seeder) summary() string {
 	var b strings.Builder
-	for _, k := range []string{"users", "submissions", "product_entries", "product_votes", "product_judgments", "bots", "matches", "tournaments", "notifications"} {
+	for _, k := range []string{"users", "submissions", "bots", "matches", "tournaments", "notifications"} {
 		fmt.Fprintf(&b, "%s=%d ", k, s.counts[k])
 	}
 	return strings.TrimSpace(b.String())

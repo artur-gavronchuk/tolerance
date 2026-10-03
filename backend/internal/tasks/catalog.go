@@ -68,27 +68,6 @@ type manifest struct {
 	Cases           int    `json:"cases"`
 }
 
-// LoadFlat reads a directory of task directories that each carry their own image and run command in
-// manifest.json (fixtures/proofs).
-func LoadFlat(dir string) ([]Task, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("tasks: read %s: %w", dir, err)
-	}
-	var out []Task
-	for _, e := range entries {
-		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-		t, err := loadTask(filepath.Join(dir, e.Name()), language{})
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, t)
-	}
-	return out, nil
-}
-
 // LoadByLanguage reads fixtures/skills: <lang>/skill.json (language, image, run command) and every task
 // directory beside it (a directory with a manifest.json).
 func LoadByLanguage(dir string) ([]Task, error) {

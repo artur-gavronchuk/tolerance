@@ -49,8 +49,6 @@ jobs:
           go-version-file: backend/go.mod
       - name: vet and fmt
         run: cd backend && go vet ./... && test -z "$(gofmt -l .)"
-      - name: build proof image
-        run: docker build -q -t arena-proof-go:1 backend/fixtures/proofs/go-fix-retry
       - name: build skill images
         run: |
           docker build -q -t arena-skill-go:1 backend/fixtures/skills/go

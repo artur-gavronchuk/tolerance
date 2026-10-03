@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-// maxBodyBytes bounds the ordinary JSON request bodies (credentials, agent
-// names, task slugs, ...): none of them legitimately need more than a few
+// maxBodyBytes bounds the ordinary JSON request bodies (bot names, task
+// slugs, moderation reasons, ...): none of them legitimately need more than a few
 // hundred bytes, so 64 KiB leaves generous headroom while still bounding
 // how much any one request can make the server buffer. Routes that
-// legitimately carry more (the connector's diff+log result) set their own,
+// legitimately carry more (uploads) set their own,
 // larger limit instead of going through ReadBody.
 const maxBodyBytes = 64 << 10
 

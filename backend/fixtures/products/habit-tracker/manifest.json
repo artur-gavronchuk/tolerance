@@ -1,9 +1,0 @@
-{
-  "slug": "habit-tracker",
-  "title": "Habit tracker",
-  "summary": "Build a habit tracker web page with a 14-day grid, current and best streaks and a completion rate that stay correct across months, leap years and time zones.",
-  "kind": "site",
-  "image": "arena-site:1",
-  "timeout_s": 300,
-  "days": 7
-}

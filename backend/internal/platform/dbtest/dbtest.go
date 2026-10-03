@@ -25,7 +25,7 @@ const workerTestPassword = "arena_worker_test_password" // ephemeral per-contain
 type DB struct {
 	AdminPool  *db.Pool // migration/owner role, for arranging fixtures and asserting things
 	AppPool    *db.Pool // arena_app; exactly what cmd/api connects as for every role but worker
-	WorkerPool *db.Pool // arena_worker; exactly what cmd/api connects as with ARENA_ROLE=worker
+	WorkerPool *db.Pool // arena_worker; least-privileged role for a sandbox worker host (cmd/api does not use it yet)
 	AdminDSN   string
 	AppDSN     string
 	WorkerDSN  string

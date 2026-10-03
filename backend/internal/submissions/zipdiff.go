@@ -234,7 +234,3 @@ func normalizeDiffPaths(diff string) string {
 	}
 	return strings.Join(lines, "\n")
 }
-
-// ReadZip is readZip for other packages (product entries): files by cleaned path, junk dropped, one
-// wrapping directory stripped, unsafe archives refused with a 422.
-func ReadZip(data []byte) (map[string][]byte, error) { return readZip(data) }

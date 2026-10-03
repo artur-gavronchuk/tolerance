@@ -1,5 +1,5 @@
-// Package admin is the owner's read-only view of the platform: what happens in the three modes (daily task,
-// weekly product tasks, tanks) and whether the machinery is healthy. Every number comes from one cheap
+// Package admin is the owner's read-only view of the platform: what happens in the two modes (daily task,
+// tanks) and whether the machinery is healthy. Every number comes from one cheap
 // read-only transaction over tables the other packages own.
 package admin
 
@@ -45,19 +45,6 @@ type Daily struct {
 	MedianSeconds    *float64       `json:"median_seconds"` // created to verdict, last 7 days
 	SubmissionSeries []Point        `json:"submission_series"`
 	UserSeries       []Point        `json:"user_series"`
-}
-
-type Products struct {
-	TaskSlug  string         `json:"task_slug"`
-	TaskTitle string         `json:"task_title"`
-	TaskKind  string         `json:"task_kind"`
-	Opens     *time.Time     `json:"opens_at"`
-	Deadline  *time.Time     `json:"deadline"`
-	Entries   int            `json:"entries"`
-	ByStatus  map[string]int `json:"by_status"`
-	Votes     int            `json:"votes"`
-	NextKind  string         `json:"next_kind"`
-	Upcoming  int            `json:"upcoming"`
 }
 
 type LadderRow struct {
@@ -119,7 +106,6 @@ type Pulse struct {
 	GeneratedAt time.Time `json:"generated_at"`
 	Users       Users     `json:"users"`
 	Daily       Daily     `json:"daily"`
-	Products    Products  `json:"products"`
 	Tanks       Tanks     `json:"tanks"`
 	Health      Health    `json:"health"`
 }
@@ -187,14 +173,6 @@ func optional(ctx context.Context, tx pgx.Tx, q string, args []any, dst ...any) 
 	return err
 }
 
-func utcPtr(t *time.Time) *time.Time {
-	if t == nil {
-		return nil
-	}
-	u := t.UTC()
-	return &u
-}
-
 func (s *Service) Pulse(ctx context.Context) (Pulse, error) {
 	now := time.Now().UTC()
 	today := dayStart(now)
@@ -217,7 +195,6 @@ func (s *Service) Pulse(ctx context.Context) (Pulse, error) {
 		one(`SELECT count(*) FROM users WHERE created_at >= $1`, &u.New7d, d7)
 		one(`SELECT count(*) FROM (
 			SELECT user_id FROM submissions WHERE created_at >= $1
-			UNION SELECT user_id FROM product_entries WHERE created_at >= $1
 			UNION SELECT b.owner_user_id FROM bot_versions v JOIN game_bots b ON b.id = v.bot_id
 				WHERE v.source = 'upload' AND v.created_at >= $1 AND b.owner_user_id IS NOT NULL) a`, &u.ActiveToday, today)
 		if err != nil {
@@ -259,32 +236,6 @@ func (s *Service) Pulse(ctx context.Context) (Pulse, error) {
 		}
 		if d.UserSeries, err = series(ctx, tx, since, `SELECT (created_at AT TIME ZONE 'UTC')::date, count(DISTINCT user_id)::int FROM submissions
 			WHERE created_at >= $1 GROUP BY 1`); err != nil {
-			return err
-		}
-
-		// Products: the task that opened most recently (this week's, or the last one still showing).
-		pr := &p.Products
-		pr.ByStatus = map[string]int{}
-		if err = optional(ctx, tx, `SELECT slug, title, kind, opens_at, deadline FROM product_tasks
-			WHERE active AND opens_at IS NOT NULL AND opens_at <= now() ORDER BY opens_at DESC, slug LIMIT 1`, nil,
-			&pr.TaskSlug, &pr.TaskTitle, &pr.TaskKind, &pr.Opens, &pr.Deadline); err != nil {
-			return err
-		}
-		pr.Opens, pr.Deadline = utcPtr(pr.Opens), utcPtr(pr.Deadline)
-		if pr.TaskSlug != "" {
-			if pr.ByStatus, err = counts(ctx, tx, `SELECT status, count(*)::int FROM product_entries WHERE task_slug = $1 GROUP BY 1`, pr.TaskSlug); err != nil {
-				return err
-			}
-			for _, n := range pr.ByStatus {
-				pr.Entries += n
-			}
-			one(`SELECT count(*) FROM product_votes WHERE task_slug = $1`, &pr.Votes, pr.TaskSlug)
-		}
-		one(`SELECT count(*) FROM product_tasks WHERE active AND NOT frozen AND opens_at IS NULL`, &pr.Upcoming)
-		if err != nil {
-			return err
-		}
-		if err = optional(ctx, tx, `SELECT kind FROM product_tasks WHERE active AND NOT frozen AND opens_at IS NULL ORDER BY ord, slug LIMIT 1`, nil, &pr.NextKind); err != nil {
 			return err
 		}
 
@@ -414,9 +365,6 @@ func stuck(ctx context.Context, tx pgx.Tx, now time.Time) ([]Stuck, error) {
 			SELECT 'submission' AS kind, s.id AS id, s.status AS status, s.created_at AS since, '/u/' || u.handle AS href
 				FROM submissions s JOIN users u ON u.id = s.user_id WHERE s.status = 'running' AND s.created_at < $1
 			UNION ALL
-			SELECT 'product entry', e.id, e.status, e.created_at, '/products/' || e.task_slug
-				FROM product_entries e WHERE e.status = 'running' AND e.created_at < $1
-			UNION ALL
 			SELECT 'match', m.id, m.status, coalesce(m.started_at, m.created_at), '/tanks/matches/' || m.id
 				FROM matches m WHERE m.status = 'running' AND coalesce(m.started_at, m.created_at) < $1
 		) x ORDER BY since LIMIT 50`, cut)
@@ -443,9 +391,6 @@ func infraErrors(ctx context.Context, tx pgx.Tx) ([]InfraError, error) {
 			(SELECT coalesce(finished_at, created_at) AS at, 'submission' AS kind, id, coalesce(failure_reason, '') AS reason
 				FROM submissions WHERE status = 'infra_error' ORDER BY 1 DESC LIMIT 20)
 			UNION ALL
-			(SELECT coalesce(finished_at, created_at), 'product entry', id, coalesce(failure_reason, '')
-				FROM product_entries WHERE status = 'infra_error' ORDER BY 1 DESC LIMIT 20)
-			UNION ALL
 			(SELECT coalesce(finished_at, created_at), 'match', id, failure_reason
 				FROM matches WHERE status = 'infra_error' ORDER BY 1 DESC LIMIT 20)
 		) x ORDER BY at DESC LIMIT 20`)
@@ -469,7 +414,7 @@ func infraErrors(ctx context.Context, tx pgx.Tx) ([]InfraError, error) {
 // Event is one line of the recent feed.
 type Event struct {
 	At     time.Time `json:"at"`
-	Type   string    `json:"type"` // signup | submission | product_entry | bot_version | tournament
+	Type   string    `json:"type"` // signup | submission | bot_version | tournament
 	Title  string    `json:"title"`
 	Detail string    `json:"detail"`
 	Status string    `json:"status"`
@@ -478,7 +423,7 @@ type Event struct {
 
 const feedPer = 50
 
-// Recent merges the latest signups, submissions, product entries, bot versions and tournament results.
+// Recent merges the latest signups, submissions, bot versions and tournament results.
 func (s *Service) Recent(ctx context.Context) ([]Event, error) {
 	out := []Event{}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
@@ -491,10 +436,6 @@ func (s *Service) Recent(ctx context.Context) ([]Event, error) {
 						|| CASE WHEN s.score IS NOT NULL THEN ', score ' || round(s.score::numeric, 2) ELSE '' END,
 						s.status, CASE WHEN s.day IS NOT NULL THEN '/day/' || s.day::text ELSE '/u/' || u.handle END
 					FROM submissions s JOIN users u ON u.id = s.user_id ORDER BY s.created_at DESC LIMIT $1)
-				UNION ALL
-				(SELECT e.created_at, 'product_entry', u.handle, e.task_slug || ' - ' || e.passed || '/' || e.total || ' scenarios',
-						e.status, '/products/' || e.task_slug
-					FROM product_entries e JOIN users u ON u.id = e.user_id ORDER BY e.created_at DESC LIMIT $1)
 				UNION ALL
 				(SELECT v.created_at, 'bot_version', g.name, 'v' || v.number || ' (' || v.source || ')', v.status, '/tanks/bots/' || g.id
 					FROM bot_versions v JOIN game_bots g ON g.id = v.bot_id WHERE NOT g.house ORDER BY v.created_at DESC LIMIT $1)

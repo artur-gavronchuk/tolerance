@@ -1,6 +1,6 @@
 // Package notify is the on-site notification list (the bell in the header). Notifications are not written by the
 // features they are about: on read, this package derives candidates from existing data (submissions, the daily
-// board, product tasks, tournaments, the tanks ladder) and stores each once per (person, natural key). A row is a
+// board, tournaments, the tanks ladder) and stores each once per (person, natural key). A row is a
 // type plus params; the frontend words it (en/ru). It only reads other packages' tables.
 package notify
 
@@ -19,7 +19,6 @@ import (
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
-	"tolerance/internal/products"
 	"tolerance/internal/recap"
 )
 
@@ -27,24 +26,21 @@ const (
 	listLimit = 30
 	// syncEvery is the least time between two derivations for one person: the header polls.
 	syncEvery = 45 * time.Second
-	// recent is how far back an event still produces a notification, so a first visit does not replay history.
-	recent = 14 * 24 * time.Hour
 	// dropPlaces is how many places the person's bot must fall in the season ladder to be told.
 	dropPlaces = 3
 )
 
 type Service struct {
-	pool     *db.Pool
-	games    *games.Service
-	products *products.Service
-	recap    *recap.Service
+	pool  *db.Pool
+	games *games.Service
+	recap *recap.Service
 
 	mu     sync.Mutex
 	synced map[string]time.Time
 }
 
-func NewService(pool *db.Pool, g *games.Service, p *products.Service, r *recap.Service) *Service {
-	return &Service{pool: pool, games: g, products: p, recap: r, synced: map[string]time.Time{}}
+func NewService(pool *db.Pool, g *games.Service, r *recap.Service) *Service {
+	return &Service{pool: pool, games: g, recap: r, synced: map[string]time.Time{}}
 }
 
 type Notification struct {
@@ -133,7 +129,7 @@ func (s *Service) MarkRead(ctx context.Context, userID string) error {
 // sync derives every candidate and stores the new ones. Each source is independent: one failing does not hide the others.
 func (s *Service) sync(ctx context.Context, userID string) error {
 	var cands []candidate
-	for _, src := range []func(context.Context, string) ([]candidate, error){s.verdicts, s.yesterday, s.productPhases, s.tanks} {
+	for _, src := range []func(context.Context, string) ([]candidate, error){s.verdicts, s.yesterday, s.tanks} {
 		c, err := src(ctx, userID)
 		if err != nil {
 			return err
@@ -199,43 +195,6 @@ func (s *Service) yesterday(ctx context.Context, userID string) ([]candidate, er
 	return []candidate{{"day_final:" + y.Day, "daily_final", map[string]any{
 		"day": y.Day, "title": y.Task.Title, "place": *y.Place, "of": y.Participants,
 	}, day.Add(24 * time.Hour)}}, nil
-}
-
-// productPhases: voting opened (with the pairs this person has to judge) and final standings with the person's place.
-func (s *Service) productPhases(ctx context.Context, userID string) ([]candidate, error) {
-	l, err := s.products.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var out []candidate
-	for _, t := range l.Items {
-		switch {
-		case t.Phase == products.PhaseVoting:
-			p := map[string]any{"slug": t.Slug, "title": t.Title, "kind": t.Kind, "pairs": 0}
-			if t.Kind == products.KindSite {
-				n, err := s.products.Next(ctx, userID, t.Slug)
-				if err != nil || n.Target-n.Judged <= 0 {
-					continue
-				}
-				p["pairs"] = n.Target - n.Judged
-			}
-			out = append(out, candidate{"product_voting:" + t.Slug, "product_voting", p, t.Deadline})
-		case t.Phase == products.PhaseFinal && time.Since(t.VotingEndsAt) < recent:
-			res, err := s.products.Results(ctx, t.Slug, userID)
-			if err != nil {
-				return nil, err
-			}
-			for i, e := range res.Entries {
-				if e.Mine {
-					out = append(out, candidate{"product_final:" + t.Slug, "product_final", map[string]any{
-						"slug": t.Slug, "title": t.Title, "place": i + 1, "of": len(res.Entries),
-					}, t.VotingEndsAt})
-					break
-				}
-			}
-		}
-	}
-	return out, nil
 }
 
 // tanks: tournaments the person's bot is in, one about to start, and a drop in the season ladder.

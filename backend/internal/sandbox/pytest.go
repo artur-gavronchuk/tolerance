@@ -22,7 +22,7 @@ import (
 // could still forge output that comes last (monkeypatching _pytest's report
 // classes, an atexit hook printing a complete fake summary). That is a known
 // risk, mitigated by --show-capture=no in the skill's run_cmd and by the
-// worker's harness_tampering check (proofs.HarnessTampered); an
+// worker's harness_tampering check (see submissions' harness_tampering guard); an
 // out-of-process harness is the follow-up. This parser closes the cheap tricks.
 func ParsePytest(out []byte) []TestResult {
 	var res []TestResult

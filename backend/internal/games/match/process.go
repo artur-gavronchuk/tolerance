@@ -20,7 +20,7 @@ const (
 )
 
 // ProcessLauncher runs a bot as a local process in Spec.Dir with the argv from Command, in its own process
-// group so Close kills everything it started. Used by the connector, by tests and by ARENA_SANDBOX=fake.
+// group so Close kills everything it started. Used by the local `arena tanks play`, by tests and by ARENA_SANDBOX=fake.
 // Never use it for untrusted code on the server.
 type ProcessLauncher struct{}
 
