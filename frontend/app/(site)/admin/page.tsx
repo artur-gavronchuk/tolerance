@@ -7,12 +7,26 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { admin, ApiError, friendlyMessage } from '@/lib/api'
-import { ago } from '@/lib/format'
+import { useT } from '@/lib/i18n/client'
+import { formatDateTime, type T } from '@/lib/i18n/core'
+import { adminMessages } from '@/lib/i18n/messages/admin'
 import { useMe } from '@/lib/use-me'
 import { cn } from '@/lib/utils'
 import type { AdminEvent, AdminPoint, AdminPulse } from '@/lib/types'
 
 const REFRESH_MS = 15_000
+
+type AT = T<typeof adminMessages.en>
+
+function ago(t: AT, iso: string, now = Date.now()) {
+  const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000))
+  if (s < 60) return t('ago.s', { n: s })
+  if (s < 3600) return t('ago.m', { n: Math.round(s / 60) })
+  if (s < 86400) return t('ago.h', { n: Math.round(s / 3600) })
+  return t('ago.d', { n: Math.round(s / 86400) })
+}
+
+const stLabel = (t: AT, k: string) => (`st.${k}` in adminMessages.en ? t(`st.${k}` as 'st.queued') : k.replace('_', ' '))
 
 function useAdminData(enabled: boolean) {
   const [pulse, setPulse] = useState<AdminPulse | null>(null)
@@ -40,6 +54,7 @@ function useAdminData(enabled: boolean) {
 }
 
 export default function AdminPage() {
+  const t = useT(adminMessages)
   const { me, loading } = useMe()
   const allowed = !!me?.can_admin
   const { pulse, recent, error, at } = useAdminData(allowed)
@@ -49,9 +64,9 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-10">
-      <PageHeader title="Pulse" kicker="Admin"
-        actions={<span className="self-end text-xs text-muted-foreground">{at ? `Updated ${ago(new Date(at).toISOString())}, refreshes every 15s` : 'Loading'}</span>}>
-        What is happening across the daily task, the weekly products and tanks, and whether the machinery is healthy.
+      <PageHeader title={t('pulse')} kicker={t('admin')}
+        actions={<span className="self-end text-xs text-muted-foreground">{at ? t('updated', { ago: ago(t, new Date(at).toISOString()) }) : t('loading')}</span>}>
+        {t('lead')}
       </PageHeader>
       {error && <p role="alert" className="text-sm text-destructive">{friendlyMessage(error)}</p>}
       {!pulse && !error && <Skeleton className="h-64 rounded-[14px]" />}
@@ -70,12 +85,13 @@ export default function AdminPage() {
 }
 
 function NotFoundLike() {
+  const t = useT(adminMessages)
   return (
     <div className="py-16">
       <p className="font-mono text-sm text-muted-foreground">404</p>
-      <h1 className="display mt-2 text-[2.6rem]">Nothing here</h1>
-      <p className="mt-3 text-muted-foreground">This page doesn’t exist.</p>
-      <Link href="/" className="mt-6 inline-block text-sm font-semibold text-primary hover:underline">Today’s task</Link>
+      <h1 className="display mt-2 text-[2.6rem]">{t('nfTitle')}</h1>
+      <p className="mt-3 text-muted-foreground">{t('nfText')}</p>
+      <Link href="/" className="mt-6 inline-block text-sm font-semibold text-primary hover:underline">{t('nfLink')}</Link>
     </div>
   )
 }
@@ -124,15 +140,16 @@ function Bars({ points, label }: { points: AdminPoint[]; label: string }) {
 
 const sum = (m: Record<string, number> | undefined) => Object.values(m ?? {}).reduce((a, b) => a + b, 0)
 const pct = (x: number) => `${(x * 100).toFixed(x > 0 && x < 0.1 ? 1 : 0)}%`
-const dur = (s: number) => (s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s / 60)}m` : `${(s / 3600).toFixed(1)}h`)
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC' : '-')
+const dur = (t: AT, s: number) => (s < 90 ? `${Math.round(s)} ${t('unitS')}` : s < 5400 ? `${Math.round(s / 60)} ${t('unitM')}` : `${(s / 3600).toFixed(1)} ${t('unitH')}`)
+const when = (t: AT, iso: string | null) => (iso ? formatDateTime(t.locale, iso) : '-')
 
 function Statuses({ m, order }: { m: Record<string, number>; order: string[] }) {
+  const t = useT(adminMessages)
   const keys = [...order, ...Object.keys(m).filter((k) => !order.includes(k))]
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {keys.map((k) => (
-        <Badge key={k} variant={k === 'infra_error' && (m[k] ?? 0) > 0 ? 'destructive' : (m[k] ?? 0) > 0 ? 'secondary' : 'outline'}>{k.replace('_', ' ')} {m[k] ?? 0}</Badge>
+        <Badge key={k} variant={k === 'infra_error' && (m[k] ?? 0) > 0 ? 'destructive' : (m[k] ?? 0) > 0 ? 'secondary' : 'outline'}>{stLabel(t, k)} {m[k] ?? 0}</Badge>
       ))}
     </div>
   )
@@ -143,16 +160,17 @@ const grid = 'grid grid-cols-2 gap-3 lg:grid-cols-4'
 // ---- sections ------------------------------------------------------------
 
 function UsersSection({ p }: { p: AdminPulse }) {
+  const t = useT(adminMessages)
   const u = p.users
   return (
     <section>
-      <SectionTitle>Users</SectionTitle>
+      <SectionTitle>{t('users')}</SectionTitle>
       <div className={grid}>
-        <Tile label="Total" value={u.total} />
-        <Tile label="New today" value={u.new_today} hint={`${u.new_7d} in 7 days`} />
-        <Tile label="Active today" value={u.active_today} hint="submitted, uploaded or pushed a bot" />
-        <Tile label="Signups, 14 days" value={u.signup_series.reduce((a, b) => a + b.value, 0)}>
-          <Bars points={u.signup_series} label="Signups per day" />
+        <Tile label={t('total')} value={u.total} />
+        <Tile label={t('newToday')} value={u.new_today} hint={t('new7d', { n: u.new_7d })} />
+        <Tile label={t('activeToday')} value={u.active_today} hint={t('activeHint')} />
+        <Tile label={t('signups14')} value={u.signup_series.reduce((a, b) => a + b.value, 0)}>
+          <Bars points={u.signup_series} label={t('signupsPerDay')} />
         </Tile>
       </div>
     </section>
@@ -160,24 +178,25 @@ function UsersSection({ p }: { p: AdminPulse }) {
 }
 
 function DailySection({ p }: { p: AdminPulse }) {
+  const t = useT(adminMessages)
   const d = p.daily
   const total = sum(d.today)
   const infra = d.infra_rate_7d
   return (
     <section>
-      <SectionTitle aside={d.task_slug ? <Link href="/" className="hover:text-foreground">{d.task_kind}</Link> : undefined}>Daily task</SectionTitle>
+      <SectionTitle aside={d.task_slug ? <Link href="/" className="hover:text-foreground">{d.task_kind}</Link> : undefined}>{t('dailyTask')}</SectionTitle>
       <div className={grid}>
-        <Tile label="Today’s task" value={<span className="text-lg">{d.task_slug || 'not picked yet'}</span>} hint={d.task_title || 'Assigned on the first visit of the day'} />
-        <Tile label="Submissions today" value={total} hint={`${d.unique_solvers} unique ${d.unique_solvers === 1 ? 'solver' : 'solvers'}`}>
+        <Tile label={t('todaysTask')} value={<span className="text-lg">{d.task_slug || t('notPicked')}</span>} hint={d.task_title || t('assignedHint')} />
+        <Tile label={t('subsToday')} value={total} hint={t.plural('solvers', d.unique_solvers)}>
           <Statuses m={d.today} order={['queued', 'running', 'passed', 'failed', 'infra_error']} />
         </Tile>
-        <Tile label="Infra error rate, 7d" value={pct(infra)} tone={infra >= 0.2 ? 'bad' : infra >= 0.05 ? 'warn' : 'good'}
-          hint={`${d.submissions_7d} submissions; median verdict in ${d.median_seconds == null ? '-' : dur(d.median_seconds)}`} />
-        <Tile label="Submissions, 14 days" value={d.submission_series.reduce((a, b) => a + b.value, 0)}>
-          <Bars points={d.submission_series} label="Submissions per day" />
+        <Tile label={t('infraRate')} value={pct(infra)} tone={infra >= 0.2 ? 'bad' : infra >= 0.05 ? 'warn' : 'good'}
+          hint={t('infraHint', { n: d.submissions_7d, dur: d.median_seconds == null ? '-' : dur(t, d.median_seconds) })} />
+        <Tile label={t('subs14')} value={d.submission_series.reduce((a, b) => a + b.value, 0)}>
+          <Bars points={d.submission_series} label={t('subsPerDay')} />
         </Tile>
-        <Tile label="Unique users per day, 14 days" value={d.user_series[d.user_series.length - 1]?.value ?? 0} hint="today" className="col-span-2 lg:col-span-4">
-          <Bars points={d.user_series} label="Unique submitters per day" />
+        <Tile label={t('usersPerDay14')} value={d.user_series[d.user_series.length - 1]?.value ?? 0} hint={t('todayHint')} className="col-span-2 lg:col-span-4">
+          <Bars points={d.user_series} label={t('uniquePerDay')} />
         </Tile>
       </div>
     </section>
@@ -185,49 +204,51 @@ function DailySection({ p }: { p: AdminPulse }) {
 }
 
 function ProductsSection({ p }: { p: AdminPulse }) {
+  const t = useT(adminMessages)
   const x = p.products
   return (
     <section>
-      <SectionTitle aside={<Link href="/products" className="hover:text-foreground">Open products</Link>}>Product of the week</SectionTitle>
+      <SectionTitle aside={<Link href="/products" className="hover:text-foreground">{t('openProducts')}</Link>}>{t('productOfWeek')}</SectionTitle>
       <div className={grid}>
-        <Tile label="This week" value={<span className="text-lg">{x.task_slug || 'none open'}</span>}
-          hint={x.task_slug ? `${x.task_kind}, ${x.deadline ? `deadline ${when(x.deadline)}` : 'no deadline'}` : undefined} />
-        <Tile label="Entries" value={x.entries}>
+        <Tile label={t('thisWeek')} value={<span className="text-lg">{x.task_slug || t('noneOpen')}</span>}
+          hint={x.task_slug ? (x.deadline ? t('deadlineHint', { kind: x.task_kind, when: when(t, x.deadline) }) : t('noDeadline', { kind: x.task_kind })) : undefined} />
+        <Tile label={t('entries')} value={x.entries}>
           <Statuses m={x.by_status} order={['queued', 'running', 'done', 'infra_error']} />
         </Tile>
-        <Tile label="Votes so far" value={x.votes} />
-        <Tile label="Up next" value={<span className="text-lg">{x.next_kind || 'nothing queued'}</span>} hint={`${x.upcoming} fresh ${x.upcoming === 1 ? 'task' : 'tasks'} not played yet`} />
+        <Tile label={t('votesSoFar')} value={x.votes} />
+        <Tile label={t('upNext')} value={<span className="text-lg">{x.next_kind || t('nothingQueued')}</span>} hint={t.plural('fresh', x.upcoming)} />
       </div>
     </section>
   )
 }
 
 function TanksSection({ p }: { p: AdminPulse }) {
-  const t = p.tanks
+  const t = useT(adminMessages)
+  const tk = p.tanks
   return (
     <section>
-      <SectionTitle aside={<Link href="/tanks" className="hover:text-foreground">Open tanks</Link>}>Tanks</SectionTitle>
+      <SectionTitle aside={<Link href="/tanks" className="hover:text-foreground">{t('openTanks')}</Link>}>{t('tanks')}</SectionTitle>
       <div className={grid}>
-        <Tile label="Bots" value={t.bots_total} hint={`${t.bots_active} active (passed the check)`} />
-        <Tile label="Uploads today" value={t.uploads_today} hint={`${t.rejected_today} rejected today`} tone={t.rejected_today > 0 && t.rejected_today >= t.uploads_today ? 'warn' : undefined} />
-        <Tile label="Matches, last hour" value={sum(t.matches_last_hour)}>
-          <Statuses m={t.matches_last_hour} order={['queued', 'running', 'finished', 'infra_error']} />
+        <Tile label={t('bots')} value={tk.bots_total} hint={t('activeBots', { n: tk.bots_active })} />
+        <Tile label={t('uploadsToday')} value={tk.uploads_today} hint={t('rejectedToday', { n: tk.rejected_today })} tone={tk.rejected_today > 0 && tk.rejected_today >= tk.uploads_today ? 'warn' : undefined} />
+        <Tile label={t('matchesHour')} value={sum(tk.matches_last_hour)}>
+          <Statuses m={tk.matches_last_hour} order={['queued', 'running', 'finished', 'infra_error']} />
         </Tile>
-        <Tile label="Tournament" value={<span className="text-lg">{t.tournament ? t.tournament.status : 'none'}</span>}
-          hint={t.tournament ? <Link href={`/tanks/tournaments/${t.tournament.id}`} className="text-primary hover:underline">{t.tournament.name}</Link> : undefined} />
+        <Tile label={t('tournament')} value={<span className="text-lg">{tk.tournament ? stLabel(t, tk.tournament.status) : t('none')}</span>}
+          hint={tk.tournament ? <Link href={`/tanks/tournaments/${tk.tournament.id}`} className="text-primary hover:underline">{tk.tournament.name}</Link> : undefined} />
       </div>
       <div className="mt-3 rounded-[14px] border border-border bg-card">
         <Table>
           <TableHeader>
-            <TableRow><TableHead>#</TableHead><TableHead>Bot</TableHead><TableHead>Owner</TableHead><TableHead className="text-right">Rating</TableHead><TableHead className="text-right">Matches</TableHead></TableRow>
+            <TableRow><TableHead>#</TableHead><TableHead>{t('colBot')}</TableHead><TableHead>{t('colOwner')}</TableHead><TableHead className="text-right">{t('colRating')}</TableHead><TableHead className="text-right">{t('colMatches')}</TableHead></TableRow>
           </TableHeader>
           <TableBody>
-            {t.ladder.length === 0 && <TableRow><TableCell colSpan={5} className="text-muted-foreground">No bots on the ladder yet.</TableCell></TableRow>}
-            {t.ladder.map((r) => (
+            {tk.ladder.length === 0 && <TableRow><TableCell colSpan={5} className="text-muted-foreground">{t('noLadder')}</TableCell></TableRow>}
+            {tk.ladder.map((r) => (
               <TableRow key={r.bot_id}>
                 <TableCell className="font-mono">{r.rank}</TableCell>
                 <TableCell><Link href={`/tanks/bots/${r.bot_id}`} className="font-semibold hover:underline">{r.name}</Link></TableCell>
-                <TableCell className="text-muted-foreground">{r.owner || 'house'}</TableCell>
+                <TableCell className="text-muted-foreground">{r.owner || t('house')}</TableCell>
                 <TableCell className="text-right font-mono">{r.rating}</TableCell>
                 <TableCell className="text-right font-mono">{r.matches}</TableCell>
               </TableRow>
@@ -240,30 +261,31 @@ function TanksSection({ p }: { p: AdminPulse }) {
 }
 
 function HealthSection({ p }: { p: AdminPulse }) {
+  const t = useT(adminMessages)
   const h = p.health
   const queued = h.jobs.filter((j) => j.state === 'queued').reduce((a, b) => a + b.count, 0)
   const oldest = h.oldest_queued_seconds
   return (
     <section>
-      <SectionTitle>Health</SectionTitle>
+      <SectionTitle>{t('health')}</SectionTitle>
       <div className={grid}>
-        <Tile label="Jobs queued" value={queued} tone={queued > 20 ? 'warn' : undefined}
-          hint={oldest == null ? 'queue is empty' : `oldest waiting ${dur(oldest)}`} />
-        <Tile label="Jobs retried, 7d" value={h.retried_jobs} hint="attempts above one" tone={h.retried_jobs > 0 ? 'warn' : undefined} />
-        <Tile label="Jobs failed, 7d" value={h.failed_jobs} tone={h.failed_jobs > 0 ? 'bad' : 'good'} />
-        <Tile label="Stuck over 15 min" value={h.stuck.length} tone={h.stuck.length > 0 ? 'bad' : 'good'} hint="submissions, entries, matches" />
+        <Tile label={t('jobsQueued')} value={queued} tone={queued > 20 ? 'warn' : undefined}
+          hint={oldest == null ? t('queueEmpty') : t('oldestWaiting', { dur: dur(t, oldest) })} />
+        <Tile label={t('jobsRetried')} value={h.retried_jobs} hint={t('attemptsAbove')} tone={h.retried_jobs > 0 ? 'warn' : undefined} />
+        <Tile label={t('jobsFailed')} value={h.failed_jobs} tone={h.failed_jobs > 0 ? 'bad' : 'good'} />
+        <Tile label={t('stuck15')} value={h.stuck.length} tone={h.stuck.length > 0 ? 'bad' : 'good'} hint={t('stuckHint')} />
       </div>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <div className="min-w-0 rounded-[14px] border border-border bg-card">
           <Table>
-            <TableHeader><TableRow><TableHead>Job kind</TableHead><TableHead>State</TableHead><TableHead className="text-right">Count</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>{t('colJobKind')}</TableHead><TableHead>{t('colState')}</TableHead><TableHead className="text-right">{t('colCount')}</TableHead></TableRow></TableHeader>
             <TableBody>
-              {h.jobs.length === 0 && <TableRow><TableCell colSpan={3} className="text-muted-foreground">No jobs in the last day.</TableCell></TableRow>}
+              {h.jobs.length === 0 && <TableRow><TableCell colSpan={3} className="text-muted-foreground">{t('noJobs')}</TableCell></TableRow>}
               {h.jobs.map((j) => (
                 <TableRow key={j.kind + j.state}>
                   <TableCell className="font-mono">{j.kind}</TableCell>
-                  <TableCell><Badge variant={j.state === 'failed' ? 'destructive' : j.state === 'done' ? 'outline' : 'secondary'}>{j.state}</Badge></TableCell>
+                  <TableCell><Badge variant={j.state === 'failed' ? 'destructive' : j.state === 'done' ? 'outline' : 'secondary'}>{stLabel(t, j.state)}</Badge></TableCell>
                   <TableCell className="text-right font-mono">{j.count}</TableCell>
                 </TableRow>
               ))}
@@ -272,14 +294,14 @@ function HealthSection({ p }: { p: AdminPulse }) {
         </div>
         <div className="min-w-0 rounded-[14px] border border-border bg-card">
           <Table>
-            <TableHeader><TableRow><TableHead>Stuck</TableHead><TableHead>Id</TableHead><TableHead className="text-right">Running for</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>{t('colStuck')}</TableHead><TableHead>{t('colId')}</TableHead><TableHead className="text-right">{t('colRunningFor')}</TableHead></TableRow></TableHeader>
             <TableBody>
-              {h.stuck.length === 0 && <TableRow><TableCell colSpan={3} className="text-muted-foreground">Nothing is stuck.</TableCell></TableRow>}
+              {h.stuck.length === 0 && <TableRow><TableCell colSpan={3} className="text-muted-foreground">{t('nothingStuck')}</TableCell></TableRow>}
               {h.stuck.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell>{s.kind}</TableCell>
                   <TableCell><Link href={s.href} className="font-mono text-xs hover:underline">{s.id}</Link></TableCell>
-                  <TableCell className="text-right font-mono">{s.age_minutes}m</TableCell>
+                  <TableCell className="text-right font-mono">{s.age_minutes} {t('unitM')}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -287,15 +309,15 @@ function HealthSection({ p }: { p: AdminPulse }) {
         </div>
       </div>
 
-      <h3 className="heading mt-6 mb-2 text-base">Last infra errors</h3>
+      <h3 className="heading mt-6 mb-2 text-base">{t('lastInfra')}</h3>
       <div className="rounded-[14px] border border-border bg-card">
         <Table>
-          <TableHeader><TableRow><TableHead>When</TableHead><TableHead>Kind</TableHead><TableHead>Id</TableHead><TableHead>Reason</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>{t('colWhen')}</TableHead><TableHead>{t('colKind')}</TableHead><TableHead>{t('colId')}</TableHead><TableHead>{t('colReason')}</TableHead></TableRow></TableHeader>
           <TableBody>
-            {h.infra_errors.length === 0 && <TableRow><TableCell colSpan={4} className="text-muted-foreground">No infra errors recorded.</TableCell></TableRow>}
+            {h.infra_errors.length === 0 && <TableRow><TableCell colSpan={4} className="text-muted-foreground">{t('noInfra')}</TableCell></TableRow>}
             {h.infra_errors.map((e) => (
               <TableRow key={e.kind + e.id}>
-                <TableCell className="text-muted-foreground">{ago(e.at)}</TableCell>
+                <TableCell className="text-muted-foreground">{ago(t, e.at)}</TableCell>
                 <TableCell>{e.kind}</TableCell>
                 <TableCell className="font-mono text-xs">{e.id}</TableCell>
                 <TableCell className="max-w-[28rem] truncate" title={e.reason}>{e.reason || '-'}</TableCell>
@@ -308,10 +330,6 @@ function HealthSection({ p }: { p: AdminPulse }) {
   )
 }
 
-const TYPE_LABEL: Record<AdminEvent['type'], string> = {
-  signup: 'Signup', submission: 'Submission', product_entry: 'Product entry', bot_version: 'Bot version', tournament: 'Tournament',
-}
-
 function statusVariant(s: string) {
   if (s === 'passed' || s === 'done' || s === 'active' || s === 'finished') return 'default' as const
   if (s === 'failed' || s === 'rejected' || s === 'infra_error') return 'destructive' as const
@@ -319,21 +337,22 @@ function statusVariant(s: string) {
 }
 
 function FeedSection({ items }: { items: AdminEvent[] }) {
+  const t = useT(adminMessages)
   return (
     <section>
-      <SectionTitle aside="last 50 events">Recent activity</SectionTitle>
+      <SectionTitle aside={t('last50')}>{t('recent')}</SectionTitle>
       <div className="rounded-[14px] border border-border bg-card">
         <Table>
-          <TableHeader><TableRow><TableHead>When</TableHead><TableHead>Event</TableHead><TableHead>Who</TableHead><TableHead>Detail</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>{t('colWhen')}</TableHead><TableHead>{t('colEvent')}</TableHead><TableHead>{t('colWho')}</TableHead><TableHead>{t('colDetail')}</TableHead><TableHead>{t('colStatus')}</TableHead></TableRow></TableHeader>
           <TableBody>
-            {items.length === 0 && <TableRow><TableCell colSpan={5} className="text-muted-foreground">Nothing has happened yet.</TableCell></TableRow>}
+            {items.length === 0 && <TableRow><TableCell colSpan={5} className="text-muted-foreground">{t('nothingYet')}</TableCell></TableRow>}
             {items.map((e, i) => (
               <TableRow key={`${e.type}-${e.at}-${i}`}>
-                <TableCell className="text-muted-foreground">{ago(e.at)}</TableCell>
-                <TableCell>{TYPE_LABEL[e.type]}</TableCell>
+                <TableCell className="text-muted-foreground">{ago(t, e.at)}</TableCell>
+                <TableCell>{t(`type.${e.type}` as 'type.signup')}</TableCell>
                 <TableCell><Link href={e.href} className="font-semibold hover:underline">{e.title}</Link></TableCell>
                 <TableCell className="max-w-[22rem] truncate text-muted-foreground" title={e.detail}>{e.detail}</TableCell>
-                <TableCell>{e.status && <Badge variant={statusVariant(e.status)}>{e.status.replace('_', ' ')}</Badge>}</TableCell>
+                <TableCell>{e.status && <Badge variant={statusVariant(e.status)}>{stLabel(t, e.status)}</Badge>}</TableCell>
               </TableRow>
             ))}
           </TableBody>

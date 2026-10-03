@@ -8,6 +8,9 @@ import { SectionTitle } from '@/components/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, friendlyMessage, products } from '@/lib/api'
+import { useT } from '@/lib/i18n/client'
+import { formatDate } from '@/lib/i18n/core'
+import { profileMessages } from '@/lib/i18n/messages/profile'
 import type { Activity, ActivityBot, ActivityProduct, ProductList } from '@/lib/types'
 
 // One fetch of /users/{handle}/activity shared by the stack chip (above the daily header) and the sections below it.
@@ -28,11 +31,12 @@ export function ActivityProvider({ handle, children }: { handle: string; childre
 
 export function MainStack() {
   const { data } = useContext(Ctx)
+  const t = useT(profileMessages)
   if (!data?.stack) return null
   const s = data.stack
   return (
-    <p className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground" title={`Most used across ${s.count} upload${s.count === 1 ? '' : 's'}`}>
-      Main stack
+    <p className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground" title={t.plural('mostUsed', s.count)}>
+      {t('mainStack')}
       <Badge variant="secondary" className="h-6 px-2.5 text-sm font-semibold">{s.label}</Badge>
     </p>
   )
@@ -45,17 +49,19 @@ function Empty({ children }: { children: React.ReactNode }) {
 const MEDAL = ['text-warning', 'text-muted-foreground', 'text-[#b4784a]']
 
 function PlaceBadge({ place, of }: { place: number; of: number }) {
+  const t = useT(profileMessages)
   return (
     <span className="inline-flex shrink-0 items-center gap-1 rounded-4xl border border-border px-2.5 py-0.5 text-xs font-bold">
       {place <= 3 ? <Medal className={`size-3.5 ${MEDAL[place - 1]}`} /> : null}
-      #{place}<span className="font-normal text-muted-foreground">of {of}</span>
+      #{place}<span className="font-normal text-muted-foreground">{t('of', { n: of })}</span>
     </span>
   )
 }
 
 function ProductCard({ p }: { p: ActivityProduct }) {
+  const t = useT(profileMessages)
   const href = p.phase === 'open' ? `/products/${p.task_slug}` : `/products/${p.task_slug}/results`
-  const checks = p.total > 0 ? `${p.passed}/${p.total} checks` : null
+  const checks = p.total > 0 ? t('checks', { passed: p.passed, total: p.total }) : null
   return (
     <li>
       <Link href={href} className="flex h-full flex-col gap-3 rounded-[14px] border border-border bg-card p-4 transition-colors hover:border-primary/50">
@@ -67,11 +73,11 @@ function ProductCard({ p }: { p: ActivityProduct }) {
           <PhaseBadge phase={p.phase} />
           <Badge variant="outline">{p.kind}</Badge>
           {p.phase === 'open' ? (
-            <span>Results after {p.deadline.slice(0, 10)}</span>
+            <span>{t('resultsAfter', { date: p.deadline.slice(0, 10) })}</span>
           ) : (
             <>
               {checks && <span className="font-mono">{checks}</span>}
-              <span className="font-mono">{p.votes} vote{p.votes === 1 ? '' : 's'}</span>
+              <span className="font-mono">{t.plural('votes', p.votes)}</span>
             </>
           )}
         </div>
@@ -82,6 +88,7 @@ function ProductCard({ p }: { p: ActivityProduct }) {
 
 // The call to action depends on whether a product task is open right now.
 function NoProducts() {
+  const t = useT(profileMessages)
   const [list, setList] = useState<ProductList | null>(null)
   useEffect(() => {
     let live = true
@@ -93,9 +100,9 @@ function NoProducts() {
   return (
     <Empty>
       <Package className="mx-auto mb-2 size-5" />
-      No product tasks yet
-      {open ? <> — <Link href={`/products/${open.slug}`} className="font-semibold text-primary hover:underline">enter this week&apos;s task</Link></>
-        : next ? <> — next product task opens {new Date(next).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</>
+      {t('noProducts')}
+      {open ? <> — <Link href={`/products/${open.slug}`} className="font-semibold text-primary hover:underline">{t('enterThisWeek')}</Link></>
+        : next ? <> — {t('nextOpens', { date: formatDate(t.locale, next, { day: 'numeric', month: 'short' }) })}</>
         : null}
     </Empty>
   )
@@ -103,9 +110,10 @@ function NoProducts() {
 
 export function ProductsSection() {
   const { data } = useContext(Ctx)
+  const t = useT(profileMessages)
   return (
     <section>
-      <SectionTitle>Products</SectionTitle>
+      <SectionTitle>{t('products')}</SectionTitle>
       {!data ? <Skeleton className="h-24 rounded-[14px]" /> : data.products.length === 0 ? (
         <NoProducts />
       ) : (
@@ -116,6 +124,7 @@ export function ProductsSection() {
 }
 
 function BotCard({ b }: { b: ActivityBot }) {
+  const t = useT(profileMessages)
   const titles = b.tournaments.filter((t) => t.champion)
   return (
     <li className="flex h-full flex-col gap-3 rounded-[14px] border border-border bg-card p-4">
@@ -124,9 +133,9 @@ function BotCard({ b }: { b: ActivityBot }) {
         <span className="shrink-0 font-mono text-lg font-bold">{b.rating}</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        {b.rank != null ? <>#{b.rank} this season</> : 'Not on the ladder'} · {b.matches} match{b.matches === 1 ? '' : 'es'}, {b.wins} win{b.wins === 1 ? '' : 's'}
+        {b.rank != null ? t('rankThisSeason', { rank: b.rank }) : t('notOnLadder')} · {t.plural('matches', b.matches)}, {t.plural('wins', b.wins)}
         <br />
-        Lifetime {b.lifetime_rating} · {b.total_matches} matches, {b.total_wins} wins
+        {t('lifetime', { rating: b.lifetime_rating, matches: t.plural('matches', b.total_matches), wins: t.plural('wins', b.total_wins) })}
       </p>
       {(titles.length > 0 || b.best_finish) && (
         <div className="mt-auto flex flex-wrap items-center gap-2 text-xs">
@@ -136,7 +145,7 @@ function BotCard({ b }: { b: ActivityBot }) {
               <Trophy className="size-3.5 shrink-0 text-warning" /><span className="truncate">{t.name}</span>
             </Link>
           ))}
-          {titles.length === 0 && b.best_finish && <span className="text-muted-foreground">Best tournament finish: <b className="text-foreground">{b.best_finish}</b></span>}
+          {titles.length === 0 && b.best_finish && <span className="text-muted-foreground">{t('bestFinish')} <b className="text-foreground">{b.best_finish}</b></span>}
         </div>
       )}
     </li>
@@ -145,13 +154,14 @@ function BotCard({ b }: { b: ActivityBot }) {
 
 export function TanksSection() {
   const { data } = useContext(Ctx)
+  const t = useT(profileMessages)
   return (
     <section>
-      <SectionTitle>Tanks</SectionTitle>
+      <SectionTitle>{t('tanks')}</SectionTitle>
       {!data ? <Skeleton className="h-24 rounded-[14px]" /> : data.bots.length === 0 ? (
         <Empty>
           <Bot className="mx-auto mb-2 size-5" />
-          No bots yet — <Link href="/app/tanks" className="font-semibold text-primary hover:underline">build one</Link>
+          {t('noBots')} — <Link href="/app/tanks" className="font-semibold text-primary hover:underline">{t('buildOne')}</Link>
         </Empty>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">{data.bots.map((b) => <BotCard key={b.id} b={b} />)}</ul>
