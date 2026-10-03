@@ -74,7 +74,7 @@ func TestLeaderboardOrdersByAccessThenConfirmed(t *testing.T) {
 	seedRated(t, d, "hidden", "go", 2400, 60, true, false) // opted out
 	seedRated(t, d, "other", "python", 2400, 60, true, true)
 
-	rows, err := arena.NewService(d.AppPool).Leaderboard(context.Background(), "go", 100)
+	rows, err := arena.NewService(d.AppPool, 3).Leaderboard(context.Background(), "go", 100)
 	if err != nil {
 		t.Fatalf("leaderboard: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestLeaderboardHidesBannedAgents(t *testing.T) {
 	seedRated(t, d, "banned", "go", 2400, 60, true, true)
 	mustExec(t, d, `UPDATE agents SET banned_at = now(), banned_reason = 'test' WHERE name = 'banned'`)
 
-	rows, err := arena.NewService(d.AppPool).Leaderboard(context.Background(), "go", 100)
+	rows, err := arena.NewService(d.AppPool, 3).Leaderboard(context.Background(), "go", 100)
 	if err != nil {
 		t.Fatalf("leaderboard: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestLeaderboardClampsToLimitAndIsEmptyNotNil(t *testing.T) {
 	for _, n := range []string{"a", "b", "c"} {
 		seedRated(t, d, n, "go", 1800, 100, true, true)
 	}
-	s := arena.NewService(d.AppPool)
+	s := arena.NewService(d.AppPool, 3)
 	rows, err := s.Leaderboard(context.Background(), "go", 2)
 	if err != nil {
 		t.Fatalf("leaderboard: %v", err)
@@ -134,5 +134,39 @@ func TestLeaderboardClampsToLimitAndIsEmptyNotNil(t *testing.T) {
 	}
 	if empty == nil {
 		t.Fatal("an unknown skill must return an empty slice, not nil, so the JSON is [] and not null")
+	}
+}
+
+func TestSkillsAreReadableWithoutASession(t *testing.T) {
+	d := dbtest.New(t)
+	ctx := context.Background()
+	mustExec(t, d, `INSERT INTO skills (slug, title, language, image, run_cmd, description)
+		VALUES ('go', 'Go', 'go', 'arena-skill-go:1', 'go test -json ./...', 'Fix Go bugs')`)
+	for _, slug := range []string{"t1", "t2", "t3"} {
+		mustExec(t, d, `INSERT INTO skill_tasks (slug, skill_slug, title, difficulty, agent_timeout_s, sandbox_timeout_s,
+			hidden_tests, task_md, repo_tar, hidden_tar, repo_sha256) VALUES ($1, 'go', $1, 1, 600, 120, 4, '# t', '\x00', '\x00', 'sha')`, slug)
+	}
+
+	// The arena is the platform's public face: a reader without an account has to
+	// be able to see which skills exist, or the page cannot draw its own tabs.
+	items, err := arena.NewService(d.AppPool, 3).Skills(ctx)
+	if err != nil {
+		t.Fatalf("skills: %v", err)
+	}
+	if len(items) != 1 || items[0].Slug != "go" || items[0].PoolSize != 3 || items[0].Frozen {
+		t.Fatalf("skills = %+v, want one healthy go skill with three issuable tasks", items)
+	}
+	if items[0].Title != "Go" || items[0].Description != "Fix Go bugs" {
+		t.Errorf("a tab needs a title and a description, got %+v", items[0])
+	}
+
+	// One task short of the floor: the skill is frozen and says so publicly.
+	mustExec(t, d, `UPDATE skill_tasks SET retired_at = now() WHERE slug = 't3'`)
+	items, err = arena.NewService(d.AppPool, 3).Skills(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !items[0].Frozen || items[0].PoolSize != 2 {
+		t.Fatalf("skills = %+v, want frozen with two issuable tasks", items)
 	}
 }

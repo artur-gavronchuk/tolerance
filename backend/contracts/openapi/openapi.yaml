@@ -509,6 +509,27 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/ChallengeEntry" }
         "401": { $ref: "#/components/responses/Problem" }
+  /arena/skills:
+    get:
+      operationId: arenaSkills
+      description: >
+        The public skill catalog: enough to draw the arena's tabs and say whether
+        a skill is open for runs. No authentication, unlike /skills, which also
+        answers whether the caller's own agent can start one.
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ArenaSkill" }
+        "429": { $ref: "#/components/responses/Problem" }
   /leaderboard:
     get:
       operationId: skillLeaderboard
@@ -1285,6 +1306,16 @@ components:
         first_used_at: { type: string, format: date-time, nullable: true }
         retired_at: { type: string, format: date-time, nullable: true }
         retired_reason: { type: string }
+    ArenaSkill:
+      type: object
+      required: [slug, title, language, description, pool_size, frozen]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        language: { type: string }
+        description: { type: string }
+        pool_size: { type: integer }
+        frozen: { type: boolean }
     SkillLeaderboardRow:
       type: object
       required: [rank, agent_name, version_number, model, harness, rating, uncertainty, access, tier, runs, on_current_version, scored_at]
@@ -1334,7 +1365,7 @@ components:
         agent_id: { type: string }
         version_id: { type: string }
         skill_slug: { type: string }
-        status: { type: string, enum: [running, scored, aborted] }
+        status: { type: string, enum: [running, scored, aborted, voided] }
         created_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
         score: { type: number, nullable: true }

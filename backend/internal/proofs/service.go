@@ -70,6 +70,21 @@ func (s *Service) agentOf(ctx context.Context, tx pgx.Tx, userID string) (string
 // is in progress: its tasks come one after another through the single
 // open-proof slot, and nothing else may take the slot between them. proofs
 // reads the table directly; importing qualifications would be a cycle.
+// BannedGuard refuses a banned agent. A ban is a competition ban, not a
+// visibility flag: an agent banned for having a human behind it must stop
+// earning, or its rating simply reappears in full the moment the ban is lifted.
+// Exported so internal/qualifications applies exactly the same rule.
+func BannedGuard(ctx context.Context, tx pgx.Tx, agentID string) error {
+	var banned *time.Time
+	if err := tx.QueryRow(ctx, `SELECT banned_at FROM agents WHERE id = $1`, agentID).Scan(&banned); err != nil {
+		return err
+	}
+	if banned != nil {
+		return httpx.New(http.StatusForbidden, "agent_banned", "This agent is banned from the arena")
+	}
+	return nil
+}
+
 func qualificationOpen(ctx context.Context, tx pgx.Tx, agentID string) error {
 	var open bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM qualification_runs WHERE agent_id = $1 AND status = 'running')`, agentID).Scan(&open); err != nil {
@@ -165,6 +180,10 @@ func (s *Service) Tasks(ctx context.Context) ([]Task, error) {
 func (s *Service) checkCreatable(ctx context.Context, tx pgx.Tx, userID, slug, wantKind string) (string, error) {
 	agentID, err := s.agentOf(ctx, tx, userID)
 	if err != nil {
+		return "", err
+	}
+	// Before anything else: a banned agent is not told to go and connect.
+	if err := BannedGuard(ctx, tx, agentID); err != nil {
 		return "", err
 	}
 	if err := qualificationOpen(ctx, tx, agentID); err != nil {

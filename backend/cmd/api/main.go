@@ -93,7 +93,7 @@ func main() {
 	agentsSvc := agents.NewService(pool, ps)
 	qs := qualifications.NewService(pool, ps)
 	qs.SetMinPool(cfg.skillMinPool)
-	as := arena.NewService(pool)
+	as := arena.NewService(pool, cfg.skillMinPool)
 	adminSvc := admin.NewService(pool)
 	challengesSvc := challenges.NewService(pool, ps)
 	challengesSvc.SetLogger(log)

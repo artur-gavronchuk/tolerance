@@ -51,8 +51,11 @@ func (s *Service) OnProofFinished(ctx context.Context, proofID string) error {
 				return err
 			}
 		}
+		// rank IS NULL: once the challenge is closed the places are out, and a hook
+		// arriving late must not leave a score the ranking was not computed from.
+		// Close reads the verdict off the proof itself for exactly this reason.
 		_, err = tx.Exec(ctx, `UPDATE challenge_entries SET score = $3, diff_lines = $4, submitted_at = now()
-			WHERE challenge_id = $1 AND proof_id = $2`, *challengeID, proofID, score, diffLines(diff))
+			WHERE challenge_id = $1 AND proof_id = $2 AND rank IS NULL`, *challengeID, proofID, score, diffLines(diff))
 		return err
 	})
 }
@@ -154,12 +157,54 @@ func (s *Service) Close(ctx context.Context, actorID, slug string) error {
 			WHERE challenge_id = $1 AND finished_at IS NULL`, c.ID); err != nil {
 			return err
 		}
+		// An entry can be unscored for two different reasons, and they deserve
+		// different answers: its proof never reached a verdict (the attempt did not
+		// happen — zero), or it did and the finish hook was dropped on the way
+		// (proofs.Worker.notify logs and swallows that). Reading the verdict off
+		// the proof keeps a dropped hook from publishing a winner as a zero.
+		type recovery struct {
+			proofID  string
+			taskSlug string
+			diff     string
+			sr       *proofs.SandboxResult
+		}
+		var recoveries []recovery
+		rows, err := tx.Query(ctx, `SELECT e.proof_id, p.skill_task_slug, coalesce(p.diff, ''), p.sandbox_result
+			FROM challenge_entries e JOIN proofs p ON p.id = e.proof_id
+			WHERE e.challenge_id = $1 AND e.score IS NULL AND p.finished_at IS NOT NULL
+			  AND p.status <> $2 AND p.skill_task_slug IS NOT NULL`, c.ID, proofs.StatusInfraError)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var r recovery
+			if err := rows.Scan(&r.proofID, &r.taskSlug, &r.diff, &r.sr); err != nil {
+				rows.Close()
+				return err
+			}
+			recoveries = append(recoveries, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, r := range recoveries {
+			score, err := s.hiddenFraction(ctx, tx, r.taskSlug, r.sr)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE challenge_entries SET score = $3, diff_lines = $4,
+				submitted_at = coalesce(submitted_at, now()) WHERE challenge_id = $1 AND proof_id = $2`,
+				c.ID, r.proofID, score, diffLines(r.diff)); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.Exec(ctx, `UPDATE challenge_entries SET score = 0, submitted_at = coalesce(submitted_at, now())
 			WHERE challenge_id = $1 AND score IS NULL`, c.ID); err != nil {
 			return err
 		}
 
-		rows, err := tx.Query(ctx, `SELECT a.name, e.score::float8, coalesce(e.diff_lines, 0), e.submitted_at
+		rows, err = tx.Query(ctx, `SELECT a.name, e.score::float8, coalesce(e.diff_lines, 0), e.submitted_at
 			FROM challenge_entries e JOIN agents a ON a.id = e.agent_id WHERE e.challenge_id = $1`, c.ID)
 		if err != nil {
 			return err
@@ -263,6 +308,21 @@ func (s *Service) log() *slog.Logger {
 func (s *Service) Patch(ctx context.Context, actorID, slug string, prizes, payoutNote *string) (Challenge, error) {
 	var c Challenge
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if prizes != nil {
+			var language string
+			err := tx.QueryRow(ctx, `SELECT s.language FROM challenges c
+				JOIN skill_tasks t ON t.slug = c.skill_task_slug
+				JOIN skills s ON s.slug = t.skill_slug WHERE c.slug = $1`, slug).Scan(&language)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return httpx.NotFound()
+			}
+			if err != nil {
+				return err
+			}
+			if err := checkPrizeLanguage(*prizes, language); err != nil {
+				return err
+			}
+		}
 		if err := scanChallenge(tx.QueryRow(ctx, `UPDATE challenges SET prizes = coalesce($2, prizes),
 			payout_note = coalesce($3, payout_note) WHERE slug = $1 RETURNING `+challengeCols, slug, prizes, payoutNote), &c); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {

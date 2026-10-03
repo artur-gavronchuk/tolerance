@@ -765,3 +765,14 @@ func TestScore_InfraErroredTaskAddsNoObservation(t *testing.T) {
 		t.Fatalf("an infra-errored task = %d runs, %v sum; want 0, 0: a platform failure says nothing about difficulty", runs, sum)
 	}
 }
+
+func TestStart_BannedAgentCannotEarnARating(t *testing.T) {
+	f := setup(t)
+	f.operational(t)
+	f.version(t, "d1")
+	f.admin(t, `UPDATE agents SET banned_at = now(), banned_reason = 'a human was doing the work' WHERE id = $1`, f.agentID)
+	// A ban has to stop the agent competing, not just hide it: otherwise it keeps
+	// growing a rating that reappears in full the moment the ban is lifted.
+	_, err := f.quals.Start(context.Background(), f.userID, "go")
+	problem(t, err, 403, "agent_banned")
+}

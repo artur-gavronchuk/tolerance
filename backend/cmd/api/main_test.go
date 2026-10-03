@@ -96,7 +96,7 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	agentsSvc.SetSkillsSource(qs)
 	agentsSvc.SetChallengePlacesSource(challengesSvc)
 	dp := deps{pool: d.AppPool, log: log, limiter: ratelimit.New(nil), users: identity.NewService(d.AppPool, cfg.adminEmails),
-		agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs, arena: arena.NewService(d.AppPool), admin: admin.NewService(d.AppPool), challenges: challengesSvc,
+		agents: agentsSvc, proofs: ps, games: gamesSvc, quals: qs, arena: arena.NewService(d.AppPool, 3), admin: admin.NewService(d.AppPool), challenges: challengesSvc,
 		ipLimiter:  ratelimit.NewTokenBuckets(scale.rateIPRPS, scale.rateIPBurst, 100),
 		keyLimiter: ratelimit.NewTokenBuckets(scale.rateKeyRPS, scale.rateKeyBurst, 100),
 		longPoll:   ratelimit.NewConcurrencyLimiter(2)}
@@ -1147,6 +1147,17 @@ func TestEndToEnd_ChallengeLifecycle(t *testing.T) {
 		t.Fatalf("heartbeat: %d", code)
 	}
 
+	// Entering a challenge needs the same basic proof a qualification run does.
+	// The full connector cycle for one is covered by TestEndToEnd_Qualification;
+	// here the row is seeded so this test stays about the challenge path.
+	if err := e.db.AdminPool.Tx(context.Background(), func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO proofs (id, agent_id, kind, task_slug, status, finished_at)
+			SELECT 'proof_cup_seed', id, 'proof', 'go-fix-retry', 'passed', now() FROM agents WHERE name = 'Cupfighter'`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
 	body := map[string]any{"slug": "autumn-cup", "title": "Autumn cup", "skill_task_slug": "go-cursor-pagination",
 		"min_tier": "none", "opens_at": time.Now().Add(-time.Hour).UTC().Format(time.RFC3339),
 		"closes_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339), "prizes": "bragging rights"}
@@ -1295,5 +1306,37 @@ func TestEndToEnd_ChallengeLifecycle(t *testing.T) {
 	}
 	if mine.Items[0].Rank == nil || *mine.Items[0].Rank != 1 {
 		t.Fatalf("my entry rank: %+v", mine.Items[0])
+	}
+}
+
+func TestArenaIsUsableWithoutAnAccount(t *testing.T) {
+	e := newE2E(t)
+	// The whole point of the arena is a reader who has not signed up. The page
+	// draws its tabs from this route; behind a session it would show nothing.
+	plain := &http.Client{}
+	var skills struct {
+		Items []arena.SkillSummary `json:"items"`
+	}
+	if code := e.call(t, plain, "GET", "/api/v1/arena/skills", "", nil, &skills); code != 200 {
+		t.Fatalf("arena skills anonymously: %d, want 200", code)
+	}
+	if len(skills.Items) != 2 {
+		t.Fatalf("items = %+v, want the two practice skills", skills.Items)
+	}
+	for _, s := range skills.Items {
+		if s.Title == "" || s.PoolSize != 3 || s.Frozen {
+			t.Fatalf("skill %+v: want a title and three issuable tasks, not frozen", s)
+		}
+		// And the table for it is readable too, so the page has something to show.
+		var lb struct {
+			Items []arena.Row `json:"items"`
+		}
+		if code := e.call(t, plain, "GET", "/api/v1/leaderboard?skill="+s.Slug, "", nil, &lb); code != 200 || lb.Items == nil {
+			t.Fatalf("leaderboard for %s: %d %+v", s.Slug, code, lb.Items)
+		}
+	}
+	// The owner-only route still needs a session.
+	if code := e.call(t, plain, "GET", "/api/v1/skills", "", nil, nil); code != 401 {
+		t.Fatalf("GET /skills anonymously: %d, want 401", code)
 	}
 }

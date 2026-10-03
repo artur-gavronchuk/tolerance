@@ -64,7 +64,16 @@ func (f *fx) addAgent(t *testing.T, name string) (userID, agentID string) {
 	f.exec(t, `UPDATE agents SET current_version_id = $2 WHERE id = $1`, agentID, ver)
 	f.exec(t, `INSERT INTO agent_presence (agent_id, last_seen_at, connector_version, hostname)
 		VALUES ($1, now(), '0.2', 'h') ON CONFLICT (agent_id) DO UPDATE SET last_seen_at = now()`, agentID)
+	f.operational(t, agentID)
 	return userID, agentID
+}
+
+// operational gives the agent the passed basic proof that entering a challenge
+// requires. basicTask is seeded once per fixture.
+func (f *fx) operational(t *testing.T, agentID string) {
+	t.Helper()
+	f.exec(t, `INSERT INTO proofs (id, agent_id, kind, task_slug, status, finished_at)
+		VALUES ($1, $2, 'proof', $3, 'passed', now())`, idgen.New("proof"), agentID, basicTask)
 }
 
 // rate gives the agent a rating on the skill, earned on its current version.
@@ -91,6 +100,7 @@ const (
 	goTask     = "go-lru-cache-eviction"
 	goTask2    = "go-cursor-pagination"
 	pythonTask = "py-interval-merge"
+	basicTask  = "basic-proof"
 )
 
 func setup(t *testing.T, minTier, status string) *fx {
@@ -110,6 +120,9 @@ func setup(t *testing.T, minTier, status string) *fx {
 	if f.hidden, err = skills.HiddenNamesByTask(sk, tasks); err != nil {
 		t.Fatal(err)
 	}
+	f.exec(t, `INSERT INTO proof_tasks (slug, title, language, image, run_cmd, agent_timeout_s, sandbox_timeout_s,
+		visible_tests, hidden_tests, task_md, repo_tar, hidden_tar, repo_sha256)
+		VALUES ($1, $1, 'go', 'arena-proof-go:1', 'go test -json ./...', 600, 120, 1, 1, '# basic', '\x00', '\x00', 'sha')`, basicTask)
 	f.adminID = idgen.New("user")
 	f.exec(t, `INSERT INTO users (id, email, role) VALUES ($1, 'admin@example.com', 'admin')`, f.adminID)
 	f.userID, f.agentID = f.addAgent(t, "entrant")
@@ -362,6 +375,23 @@ func (f *fx) proofStatus(t *testing.T, agentID string) string {
 // pass, the diff has diffLines changed lines, and the finish hook runs.
 func (f *fx) score(t *testing.T, agentID string, frac float64, diffLines int) {
 	t.Helper()
+	proofID := f.writeVerdict(t, agentID, frac, diffLines)
+	if err := f.svc.OnProofFinished(context.Background(), proofID); err != nil {
+		t.Fatalf("finish hook: %v", err)
+	}
+}
+
+// scoreWithoutHook writes the proof's verdict but deliberately does not run
+// OnProofFinished, standing in for a finish hook that was dropped.
+func (f *fx) scoreWithoutHook(t *testing.T, agentID string, frac float64, diffLines int) {
+	t.Helper()
+	f.writeVerdict(t, agentID, frac, diffLines)
+}
+
+// writeVerdict puts a sandbox result and a diff on the entry's proof and returns
+// its id, without notifying anyone.
+func (f *fx) writeVerdict(t *testing.T, agentID string, frac float64, diffLines int) string {
+	t.Helper()
 	proofID := f.openProofID(t, agentID)
 	names := f.hidden[f.task]
 	if len(names) == 0 {
@@ -389,9 +419,7 @@ func (f *fx) score(t *testing.T, agentID string, frac float64, diffLines int) {
 	}
 	f.exec(t, `UPDATE proofs SET status = $2, finished_at = now(), diff = $3, sandbox_result = $4 WHERE id = $1`,
 		proofID, status, b.String(), sr)
-	if err := f.svc.OnProofFinished(context.Background(), proofID); err != nil {
-		t.Fatalf("finish hook: %v", err)
-	}
+	return proofID
 }
 
 func (f *fx) status(t *testing.T) string {
@@ -446,7 +474,8 @@ func TestCloseScoresAnUnfinishedEntryAsZero(t *testing.T) {
 	ctx := context.Background()
 	done := f.enterAgent(t, "done")
 	stuck := f.enterAgent(t, "stillrunning")
-	f.exec(t, `UPDATE proofs SET status = 'running_agent', claimed_at = now() WHERE agent_id = $1`, stuck)
+	f.exec(t, `UPDATE proofs SET status = 'running_agent', claimed_at = now()
+		WHERE agent_id = $1 AND kind = 'challenge'`, stuck)
 	f.score(t, done, 0.25, 5)
 
 	if err := f.svc.Close(ctx, f.adminID, f.slug); err != nil {
@@ -645,5 +674,89 @@ func TestCreateTakesTheTaskOutOfTheQualificationPool(t *testing.T) {
 	}
 	if !read() {
 		t.Fatal("creating a challenge must claim its task: agents meeting on it in a competition must not also be qualified on it")
+	}
+}
+
+func TestEnterBeforeTheWindowOpens(t *testing.T) {
+	f := setup(t, "none", "open")
+	// An admin may open a challenge early; until opens_at the public pages label
+	// it "Opens <date>", so accepting an entry here hands one agent extra hours
+	// against a fixed deadline on a one-attempt competition.
+	f.setWindow(t, time.Hour, 2*time.Hour)
+	problem(t, mustErr(f.svc.Enter(context.Background(), f.userID, f.slug, true)), 409, "challenge_not_open")
+}
+
+func TestEnterRequiresABasicProof(t *testing.T) {
+	f := setup(t, "none", "open")
+	// This agent has never proved it can work at all. An open challenge must not
+	// take its entry: it burns a slot and pads the entrant count.
+	f.exec(t, `DELETE FROM proofs WHERE agent_id = $1 AND kind = 'proof'`, f.agentID)
+	problem(t, mustErr(f.svc.Enter(context.Background(), f.userID, f.slug, true)), 409, "agent_not_operational")
+}
+
+func TestPatchCannotSmuggleInPrizes(t *testing.T) {
+	f := setup(t, "none", "open")
+	ctx := context.Background()
+	py := f.reserve(t, pythonTask)
+	c, err := f.svc.Create(ctx, f.adminID, challenges.NewInput{Slug: "python-open", Title: "Python open",
+		SkillTaskSlug: py, OpensAt: time.Now(), ClosesAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	prizes := "$500 for first place"
+	// Create refuses prizes on a language whose verdict runs in the agent's own
+	// process. Adding them afterwards must be refused for the same reason.
+	problem(t, mustErr2(f.svc.Patch(ctx, f.adminID, c.Slug, &prizes, nil)), 422, "prizes_not_allowed_for_language")
+
+	note := "paid by bank transfer"
+	if _, err := f.svc.Patch(ctx, f.adminID, c.Slug, nil, &note); err != nil {
+		t.Fatalf("a payout note is always allowed: %v", err)
+	}
+}
+
+func TestCloseRecoversAScoreFromAFinishedProof(t *testing.T) {
+	f := setup(t, "none", "open")
+	ctx := context.Background()
+	a := f.enterAgent(t, "unhooked")
+	// The proof reached a verdict but the finish hook never ran — a transient
+	// failure, which proofs.Worker.notify logs and swallows. Closing must read the
+	// verdict that is sitting in the row, not publish this agent as a zero.
+	f.scoreWithoutHook(t, a, 1, 11)
+
+	if err := f.svc.Close(ctx, f.adminID, f.slug); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	view, err := f.svc.Public(ctx, f.slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Standings) != 1 || view.Standings[0].Score != 1 {
+		t.Fatalf("standings = %+v, want the entry scored 1 from its own sandbox result", view.Standings)
+	}
+}
+
+func TestAHookArrivingAfterCloseDoesNotDesyncScoreFromRank(t *testing.T) {
+	f := setup(t, "none", "open")
+	ctx := context.Background()
+	winner := f.enterAgent(t, "won")
+	loser := f.enterAgent(t, "lost")
+	f.scoreWithoutHook(t, winner, 1, 10)
+	f.score(t, loser, 0.5, 10)
+	if err := f.svc.Close(ctx, f.adminID, f.slug); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	// The hook finally fires, after the places are out. It must not rewrite a
+	// score the ranking was computed from.
+	if err := f.svc.OnProofFinished(ctx, f.openProofID(t, winner)); err != nil {
+		t.Fatalf("late hook: %v", err)
+	}
+	view, err := f.svc.Public(ctx, f.slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range view.Standings {
+		if s.Rank == 1 && s.Score < 0.99 {
+			t.Fatalf("first place carries score %v: a late hook desynced score from rank (%+v)", s.Score, view.Standings)
+		}
 	}
 }

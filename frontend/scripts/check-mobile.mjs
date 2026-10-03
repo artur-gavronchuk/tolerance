@@ -34,6 +34,20 @@ async function check(context, paths) {
 
 try {
   const anonymous = await browser.newContext({ viewport: { width: WIDTH, height: 800 } })
+  // /arena is the public face of the platform and it is entirely data: an h1 can
+  // appear while the body is still a loading skeleton, which is exactly how a
+  // session-gated fetch slipped past this check once.
+  {
+    const page = await anonymous.newPage()
+    await page.goto(`${BASE}/arena`)
+    await page.getByRole('button', { name: 'Go' }).waitFor({ timeout: 15_000 })
+    await page.waitForFunction(
+      () => !document.querySelector('[data-slot="skeleton"]'),
+      undefined,
+      { timeout: 15_000 },
+    )
+    await page.close()
+  }
   await check(anonymous, ['/', '/login', '/signup', '/terms', '/arena', '/challenges',
     '/tanks', '/tanks/leaderboard', '/tanks/docs', '/tanks/replay'])
 
@@ -92,11 +106,14 @@ try {
   await check(owner, ['/app/skills', `/app/qualifications/${qrun.id}`])
   await check(anonymous, [`/agents/mobile-${run % 1_000_000}`])
 
-  // A challenge page in its widest state: places, the task, the hidden test
-  // names and a published diff. It runs last and on its own owner, because
-  // creating the challenge claims go-cursor-pagination out of the go pool (which
-  // would freeze the skill for the qualification checks above) and because the
-  // owner above still has a qualification run holding its one proof slot.
+  // A challenge page in its widest state: places, the task, the hidden test names
+  // and a published diff. It runs last and on its own owner, because that owner's
+  // proof slot is held by its running qualification. The task comes from python
+  // on purpose: creating a challenge claims its task out of the qualification
+  // pool, and claiming a go one would freeze the skill the checks above qualify
+  // on — including on a re-run against a database that is not fresh. No prizes,
+  // because a prize challenge is refused on a language whose verdict still runs
+  // in the agent's own process.
   const admin = await browser.newContext({ viewport: { width: WIDTH, height: 800 } })
   const asAdmin = async (method, path, data) => {
     const res = await admin.request.fetch(`${BASE}/api/v1${path}`, { method, data })
@@ -109,13 +126,12 @@ try {
   const slug = `ci-cup-${run}`
   await asAdmin('POST', '/admin/challenges', {
     slug,
-    title: 'Cursor pagination cup',
+    title: 'Interval merge cup',
     summary: 'One hidden task, one attempt each.',
-    skill_task_slug: 'go-cursor-pagination',
+    skill_task_slug: 'py-interval-merge',
     min_tier: 'none',
     opens_at: new Date(Date.now() - 3600_000).toISOString(),
     closes_at: new Date(Date.now() + 3600_000).toISOString(),
-    prizes: 'bragging rights',
   })
   await asAdmin('POST', `/admin/challenges/${slug}/open`)
   await check(anonymous, [`/challenges/${slug}`, '/challenges'])
@@ -137,6 +153,22 @@ try {
     key: cupKey,
     data: { connector_version: 'ci', hostname: 'ci', version: { model: 'ci-model', harness: 'ci', config_digest: `cup-${run}` } },
   })
+  // Entering a challenge needs the same basic proof a qualification run does, so
+  // this agent earns one first.
+  const basic = await asEntrant('POST', '/proofs', { data: { task_slug: 'go-fix-retry' } })
+  await asEntrant('GET', '/connector/tasks/next?wait=5', { key: cupKey })
+  await asEntrant('POST', `/connector/proofs/${basic.id}/result`, {
+    key: cupKey,
+    data: { diff, log_tail: 'fixed\n', duration_ms: 900, exit_code: 0 },
+  })
+  const basicDeadline = Date.now() + 90_000
+  while (Date.now() < basicDeadline) {
+    const p = await asEntrant('GET', `/proofs/${basic.id}`)
+    if (p.status === 'passed') break
+    if (p.finished_at) throw new Error(`the entrant's basic proof ended ${p.status}`)
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+
   const entry = await asEntrant('POST', `/challenges/${slug}/enter`, { data: { consent_publish: true } })
   await check(entrant, ['/app/challenges'])
   const task = await asEntrant('GET', '/connector/tasks/next?wait=5', { key: cupKey })

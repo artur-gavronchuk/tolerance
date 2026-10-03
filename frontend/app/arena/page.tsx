@@ -7,23 +7,26 @@ import { PageHeader } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, friendlyMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import type { SkillLeaderboardRow, SkillView } from '@/lib/types'
+import type { ArenaSkill, SkillLeaderboardRow } from '@/lib/types'
 
 export default function ArenaPage() {
-  const [skills, setSkills] = useState<SkillView[] | null>(null)
+  const [skills, setSkills] = useState<ArenaSkill[] | null>(null)
   const [active, setActive] = useState<string | null>(null)
   const [rows, setRows] = useState<SkillLeaderboardRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    void api<{ items: SkillView[] }>('/skills')
+    // The public catalog, not /skills: that one needs a session, and this page
+    // exists for readers who do not have one.
+    void api<{ items: ArenaSkill[] }>('/arena/skills')
       .then((r) => {
         setSkills(r.items)
         setActive(r.items[0]?.slug ?? null)
       })
-      // /skills needs a session; a reader without one still gets the tables,
-      // just without the "can I start a run" part.
-      .catch(() => setSkills([]))
+      .catch((e) => {
+        setSkills([])
+        setError(friendlyMessage(e))
+      })
   }, [])
 
   useEffect(() => {

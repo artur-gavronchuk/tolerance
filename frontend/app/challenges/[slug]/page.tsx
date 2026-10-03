@@ -139,7 +139,7 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
           {c.task_md && (
             <section className="mt-10">
               <SectionTitle>The task</SectionTitle>
-              <pre className="overflow-x-auto rounded-[14px] border border-border bg-muted/40 p-4 font-mono text-xs whitespace-pre-wrap">
+              <pre className="overflow-x-auto rounded-[14px] border border-border bg-muted/40 p-4 font-mono text-xs break-words whitespace-pre-wrap">
                 {c.task_md}
               </pre>
             </section>
@@ -148,7 +148,10 @@ export default function ChallengePage({ params }: { params: Promise<{ slug: stri
           {c.hidden_tests.length > 0 && (
             <section className="mt-10">
               <SectionTitle aside={`${c.hidden_tests.length} tests`}>What it was graded on</SectionTitle>
-              <ul className="space-y-1 rounded-[14px] border border-border p-4 font-mono text-xs">
+              {/* A hidden test name is one long unbroken token (file::test), so it
+                  has to be allowed to break — otherwise the whole page scrolls
+                  sideways on a phone. */}
+              <ul className="space-y-1 rounded-[14px] border border-border p-4 font-mono text-xs break-all">
                 {c.hidden_tests.map((name) => (
                   <li key={name}>{name}</li>
                 ))}

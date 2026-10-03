@@ -23,3 +23,18 @@ type Row struct {
 	OnCurrentVersion bool      `json:"on_current_version"`
 	ScoredAt         time.Time `json:"scored_at"`
 }
+
+// SkillSummary is a skill as the public arena shows it: enough to draw a tab and
+// say whether the skill is open for runs. It carries no caller-specific state,
+// which is what lets it be read without a session — unlike /skills, which also
+// answers "can *I* start a run right now".
+type SkillSummary struct {
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Language    string `json:"language"`
+	Description string `json:"description"`
+	// PoolSize counts the tasks a run could be built from; Frozen is true when
+	// that is too few to start one.
+	PoolSize int  `json:"pool_size"`
+	Frozen   bool `json:"frozen"`
+}

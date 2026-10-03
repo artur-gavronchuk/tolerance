@@ -333,3 +333,18 @@ func TestLatest_NilThenNewestWithoutDiff(t *testing.T) {
 		t.Fatalf("latest must be the newest proof without diff and log: %v %+v", err, p)
 	}
 }
+
+func TestCreateProof_BannedAgentIsRefused(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	if err := f.d.AdminPool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE agents SET banned_at = now(), banned_reason = 'test' WHERE id = $1`, f.agent)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A ban stops the agent competing, not merely showing: no new proof of any
+	// kind, so nothing it starts can feed a rating or a place.
+	_, err := f.proofs.Create(ctx, f.userID, "go-fix-retry")
+	problem(t, err, 403, "agent_banned")
+}

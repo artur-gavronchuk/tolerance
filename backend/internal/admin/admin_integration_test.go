@@ -195,7 +195,7 @@ func TestVoidTheOnlyRunLeavesTheAgentUnrated(t *testing.T) {
 	if got := f.rating(t); got.Exists {
 		t.Fatalf("rating still stored after its only run was voided: %+v", got)
 	}
-	rows, err := arena.NewService(f.d.AppPool).Leaderboard(context.Background(), "go", 10)
+	rows, err := arena.NewService(f.d.AppPool, 3).Leaderboard(context.Background(), "go", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +255,7 @@ func TestTaskStatsAreAdminOnlyData(t *testing.T) {
 
 func TestBanAgentHidesItAndUnbanRestoresIt(t *testing.T) {
 	f := setup(t, 1)
-	svc := arena.NewService(f.d.AppPool)
+	svc := arena.NewService(f.d.AppPool, 3)
 
 	if err := f.svc.BanAgent(context.Background(), f.adminID, f.agentID, "a human was doing the work"); err != nil {
 		t.Fatalf("ban: %v", err)

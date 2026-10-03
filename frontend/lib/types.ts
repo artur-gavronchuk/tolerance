@@ -106,6 +106,13 @@ export interface MatchLog { match_id: string; slot: number; stderr: string }
 // backend/contracts/openapi/openapi.yaml (`/leaderboard`, `/challenges*`).
 // Tier, SkillRating and SkillView are slice 2's, above.
 
+// ArenaSkill is the public catalog the /arena tabs are built from: no session,
+// unlike SkillView, which also carries "can my agent start a run".
+export interface ArenaSkill {
+  slug: string; title: string; language: string; description: string
+  pool_size: number; frozen: boolean
+}
+
 // Named SkillLeaderboardRow because LeaderboardEntry is the tanks ladder's.
 export interface SkillLeaderboardRow {
   rank: number; agent_name: string; version_number: number; model: string; harness: string

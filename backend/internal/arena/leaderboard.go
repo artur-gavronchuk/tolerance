@@ -7,11 +7,47 @@ import (
 
 	"tolerance/internal/platform/db"
 	"tolerance/internal/skillrating"
+	"tolerance/internal/skills"
 )
 
-type Service struct{ pool *db.Pool }
+type Service struct {
+	pool *db.Pool
+	// minPool mirrors the qualification floor (ARENA_SKILL_MIN_POOL) so the public
+	// skill list can say a skill is frozen without asking the owner-only route.
+	minPool int
+}
 
-func NewService(pool *db.Pool) *Service { return &Service{pool: pool} }
+func NewService(pool *db.Pool, minPool int) *Service { return &Service{pool: pool, minPool: minPool} }
+
+// Skills is the public catalog: every skill, with how many tasks a run could be
+// built from and whether that is too few. No session, because the arena page
+// needs it before anyone has signed in.
+func (s *Service) Skills(ctx context.Context) ([]SkillSummary, error) {
+	out := []SkillSummary{}
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT s.slug, s.title, s.language, s.description,
+				(SELECT count(*) FROM skill_tasks t
+					WHERE t.skill_slug = s.slug AND t.active AND t.retired_at IS NULL AND NOT t.challenge_only)
+			FROM skills s ORDER BY s.slug`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var k SkillSummary
+			if err := rows.Scan(&k.Slug, &k.Title, &k.Language, &k.Description, &k.PoolSize); err != nil {
+				return err
+			}
+			k.Frozen = skills.Frozen(k.PoolSize, max(s.minPool, skills.TasksPerRun))
+			out = append(out, k)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 // Leaderboard returns one skill's table, best first. The order is
 // access = rating − uncertainty descending, and on equal access a rating

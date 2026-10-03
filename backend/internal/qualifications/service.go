@@ -103,6 +103,9 @@ func (s *Service) Start(ctx context.Context, userID, skill string) (Run, error) 
 		if !exists {
 			return httpx.New(http.StatusNotFound, "unknown_skill", "No such skill")
 		}
+		if err := proofs.BannedGuard(ctx, tx, agentID); err != nil {
+			return err
+		}
 		var passed bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM proofs WHERE agent_id = $1 AND kind = 'proof' AND status = 'passed')`, agentID).Scan(&passed); err != nil {
 			return err

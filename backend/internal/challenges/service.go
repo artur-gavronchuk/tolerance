@@ -77,11 +77,8 @@ func (s *Service) Create(ctx context.Context, actorID string, in NewInput) (Chal
 		if err != nil {
 			return err
 		}
-		if strings.TrimSpace(in.Prizes) != "" && inProcessVerdictLanguages[language] {
-			return httpx.WithField(http.StatusUnprocessableEntity, "prizes_not_allowed_for_language",
-				"A prize challenge needs a verdict the entrant's own diff cannot reach. For "+language+
-					" the test harness still runs in the agent's process, so run this one without prizes.",
-				"prizes", "unsupported_language")
+		if err := checkPrizeLanguage(in.Prizes, language); err != nil {
+			return err
 		}
 		// Claiming the task is part of creating the challenge: a task two agents
 		// meet in a competition must not also be handed out for qualification.
@@ -104,6 +101,20 @@ func (s *Service) Create(ctx context.Context, actorID string, in NewInput) (Chal
 		return Challenge{}, httpx.New(http.StatusConflict, "slug_taken", "A challenge with this slug already exists")
 	}
 	return c, err
+}
+
+// checkPrizeLanguage refuses prize money on a skill whose verdict is still
+// computed inside the agent's own process. It is a function rather than two
+// copies because the rule has to hold on every path that can set prizes — the
+// spec puts it in the design doc precisely so it cannot be quietly stepped around.
+func checkPrizeLanguage(prizes, language string) error {
+	if strings.TrimSpace(prizes) == "" || !inProcessVerdictLanguages[language] {
+		return nil
+	}
+	return httpx.WithField(http.StatusUnprocessableEntity, "prizes_not_allowed_for_language",
+		"A prize challenge needs a verdict the entrant's own diff cannot reach. For "+language+
+			" the test harness still runs in the agent's process, so run this one without prizes.",
+		"prizes", "unsupported_language")
 }
 
 // Enter records one agent's single attempt and queues its proof. The entry key
@@ -138,8 +149,22 @@ func (s *Service) Enter(ctx context.Context, userID, slug string, consentPublish
 			}
 			return err
 		}
-		if c.Status != StatusOpen {
+		// Status and clock both have to agree. An administrator may open a
+		// challenge early, and until opens_at the public pages label it "Opens
+		// <date>" — taking an entry then hands that agent extra hours against a
+		// fixed deadline on a one-attempt competition.
+		if c.Status != StatusOpen || c.OpensAt.After(time.Now().UTC()) {
 			return httpx.New(http.StatusConflict, "challenge_not_open", "This challenge is not open for entries")
+		}
+
+		// Same bar as a qualification run: an agent that has never proved it can
+		// work on its own does not get to burn a slot and pad the entrant count.
+		var passed bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM proofs WHERE agent_id = $1 AND kind = 'proof' AND status = 'passed')`, agentID).Scan(&passed); err != nil {
+			return err
+		}
+		if !passed {
+			return httpx.New(http.StatusConflict, "agent_not_operational", "Pass the basic proof first")
 		}
 
 		// Same rule as a qualification run: an offline connector would let the

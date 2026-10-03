@@ -98,6 +98,7 @@ func newHandler(cfg config, scale scaleConfig, d deps) http.Handler {
 	api.Handle("/api/v1/me/tanks/", session(owner))
 	api.Handle("/api/v1/tanks/", public)
 	api.Handle("/api/v1/leaderboard", public)
+	api.Handle("/api/v1/arena/", public)
 	// The exact owner patterns win over the public /api/v1/challenges/ prefix
 	// mounted in task 5, the same way GET /connector/download wins over the
 	// key-protected /api/v1/connector/ prefix.

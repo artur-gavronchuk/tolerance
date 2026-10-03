@@ -28,6 +28,15 @@ func parseLimit(r *http.Request, def, max int) (int, error) {
 
 // RegisterPublicRoutes mounts the arena's public, unauthenticated reads.
 func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
+	mux.HandleFunc("GET /api/v1/arena/skills", func(w http.ResponseWriter, r *http.Request) {
+		items, err := s.Skills(r.Context())
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, map[string]any{"items": items})
+	})
+
 	mux.HandleFunc("GET /api/v1/leaderboard", func(w http.ResponseWriter, r *http.Request) {
 		skill := r.URL.Query().Get("skill")
 		if skill == "" {
