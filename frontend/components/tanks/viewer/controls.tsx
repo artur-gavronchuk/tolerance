@@ -33,12 +33,17 @@ export function Controls({ playing, onPlayPause, speed, onSpeed, tick, maxTick, 
       {live ? (
         <span
           title="Everyone watching sees the same moment of the latest ladder match"
-          className="flex items-center gap-1.5 text-xs font-bold text-primary"
+          className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 text-xs"
         >
-          <span className="size-2 rounded-full bg-primary" />
-          Latest match
+          <span className="flex items-center gap-1.5 font-bold text-primary">
+            <span className="size-2 rounded-full bg-primary" />
+            Latest match
+          </span>
+          <span className="text-muted-foreground">same moment for everyone</span>
         </span>
       ) : (
+        <>
+        <span className="text-xs font-bold text-muted-foreground">Replay</span>
         <input
           type="range"
           min={0}
@@ -49,10 +54,11 @@ export function Controls({ playing, onPlayPause, speed, onSpeed, tick, maxTick, 
           aria-label="Seek"
           className="h-1.5 min-w-[6rem] flex-1 cursor-pointer accent-primary"
         />
+        <span className="font-mono text-xs tabular-mono whitespace-nowrap text-muted-foreground">
+          {mmss(tick, tickRate)} / {mmss(maxTick, tickRate)}
+        </span>
+        </>
       )}
-      <span className="font-mono text-xs tabular-mono whitespace-nowrap text-muted-foreground">
-        {mmss(tick, tickRate)} / {mmss(maxTick, tickRate)}
-      </span>
       <div className="ml-auto flex gap-1">
         {SPEEDS.map((s) => (
           <button

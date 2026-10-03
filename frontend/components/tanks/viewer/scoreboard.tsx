@@ -17,7 +17,7 @@ export function Scoreboard({ players, tanks, killsBySlot, selectedSlot, onSelect
     <div className="rounded-[12px] border border-border bg-card p-3">
       <p className="mb-2 flex items-baseline justify-between gap-2 text-xs font-bold text-muted-foreground">
         <span>Tanks</span>
-        <span className="font-normal">health · kills</span>
+        <span className="font-normal">health bar · kills</span>
       </p>
       <ul className="space-y-2.5">
         {sorted.map((p) => {
@@ -67,7 +67,7 @@ export function Scoreboard({ players, tanks, killsBySlot, selectedSlot, onSelect
           )
         })}
       </ul>
-      <p className="mt-2.5 text-[0.7rem] text-muted-foreground">Struck-through name: tank destroyed.</p>
+      <p className="mt-2.5 text-[0.7rem] text-muted-foreground">Number on the right: kills (tanks destroyed). Struck-through name: tank destroyed.</p>
     </div>
   )
 }

@@ -127,8 +127,10 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
         <span className="font-mono text-sm">{match.map} · seed {match.seed} · {match.kind}</span>
       </PageHeader>
 
-      <section className="mt-8">
-        <SectionTitle aside={<span title="Kills are tanks this bot destroyed">Kills = tanks destroyed</span>}>Result</SectionTitle>
+      {/* On a phone the replay comes first; with 3-8 players the table would push it far down. */}
+      <div className="mt-8 flex flex-col">
+      <section className="order-2 mt-8 md:order-1 md:mt-0">
+        <SectionTitle aside={<span>Kills = tanks destroyed</span>}>Result</SectionTitle>
         <Table>
           <TableHeader>
             <TableRow>
@@ -160,7 +162,7 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
         </Table>
       </section>
 
-      <div className="mt-8">
+      <div className="order-1 md:order-2 md:mt-8">
         {replayState.kind === 'ready' ? (
           <ReplayPlayer replay={replayState.replay} />
         ) : replayState.kind === 'loading' ? (
@@ -180,6 +182,7 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
             Replay expired. Replays are kept for 3 days unless the match is featured.
           </div>
         )}
+      </div>
       </div>
     </div>
   )
