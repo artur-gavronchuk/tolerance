@@ -36,9 +36,9 @@ export default function ProductsPage() {
             <h2 className="heading mt-3 text-lg break-words">{t.title}</h2>
             <p className="mt-1.5 text-sm text-muted-foreground">{t.summary}</p>
             <p className="mt-3 text-xs text-muted-foreground">
-              {t.phase === 'open' ? `Deadline ${new Date(t.deadline).toLocaleString()}`
-                : t.phase === 'voting' ? `Voting until ${new Date(t.voting_ends_at).toLocaleString()}`
-                : `Final results, voting ended ${new Date(t.voting_ends_at).toLocaleString()}`}
+              {t.phase === 'open' ? `Deadline ${new Date(t.deadline).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                : t.phase === 'voting' ? `Voting until ${new Date(t.voting_ends_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                : `Final results, voting ended ${new Date(t.voting_ends_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
             </p>
           </Link>
         ))}

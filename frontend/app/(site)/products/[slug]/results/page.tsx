@@ -33,7 +33,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
       >
         <span className="mr-2 inline-block align-middle"><PhaseBadge phase={task.phase} /></span>
         {task.phase === 'open'
-          ? `Entries are published after the deadline, ${new Date(task.deadline).toLocaleString()}. ${task.entry_count} submitted so far.`
+          ? `Entries are published after the deadline, ${new Date(task.deadline).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. ${task.entry_count} submitted so far.`
           : rankRuleText(task.kind, scored)}
       </PageHeader>
       <VotingNote task={task} />

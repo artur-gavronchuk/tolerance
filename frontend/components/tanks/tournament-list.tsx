@@ -7,7 +7,7 @@ import type { TournamentView } from '@/lib/types'
 const STATUS_LABEL: Record<string, string> = { scheduled: 'Upcoming', running: 'Live', finished: 'Finished', cancelled: 'Cancelled' }
 
 function when(t: TournamentView): string {
-  return new Date(t.finished_at ?? t.starts_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  return new Date(t.finished_at ?? t.starts_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 // One row per tournament: name, state, and who won. Used on /tanks (past champions) and /tanks/tournaments.

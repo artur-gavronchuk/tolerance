@@ -59,7 +59,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
         actions={<Button variant="outline" render={<Link href={`/products/${slug}/results`} />} nativeButton={false}>Results</Button>}
       >
         <span className="mr-2 inline-block align-middle"><PhaseBadge phase={task.phase} /></span>
-        {open ? 'Uploads close' : 'Uploads closed'} {new Date(task.deadline).toLocaleString()}
+        {open ? 'Uploads close' : 'Uploads closed'} {new Date(task.deadline).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
         {open && <> · {task.entry_count} {task.entry_count === 1 ? 'entry' : 'entries'} submitted so far</>}
       </PageHeader>
 

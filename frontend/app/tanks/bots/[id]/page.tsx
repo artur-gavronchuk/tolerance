@@ -138,7 +138,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
               >
                 {v.status}
               </span>
-              <span className="ml-auto text-xs text-muted-foreground">{new Date(v.created_at).toLocaleDateString()}</span>
+              <span className="ml-auto text-xs text-muted-foreground">{new Date(v.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
             </li>
           ))}
           {bot.versions.length === 0 && <li className="p-4 text-sm text-muted-foreground">No versions yet.</li>}

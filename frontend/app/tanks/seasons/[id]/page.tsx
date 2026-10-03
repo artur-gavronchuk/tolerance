@@ -67,8 +67,8 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
           <>Ends in <Countdown to={s.ends_at} serverNow={d.now} />. Every bot starts the season at a fresh rating.</>
         ) : (
           <>
-            {new Date(s.starts_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' })} –{' '}
-            {new Date(new Date(s.ends_at).getTime() - 1).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}.
+            {new Date(s.starts_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })} –{' '}
+            {new Date(new Date(s.ends_at).getTime() - 1).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}.
             These standings are frozen.
           </>
         )}

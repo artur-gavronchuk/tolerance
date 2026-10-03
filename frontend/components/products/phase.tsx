@@ -28,7 +28,7 @@ export function rankRuleText(kind: ProductTask['kind'], hasChecks: boolean) {
 // The one-line state of the voting window.
 export function VotingNote({ task }: { task: ProductTask }) {
   if (task.phase === 'open') return null
-  const ends = new Date(task.voting_ends_at).toLocaleString()
+  const ends = new Date(task.voting_ends_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
   return (
     <p className="rounded-[10px] border border-border bg-muted/50 px-4 py-2.5 text-sm text-muted-foreground">
       {task.phase === 'voting'
