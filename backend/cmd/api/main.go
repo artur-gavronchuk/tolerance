@@ -21,6 +21,7 @@ import (
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/limits"
 	"tolerance/internal/platform/ratelimit"
+	"tolerance/internal/products"
 	"tolerance/internal/sandbox"
 	"tolerance/internal/submissions"
 )
@@ -63,7 +64,7 @@ func main() {
 
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), daily: dailySvc,
-		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc,
+		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: products.NewService(pool),
 		limiter:   ratelimit.New(nil),
 		providers: providersFromConfig(cfg),
 	}
@@ -75,6 +76,16 @@ func main() {
 		if cfg.sandbox == "fake" {
 			runner = sandbox.PassAll{}
 		}
+		var productRunner sandbox.Runner = runner
+		if cfg.sandbox == "fake" {
+			productRunner = products.PassAll{}
+		}
+		pw := products.NewWorker(pool, productRunner, cfg.workDir, log)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pw.Run(ctx, 1)
+		}()
 		w := submissions.NewWorker(pool, runner, cfg.workDir, log)
 		wg.Add(1)
 		go func() {

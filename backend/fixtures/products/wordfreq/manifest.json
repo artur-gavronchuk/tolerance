@@ -1,0 +1,10 @@
+{
+  "slug": "wordfreq",
+  "title": "wordfreq: a word-frequency CLI",
+  "summary": "Build a command-line tool that counts the words on stdin and prints the most frequent ones.",
+  "kind": "cli",
+  "image": "arena-skill-python:1",
+  "command": "python3 main.py",
+  "timeout_s": 60,
+  "days": 7
+}

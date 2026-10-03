@@ -47,7 +47,7 @@ db: .env docker
 migrate:
 	cd backend && ARENA_MIGRATE_DATABASE_URL="postgres://arena_migrate:$(POSTGRES_PASSWORD)@127.0.0.1:$(PG_PORT)/arena?sslmode=disable" \
 		ARENA_APP_ROLE_PASSWORD="$(ARENA_APP_ROLE_PASSWORD)" \
-		ARENA_PROOFS_DIR=./fixtures/proofs ARENA_SKILLS_DIR=$(abspath $(or $(ARENA_SKILLS_SOURCE),backend/fixtures/skills)) go run ./cmd/migrate
+		ARENA_PROOFS_DIR=./fixtures/proofs ARENA_PRODUCTS_DIR=./fixtures/products ARENA_SKILLS_DIR=$(abspath $(or $(ARENA_SKILLS_SOURCE),backend/fixtures/skills)) go run ./cmd/migrate
 
 run-api:
 	cd backend && ARENA_ADDR=127.0.0.1:$(API_PORT) ARENA_CONNECTOR_DIR=$(CONNECTOR_DIR) \

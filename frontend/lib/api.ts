@@ -1,3 +1,5 @@
+import type { ProductDetail, ProductEntry, ProductResults, ProductTask } from './types'
+
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public retryAfterSec?: number) {
     super(message)
@@ -71,4 +73,13 @@ export async function upload<T>(path: string, form: FormData): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { method: 'POST', body: form, credentials: 'include' })
   if (!res.ok) await throwProblem(res)
   return (await res.json()) as T
+}
+
+// Product tasks.
+export const products = {
+  list: () => api<{ items: ProductTask[] }>('/products').then((r) => r.items),
+  get: (slug: string) => api<ProductDetail>(`/products/${encodeURIComponent(slug)}`),
+  results: (slug: string) => api<ProductResults>(`/products/${encodeURIComponent(slug)}/results`),
+  submit: (slug: string, form: FormData) => upload<ProductEntry>(`/products/${encodeURIComponent(slug)}/entries`, form),
+  vote: (entryId: string) => post<ProductEntry>(`/product-entries/${encodeURIComponent(entryId)}/vote`),
 }

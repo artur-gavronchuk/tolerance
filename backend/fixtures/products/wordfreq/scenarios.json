@@ -1,0 +1,9 @@
+[
+  {"name": "counts and orders words", "args": [], "stdin": "the cat the dog the end\n", "stdout": "the 3\ncat 1\ndog 1\nend 1\n", "exit_code": 0},
+  {"name": "folds case", "args": [], "stdin": "Go go GO gO\n", "stdout": "go 4\n", "exit_code": 0},
+  {"name": "ignores punctuation", "args": [], "stdin": "Hello, world! Hello... don't stop.\n", "stdout": "hello 2\ndon't 1\nstop 1\nworld 1\n", "exit_code": 0},
+  {"name": "--top limits output", "args": ["--top", "2"], "stdin": "a b b c c c d d d d\n", "stdout": "d 4\nc 3\n", "exit_code": 0},
+  {"name": "empty input", "args": [], "stdin": "", "stdout": "", "exit_code": 0},
+  {"name": "bad --top exits 2", "args": ["--top", "x"], "stdin": "a b c\n", "stdout": "", "exit_code": 2},
+  {"name": "default top is 10", "args": [], "stdin": "a b c d e f g h i j k l\n", "stdout": "a 1\nb 1\nc 1\nd 1\ne 1\nf 1\ng 1\nh 1\ni 1\nj 1\n", "exit_code": 0}
+]

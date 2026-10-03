@@ -17,6 +17,7 @@ import (
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/platform/ratelimit"
+	"tolerance/internal/products"
 	"tolerance/internal/submissions"
 	"tolerance/internal/tasks"
 )
@@ -28,6 +29,7 @@ type deps struct {
 	daily       *daily.Service
 	submissions *submissions.Service
 	games       *games.Service
+	products    *products.Service
 	limiter     *ratelimit.Limiter
 	providers   map[string]identity.Provider
 }
@@ -40,11 +42,13 @@ func newHandler(cfg config, d deps) http.Handler {
 	})
 	submissions.RegisterOwnerRoutes(owner, d.submissions)
 	games.RegisterOwnerRoutes(owner, d.games)
+	products.RegisterOwnerRoutes(owner, d.products)
 
 	public := http.NewServeMux()
 	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
 	tasks.RegisterPublicRoutes(public, d.pool)
 	games.RegisterPublicRoutes(public, d.games)
+	products.RegisterPublicRoutes(public, d.products, identity.OptionalUserID(d.users))
 
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
@@ -58,6 +62,11 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/me/tanks/", session(owner))
 	api.Handle("/api/v1/submissions", session(owner))
 	api.Handle("/api/v1/submissions/", session(owner))
+	api.Handle("/api/v1/products", public)
+	api.Handle("/api/v1/products/", public)
+	api.Handle("POST /api/v1/products/{slug}/entries", session(owner))
+	api.Handle("POST /api/v1/product-entries/{id}/vote", session(owner))
+	api.Handle("GET /api/v1/product-entries/{id}/zip", public)
 	api.Handle("/api/v1/daily", public)
 	api.Handle("/api/v1/daily/", public)
 	api.Handle("/api/v1/days", public)

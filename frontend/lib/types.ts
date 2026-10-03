@@ -89,3 +89,23 @@ export interface MyTanks { bot: MyBot | null; versions: VersionView[]; matches: 
 export interface LiveView { match_id: string | null; starts_at: string | null; duration_ms: number; now: string }
 
 export interface MatchLog { match_id: string; slot: number; stderr: string }
+
+// Product tasks (weekly challenges scored by scenarios, then voted on).
+export interface ProductScenarioResult { name: string; passed: boolean }
+
+export interface ProductTask {
+  slug: string; title: string; summary: string; kind: 'cli'; phase: 'open' | 'voting'
+  opens_at: string; deadline: string; scenario_count: number; attempts: number; entry_count: number
+  task_md?: string
+}
+
+export interface ProductEntry {
+  id: string; task_slug: string; handle?: string; status: 'queued' | 'running' | 'done' | 'infra_error'
+  passed: number; total: number; failure_reason: string | null; results: ProductScenarioResult[]
+  log_tail?: string; made_with: string; votes: number; voted: boolean; mine: boolean
+  created_at: string; finished_at: string | null
+}
+
+export interface ProductDetail extends ProductTask { attempts_used: number; mine: ProductEntry[] }
+
+export interface ProductResults { task: ProductTask; entries: ProductEntry[] }

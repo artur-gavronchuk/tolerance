@@ -10,6 +10,7 @@ import (
 
 	"tolerance/internal/games"
 	"tolerance/internal/platform/db"
+	"tolerance/internal/products"
 	"tolerance/internal/tasks"
 )
 
@@ -35,6 +36,14 @@ func main() {
 
 	if err := syncTasks(context.Background(), pool); err != nil {
 		log.Fatalf("tasks: %v", err)
+	}
+
+	if dir := os.Getenv("ARENA_PRODUCTS_DIR"); dir != "" {
+		n, err := products.Sync(context.Background(), pool, dir)
+		if err != nil {
+			log.Fatalf("products: %v", err)
+		}
+		log.Printf("products: %d task(s) synced", n)
 	}
 
 	if err := games.Sync(context.Background(), pool); err != nil {

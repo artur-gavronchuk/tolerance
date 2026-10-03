@@ -19,8 +19,9 @@ RUN apk add --no-cache ca-certificates tzdata git docker-cli && adduser -D -u 10
 COPY --from=build /out/api /out/migrate /usr/local/bin/
 COPY dev/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY fixtures/proofs /opt/arena/proofs
+COPY fixtures/products /opt/arena/products
 COPY --from=build /out/connector /opt/arena/connector
-ENV ARENA_PROOFS_DIR=/opt/arena/proofs ARENA_CONNECTOR_DIR=/opt/arena/connector
+ENV ARENA_PRODUCTS_DIR=/opt/arena/products ARENA_PROOFS_DIR=/opt/arena/proofs ARENA_CONNECTOR_DIR=/opt/arena/connector
 # The arena-work volume is initialised from this directory, so it has to
 # exist and belong to arena before the volume is first created.
 RUN mkdir -p /var/lib/arena/work && chown arena:arena /var/lib/arena/work
