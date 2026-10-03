@@ -74,6 +74,8 @@ export interface Check { name: string; passed: boolean; detail: string }
 export interface LeaderboardEntry {
   rank: number; bot_id: string; name: string; rating: number; mu: number; sigma: number
   matches: number; wins: number; house: boolean; source: BotSource; version: number
+  // rating/mu/sigma/matches/wins are the current season's
+  lifetime_rating: number; owner: string
 }
 
 export interface MatchPlayerView {
@@ -83,14 +85,64 @@ export interface MatchPlayerView {
 }
 
 export interface MatchView {
-  id: string; kind: 'ladder' | 'check'; status: string; map: string; seed: number; ticks: number
+  id: string; kind: 'ladder' | 'check' | 'tournament'; status: string; map: string; seed: number; ticks: number
   featured: boolean; has_replay: boolean; created_at: string; started_at: string | null; finished_at: string | null
   players: MatchPlayerView[]
 }
 
 export interface VersionPublic { number: number; source: string; status: string; created_at: string }
 
-export interface BotProfile extends LeaderboardEntry { created_at: string; versions: VersionPublic[] }
+export interface BotProfile extends LeaderboardEntry {
+  created_at: string; versions: VersionPublic[]
+  season: SeasonView; seasons: BotSeasonResult[]; tournaments: BotTournament[]
+}
+
+// Seasons (a calendar month, UTC) and tournaments (weekly single elimination, best-of-3 series).
+export interface SeasonWinner { bot_id: string; name: string; owner: string; rating: number }
+
+export interface SeasonView {
+  id: string; name: string; starts_at: string; ends_at: string; status: 'active' | 'archived'
+  winner: SeasonWinner | null
+}
+
+export interface SeasonDetail { season: SeasonView; standings: LeaderboardEntry[]; now: string }
+
+export interface BotSeasonResult { season_id: string; name: string; rank: number; rating: number; matches: number; wins: number }
+
+export interface TournamentBot { bot_id: string; name: string; house: boolean; seed: number; owner: string }
+
+export interface TournamentGame {
+  game: number; match_id: string; status: string; map: string; winner_bot_id: string | null; has_replay: boolean
+}
+
+export interface TournamentPairing {
+  id: string; round: number; position: number
+  a: TournamentBot | null; b: TournamentBot | null
+  wins_a: number; wins_b: number
+  status: 'pending' | 'running' | 'finished'
+  winner_bot_id: string | null; bye: boolean; games: TournamentGame[]
+}
+
+export interface TournamentView {
+  id: string; name: string; season_id: string | null
+  status: 'scheduled' | 'running' | 'finished' | 'cancelled'
+  starts_at: string; started_at: string | null; finished_at: string | null
+  size: number; rounds: number; best_of: number; entry_count: number
+  champion: TournamentBot | null
+  entries: TournamentBot[] | null; pairings: TournamentPairing[] | null // detail view only
+  now: string
+}
+
+export interface BotTournament {
+  tournament_id: string; name: string; status: string; starts_at: string
+  seed: number; rounds: number; result: string; champion: boolean
+}
+
+export interface Showcase {
+  now: string; season: SeasonView; ladder: LeaderboardEntry[]
+  tournament: TournamentView | null; next_tournament: TournamentView | null
+  champions: TournamentView[]; notable: MatchView[]; past_seasons: SeasonView[]
+}
 
 export interface VersionView {
   id: string; number: number; source: string; status: 'pending' | 'active' | 'rejected'; language: string

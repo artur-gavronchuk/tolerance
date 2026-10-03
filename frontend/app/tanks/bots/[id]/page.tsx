@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Trophy } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { BotBadge } from '@/components/tanks/bot-badge'
 import { MatchList } from '@/components/tanks/match-list'
@@ -47,9 +47,10 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
 
   const winRate = bot.matches > 0 ? `${Math.round((bot.wins / bot.matches) * 100)}%` : '—'
   const stats: [string, string | number][] = [
-    ['Rating', bot.rating],
-    ['Matches', bot.matches],
-    ['Wins', bot.wins],
+    ['Season rating', bot.rating],
+    ['Lifetime rating', bot.lifetime_rating],
+    ['Season matches', bot.matches],
+    ['Season wins', bot.wins],
     ['Win rate', winRate],
   ]
 
@@ -68,10 +69,11 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
           </span>
         }
       >
-        Rank #{bot.rank} on the ladder.
+        {bot.rank > 0 ? <>Rank #{bot.rank} in season {bot.season.name}.</> : <>Not ranked in season {bot.season.name} yet.</>}
+        {bot.owner && <> By {bot.owner}.</>}
       </PageHeader>
 
-      <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {stats.map(([label, value]) => (
           <div key={label} className="rounded-[12px] border border-border bg-card p-4">
             <p className="text-xs font-bold text-muted-foreground">{label}</p>
@@ -79,6 +81,48 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
           </div>
         ))}
       </div>
+
+      <section className="mt-10">
+        <SectionTitle>Tournaments</SectionTitle>
+        {bot.tournaments.length === 0 ? (
+          <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">
+            Has not played a tournament yet. The top 8 of the season ladder qualify.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border rounded-[14px] border border-border">
+            {bot.tournaments.map((t) => (
+              <li key={t.tournament_id}>
+                <Link href={`/tanks/tournaments/${t.tournament_id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 text-sm hover:bg-muted/50">
+                  <span className="min-w-0 flex-1 truncate font-semibold">{t.name}</span>
+                  <span className="font-mono text-xs text-muted-foreground">seed #{t.seed}</span>
+                  <span className={t.champion ? 'inline-flex items-center gap-1 font-bold' : 'text-muted-foreground'}>
+                    {t.champion && <Trophy className="size-3.5 text-warning" />}
+                    {t.result}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {bot.seasons.length > 0 && (
+        <section className="mt-10">
+          <SectionTitle>Past seasons</SectionTitle>
+          <ul className="divide-y divide-border rounded-[14px] border border-border">
+            {bot.seasons.map((x) => (
+              <li key={x.season_id}>
+                <Link href={`/tanks/seasons/${x.season_id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 text-sm hover:bg-muted/50">
+                  <span className="min-w-0 flex-1 truncate font-semibold">{x.name}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{x.matches} matches · {x.wins} wins</span>
+                  <span className="font-mono font-bold">#{x.rank}</span>
+                  <span className="font-mono text-muted-foreground">{x.rating}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="mt-10">
         <SectionTitle>Versions</SectionTitle>

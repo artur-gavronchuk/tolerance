@@ -21,6 +21,7 @@ const SITE_NAV = [
 const TANKS_NAV = [
   { label: 'Live', href: '/tanks' },
   { label: 'Ladder', href: '/tanks/leaderboard' },
+  { label: 'Tournaments', href: '/tanks/tournaments' },
   { label: 'Docs', href: '/tanks/docs' },
   { label: 'My bot', href: '/app/tanks' },
 ]

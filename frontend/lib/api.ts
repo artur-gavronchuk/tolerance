@@ -1,4 +1,6 @@
-import type { ProductDetail, ProductEntry, ProductResults, ProductTask, StackRow } from './types'
+import type {
+  ProductDetail, ProductEntry, ProductResults, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
+} from './types'
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public retryAfterSec?: number) {
@@ -88,4 +90,15 @@ export const products = {
 export const stacks = {
   overall: (days?: number) => api<{ items: StackRow[] }>(`/stacks${days ? `?days=${days}` : ''}`).then((r) => r.items),
   forDay: (day: string) => api<{ items: StackRow[] }>(`/daily/${day}/stacks`).then((r) => r.items),
+}
+
+// Tanks showcase, seasons and tournaments (public reads; starting a tournament needs an admin or the dev login).
+export const tanks = {
+  showcase: () => api<Showcase>('/tanks/showcase'),
+  seasons: () => api<{ items: SeasonView[] }>('/tanks/seasons').then((r) => r.items),
+  season: (id: string) => api<SeasonDetail>(`/tanks/seasons/${encodeURIComponent(id)}`),
+  tournaments: (status = '') =>
+    api<{ items: TournamentView[]; now: string }>(`/tanks/tournaments${status ? `?status=${status}` : ''}`),
+  tournament: (id: string) => api<TournamentView>(`/tanks/tournaments/${encodeURIComponent(id)}`),
+  startTournament: (size?: number) => post<TournamentView>('/tanks/tournaments', size ? { size } : {}),
 }

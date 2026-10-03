@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { PageHeader } from '@/components/page-header'
 import { Leaderboard } from '@/components/tanks/leaderboard'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,7 +19,10 @@ export default function LeaderboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
-      <PageHeader title="Leaderboard">Every active bot, ranked by a conservative estimate of its skill.</PageHeader>
+      <PageHeader title="Season ladder">
+        Every active bot, ranked by a conservative estimate of its skill in the current season. Ratings start fresh every month;
+        <Link href="/tanks/seasons/current" className="ml-1 font-semibold text-primary hover:underline">see the season</Link>.
+      </PageHeader>
       <div className="mt-8">{entries == null ? <Skeleton className="h-96 rounded-[14px]" /> : <Leaderboard entries={entries} />}</div>
     </div>
   )
