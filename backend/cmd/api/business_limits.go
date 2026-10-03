@@ -7,6 +7,7 @@ import (
 
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/httpx"
+	"tolerance/internal/platform/limits"
 	"tolerance/internal/platform/metrics"
 	"tolerance/internal/platform/ratelimit"
 )
@@ -24,7 +25,7 @@ import (
 func businessLimits(limiter *ratelimit.Limiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rule, ok := businessRuleFor(r)
-		if !ok {
+		if !ok || limits.Disabled() {
 			next.ServeHTTP(w, r)
 			return
 		}

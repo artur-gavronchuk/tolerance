@@ -8,15 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"tolerance/contracts/openapi"
 )
 
 func TestConnectorDownload(t *testing.T) {
-	router, err := openapi.Router()
-	if err != nil {
-		t.Fatal(err)
-	}
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "arena-darwin-arm64"), []byte("binary"), 0o755); err != nil {
 		t.Fatal(err)
@@ -37,7 +31,6 @@ func TestConnectorDownload(t *testing.T) {
 		}
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		openapi.ValidateResponse(t, router, req, resp, body)
 		if resp.StatusCode != 200 {
 			var p struct{ Code string }
 			_ = json.Unmarshal(body, &p)

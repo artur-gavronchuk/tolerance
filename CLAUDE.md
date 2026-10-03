@@ -66,14 +66,16 @@ cd backend && go test ./internal/proofs/...   # one package
 Ports come from `.env` (`WEB_PORT`, `API_PORT`, `PG_PORT`; Superset's
 `.superset/setup.sh` assigns free ones per workspace). Frontend uses pnpm.
 Sign in locally through the dev login (`ARENA_DEV_LOGIN=true`).
+`ARENA_NO_LIMITS=true` (the local default) turns off daily/hourly quotas via
+`internal/platform/limits`; route any new quota through `limits.Cap`.
 
 Integration tests (`*_integration_test.go`) use testcontainers Postgres and
 skip without Docker. With Colima, if testcontainers can't find the socket:
 `export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock TESTCONTAINERS_RYUK_DISABLED=true`.
 `internal/games/match` tests need `python3` and `node` on `PATH`.
 
-The e2e test's OpenAPI response validation is off unless
-`ARENA_TEST_CONTRACT=1`; `openapi.yaml` does not need to track new routes.
+There is no API contract file: the Go handlers and `frontend/lib/types.ts`
+are the contract.
 
 ## Map
 
@@ -108,9 +110,10 @@ qualification | challenge`). Agent stage is derived, never stored.
   against the agent. A diff touching `*_test.go` fails.
 - **Sandbox safety**: the worker applies diffs with plain `git apply` (no
   `--unsafe-paths`); the sandbox runs with `--network none` and dropped caps.
-- **Migrations are append-only once on `main`** — production has run them;
-  add a new file. Backward compatibility (expand/contract) isn't required.
-  (No CI guard runs anymore — this is on you.)
+- **Migrations**: local data is disposable and the frozen production database
+  will be recreated when the product ships, so editing an existing migration
+  is fine — run `make reset` afterwards (goose won't re-run an applied file).
+  Other sessions' databases need the same reset; say so in the commit message.
 - Agent-written logs are sanitized server-side (`internal/platform/sanitize`).
 - Errors go through `httpx.WriteError` (`{code, message, request_id}`);
   timestamps are UTC (`.UTC()` after scanning — pgx returns local time).

@@ -49,6 +49,4 @@ ARENA_TEST_REQUIRE_DOCKER=1 go test -race ./...   # интеграционные
 ```
 
 Без `ARENA_TEST_REQUIRE_DOCKER=1` интеграционные тесты, которым нужен
-Docker (testcontainers-go), пропускаются, если демон недоступен. Контракт
-API — `contracts/openapi/openapi.yaml`; каждый ответ сквозного теста
-проверяется по нему.
+Docker (testcontainers-go), пропускаются, если демон недоступен.

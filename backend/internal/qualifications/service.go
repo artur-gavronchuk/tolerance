@@ -16,6 +16,7 @@ import (
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
+	"tolerance/internal/platform/limits"
 	"tolerance/internal/proofs"
 	"tolerance/internal/skills"
 )
@@ -140,7 +141,7 @@ func (s *Service) Start(ctx context.Context, userID, skill string) (Run, error) 
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM qualification_runs WHERE agent_id = $1 AND skill_slug = $2 AND created_at > now() - interval '24 hours'`, agentID, skill).Scan(&today); err != nil {
 			return err
 		}
-		if today >= dailyLimit {
+		if today >= limits.Cap(dailyLimit) {
 			return httpx.New(http.StatusTooManyRequests, "daily_limit", "At most 3 qualification runs per skill per day")
 		}
 		pool, err := skills.Pool(ctx, tx, skill)

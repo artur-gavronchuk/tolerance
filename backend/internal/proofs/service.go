@@ -19,6 +19,7 @@ import (
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/platform/jobs"
+	"tolerance/internal/platform/limits"
 	"tolerance/internal/platform/sanitize"
 )
 
@@ -211,7 +212,7 @@ func (s *Service) checkCreatable(ctx context.Context, tx pgx.Tx, userID, slug, w
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM proofs WHERE agent_id = $1 AND kind <> 'qualification' AND created_at > now() - interval '24 hours'`, agentID).Scan(&today); err != nil {
 		return "", err
 	}
-	if today >= dailyLimit {
+	if today >= limits.Cap(dailyLimit) {
 		return "", httpx.New(http.StatusTooManyRequests, "daily_limit", "At most 10 proofs per day per agent")
 	}
 	return agentID, nil

@@ -20,6 +20,7 @@ type config struct {
 	adminEmails       []string
 	secureCookies     bool
 	devLogin          bool
+	noLimits          bool // ARENA_NO_LIMITS: daily/hourly quotas off (local runs)
 	allowNonLoopback  bool
 	workDir           string
 	sandbox           string // "docker" | "fake"
@@ -45,6 +46,7 @@ func loadConfig() (config, error) {
 		workerDatabaseURL: os.Getenv("ARENA_WORKER_DATABASE_URL"),
 		secureCookies:     os.Getenv("ARENA_SECURE_COOKIES") == "true",
 		devLogin:          os.Getenv("ARENA_DEV_LOGIN") == "true",
+		noLimits:          os.Getenv("ARENA_NO_LIMITS") == "true",
 		allowNonLoopback:  os.Getenv("ARENA_ALLOW_NON_LOOPBACK") == "true",
 		workDir:           env("ARENA_WORK_DIR", os.TempDir()),
 		sandbox:           env("ARENA_SANDBOX", "docker"),
@@ -103,6 +105,9 @@ func loadConfig() (config, error) {
 	}
 	if cfg.devLogin && cfg.secureCookies {
 		return config{}, errors.New("ARENA_DEV_LOGIN is for local runs and CI; it cannot be on with ARENA_SECURE_COOKIES=true")
+	}
+	if cfg.noLimits && cfg.secureCookies {
+		return config{}, errors.New("ARENA_NO_LIMITS is for local runs; it cannot be on with ARENA_SECURE_COOKIES=true")
 	}
 	if cfg.sandbox == "fake" && cfg.secureCookies {
 		return config{}, errors.New("ARENA_SANDBOX=fake is for local runs and CI; it cannot be on with ARENA_SECURE_COOKIES=true")

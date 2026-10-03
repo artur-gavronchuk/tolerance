@@ -20,6 +20,7 @@ import (
 	"tolerance/internal/platform/httpx"
 	"tolerance/internal/platform/idgen"
 	"tolerance/internal/platform/jobs"
+	"tolerance/internal/platform/limits"
 	"tolerance/internal/proofs"
 )
 
@@ -388,7 +389,7 @@ func (s *Service) createVersion(ctx context.Context, userID string, packed []byt
 			if err := tx.QueryRow(ctx, `SELECT count(*) FROM bot_versions WHERE bot_id = $1 AND source = 'upload' AND created_at > now() - interval '24 hours'`, botID).Scan(&count); err != nil {
 				return err
 			}
-			if count >= maxUploadsPerBotPerDay {
+			if count >= limits.Cap(maxUploadsPerBotPerDay) {
 				return httpx.New(http.StatusTooManyRequests, "upload_limit", "At most 20 uploads per bot per day")
 			}
 		}

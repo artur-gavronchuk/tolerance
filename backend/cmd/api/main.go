@@ -28,6 +28,7 @@ import (
 	"tolerance/internal/games/match"
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/db"
+	"tolerance/internal/platform/limits"
 	"tolerance/internal/platform/ratelimit"
 	"tolerance/internal/proofs"
 	"tolerance/internal/proofs/sandbox"
@@ -82,6 +83,10 @@ func main() {
 	// of qualifying synchronously. Only games.NewWorker and the proof
 	// worker's GameBotJudge (both gated to non-"api" roles below) actually
 	// invoke it, which is where Docker is really touched.
+	if cfg.noLimits {
+		limits.Disable()
+		log.Info("quotas off (ARENA_NO_LIMITS)")
+	}
 	var launcher match.Launcher = match.WithHouse(match.DockerLauncher{Image: cfg.botImage})
 	if cfg.sandbox == "fake" {
 		launcher = match.WithHouse(match.ProcessLauncher{})

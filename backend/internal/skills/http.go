@@ -9,6 +9,7 @@ import (
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
+	"tolerance/internal/platform/limits"
 	"tolerance/internal/skillrating"
 )
 
@@ -110,7 +111,7 @@ func RegisterOwnerRoutes(mux *http.ServeMux, pool *db.Pool, ratings RatingsSourc
 				items[i].BlockedReason = BlockedNotOperational
 			case !hasVersion:
 				items[i].BlockedReason = BlockedNoVersion
-			case items[i].RunsToday >= 3:
+			case items[i].RunsToday >= limits.Cap(3):
 				items[i].BlockedReason = BlockedDailyLimit
 			case items[i].Frozen:
 				items[i].BlockedReason = BlockedFrozen

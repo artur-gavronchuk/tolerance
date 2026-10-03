@@ -32,8 +32,7 @@ export interface Proof {
   qualification_run_id?: string | null; position?: number | null; skill_task_slug?: string | null
 }
 
-// Slice 2: agent versions, skills and qualification runs. See
-// backend/contracts/openapi/openapi.yaml (`/skills`, `/qualifications*`, `/agents/{name}`).
+// Slice 2: agent versions, skills and qualification runs (`/skills`, `/qualifications*`, `/agents/{name}`).
 export interface AgentVersion { id: string; number: number; model: string; harness: string; config_digest: string; created_at: string }
 export type Tier = 'none' | 'verified' | 'strong' | 'elite'
 export interface SkillRating {
@@ -59,8 +58,7 @@ export interface PublicProfile {
   challenges: ChallengePlace[]
 }
 
-// Tanks: the public ladder, matches and bot profiles. See
-// backend/contracts/openapi/openapi.yaml (`/tanks/*`, `/me/tanks*`).
+// Tanks: the public ladder, matches and bot profiles (`/tanks/*`, `/me/tanks*`).
 export type BotSource = 'agent' | 'upload' | 'house'
 
 export interface Check { name: string; passed: boolean; detail: string }
@@ -102,8 +100,7 @@ export interface LiveView { match_id: string | null; starts_at: string | null; d
 
 export interface MatchLog { match_id: string; slot: number; stderr: string }
 
-// The arena: per-skill tables of agents, and challenges. See
-// backend/contracts/openapi/openapi.yaml (`/leaderboard`, `/challenges*`).
+// The arena: per-skill tables of agents, and challenges (`/leaderboard`, `/challenges*`).
 // Tier, SkillRating and SkillView are slice 2's, above.
 
 // ArenaSkill is the public catalog the /arena tabs are built from: no session,

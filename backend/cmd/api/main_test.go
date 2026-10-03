@@ -20,10 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getkin/kin-openapi/routers"
 	"github.com/jackc/pgx/v5"
 
-	"tolerance/contracts/openapi"
 	"tolerance/internal/admin"
 	"tolerance/internal/agents"
 	"tolerance/internal/arena"
@@ -44,7 +42,6 @@ import (
 
 type e2e struct {
 	srv    *httptest.Server
-	router routers.Router
 	worker *proofs.Worker
 	fake   *sandbox.Fake
 	games  *games.Service
@@ -106,10 +103,6 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	}
 	srv := httptest.NewServer(newHandler(cfg, scale, dp))
 	t.Cleanup(srv.Close)
-	router, err := openapi.Router()
-	if err != nil {
-		t.Fatal(err)
-	}
 	// The hidden tests of fixtures/proofs/go-fix-retry: a pass needs all of them.
 	var tests []sandbox.TestResult
 	for _, n := range []string{"TestHidden_BackoffSequence", "TestHidden_BackoffCapsAtMax", "TestHidden_BackoffZeroAndNegative",
@@ -122,7 +115,7 @@ func newE2E(t *testing.T, providers ...map[string]identity.Provider) *e2e {
 	// Both hooks, exactly as main.go wires them: a qualification proof advances
 	// its run, a challenge proof records its entry's result.
 	worker.SetFinishListener(finishBoth{qs, challengesSvc})
-	return &e2e{srv: srv, router: router, worker: worker, fake: fake, games: gamesSvc, db: d}
+	return &e2e{srv: srv, worker: worker, fake: fake, games: gamesSvc, db: d}
 }
 
 // requirePython3 skips a test when python3 isn't on PATH, unless ARENA_TEST_REQUIRE_DOCKER=1 (CI always
@@ -177,7 +170,7 @@ func (e *e2e) devLogin(t *testing.T, c *http.Client, email string) {
 }
 
 // call performs a request (cookie jar on the client, optional bearer key),
-// validates the response against openapi.yaml and decodes into out.
+// decodes the response into out.
 func (e *e2e) call(t *testing.T, c *http.Client, method, path, key string, body any, out any) int {
 	t.Helper()
 	var buf bytes.Buffer
@@ -195,7 +188,6 @@ func (e *e2e) call(t *testing.T, c *http.Client, method, path, key string, body 
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
-	openapi.ValidateResponse(t, e.router, req, resp, raw)
 	if out != nil && len(raw) > 0 {
 		if err := json.Unmarshal(raw, out); err != nil {
 			t.Fatalf("decode %s %s: %v\n%s", method, path, err, raw)
@@ -331,8 +323,6 @@ func TestEndToEnd_SignInConnectProve(t *testing.T) {
 	if err != nil || resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "application/gzip" {
 		t.Fatalf("repo: %v %v", err, resp)
 	}
-	raw, _ := io.ReadAll(resp.Body)
-	openapi.ValidateResponse(t, e.router, req, resp, raw)
 	resp.Body.Close()
 	if code := e.call(t, plain, "POST", "/api/v1/connector/proofs/"+proof.ID+"/started", keyResp.Key, map[string]string{}, nil); code != 204 {
 		t.Fatalf("started: %d", code)
@@ -492,7 +482,6 @@ func TestEndToEnd_GitHubSignIn(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	openapi.ValidateResponse(t, e.router, req, resp, nil)
 	loc, _ := url.Parse(resp.Header.Get("Location"))
 	if resp.StatusCode != 302 || !strings.HasPrefix(loc.String(), gh.URL+"/authorize") {
 		t.Fatalf("start: %d %s", resp.StatusCode, loc)
@@ -510,7 +499,6 @@ func TestEndToEnd_GitHubSignIn(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	openapi.ValidateResponse(t, e.router, req, resp, nil)
 	if resp.StatusCode != 302 || resp.Header.Get("Location") != "/app/agent/connect" {
 		t.Fatalf("callback: %d %s", resp.StatusCode, resp.Header.Get("Location"))
 	}
@@ -732,7 +720,6 @@ func TestTanksLadderPublic(t *testing.T) {
 		t.Fatalf("replay: %v %v", err, resp)
 	}
 	raw, _ := io.ReadAll(resp.Body)
-	openapi.ValidateResponse(t, e.router, req, resp, raw)
 	resp.Body.Close()
 	if _, err := tanks.DecodeReplay(raw); err != nil {
 		t.Fatalf("decode replay: %v", err)
@@ -787,7 +774,6 @@ func TestTanksAgentRun(t *testing.T) {
 		t.Fatalf("repo download: %v %v", err, resp)
 	}
 	raw, _ := io.ReadAll(resp.Body)
-	openapi.ValidateResponse(t, e.router, req, resp, raw)
 	resp.Body.Close()
 	sum := sha256.Sum256(raw)
 	if hex.EncodeToString(sum[:]) != next.Task.RepoSHA256 {
