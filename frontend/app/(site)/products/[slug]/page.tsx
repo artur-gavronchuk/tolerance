@@ -9,7 +9,7 @@ import { AdminBar } from '@/components/products/admin-bar'
 import { Compare } from '@/components/products/compare'
 import { EntryCard } from '@/components/products/entry-card'
 import { EntryGallery } from '@/components/products/gallery'
-import { PhaseBadge, VotingNote, rankRuleText } from '@/components/products/phase'
+import { PhaseBadge, RankingHow, VotingNote, isBlind, utc } from '@/components/products/phase'
 import { useResults } from '@/components/products/use-results'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,12 +55,12 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
   return (
     <div className="space-y-8">
       <PageHeader
-        kicker={<Link href="/products" className="hover:text-foreground">Product tasks</Link>}
+        kicker={<Link href="/products" className="hover:text-foreground">Product of the week</Link>}
         title={task.title}
         actions={<Button variant="outline" render={<Link href={`/products/${slug}/results`} />} nativeButton={false}>Results</Button>}
       >
         <span className="mr-2 inline-block align-middle"><PhaseBadge phase={task.phase} /></span>
-        {open ? 'Uploads close' : 'Uploads closed'} {new Date(task.deadline).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+        {open ? 'Uploads close' : 'Uploads closed'} {utc(task.deadline)}
         {open && <> · {task.entry_count} {task.entry_count === 1 ? 'entry' : 'entries'} submitted so far</>}
       </PageHeader>
 
@@ -84,9 +84,10 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
           {open ? 'Your entry' : 'Your uploads'}
         </SectionTitle>
         {open && (
-          <p className="mb-4 max-w-2xl text-sm text-muted-foreground">
-            Entries stay hidden until the deadline. {rankRuleText(task.kind, task.scenario_count > 0)}
-          </p>
+          <div className="mb-4 space-y-3">
+            <p className="max-w-2xl text-sm text-muted-foreground">Entries stay hidden until the deadline.</p>
+            <RankingHow kind={task.kind} hasChecks={task.scenario_count > 0} />
+          </div>
         )}
         {open && !meLoading && !me && (
           <p className="text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" href="/login">Sign in</Link> to upload your solution.</p>
@@ -115,7 +116,7 @@ function Published({ task, slug, viewer, signedIn }: { task: ProductDetail; slug
       </SectionTitle>
       <VotingNote task={task} />
       {task.kind === 'site' && task.phase === 'voting' && <Compare slug={slug} signedIn={signedIn} />}
-      <p className="max-w-2xl text-sm text-muted-foreground">{rankRuleText(task.kind, task.scenario_count > 0)}</p>
+      <RankingHow kind={task.kind} hasChecks={task.scenario_count > 0 && !isBlind(task)} />
       {voteError && <p role="alert" className="text-sm text-destructive">{voteError}</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!res && !error && <Skeleton className="h-40 rounded-[14px]" />}

@@ -15,24 +15,52 @@ export function until(iso: string, now = Date.now()) {
   return `in ${Math.max(1, m)}m`
 }
 
-// How a task's standings are decided, in words; shown wherever people see a ranking.
-export function rankRuleText(kind: ProductTask['kind'], hasChecks: boolean) {
-  if (kind === 'site') {
-    return 'Ranked by blind comparisons: people judge anonymous pairs of sites and a Bradley-Terry score is fitted to all judgments. '
-      + (hasChecks ? 'Ties go to the direct votes, then the automated-check score, then the earlier upload. ' : 'Ties go to the direct votes, then the earlier upload. ')
-      + 'Your latest upload counts.'
-  }
-  return 'Ranked by scenarios passed, then by votes; ties go to the earlier upload. Your best upload counts. A tool that fails scenarios does not win on popularity.'
+const UTC_FMT: Intl.DateTimeFormatOptions = { timeZone: 'UTC', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }
+
+// Every time on the product pages is shown in UTC, with the suffix, so nobody has to guess the zone.
+export const utc = (iso: string) => `${new Date(iso).toLocaleString('en-GB', UTC_FMT)} UTC`
+export const utcDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' })
+
+// True while a site task's entries are judged blind: automated check counts and source stay hidden so they
+// can't sway the votes.
+export const isBlind = (task: Pick<ProductTask, 'kind' | 'phase'>) => task.kind === 'site' && task.phase === 'voting'
+
+export const JUDGE_SENTENCE = 'Pick the better of two anonymous sites. Your picks rank the entries.'
+
+// One line on what the ranking is, for page headers.
+export function rankSummary(kind: ProductTask['kind']) {
+  return kind === 'site' ? 'Ranked by blind picks between pairs of anonymous sites.' : 'Ranked by scenarios passed, then by votes.'
 }
 
-// The one-line state of the voting window.
-export function VotingNote({ task }: { task: ProductTask }) {
+// How a task's standings are decided, in words (one rule, stated once); shown inside the disclosure.
+export function rankRuleText(kind: ProductTask['kind'], hasChecks: boolean) {
+  if (kind === 'site') {
+    return 'Each site gets a score from everybody\'s blind picks (1000 is the average site). If scores are equal, the site with more favourite votes ranks higher, '
+      + (hasChecks ? 'then the one with more automated checks passed, ' : '')
+      + 'then the earlier upload. A favourite vote is one per task and never for your own entry. Your latest upload counts.'
+  }
+  return 'Tools are ranked by scenarios passed, then by favourite votes; if both are equal, the earlier upload ranks higher. A favourite vote is one per task and never for your own entry. Your best upload counts. A tool that fails scenarios does not win on popularity.'
+}
+
+// The collapsed method behind a ranking.
+export function RankingHow({ kind, hasChecks }: { kind: ProductTask['kind']; hasChecks: boolean }) {
+  return (
+    <details className="max-w-2xl rounded-[10px] border border-border bg-card px-4 py-2.5 text-sm">
+      <summary className="cursor-pointer font-semibold">How ranking works</summary>
+      <p className="mt-2 text-muted-foreground">{rankRuleText(kind, hasChecks)}</p>
+    </details>
+  )
+}
+
+// The one-line state of the voting window. With `judge` it also says how site entries are judged (the compare
+// panel says that itself on the task page).
+export function VotingNote({ task, judge = false }: { task: ProductTask; judge?: boolean }) {
   if (task.phase === 'open') return null
-  const ends = new Date(task.voting_ends_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const ends = utc(task.voting_ends_at)
   return (
     <p className="rounded-[10px] border border-border bg-muted/50 px-4 py-2.5 text-sm text-muted-foreground">
       {task.phase === 'voting'
-        ? <>Voting is open until <b className="text-foreground">{ends}</b> ({until(task.voting_ends_at)}). Judge pairs in Compare mode; the favourite vote (one per task, not your own entry) is a tie-break.</>
+        ? <>Voting is open until <b className="text-foreground">{ends}</b> ({until(task.voting_ends_at)}).{task.kind === 'cli' ? ' Vote for the tool you like best (not your own).' : judge ? ` ${JUDGE_SENTENCE}` : ''}</>
         : <>Voting ended {ends}. These results are final.</>}
     </p>
   )

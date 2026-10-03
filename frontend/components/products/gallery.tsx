@@ -10,7 +10,7 @@ import { SourceViewer } from './source-viewer'
 import { VoteButton } from './vote-button'
 
 // Everything published for a task, one card per person: the live site or the scenario results, the author,
-// the automated score and the vote control. Rank numbers are the current standings. While a site task is in
+// the automated score and the vote control (checks and source stay hidden while the blind vote is on). Rank numbers are the current standings. While a site task is in
 // its voting phase the gallery is blind: stable shuffled order, no ranks, authors or vote counts, so it doesn't
 // undo the blind comparison above it.
 export function EntryGallery({ task, entries, signedIn, busy, onToggleVote }: {
@@ -46,7 +46,7 @@ export function EntryGallery({ task, entries, signedIn, busy, onToggleVote }: {
                 </div>
               </>
             )}
-            {e.total > 0 && (
+            {e.total > 0 && !blind && (
               <Badge variant={e.passed === e.total ? 'default' : 'outline'} title="Automated checks passed">{e.passed}/{e.total}{site ? ' checks' : ''}</Badge>
             )}
             <VoteButton entry={e} phase={task.phase} signedIn={signedIn} busy={busy === e.id} hideCount={blind} onToggle={() => onToggleVote(e)} />
@@ -61,11 +61,13 @@ export function EntryGallery({ task, entries, signedIn, busy, onToggleVote }: {
               ))}
             </ul>
           )}
-          <SourceViewer id={e.id}>
-            <Button size="sm" variant="ghost" nativeButton={false} render={<a href={`/api/v1/product-entries/${e.id}/zip`} />}>
-              <Download />Download zip
-            </Button>
-          </SourceViewer>
+          {!blind && (
+            <SourceViewer id={e.id}>
+              <Button size="sm" variant="ghost" nativeButton={false} render={<a href={`/api/v1/product-entries/${e.id}/zip`} />}>
+                <Download />Download zip
+              </Button>
+            </SourceViewer>
+          )}
         </li>
       ))}
     </ul>

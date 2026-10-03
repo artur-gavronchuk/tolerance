@@ -8,11 +8,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { friendlyMessage, products } from '@/lib/api'
 import type { CompareJudged, CompareNext } from '@/lib/types'
 import { siteURL } from './entry-card'
+import { JUDGE_SENTENCE } from './phase'
 
 type Verdict = 'a' | 'b' | 'tie'
 
 // Blind comparison: two anonymous sites side by side (tabs on a phone), a verdict, then the authors are
-// revealed and the next pair comes. The standings are fitted from everybody's verdicts.
+// revealed and the next pair comes. The standings come from everybody's verdicts.
 export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean }) {
   const [next, setNext] = useState<CompareNext | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -76,7 +77,7 @@ export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean })
         )}
       </div>
       <p className="max-w-2xl text-sm text-muted-foreground">
-        Two anonymous sites, no names and no votes. Open both, use them, and say which is better. This is what decides the standings.
+        {JUDGE_SENTENCE} Open both and use them before you decide.
       </p>
 
       {!signedIn && (

@@ -5,15 +5,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { Trophy } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/page-header'
 import { AdminBar } from '@/components/products/admin-bar'
-import { PhaseBadge, until } from '@/components/products/phase'
+import { OpensCountdown, VoteCta } from '@/components/products/next-up'
+import { PhaseBadge, until, utc, utcDay } from '@/components/products/phase'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { friendlyMessage, products } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import type { ProductList, ProductTask } from '@/lib/types'
 
-const when = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-const day = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+const when = utc
+const day = utcDay
 const kindLabel = (t: ProductTask) => (t.kind === 'site' ? 'Website' : `Command-line tool, ${t.scenario_count} scenarios`)
 
 export default function ProductsPage() {
@@ -41,9 +42,13 @@ export default function ProductsPage() {
       {!list && !error && <Skeleton className="h-40 rounded-[14px]" />}
 
       {list && open.length === 0 && (
-        <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">
-          No task is open right now{next?.next_kind ? `; the next one opens ${when(next.next_opens_at)}.` : '.'}
-        </p>
+        <>
+          {voting[0] && <VoteCta task={voting[0]} signedIn={!!me} />}
+          {next ? <OpensCountdown upcoming={next} /> : null}
+          {!voting[0] && !next?.next_kind && (
+            <p className="rounded-[14px] border border-dashed border-input px-5 py-10 text-center text-sm text-muted-foreground">No task is open right now.</p>
+          )}
+        </>
       )}
       {open.map((t) => (
         <section key={t.slug}>
@@ -80,7 +85,7 @@ export default function ProductsPage() {
         </section>
       )}
 
-      {next && next.count > 0 && (
+      {open.length > 0 && next && next.count > 0 && (
         <p className="text-sm text-muted-foreground">
           Next week: {next.next_kind === 'cli' ? 'a command-line tool' : 'a website'}, opens {when(next.next_opens_at)}.
           {next.count > 1 && ` ${next.count} tasks are waiting in the queue.`}
