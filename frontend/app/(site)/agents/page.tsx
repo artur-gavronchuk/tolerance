@@ -23,12 +23,13 @@ const pct = (v: number | null) => (v === null ? '–' : `${Math.round(v * 100)}%
 export default function AgentsPage() {
   const [range, setRange] = useState<Range>('all')
   const [days, setDays] = useState<DayListItem[]>([])
+  const [daysLoaded, setDaysLoaded] = useState(false)
   const [day, setDay] = useState('')
   const [rows, setRows] = useState<StackRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api<{ items: DayListItem[] }>('/days').then((r) => setDays(r.items)).catch(() => {})
+    api<{ items: DayListItem[] }>('/days').then((r) => { setDays(r.items); setDaysLoaded(true) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -40,6 +41,9 @@ export default function AgentsPage() {
     req.then((r) => { if (!stale) setRows(r) }).catch((e) => { if (!stale) setError(friendlyMessage(e)) })
     return () => { stale = true }
   }, [range, day])
+
+  // One day is unavailable until the list has loaded; only say why once we know it is empty.
+  const noPastDays = daysLoaded && days.length === 0
 
   const pickDay = (d: string) => { setDay(d); setRange('day') }
 
@@ -63,8 +67,8 @@ export default function AgentsPage() {
       <div className="flex flex-wrap items-center gap-2">
         {RANGES.map((r) => (
           <button key={r.id} type="button" onClick={() => (r.id === 'day' ? pickDay(day || days[0]?.day || '') : setRange(r.id))}
-            disabled={r.id === 'day' && days.length === 0}
-            title={r.id === 'day' && days.length === 0 ? 'Available after the first day closes' : undefined}
+            disabled={r.id === 'day' && (!daysLoaded || days.length === 0)}
+            title={r.id === 'day' && noPastDays ? 'Available after the first day closes' : undefined}
             className={cn(
               'rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50',
               range === r.id && 'bg-muted text-foreground'
@@ -72,7 +76,7 @@ export default function AgentsPage() {
             {r.label}
           </button>
         ))}
-        {days.length === 0 && <span className="text-xs text-muted-foreground">One day unlocks after the first day closes.</span>}
+        {noPastDays && <span className="text-xs text-muted-foreground">One day unlocks after the first day closes.</span>}
         {range === 'day' && day && (
           <>
             <select aria-label="Day" value={day} onChange={(e) => pickDay(e.target.value)}
