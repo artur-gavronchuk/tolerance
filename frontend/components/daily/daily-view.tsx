@@ -31,7 +31,7 @@ When you are done, the repository should build and the tests should pass.`
 // The task of the day (`day` omitted) or a past day (`day` = YYYY-MM-DD).
 // Past days accept practice uploads: they do not count for the leaderboards.
 export function DailyView({ day }: { day?: string }) {
-  const { me, refresh: refreshMe } = useMe()
+  const { me, loading: meLoading, refresh: refreshMe } = useMe()
   const [daily, setDaily] = useState<Daily | null>(null)
   const [rows, setRows] = useState<DailyRow[] | null>(null)
   const [stats, setStats] = useState<DayStats | null>(null)
@@ -82,6 +82,9 @@ export function DailyView({ day }: { day?: string }) {
 
   const { task } = daily
   const practice = !daily.is_open
+  const signedIn = !!me && !!daily.my
+  const signedOut = !meLoading && !me
+  const loginHref = `/login?next=${encodeURIComponent(day ? `/day/${day}` : '/')}`
   const attemptsLeft = practice || !daily.my ? undefined : Math.max(0, daily.attempts_per_day - daily.my.attempts_used)
   const serverIds = new Set(daily.my?.submissions.map((s) => s.id))
   const localById = new Map(local.map((s) => [s.id, s]))
@@ -108,12 +111,12 @@ export function DailyView({ day }: { day?: string }) {
         </div>
       </header>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
+      <div className="grid items-start gap-8 lg:grid-cols-[1fr_22rem]">
         <section className="min-w-0 rounded-[14px] border border-border bg-card p-5 sm:p-6">
           <Markdown>{task.task_md}</Markdown>
         </section>
 
-        <aside className="min-w-0 space-y-6">
+        <aside className="order-first min-w-0 space-y-6 lg:sticky lg:top-6 lg:order-none lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto">
           <section className="rounded-[14px] border border-border bg-card p-5">
             <h2 className="heading">How to solve</h2>
             <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
@@ -131,26 +134,32 @@ export function DailyView({ day }: { day?: string }) {
             </Button>
           </section>
 
-          <section className="rounded-[14px] border border-border bg-card p-5">
+          <section id="submit" className="scroll-mt-6 rounded-[14px] border border-border bg-card p-5">
             <h2 className="heading">{practice ? 'Practice upload' : 'Submit'}</h2>
-            {!daily.my ? (
-              <div className="mt-3 space-y-3">
-                <p className="text-sm text-muted-foreground">Sign in to upload your result and get on the leaderboard.</p>
-                <Button render={<Link href="/login" />} nativeButton={false}>Sign in to submit</Button>
-              </div>
-            ) : (
+            {signedIn ? (
               <div className="mt-3 space-y-3">
                 {practice && (
                   <p className="text-sm text-muted-foreground">This day is over: you can still try it, but the result will not count for any leaderboard or streak.</p>
                 )}
                 <UploadForm taskSlug={practice ? task.slug : undefined} attemptsLeft={attemptsLeft} onSubmitted={update} />
               </div>
+            ) : signedOut ? (
+              <div className="mt-3 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  {practice
+                    ? 'Sign in to try this day as practice.'
+                    : 'Sign in to upload your solution and get on the leaderboard. Reading the task and downloading the repo works without an account.'}
+                </p>
+                <Button className="w-full sm:w-auto" render={<Link href={loginHref} />} nativeButton={false}>Sign in to submit</Button>
+              </div>
+            ) : (
+              <Skeleton className="mt-3 h-32 rounded-[10px]" />
             )}
           </section>
         </aside>
       </div>
 
-      {daily.my && (
+      {signedIn && daily.my && (
         <section>
           <SectionTitle aside={daily.my.best ? (task.kind === 'optimize' ? `Best score: ${fmtScore(daily.my.best.score)}` : `Best: ${daily.my.best.passed_tests}/${daily.my.best.total_tests}`) : undefined}>
             My submissions
