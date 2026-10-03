@@ -2,7 +2,9 @@
 
 import { useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
-import { post, friendlyMessage } from '@/lib/api'
+import { post } from '@/lib/api'
+import { useT } from '@/lib/i18n/client'
+import { tanksOwnerMessages as m, ownerError } from '@/lib/i18n/messages/tanks-owner'
 import type { VersionView } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -30,6 +32,7 @@ async function fileToBase64(file: File): Promise<string> {
 // the same botpkg.Normalize checks for both formats: a single wrapping folder
 // and macOS junk are stripped, the language and entry come from bot.json.
 export function UploadVersion({ onUploaded }: { onUploaded: (v: VersionView) => void }) {
+  const t = useT(m)
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [over, setOver] = useState(false)
@@ -40,11 +43,11 @@ export function UploadVersion({ onUploaded }: { onUploaded: (v: VersionView) => 
     setError(null)
     setDone(null)
     if (!ACCEPTED.test(file.name)) {
-      setError('Upload a .zip, .tar.gz or .tgz file.')
+      setError(t('upload.badType'))
       return
     }
     if (file.size > MAX_ARCHIVE_BYTES) {
-      setError(`That archive is ${(file.size / (1 << 20)).toFixed(2)} MiB; the limit is 1 MiB.`)
+      setError(t('upload.tooBig', { size: (file.size / (1 << 20)).toFixed(2) }))
       return
     }
     setBusy(true)
@@ -54,7 +57,7 @@ export function UploadVersion({ onUploaded }: { onUploaded: (v: VersionView) => 
       setDone(v)
       onUploaded(v)
     } catch (err) {
-      setError(friendlyMessage(err))
+      setError(ownerError(t, err))
     } finally {
       setBusy(false)
     }
@@ -89,15 +92,14 @@ export function UploadVersion({ onUploaded }: { onUploaded: (v: VersionView) => 
         )}
       >
         <Upload className="size-5 text-muted-foreground" />
-        <span className="text-sm font-bold">{busy ? 'Uploading…' : 'Drop your bot .zip here, or click to choose'}</span>
-        <span className="text-xs text-muted-foreground">.zip, .tar.gz or .tgz, up to 1 MiB</span>
+        <span className="text-sm font-bold">{busy ? t('upload.uploading') : t('upload.drop')}</span>
+        <span className="text-xs text-muted-foreground">{t('upload.formats')}</span>
       </button>
       <input ref={inputRef} type="file" accept=".zip,.tar.gz,.tgz,.gz" className="hidden" onChange={onChange} />
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {done && (
         <p role="status" className="text-sm text-muted-foreground">
-          Version {done.number} uploaded. The platform is playing a trial match for it now; progress and the replay
-          appear under Versions below.
+          {t('upload.done', { n: done.number })}
         </p>
       )}
     </div>

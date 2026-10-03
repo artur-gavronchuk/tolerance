@@ -7,12 +7,14 @@ import { SiteHeader } from '@/components/public/site-header'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMe } from '@/lib/use-me'
-import { friendlyMessage } from '@/lib/api'
+import { useT } from '@/lib/i18n/client'
+import { tanksOwnerMessages as m, ownerError } from '@/lib/i18n/messages/tanks-owner'
 import { PRODUCT } from '@/lib/brand'
 
 // Signed-in area (the owner's tanks bot). Sends visitors to /login.
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
   const { me, loading, error, refresh } = useMe()
+  const t = useT(m)
   const router = useRouter()
   const pathname = usePathname()
   useEffect(() => {
@@ -21,9 +23,9 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   if (!loading && error && error.status !== 401) {
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4">
-        <h1 className="display text-3xl">Can’t reach {PRODUCT}</h1>
-        <p role="alert" className="mt-3 text-muted-foreground">Loading your account failed: {friendlyMessage(error)}. The API may be restarting.</p>
-        <Button className="mt-6 self-start" onClick={() => void refresh()}>Try again</Button>
+        <h1 className="display text-3xl">{t('layout.unreachable', { product: PRODUCT })}</h1>
+        <p role="alert" className="mt-3 text-muted-foreground">{t('layout.loadFailed', { error: ownerError(t, error) })}</p>
+        <Button className="mt-6 self-start" onClick={() => void refresh()}>{t('layout.retry')}</Button>
       </div>
     )
   }

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, ClipboardCopy, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ApiError } from '@/lib/api'
+import { useT } from '@/lib/i18n/client'
+import { tanksOwnerMessages as m } from '@/lib/i18n/messages/tanks-owner'
 import { copyAsync, fetchReports } from '@/lib/tanks/report'
 
 type State = 'idle' | 'busy' | 'copied' | 'error'
@@ -11,10 +13,11 @@ type State = 'idle' | 'busy' | 'copied' | 'error'
 // Copies the plain-text match report(s) for the owner's coding agent. One id gives that match's report; several
 // are concatenated in the order given. The confirmation is inline next to the button and announced politely.
 export function CopyReportButton({
-  matchIds, label = 'Copy report for your agent', size = 'default', variant = 'default', className,
+  matchIds, label, size = 'default', variant = 'default', className,
 }: {
   matchIds: string[]; label?: string; size?: 'default' | 'sm' | 'xs'; variant?: 'default' | 'outline' | 'ghost' | 'secondary'; className?: string
 }) {
+  const t = useT(m)
   const [state, setState] = useState<State>('idle')
   const [message, setMessage] = useState('')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -26,10 +29,10 @@ export function CopyReportButton({
     try {
       await copyAsync(fetchReports(matchIds))
       setState('copied')
-      setMessage(matchIds.length === 1 ? 'Copied. Paste it to your agent.' : `Copied ${matchIds.length} reports. Paste them to your agent.`)
+      setMessage(matchIds.length === 1 ? t('copy.one') : t('copy.many', { n: matchIds.length }))
     } catch (e) {
       setState('error')
-      setMessage(e instanceof ApiError ? e.message : 'Could not copy to the clipboard.')
+      setMessage(e instanceof ApiError ? e.message : t('copy.fail'))
     }
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => setState('idle'), 3500)
@@ -39,7 +42,7 @@ export function CopyReportButton({
     <span className={`inline-flex flex-wrap items-center gap-2 ${className ?? ''}`}>
       <Button type="button" variant={variant} size={size} onClick={() => void copy()} disabled={matchIds.length === 0 || state === 'busy'}>
         {state === 'busy' ? <Loader2 className="animate-spin" /> : state === 'copied' ? <Check /> : <ClipboardCopy />}
-        {label}
+        {label ?? t('copy.label')}
       </Button>
       <span role="status" aria-live="polite" className={state === 'error' ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
         {state === 'copied' || state === 'error' ? message : ''}

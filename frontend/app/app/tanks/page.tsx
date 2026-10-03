@@ -10,7 +10,9 @@ import { MyMatches } from '@/components/tanks/my-matches'
 import { CopyReportButton } from '@/components/tanks/copy-report-button'
 import { VersionList } from '@/components/tanks/version-list'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, friendlyMessage } from '@/lib/api'
+import { api } from '@/lib/api'
+import { useT } from '@/lib/i18n/client'
+import { tanksOwnerMessages as m, ownerError } from '@/lib/i18n/messages/tanks-owner'
 import { useMe } from '@/lib/use-me'
 import type { MyTanks } from '@/lib/types'
 
@@ -25,6 +27,7 @@ function pollInterval(data: MyTanks | null): number {
 
 export default function TanksPage() {
   const { me } = useMe(5000)
+  const t = useT(m)
   const [data, setData] = useState<MyTanks | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,9 +36,9 @@ export default function TanksPage() {
       setData(await api<MyTanks>('/me/tanks'))
       setError(null)
     } catch (e) {
-      setError(friendlyMessage(e))
+      setError(ownerError(t, e))
     }
-  }, [])
+  }, [t])
 
   const pollMs = pollInterval(data)
   useEffect(() => {
@@ -55,9 +58,8 @@ export default function TanksPage() {
 
   return (
     <div className="space-y-10">
-      <PageHeader kicker="Your bot on the ladder" title="Tanks">
-        Download a starter kit, let your own coding agent improve it, zip the folder and upload it — the platform plays
-        every version for you and shows how it did.
+      <PageHeader kicker={t('page.kicker')} title={t('page.title')}>
+        {t('page.intro')}
       </PageHeader>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!data ? (
@@ -75,18 +77,18 @@ export default function TanksPage() {
                     <div className="min-w-0">
                       <h2 className="heading truncate text-xl">{data.bot.name}</h2>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        Active version: {data.bot.active_version != null ? `v${data.bot.active_version}` : 'none yet'}
+                        {t('page.activeVersion', { v: data.bot.active_version != null ? `v${data.bot.active_version}` : t('page.none') })}
                       </p>
                     </div>
                     <Link href={`/tanks/bots/${data.bot.id}`}
                       className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary hover:underline">
-                      Public profile<ExternalLink className="size-3.5" />
+                      {t('page.publicProfile')}<ExternalLink className="size-3.5" />
                     </Link>
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-3 sm:max-w-sm">
-                    <div><p className="text-xs font-bold text-muted-foreground">Rating</p><p className="font-mono text-lg font-bold">{data.bot.rating}</p></div>
-                    <div><p className="text-xs font-bold text-muted-foreground">Matches</p><p className="font-mono text-lg font-bold">{data.bot.matches}</p></div>
-                    <div><p className="text-xs font-bold text-muted-foreground">Wins</p><p className="font-mono text-lg font-bold">{data.bot.wins}</p></div>
+                    <div><p className="text-xs font-bold text-muted-foreground">{t('page.rating')}</p><p className="font-mono text-lg font-bold">{data.bot.rating}</p></div>
+                    <div><p className="text-xs font-bold text-muted-foreground">{t('page.matches')}</p><p className="font-mono text-lg font-bold">{data.bot.matches}</p></div>
+                    <div><p className="text-xs font-bold text-muted-foreground">{t('page.wins')}</p><p className="font-mono text-lg font-bold">{data.bot.wins}</p></div>
                   </div>
                   <div className="mt-5 border-t border-border pt-4">
                     <BotNameForm currentName={data.bot.name} onSaved={() => void load()} />
@@ -100,26 +102,26 @@ export default function TanksPage() {
             {!data.bot && (
               <section className="rounded-[14px] border border-border bg-card p-5">
                 <p className="mb-3 text-sm text-muted-foreground">
-                  Your first upload creates the bot with an automatic name. Pick a better one now, or rename it any time.
+                  {t('page.firstUpload')}
                 </p>
                 <BotNameForm suggestedName={me.user.handle} onSaved={() => void load()} />
               </section>
             )}
 
             <section>
-              <SectionTitle aside={data.versions.length > 0 ? `${data.versions.length} total` : undefined}>Versions</SectionTitle>
+              <SectionTitle aside={data.versions.length > 0 ? t('page.total', { n: data.versions.length }) : undefined}>{t('page.versions')}</SectionTitle>
               <VersionList versions={data.versions} />
             </section>
 
             {data.bot && (
               <section>
-                <SectionTitle>My recent matches</SectionTitle>
+                <SectionTitle>{t('page.recent')}</SectionTitle>
                 {data.matches.length > 0 && (
                   <div className="mb-3 space-y-1">
-                    <CopyReportButton matchIds={data.matches.slice(0, 5).map((m) => m.id)} label="Copy last 5 matches"
+                    <CopyReportButton matchIds={data.matches.slice(0, 5).map((m) => m.id)} label={t('page.copyLast5')}
                       variant="secondary" />
                     <p className="text-xs text-muted-foreground">
-                      Reports are plain text: what happened to your tank, tick by tick. Paste them to your agent before it writes the next version.
+                      {t('page.reportsHelp')}
                     </p>
                   </div>
                 )}

@@ -1,23 +1,24 @@
+'use client'
+
 import Link from 'next/link'
 import { Check, Loader2, X } from 'lucide-react'
 import { BotBadge } from './bot-badge'
 import type { VersionView } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { CopyReportButton } from './copy-report-button'
+import { useT } from '@/lib/i18n/client'
+import { tanksOwnerMessages as m, ownerError } from '@/lib/i18n/messages/tanks-owner'
 
-const STATUS_TEXT: Record<VersionView['status'], string> = {
-  pending: 'checking…',
-  active: 'active',
-  rejected: 'rejected',
-}
+const STATUS_KEY = { pending: 'ver.checking', active: 'ver.active', rejected: 'ver.rejected' } as const
 
 function StatusBadge({ status }: { status: VersionView['status'] }) {
+  const t = useT(m)
   const Icon = status === 'active' ? Check : status === 'rejected' ? X : Loader2
   const tone = status === 'active' ? 'text-success' : status === 'rejected' ? 'text-destructive' : 'text-muted-foreground'
   return (
     <span className={cn('inline-flex items-center gap-1 text-xs font-bold', tone)}>
       <Icon className={cn('size-3.5', status === 'pending' && 'animate-spin')} strokeWidth={2.75} />
-      {STATUS_TEXT[status]}
+      {t(STATUS_KEY[status])}
     </span>
   )
 }
@@ -50,23 +51,24 @@ function CheckList({ checks }: { checks: VersionView['checks'] }) {
 // What a freshly uploaded version is going through. The platform runs one trial
 // match against the house idle bot; the steps below are what it will report.
 function PendingNote() {
+  const t = useT(m)
   return (
     <div className="mt-3 rounded-[10px] border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-      <p className="font-semibold text-foreground">Playing a trial match against the house bot…</p>
+      <p className="font-semibold text-foreground">{t('ver.pendingTitle')}</p>
       <p className="mt-1">
-        It checks that the package unpacks, the bot answers <span className="font-mono">ready</span>, survives the
-        whole match and beats the idle house tank. Results and the replay appear here in a few seconds.
+        {t('ver.pendingBody1')}<span className="font-mono">ready</span>{t('ver.pendingBody2')}
       </p>
     </div>
   )
 }
 
 function CheckLog({ text }: { text: string }) {
+  const t = useT(m)
   if (!text) return null
   return (
     <details className="group mt-3 rounded-[10px] border border-border bg-muted/30">
       <summary className="cursor-pointer list-none px-3 py-2 text-xs font-bold select-none marker:hidden">
-        <span className="mr-1.5 inline-block text-muted-foreground transition-transform group-open:rotate-90">›</span>Check log
+        <span className="mr-1.5 inline-block text-muted-foreground transition-transform group-open:rotate-90">›</span>{t('ver.checkLog')}
       </summary>
       <pre className="max-h-64 overflow-auto border-t border-border p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words">{text}</pre>
     </details>
@@ -76,10 +78,11 @@ function CheckLog({ text }: { text: string }) {
 // A bot's version history: newest first (the caller already orders them),
 // each with its provenance, status and the checks that decided it.
 export function VersionList({ versions }: { versions: VersionView[] }) {
+  const t = useT(m)
   if (versions.length === 0) {
     return (
       <p className="rounded-[14px] border border-dashed border-input px-5 py-8 text-center text-sm text-muted-foreground">
-        No versions yet. Upload one to get started.
+        {t('ver.empty')}
       </p>
     )
   }
@@ -94,10 +97,10 @@ export function VersionList({ versions }: { versions: VersionView[] }) {
             {v.check_match_id && (
               <span className="ml-auto flex flex-wrap items-center gap-3">
                 {v.status !== 'pending' && (
-                  <CopyReportButton matchIds={[v.check_match_id]} size="xs" variant="ghost" label="Copy trial report" />
+                  <CopyReportButton matchIds={[v.check_match_id]} size="xs" variant="ghost" label={t('ver.copyTrial')} />
                 )}
                 <Link href={`/tanks/matches/${v.check_match_id}`} className="text-xs font-semibold text-primary hover:underline">
-                  Watch trial replay
+                  {t('ver.watchTrial')}
                 </Link>
               </span>
             )}
