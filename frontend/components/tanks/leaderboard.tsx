@@ -4,12 +4,21 @@ import { BotBadge } from './bot-badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { LeaderboardEntry } from '@/lib/types'
 
+function Provisional() {
+  return (
+    <span title="Fewer than 10 season matches: the rating can still move a lot"
+      className="rounded-full border border-border px-1.5 py-px text-[0.65rem] font-semibold text-muted-foreground">
+      provisional
+    </span>
+  )
+}
+
 function winRate(e: LeaderboardEntry): string {
   return e.matches > 0 ? `${Math.round((e.wins / e.matches) * 100)}%` : '—'
 }
 
 // The ranking table, shared by /tanks (top 10) and /tanks/leaderboard (the
-// full ladder). Renders as a real table from sm up; a stacked row list
+// full season ladder). Renders as a real table from sm up; a stacked row list
 // below it, so it stays readable at 375px instead of scrolling sideways.
 export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
   if (entries.length === 0) {
@@ -21,6 +30,9 @@ export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
   }
   return (
     <>
+      {entries.some((e) => e.provisional) && (
+        <p className="mb-3 text-xs text-muted-foreground">Provisional: fewer than 10 season matches, so the rating can still move a lot.</p>
+      )}
       <Table className="hidden sm:table">
         <TableHeader>
           <TableRow>
@@ -40,6 +52,7 @@ export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
                 <Link href={`/tanks/bots/${e.bot_id}`} className="inline-flex items-center gap-2 font-semibold hover:text-primary">
                   {e.name}
                   <BotBadge source={e.source} house={e.house} />
+                  {e.provisional && <Provisional />}
                 </Link>
                 {e.owner && <span className="ml-2 text-xs text-muted-foreground">by <HandleLink handle={e.owner} /></span>}
               </TableCell>
@@ -59,6 +72,7 @@ export function Leaderboard({ entries }: { entries: LeaderboardEntry[] }) {
               <Link href={`/tanks/bots/${e.bot_id}`} className="flex items-center gap-2 font-semibold">
                 <span className="truncate">{e.name}</span>
                 <BotBadge source={e.source} house={e.house} />
+                {e.provisional && <Provisional />}
               </Link>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {e.owner && <><HandleLink handle={e.owner} /> · </>}{e.matches} matches · {e.wins} wins · {winRate(e)}

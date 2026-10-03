@@ -45,6 +45,20 @@ const RULES: [string, string][] = [
   ['Zone damage', '1 HP/tick while outside it'],
 ]
 
+const TOC: [string, string][] = [
+  ['quick-start', 'Quick start'],
+  ['coordinates', 'Coordinates'],
+  ['rules', 'Rules'],
+  ['protocol', 'Protocol'],
+  ['timing', 'Timing'],
+  ['logs', 'Logs'],
+  ['statuses', 'Statuses'],
+  ['package', 'Package and limits'],
+  ['qualifying', 'Qualifying checks'],
+  ['rating', 'Rating'],
+  ['local', 'Playing locally'],
+]
+
 const STATUSES: [string, string][] = [
   ['ok', 'Answered normally for the whole match (or until it died).'],
   ['crashed', 'The process exited before the match ended.'],
@@ -60,6 +74,14 @@ export default function TanksDocsPage() {
         back over stdout. Everyone plays with full information — there is no fog of war.
       </PageHeader>
 
+      <nav aria-label="On this page" className="mt-8 flex flex-wrap gap-2">
+        {TOC.map(([id, label]) => (
+          <a key={id} href={`#${id}`} className="rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
+            {label}
+          </a>
+        ))}
+      </nav>
+
       <Section id="quick-start" title="Quick start">
         <p>Nothing to install. Everything happens on the <Link className="text-primary hover:underline" href="/app/tanks">My bot</Link> page.</p>
         <p className="font-semibold text-foreground">1. Download a starter kit</p>
@@ -70,7 +92,7 @@ export default function TanksDocsPage() {
         <p className="font-semibold text-foreground">2. Give the folder to your coding agent</p>
         <p>
           Open it in Claude Code, Cursor, Codex or any agent and ask it to read <code>GAME.md</code> and improve the bot:
-          keep <code>bot.json</code> valid, use only the standard library, aim to beat the house bots. The exact prompt
+          keep <code>bot.json</code> valid, use only the standard library, aim to beat as many house bots as you can. The exact prompt
           is on the My bot page. Or edit the bot by hand.
         </p>
         <p className="font-semibold text-foreground">3. Zip it and upload</p>
@@ -209,15 +231,14 @@ export default function TanksDocsPage() {
         </ul>
       </Section>
 
-      <Section id="qualifying" title="Joining the tournament">
+      <Section id="qualifying" title="Qualifying checks">
         <p>Every uploaded version goes through a check before it can play in the ladder:</p>
         <ul className="flex list-disc flex-col gap-1.5 pl-5">
           <li><span className="font-medium text-foreground">package</span> — the archive is well-formed, <code>bot.json</code> parses, and <code>entry</code> exists.</li>
           <li><span className="font-medium text-foreground">starts</span> — the bot answers <code>ready</code> within 5 seconds.</li>
           <li>
             <span className="font-medium text-foreground">stable</span> — in a 600-tick, 1-on-1 trial match against{' '}
-            <code>house:idle</code> only (not <code>house:hunter</code> — a second, aggressive opponent made the outcome
-            depend heavily on spawn geometry, rejecting perfectly good bots at random), it answers at least 95% of the
+            <code>house:idle</code>, it answers at least 95% of the
             ticks it was alive for, and doesn&apos;t crash. Stray stdout lines don&apos;t fail this check on their own,
             but they show up in the report with a hint to use stderr instead.
           </li>
@@ -235,10 +256,9 @@ export default function TanksDocsPage() {
           Matches are rated with Weng–Lin (Plackett–Luce), the idea behind TrueSkill/OpenSkill: every bot has a
           skill estimate μ and an uncertainty σ, both updated from where it placed relative to everyone else in the
           match. Starting values are μ₀ = 25, σ₀ = 25/3; the model&apos;s own parameters are β = σ₀ / 2 and κ = 0.0001.
-          A new version of an existing bot doesn&apos;t reset its rating, but its uncertainty is bumped back up to at
-          least 5.0 — a new version is only weak evidence about how it&apos;ll actually do.
+          A new version of an existing bot keeps its rating, with its uncertainty raised back to at least 5.0.
         </p>
-        <p>The number shown on the leaderboard is a conservative estimate that starts low and climbs as the bot proves itself:</p>
+        <p>The number shown on the ladder is a conservative estimate that starts low and climbs as the bot proves itself. A bot with fewer than 10 season matches is marked provisional:</p>
         <Code>{'displayed_rating = round(1000 + 40 × (μ − 3σ))'}</Code>
       </Section>
 
@@ -261,7 +281,7 @@ export default function TanksDocsPage() {
           (charges and shoots), <code>house:sniper</code> (keeps its distance, leads shots), <code>house:duelist</code>{' '}
           (strafes, dodges, leads shots), <code>house:warden</code> (also picks targets, heals, avoids crossfire and the
           shrinking zone) and <code>house:ace</code> (plans its dodges against the shots you are about to fire). All
-          but idle play in the ladder, so a new bot starts in the middle of the table and has to climb past them.
+          but idle play in the ladder, so a new bot starts near the bottom of the table and climbs as it beats them.
         </p>
       </Section>
     </div>

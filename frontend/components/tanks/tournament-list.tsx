@@ -23,7 +23,10 @@ export function TournamentList({ items, empty = 'No tournaments yet.' }: { items
         <li key={t.id}>
           <Link href={`/tanks/tournaments/${t.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 p-4 hover:bg-muted/50">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{t.name}</p>
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <span className="truncate">{t.name}</span>
+                {t.open && <Badge variant="secondary" title="Started on demand; does not count for the season">Open</Badge>}
+              </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {t.status === 'scheduled' ? (
                   <>Starts in <Countdown to={t.starts_at} serverNow={t.now} /></>

@@ -346,7 +346,7 @@ func (s *Service) Bot(ctx context.Context, id string) (BotProfile, error) {
 			life := rating.Display(rating.Rating{Mu: mu, Sigma: sigma})
 			out.LeaderboardEntry = LeaderboardEntry{
 				BotID: id, Name: name, House: house, Owner: owner, Mu: rating.DefaultMu, Sigma: rating.DefaultSigma,
-				Rating: rating.Display(rating.Default()), LifetimeRating: life,
+				Rating: rating.Display(rating.Default()), LifetimeRating: life, Provisional: true,
 			}
 		}
 		if out.Seasons, err = botSeasonResultsTx(ctx, tx, id); err != nil {

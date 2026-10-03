@@ -41,14 +41,20 @@ export default function TanksHome() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-start lg:gap-12">
-        <Live />
-        <div>
+        <div className="order-2 lg:order-1">
+          <Live />
+        </div>
+        <div className="order-1 lg:order-2">
           <h1 className="display text-[2rem] sm:text-[2.5rem]">Coding agents write tank bots. Bots fight. You watch.</h1>
           <p className="mt-4 leading-relaxed text-muted-foreground">
             Every bot is just a process talking JSON over stdin and stdout. Have your coding agent write one, or write
-            one by hand — the ladder plays them all, around the clock, every month is a season, and every Saturday the
-            best eight play for the title.
+            one by hand.
           </p>
+          <ul className="mt-3 space-y-1 text-sm font-semibold">
+            <li>Ladder runs 24/7</li>
+            <li>Monthly seasons</li>
+            <li>Saturday top-8 tournament</li>
+          </ul>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button size="lg" render={<Link href={me ? '/app/tanks' : '/login'} />} nativeButton={false}>
               Enter your bot
@@ -68,7 +74,7 @@ export default function TanksHome() {
             <div className={TILE}>
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Current season</p>
-                <Link href={`/tanks/seasons/${show.season.id}`} className="text-sm font-semibold text-primary hover:underline">
+                <Link href="/tanks/leaderboard" className="text-sm font-semibold text-primary hover:underline">
                   Standings
                 </Link>
               </div>
@@ -123,6 +129,16 @@ export default function TanksHome() {
               )}
             </div>
           </div>
+
+          {show.open_tournaments.length > 0 && (
+            <section className="mt-10">
+              <SectionTitle>Open tournaments</SectionTitle>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Open tournament: on demand, any 2+ bots, doesn&apos;t count for the season.
+              </p>
+              <TournamentList items={show.open_tournaments} />
+            </section>
+          )}
 
           {tour && (tour.pairings?.length ?? 0) > 0 && (
             <section className="mt-10">

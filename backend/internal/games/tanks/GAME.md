@@ -191,8 +191,8 @@ The house bots, easiest to hardest: `house:idle` (never moves), `house:hunter`
 `house:duelist` (strafes, dodges, leads shots), `house:warden` (also picks
 targets, heals, avoids crossfire and the shrinking zone) and `house:ace`
 (plans its dodges against the shots you are about to fire). All but idle
-play in the ladder, so a new bot starts in the middle of the table and has to
-climb past them.
+play in the ladder, so a new bot starts near the bottom of the table and climbs
+as it beats them.
 
 ## 10. Joining the tournament
 
@@ -202,12 +202,8 @@ play in the ladder:
 1. **`package`** — the archive is well-formed, `bot.json` parses, and
    `entry` exists.
 2. **`starts`** — the bot answers `ready` within 5 seconds.
-3. **`stable`** — in a 600-tick, 1-on-1 trial match against `house:idle`
-   only (not `house:hunter`: a second, aggressive opponent made the
-   outcome depend heavily on spawn geometry, rejecting perfectly good
-   bots at random — a bot's behaviour under fire is what the ladder
-   itself shows, not this check), it answers at least 95% of the ticks it
-   was alive for, and doesn't crash. Stray stdout lines don't fail this
+3. **`stable`** — in a 600-tick, 1-on-1 trial match against `house:idle`,
+   it answers at least 95% of the ticks it was alive for, and doesn't crash. Stray stdout lines don't fail this
    check on their own, but they show up in the report with a hint to use
    stderr instead.
 4. **`beats_idle`** — it finishes above `house:idle` in that same trial

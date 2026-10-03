@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -28,6 +29,8 @@ const (
 	tournamentHour    = 18
 	// A pairing whose matches fail on the platform this many times is decided by seed.
 	maxPairingInfraErrors = 3
+	// On-demand tournaments are named with this prefix; it is how they are told apart from the weekly one.
+	openTournamentPrefix = "Open tournament"
 )
 
 // TournamentBot is one entrant.
@@ -78,6 +81,7 @@ type TournamentView struct {
 	BestOf     int             `json:"best_of"`
 	EntryCount int             `json:"entry_count"`
 	Champion   *TournamentBot  `json:"champion"`
+	Open       bool            `json:"open"` // started on demand (any 2+ bots), not part of the weekly schedule
 	Entries    []TournamentBot `json:"entries"`
 	Pairings   []Pairing       `json:"pairings"`
 	Now        time.Time       `json:"now"`
@@ -97,14 +101,15 @@ type BotTournament struct {
 
 // Showcase is everything the /tanks front page needs in one call.
 type Showcase struct {
-	Now            time.Time          `json:"now"`
-	Season         SeasonView         `json:"season"`
-	Ladder         []LeaderboardEntry `json:"ladder"`
-	Tournament     *TournamentView    `json:"tournament"`      // running, or finished within the last day: with its bracket
-	NextTournament *TournamentView    `json:"next_tournament"` // the next scheduled one
-	Champions      []TournamentView   `json:"champions"`       // latest finished tournaments, newest first
-	Notable        []MatchView        `json:"notable"`
-	PastSeasons    []SeasonView       `json:"past_seasons"`
+	Now             time.Time          `json:"now"`
+	Season          SeasonView         `json:"season"`
+	Ladder          []LeaderboardEntry `json:"ladder"`
+	Tournament      *TournamentView    `json:"tournament"`       // running, or finished within the last day: with its bracket
+	NextTournament  *TournamentView    `json:"next_tournament"`  // the next scheduled weekly one
+	OpenTournaments []TournamentView   `json:"open_tournaments"` // on-demand tournaments running now or finished within the last day
+	Champions       []TournamentView   `json:"champions"`        // latest finished tournaments, newest first
+	Notable         []MatchView        `json:"notable"`
+	PastSeasons     []SeasonView       `json:"past_seasons"`
 }
 
 // nextTournamentSlot is the first weekly start strictly after t.
@@ -230,7 +235,7 @@ func (s *Service) StartTournament(ctx context.Context, size int) (TournamentView
 		id = idgen.New("tourn")
 		if _, err := tx.Exec(ctx, `INSERT INTO tanks_tournaments (id, name, status, starts_at, size, best_of)
 			VALUES ($1, $2, 'scheduled', $3, $4, $5)`,
-			id, "Open tournament, "+now.Format("2 Jan 15:04")+" UTC", now, size, tournamentBestOf); err != nil {
+			id, openTournamentPrefix+", "+now.Format("2 Jan 15:04")+" UTC", now, size, tournamentBestOf); err != nil {
 			return err
 		}
 		ok, err := s.startTournamentTx(ctx, tx, id, size)
@@ -248,6 +253,38 @@ func (s *Service) StartTournament(ctx context.Context, size int) (TournamentView
 	return s.Tournament(ctx, id)
 }
 
+// preferSettled orders a ladder for tournament selection: bots with a settled (non-provisional) rating come
+// first, provisional ones only fill the bracket when there are not enough of the others. The chosen bots stay
+// in ladder order, so seeds still follow rating.
+func preferSettled(ladder []LeaderboardEntry, size int) []LeaderboardEntry {
+	var settled []LeaderboardEntry
+	for _, e := range ladder {
+		if !e.Provisional {
+			settled = append(settled, e)
+		}
+	}
+	if len(settled) >= size || len(settled) == len(ladder) {
+		return settled
+	}
+	picked := map[string]bool{}
+	for _, e := range settled {
+		picked[e.BotID] = true
+	}
+	for _, e := range ladder {
+		if len(picked) >= size {
+			break
+		}
+		picked[e.BotID] = true
+	}
+	out := make([]LeaderboardEntry, 0, len(picked))
+	for _, e := range ladder {
+		if picked[e.BotID] {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // startTournamentTx seeds the bracket from the current season ladder and moves the tournament to running.
 // It returns false (and cancels the tournament) when fewer than two bots are ranked.
 func (s *Service) startTournamentTx(ctx context.Context, tx pgx.Tx, id string, size int) (bool, error) {
@@ -259,6 +296,7 @@ func (s *Service) startTournamentTx(ctx context.Context, tx pgx.Tx, id string, s
 	if err != nil {
 		return false, err
 	}
+	ladder = preferSettled(ladder, size)
 	n := min(size, len(ladder))
 	if n < 2 {
 		_, err := tx.Exec(ctx, `UPDATE tanks_tournaments SET status = 'cancelled' WHERE id = $1`, id)
@@ -642,6 +680,7 @@ func scanTournaments(ctx context.Context, tx pgx.Tx, rows pgx.Rows) ([]Tournamen
 			&t.Size, &t.Rounds, &t.BestOf, &champ, &t.EntryCount); err != nil {
 			return nil, err
 		}
+		t.Open = strings.HasPrefix(t.Name, openTournamentPrefix)
 		t.StartsAt = t.StartsAt.UTC()
 		if t.StartedAt != nil {
 			u := t.StartedAt.UTC()
@@ -824,8 +863,8 @@ func (s *Service) Showcase(ctx context.Context) (Showcase, error) {
 
 		var liveID string
 		err = tx.QueryRow(ctx, `SELECT id FROM tanks_tournaments
-			WHERE status = 'running' OR (status = 'finished' AND finished_at > now() - interval '1 day')
-			ORDER BY (status = 'running') DESC, coalesce(finished_at, started_at) DESC LIMIT 1`).Scan(&liveID)
+			WHERE name NOT LIKE $1 AND (status = 'running' OR (status = 'finished' AND finished_at > now() - interval '1 day'))
+			ORDER BY (status = 'running') DESC, coalesce(finished_at, started_at) DESC LIMIT 1`, openTournamentPrefix+"%").Scan(&liveID)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
@@ -838,7 +877,7 @@ func (s *Service) Showcase(ctx context.Context) (Showcase, error) {
 		}
 
 		rows, err := tx.Query(ctx, `SELECT `+tournamentCols+` FROM tanks_tournaments t
-			WHERE t.status = 'scheduled' ORDER BY t.starts_at LIMIT 1`)
+			WHERE t.status = 'scheduled' AND t.name NOT LIKE $1 ORDER BY t.starts_at LIMIT 1`, openTournamentPrefix+"%")
 		if err != nil {
 			return err
 		}
@@ -851,7 +890,17 @@ func (s *Service) Showcase(ctx context.Context) (Showcase, error) {
 		}
 
 		rows, err = tx.Query(ctx, `SELECT `+tournamentCols+` FROM tanks_tournaments t
-			WHERE t.status = 'finished' ORDER BY t.finished_at DESC LIMIT 5`)
+			WHERE t.name LIKE $1 AND (t.status = 'running' OR (t.status = 'finished' AND t.finished_at > now() - interval '1 day'))
+			ORDER BY t.starts_at DESC LIMIT 3`, openTournamentPrefix+"%")
+		if err != nil {
+			return err
+		}
+		if out.OpenTournaments, err = scanTournaments(ctx, tx, rows); err != nil {
+			return err
+		}
+
+		rows, err = tx.Query(ctx, `SELECT `+tournamentCols+` FROM tanks_tournaments t
+			WHERE t.status = 'finished' AND t.name NOT LIKE $1 ORDER BY t.finished_at DESC LIMIT 5`, openTournamentPrefix+"%")
 		if err != nil {
 			return err
 		}
@@ -900,6 +949,9 @@ func (s *Service) Showcase(ctx context.Context) (Showcase, error) {
 	}
 	if out.Champions == nil {
 		out.Champions = []TournamentView{}
+	}
+	if out.OpenTournaments == nil {
+		out.OpenTournaments = []TournamentView{}
 	}
 	if out.Ladder == nil {
 		out.Ladder = []LeaderboardEntry{}

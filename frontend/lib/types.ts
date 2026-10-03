@@ -76,6 +76,7 @@ export interface LeaderboardEntry {
   matches: number; wins: number; house: boolean; source: BotSource; version: number
   // rating/mu/sigma/matches/wins are the current season's
   lifetime_rating: number; owner: string
+  provisional: boolean // fewer than 10 season matches
 }
 
 export interface MatchPlayerView {
@@ -129,6 +130,7 @@ export interface TournamentView {
   starts_at: string; started_at: string | null; finished_at: string | null
   size: number; rounds: number; best_of: number; entry_count: number
   champion: TournamentBot | null
+  open: boolean // started on demand, not part of the weekly schedule
   entries: TournamentBot[] | null; pairings: TournamentPairing[] | null // detail view only
   now: string
 }
@@ -141,6 +143,7 @@ export interface BotTournament {
 export interface Showcase {
   now: string; season: SeasonView; ladder: LeaderboardEntry[]
   tournament: TournamentView | null; next_tournament: TournamentView | null
+  open_tournaments: TournamentView[]
   champions: TournamentView[]; notable: MatchView[]; past_seasons: SeasonView[]
 }
 

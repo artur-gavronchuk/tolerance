@@ -8,7 +8,7 @@ import type { VersionView } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 // Keep in step with tanks.AgentPrompt in backend/internal/games/tanks/starter.go (the starter kit's README).
-export const BOT_PROMPT = `Read GAME.md in this folder, then improve the tank bot (bot.py or bot.js, whichever is here) so it beats the house bots hunter and sniper. Keep bot.json valid and keep the same entry file. Use only the standard library of the language. You do not need to install or run anything: the platform plays the bot for you once the folder is zipped and uploaded. After each upload I will paste you a match report from the site (what hit you, how many shots landed, where the tank got stuck, the bot's stderr): read it, work out what went wrong and fix the bot.`
+export const BOT_PROMPT = `Read GAME.md in this folder, then improve the tank bot (bot.py or bot.js, whichever is here) so it beats as many house bots as you can: hunter and sniper first, then duelist, warden, ace. Keep bot.json valid and keep the same entry file. Use only the standard library of the language. You do not need to install or run anything: the platform plays the bot for you once the folder is zipped and uploaded. After each upload I will paste you a match report from the site (what hit you, how many shots landed, where the tank got stuck, the bot's stderr): read it, work out what went wrong and fix the bot.`
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (

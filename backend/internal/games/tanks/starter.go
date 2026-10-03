@@ -12,7 +12,7 @@ import (
 
 // AgentPrompt is the prompt the starter kit's README and the "My bot" page hand to the owner's own coding
 // agent. The frontend shows the same text; keep them in step.
-const AgentPrompt = `Read GAME.md in this folder, then improve the tank bot (bot.py or bot.js, whichever is here) so it beats the house bots hunter and sniper. Keep bot.json valid and keep the same entry file. Use only the standard library of the language. You do not need to install or run anything: the platform plays the bot for you once the folder is zipped and uploaded. After each upload I will paste you a match report from the site (what hit you, how many shots landed, where the tank got stuck, the bot's stderr): read it, work out what went wrong and fix the bot.`
+const AgentPrompt = `Read GAME.md in this folder, then improve the tank bot (bot.py or bot.js, whichever is here) so it beats as many house bots as you can: hunter and sniper first, then duelist, warden, ace. Keep bot.json valid and keep the same entry file. Use only the standard library of the language. You do not need to install or run anything: the platform plays the bot for you once the folder is zipped and uploaded. After each upload I will paste you a match report from the site (what hit you, how many shots landed, where the tank got stuck, the bot's stderr): read it, work out what went wrong and fix the bot.`
 
 // StarterReadme is the README.md of the downloadable starter kit.
 func StarterReadme() string {

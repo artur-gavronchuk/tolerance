@@ -29,7 +29,8 @@ export default function TournamentsPage() {
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
       <PageHeader title="Tournaments" actions={<StartTournament />}>
         Every Saturday at 18:00 UTC the top 8 bots of the season ladder play a single-elimination bracket. Every
-        pairing is a best of three on different maps, and every match has a replay.
+        pairing is a best of three on different maps, and every match has a replay. Open tournaments (marked Open) are
+        started on demand with any 2+ bots and don&apos;t count for the season.
       </PageHeader>
 
       {items == null ? (

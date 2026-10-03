@@ -109,7 +109,12 @@ type LeaderboardEntry struct {
 	// Rating, Mu, Sigma, Matches and Wins are the current season's; LifetimeRating is across all seasons.
 	LifetimeRating int    `json:"lifetime_rating"`
 	Owner          string `json:"owner"` // the owner's public handle; empty for house bots
+	// Provisional marks a bot with too few season matches for its rating to mean much yet.
+	Provisional bool `json:"provisional"`
 }
+
+// ProvisionalMatches is how many season matches a bot needs before its rating stops being "provisional".
+const ProvisionalMatches = 10
 
 // VersionPublic is one bot_versions row as shown on another owner's bot profile: no archive, no checks, no
 // check log - those stay private to the version's own owner (VersionView, in model.go above).

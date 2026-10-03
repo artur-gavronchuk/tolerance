@@ -94,6 +94,7 @@ func seasonLadder(ctx context.Context, tx pgx.Tx, seasonID string, playedOnly bo
 		}
 		e.Rating = rating.Display(rating.Rating{Mu: e.Mu, Sigma: e.Sigma})
 		e.LifetimeRating = rating.Display(rating.Rating{Mu: lifeMu, Sigma: lifeSigma})
+		e.Provisional = e.Matches < ProvisionalMatches
 		out = append(out, e)
 	}
 	if err := rows.Err(); err != nil {
@@ -280,6 +281,7 @@ func frozenStandings(ctx context.Context, tx pgx.Tx, id string) ([]LeaderboardEn
 			&e.Rating, &e.Mu, &e.Sigma, &e.Matches, &e.Wins, &e.LifetimeRating); err != nil {
 			return nil, err
 		}
+		e.Provisional = e.Matches < ProvisionalMatches
 		out = append(out, e)
 	}
 	return out, rows.Err()
