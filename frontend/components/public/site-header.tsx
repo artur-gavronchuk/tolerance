@@ -10,30 +10,34 @@ import { Button } from '@/components/ui/button'
 import { post } from '@/lib/api'
 import { useMe } from '@/lib/use-me'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n/client'
+import { navMessages } from '@/lib/i18n/messages/nav'
+import { LocaleSwitch } from '@/components/public/locale-switch'
+
+type NavKey = keyof typeof navMessages.en
 
 // The three modes first, then the cross-cutting pages.
 const SITE_NAV = [
-  { label: 'Today', href: '/' },
-  { label: 'Products', href: '/products' },
-  { label: 'Tanks', href: '/tanks' },
-  { label: 'Leaderboard', href: '/leaderboard' },
-  { label: 'Agents', href: '/agents' },
-  { label: 'Archive', href: '/days' },
+  { label: 'today' as NavKey, href: '/' },
+  { label: 'products' as NavKey, href: '/products' },
+  { label: 'tanks' as NavKey, href: '/tanks' },
+  { label: 'leaderboard' as NavKey, href: '/leaderboard' },
+  { label: 'agents' as NavKey, href: '/agents' },
+  { label: 'archive' as NavKey, href: '/days' },
 ]
 
 const TANKS_NAV = [
-  { label: 'Live', href: '/tanks' },
-  { label: 'Ladder', href: '/tanks/leaderboard' },
-  { label: 'Tournaments', href: '/tanks/tournaments' },
-  { label: 'Docs', href: '/tanks/docs' },
-  { label: 'My bot', href: '/app/tanks' },
+  { label: 'live' as NavKey, href: '/tanks' },
+  { label: 'ladder' as NavKey, href: '/tanks/leaderboard' },
+  { label: 'tournaments' as NavKey, href: '/tanks/tournaments' },
+  { label: 'docs' as NavKey, href: '/tanks/docs' },
+  { label: 'myBot' as NavKey, href: '/app/tanks' },
 ]
-
-const STREAK_HELP = 'Days in a row with a passing daily result; next task at 00:00 UTC'
 
 // returnTo overrides the post-sign-in destination, for pages whose own URL is not a place to return to (404).
 export function SiteHeader({ returnTo }: { returnTo?: string }) {
   const { me, loading } = useMe()
+  const t = useT(navMessages)
   const pathname = usePathname()
   const stripRef = useRef<HTMLDivElement>(null)
   const inTanks = pathname === '/tanks' || pathname.startsWith('/tanks/') || pathname.startsWith('/app/tanks')
@@ -63,7 +67,7 @@ export function SiteHeader({ returnTo }: { returnTo?: string }) {
         isActive(item.href, nav) && 'bg-muted text-foreground'
       )}
     >
-      {item.label}
+      {t(item.label)}
     </Link>
   )
 
@@ -78,31 +82,32 @@ export function SiteHeader({ returnTo }: { returnTo?: string }) {
         <Brand />
         <nav className="ml-1 hidden items-center gap-1 sm:flex">{SITE_NAV.map((item) => link(item, SITE_NAV))}</nav>
         <div className="ml-auto flex items-center gap-2">
+          <LocaleSwitch />
           {loading ? null : me ? (
             <>
               {me.can_admin && (
-                <Link href="/admin" className="hidden h-9 items-center rounded-full px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground sm:flex">Admin</Link>
+                <Link href="/admin" className="hidden h-9 items-center rounded-full px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground sm:flex">{t('admin')}</Link>
               )}
-              <Link href={`/u/${encodeURIComponent(me.user.handle)}`} title="My profile"
+              <Link href={`/u/${encodeURIComponent(me.user.handle)}`} title={t('myProfile')}
                 className="flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm hover:border-primary">
                 <span className="max-w-[8rem] truncate font-bold">{me.user.handle}</span>
-                <span className="font-mono text-xs text-muted-foreground" title={STREAK_HELP}
-                  aria-label={`${me.streak.current} day streak. ${STREAK_HELP}`}>🔥 {me.streak.current}</span>
+                <span className="font-mono text-xs text-muted-foreground" title={t('streakHelp')}
+                  aria-label={t('streakLabel', { n: me.streak.current, help: t('streakHelp') })}>🔥 {me.streak.current}</span>
               </Link>
-              <button onClick={() => void signOut()} aria-label="Sign out" title="Sign out"
+              <button onClick={() => void signOut()} aria-label={t('signOut')} title={t('signOut')}
                 className="flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
                 <LogOut className="size-4" />
               </button>
             </>
           ) : (
-            <Button render={<Link href={loginHref(returnTo ?? pathname)} />} nativeButton={false}>Sign in</Button>
+            <Button render={<Link href={loginHref(returnTo ?? pathname)} />} nativeButton={false}>{t('signIn')}</Button>
           )}
         </div>
       </div>
       <div className="border-t border-border sm:hidden">
         <div ref={stripRef} className="flex h-11 items-center gap-1 overflow-x-auto pl-4 [mask-image:linear-gradient(to_right,#000_calc(100%-2rem),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {SITE_NAV.map((item) => link(item, SITE_NAV))}
-          {me?.can_admin && link({ label: 'Admin', href: '/admin' }, SITE_NAV)}
+          {me?.can_admin && link({ label: 'admin', href: '/admin' }, SITE_NAV)}
           {/* As wide as the fade, so the last tab clears it at the end of the scroll. */}
           <span aria-hidden className="w-8 shrink-0" />
         </div>

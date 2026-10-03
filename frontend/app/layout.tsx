@@ -3,9 +3,11 @@ import { JetBrains_Mono, Manrope } from 'next/font/google'
 import './globals.css'
 import { PRODUCT } from '@/lib/brand'
 import { SITE_URL } from '@/lib/server-api'
+import { I18nProvider } from '@/lib/i18n/client'
+import { getLocale } from '@/lib/i18n/server'
 
-const manrope = Manrope({ subsets: ['latin'], variable: '--font-manrope' })
-const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains' })
+const manrope = Manrope({ subsets: ['latin', 'cyrillic'], variable: '--font-manrope' })
+const jetbrains = JetBrains_Mono({ subsets: ['latin', 'cyrillic'], variable: '--font-jetbrains' })
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -15,10 +17,13 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image' },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale()
   return (
-    <html lang="en" className={`${manrope.variable} ${jetbrains.variable}`}>
-      <body className="min-h-dvh bg-background font-sans text-foreground antialiased">{children}</body>
+    <html lang={locale} className={`${manrope.variable} ${jetbrains.variable}`}>
+      <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
+        <I18nProvider locale={locale}>{children}</I18nProvider>
+      </body>
     </html>
   )
 }

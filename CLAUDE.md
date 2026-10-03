@@ -149,5 +149,10 @@ an attempt.
 - Errors go through `httpx.WriteError` (`{code, message, request_id}`);
   timestamps are UTC (`.UTC()` after scanning — pgx returns local time).
 - Frontend: no mocks, data from the API, browser calls same-origin `/api/v1/*`.
+- UI copy is bilingual (en, ru): strings live in `frontend/lib/i18n/messages/<area>.ts`
+  (`defineMessages`, ru must have every en key), read with `useT(m)` in client
+  components or `await getT(m)` on the server; dates via `formatDate`/
+  `formatDateTime` from `lib/i18n/core`. Language = `lang` cookie, else
+  Accept-Language, else en. Task content (TASK.md, GAME.md) stays English.
 - Commit subjects in English, imperative, sentence case, no `feat:` prefixes.
   Docs in `docs/` are in Russian, code and comments in English.
