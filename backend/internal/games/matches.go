@@ -325,7 +325,7 @@ func (s *Service) Bot(ctx context.Context, id string) (BotProfile, error) {
 		var house bool
 		var createdAt time.Time
 		if err := tx.QueryRow(ctx, `SELECT g.name, g.house, g.mu, g.sigma, g.created_at, coalesce(u.handle, '')
-			FROM game_bots g LEFT JOIN users u ON u.id = g.owner_user_id WHERE g.id = $1`, id).
+			FROM game_bots g LEFT JOIN users u ON u.id = g.owner_user_id WHERE g.id = $1 AND g.hidden_at IS NULL`, id).
 			Scan(&name, &house, &mu, &sigma, &createdAt, &owner); err != nil {
 			return err
 		}

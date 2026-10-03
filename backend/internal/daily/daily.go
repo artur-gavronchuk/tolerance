@@ -106,6 +106,7 @@ func (s *Service) Get(ctx context.Context, day, userID string, my MyFunc) (Daily
 }
 
 type Row struct {
+	ID          string    `json:"id"` // the submission, for moderation
 	Place       int       `json:"place"`
 	Handle      string    `json:"handle"`
 	MadeWith    string    `json:"made_with"`
@@ -132,10 +133,10 @@ func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
 			return err
 		}
 		q := `
-			SELECT handle, made_with, passed_tests, total_tests, NULL::float8, created_at FROM (
-				SELECT DISTINCT ON (s.user_id) u.handle, s.made_with, s.passed_tests, s.total_tests, s.created_at
+			SELECT id, handle, made_with, passed_tests, total_tests, NULL::float8, created_at FROM (
+				SELECT DISTINCT ON (s.user_id) s.id, u.handle, s.made_with, s.passed_tests, s.total_tests, s.created_at
 				FROM submissions s JOIN users u ON u.id = s.user_id
-				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND s.passed_tests > 0
+				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND s.passed_tests > 0 AND s.hidden_at IS NULL
 				ORDER BY s.user_id, s.passed_tests DESC, s.created_at ASC) best
 			ORDER BY passed_tests DESC, created_at ASC, handle LIMIT 200`
 		if kind == "optimize" {
@@ -147,10 +148,10 @@ func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
 				dir = "ASC"
 			}
 			q = `
-			SELECT handle, made_with, passed_tests, total_tests, score, created_at FROM (
-				SELECT DISTINCT ON (s.user_id) u.handle, s.made_with, s.passed_tests, s.total_tests, s.score, s.created_at
+			SELECT id, handle, made_with, passed_tests, total_tests, score, created_at FROM (
+				SELECT DISTINCT ON (s.user_id) s.id, u.handle, s.made_with, s.passed_tests, s.total_tests, s.score, s.created_at
 				FROM submissions s JOIN users u ON u.id = s.user_id JOIN tasks t ON t.slug = s.task_slug
-				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND s.score IS NOT NULL
+				WHERE s.day = $1 AND s.status IN ('passed', 'failed') AND s.score IS NOT NULL AND s.hidden_at IS NULL
 				  AND (t.direction <> 'min' OR s.cases_valid = t.cases)
 				ORDER BY s.user_id, s.score ` + dir + `, s.created_at ASC) best
 			ORDER BY score ` + dir + `, created_at ASC, handle LIMIT 200`
@@ -162,7 +163,7 @@ func (s *Service) Leaderboard(ctx context.Context, day string) ([]Row, error) {
 		defer rows.Close()
 		for rows.Next() {
 			var r Row
-			if err := rows.Scan(&r.Handle, &r.MadeWith, &r.PassedTests, &r.TotalTests, &r.Score, &r.SubmittedAt); err != nil {
+			if err := rows.Scan(&r.ID, &r.Handle, &r.MadeWith, &r.PassedTests, &r.TotalTests, &r.Score, &r.SubmittedAt); err != nil {
 				return err
 			}
 			r.SubmittedAt = r.SubmittedAt.UTC()
@@ -193,7 +194,7 @@ func (s *Service) Days(ctx context.Context) ([]DayItem, error) {
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT d.day::text, t.slug, t.title, t.language, t.difficulty,
-			       (SELECT count(DISTINCT s.user_id) FROM submissions s WHERE s.day = d.day AND s.status = 'passed')
+			       (SELECT count(DISTINCT s.user_id) FROM submissions s WHERE s.day = d.day AND s.status = 'passed' AND s.hidden_at IS NULL)
 			FROM daily_tasks d JOIN tasks t ON t.slug = d.task_slug
 			WHERE d.day < $1::date ORDER BY d.day DESC LIMIT 60`, Today())
 		if err != nil {
@@ -253,7 +254,7 @@ func streakOf(days []string, today time.Time) Streak {
 }
 
 func solvedDays(ctx context.Context, tx pgx.Tx, where string, args ...any) (map[string][]string, error) {
-	rows, err := tx.Query(ctx, `SELECT DISTINCT user_id, day::text FROM submissions WHERE day IS NOT NULL AND status = 'passed' `+where, args...)
+	rows, err := tx.Query(ctx, `SELECT DISTINCT user_id, day::text FROM submissions WHERE day IS NOT NULL AND status = 'passed' AND hidden_at IS NULL `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -313,8 +314,8 @@ func (s *Service) Overall(ctx context.Context) ([]OverallRow, error) {
 				LEFT JOIN (
 					SELECT day, max(score) AS best_max,
 						min(score) FILTER (WHERE score > 0 AND passed_tests = total_tests) AS best_min
-					FROM submissions WHERE day IS NOT NULL AND score IS NOT NULL GROUP BY day) db ON db.day = s.day
-				WHERE s.day IS NOT NULL AND s.status IN ('passed', 'failed') AND s.passed_tests > 0 AND s.total_tests > 0
+					FROM submissions WHERE day IS NOT NULL AND score IS NOT NULL AND hidden_at IS NULL GROUP BY day) db ON db.day = s.day
+				WHERE s.day IS NOT NULL AND s.status IN ('passed', 'failed') AND s.passed_tests > 0 AND s.total_tests > 0 AND s.hidden_at IS NULL
 				GROUP BY s.user_id, s.day) best
 			JOIN users u ON u.id = best.user_id
 			GROUP BY u.id, u.handle`)
@@ -366,6 +367,7 @@ type RevealFile struct {
 }
 
 type Solution struct {
+	ID          string    `json:"id"`
 	Place       int       `json:"place"`
 	Handle      string    `json:"handle"`
 	MadeWith    string    `json:"made_with"`
@@ -400,10 +402,10 @@ func (s *Service) Reveal(ctx context.Context, day string) (Reveal, error) {
 			return err
 		}
 		rows, err := tx.Query(ctx, `
-			SELECT handle, made_with, created_at, diff FROM (
-				SELECT DISTINCT ON (s.user_id) u.handle, s.made_with, s.created_at, s.diff
+			SELECT id, handle, made_with, created_at, diff FROM (
+				SELECT DISTINCT ON (s.user_id) s.id, u.handle, s.made_with, s.created_at, s.diff
 				FROM submissions s JOIN users u ON u.id = s.user_id
-				WHERE s.day = $1 AND s.status = 'passed'
+				WHERE s.day = $1 AND s.status = 'passed' AND s.hidden_at IS NULL
 				ORDER BY s.user_id, s.created_at ASC) first
 			ORDER BY created_at ASC, handle LIMIT 10`, day)
 		if err != nil {
@@ -412,7 +414,7 @@ func (s *Service) Reveal(ctx context.Context, day string) (Reveal, error) {
 		defer rows.Close()
 		for rows.Next() {
 			var sol Solution
-			if err := rows.Scan(&sol.Handle, &sol.MadeWith, &sol.SubmittedAt, &sol.Diff); err != nil {
+			if err := rows.Scan(&sol.ID, &sol.Handle, &sol.MadeWith, &sol.SubmittedAt, &sol.Diff); err != nil {
 				return err
 			}
 			sol.SubmittedAt = sol.SubmittedAt.UTC()
@@ -462,14 +464,14 @@ func (s *Service) Stats(ctx context.Context, day string) (Stats, error) {
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `
 			SELECT count(*), count(DISTINCT user_id), count(DISTINCT user_id) FILTER (WHERE status = 'passed')
-			FROM submissions WHERE day = $1 AND status IN ('passed', 'failed')`, day).
+			FROM submissions WHERE day = $1 AND status IN ('passed', 'failed') AND hidden_at IS NULL`, day).
 			Scan(&st.Submissions, &st.Participants, &st.Solvers); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `
 			SELECT tool, count(*), count(*) FILTER (WHERE solved) FROM (
 				SELECT DISTINCT ON (user_id) lower(trim(made_with)) AS tool, status = 'passed' AS solved
-				FROM submissions WHERE day = $1 AND status IN ('passed', 'failed')
+				FROM submissions WHERE day = $1 AND status IN ('passed', 'failed') AND hidden_at IS NULL
 				ORDER BY user_id, passed_tests DESC, created_at ASC) best
 			GROUP BY tool ORDER BY count(*) FILTER (WHERE solved) DESC, count(*) DESC, tool LIMIT 20`, day)
 		if err != nil {

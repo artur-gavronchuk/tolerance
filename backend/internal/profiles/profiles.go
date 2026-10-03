@@ -93,7 +93,7 @@ func (s *Service) Activity(ctx context.Context, handle string) (Activity, error)
 	a := Activity{Products: []ProductEntry{}, Bots: []Bot{}}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var userID string
-		err := tx.QueryRow(ctx, `SELECT id, handle FROM users WHERE lower(handle) = lower($1)`, handle).Scan(&userID, &a.Handle)
+		err := tx.QueryRow(ctx, `SELECT id, handle FROM users WHERE lower(handle) = lower($1) AND banned_at IS NULL`, handle).Scan(&userID, &a.Handle)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.NotFound()
 		}
@@ -123,8 +123,8 @@ func productsOf(ctx context.Context, tx pgx.Tx, userID string) ([]ProductEntry, 
 			       t.kind, t.title, t.deadline,
 			       (SELECT count(*) FROM product_votes v WHERE v.entry_id = e.id) AS votes
 			FROM product_entries e JOIN product_tasks t ON t.slug = e.task_slug
-			WHERE e.status = 'done' AND t.active AND t.opens_at <= now()
-			  AND e.task_slug IN (SELECT task_slug FROM product_entries WHERE user_id = $1 AND status = 'done')
+			WHERE e.status = 'done' AND e.hidden_at IS NULL AND t.active AND t.opens_at <= now()
+			  AND e.task_slug IN (SELECT task_slug FROM product_entries WHERE user_id = $1 AND status = 'done' AND hidden_at IS NULL)
 			ORDER BY e.task_slug, e.user_id,
 			         (CASE WHEN t.kind = 'cli' THEN e.passed END) DESC NULLS LAST,
 			         e.created_at DESC),
@@ -207,7 +207,7 @@ func botsOf(ctx context.Context, tx pgx.Tx, userID string) ([]Bot, error) {
 		FROM game_bots g
 		JOIN bot_versions v ON v.id = g.active_version_id
 		LEFT JOIN tanks_season_ratings sr ON sr.season_id = $1 AND sr.bot_id = g.id
-		WHERE g.id <> 'bot_house_idle'`, season, rating.DefaultMu, rating.DefaultSigma, userID)
+		WHERE g.id <> 'bot_house_idle' AND g.hidden_at IS NULL`, season, rating.DefaultMu, rating.DefaultSigma, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func botsOf(ctx context.Context, tx pgx.Tx, userID string) ([]Bot, error) {
 	// An owned bot with no active version is not on the ladder; list it without a rank.
 	extra, err := tx.Query(ctx, `
 		SELECT id, name, mu, sigma, matches, wins FROM game_bots
-		WHERE owner_user_id = $1 AND active_version_id IS NULL ORDER BY created_at`, userID)
+		WHERE owner_user_id = $1 AND active_version_id IS NULL AND hidden_at IS NULL ORDER BY created_at`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -353,8 +353,8 @@ func summarize(ts []BotTournament) (titles int, best string) {
 func stackOf(ctx context.Context, tx pgx.Tx, userID string) (*Stack, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT lower(trim(made_with)), count(*) FROM (
-			SELECT made_with FROM submissions WHERE user_id = $1 AND day IS NOT NULL
-			UNION ALL SELECT made_with FROM product_entries WHERE user_id = $1 AND status = 'done') m
+			SELECT made_with FROM submissions WHERE user_id = $1 AND day IS NOT NULL AND hidden_at IS NULL
+			UNION ALL SELECT made_with FROM product_entries WHERE user_id = $1 AND status = 'done' AND hidden_at IS NULL) m
 		WHERE trim(made_with) <> '' GROUP BY 1`, userID)
 	if err != nil {
 		return nil, err

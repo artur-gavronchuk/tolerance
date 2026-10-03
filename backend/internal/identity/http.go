@@ -148,6 +148,10 @@ func oauthCallback(s *Service, limiter *ratelimit.Limiter, cfg AuthConfig) http.
 			fail("email_unverified")
 			return
 		}
+		if errors.Is(err, ErrBanned) {
+			fail("banned")
+			return
+		}
 		if err != nil {
 			slog.ErrorContext(r.Context(), "oauth sign-in failed", "provider", name, "err", err)
 			fail("oauth_failed")
@@ -191,6 +195,10 @@ func devSignIn(s *Service, limiter *ratelimit.Limiter, secure, trustProxy bool) 
 		u, token, err := s.SignIn(r.Context(), Identity{Provider: "dev", Subject: email, Email: email, EmailVerified: true})
 		if errors.Is(err, ErrEmailUnverified) {
 			httpx.WriteError(w, r, httpx.New(http.StatusForbidden, "email_unverified", "Your account has no verified email address"))
+			return
+		}
+		if errors.Is(err, ErrBanned) {
+			httpx.WriteError(w, r, httpx.New(http.StatusForbidden, "banned", "This account has been banned"))
 			return
 		}
 		if err != nil {

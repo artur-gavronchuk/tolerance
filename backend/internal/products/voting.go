@@ -49,7 +49,7 @@ func (s *Service) Results(ctx context.Context, slug, userID string) (Results, er
 		pick, order := rankRule(r.Task.Kind)
 		rows, err := tx.Query(ctx, `
 			SELECT `+entryCols+` FROM (
-				SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $2 AND status = 'done'
+				SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $2 AND status = 'done' AND hidden_at IS NULL
 				ORDER BY user_id, `+pick+`) e
 			JOIN users u ON u.id = e.user_id
 			ORDER BY `+order, userID, slug)
@@ -136,7 +136,7 @@ func (s *Service) Vote(ctx context.Context, userID, entryID string) (Entry, erro
 		// Only the upload that stands for its author in the results can be voted for.
 		pick, _ := rankRule(kind)
 		var counted string
-		if err := tx.QueryRow(ctx, `SELECT id FROM product_entries e WHERE task_slug = $1 AND user_id = $2 AND status = 'done'
+		if err := tx.QueryRow(ctx, `SELECT id FROM product_entries e WHERE task_slug = $1 AND user_id = $2 AND status = 'done' AND hidden_at IS NULL
 			ORDER BY `+pick+` LIMIT 1`, slug, owner).Scan(&counted); err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ func (s *Service) Unvote(ctx context.Context, userID, entryID string) (Entry, er
 func votable(ctx context.Context, tx pgx.Tx, entryID string) (slug, kind, owner string, deadline time.Time, err error) {
 	var status string
 	err = tx.QueryRow(ctx, `SELECT e.task_slug, t.kind, e.user_id, t.deadline, e.status FROM product_entries e JOIN product_tasks t ON t.slug = e.task_slug
-		WHERE e.id = $1`, entryID).Scan(&slug, &kind, &owner, &deadline, &status)
+		WHERE e.id = $1 AND e.hidden_at IS NULL`, entryID).Scan(&slug, &kind, &owner, &deadline, &status)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && status != StatusDone) {
 		return "", "", "", time.Time{}, httpx.NotFound()
 	}

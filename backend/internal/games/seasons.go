@@ -74,7 +74,7 @@ func seasonLadder(ctx context.Context, tx pgx.Tx, seasonID string, playedOnly bo
 		JOIN bot_versions v ON v.id = g.active_version_id
 		LEFT JOIN tanks_season_ratings sr ON sr.season_id = $1 AND sr.bot_id = g.id
 		LEFT JOIN users u ON u.id = g.owner_user_id
-		WHERE g.id <> 'bot_house_idle'`
+		WHERE g.id <> 'bot_house_idle' AND g.hidden_at IS NULL`
 	if playedOnly {
 		q += ` AND coalesce(sr.matches, 0) > 0`
 	}
@@ -270,7 +270,7 @@ func frozenStandings(ctx context.Context, tx pgx.Tx, id string) ([]LeaderboardEn
 		       st.rating, st.mu, st.sigma, st.matches, st.wins,
 		       coalesce(round(1000 + 40 * (g.mu - 3 * g.sigma))::int, st.rating)
 		FROM tanks_season_standings st JOIN game_bots g ON g.id = st.bot_id
-		WHERE st.season_id = $1 ORDER BY st.rank`, id)
+		WHERE st.season_id = $1 AND g.hidden_at IS NULL ORDER BY st.rank`, id)
 	if err != nil {
 		return nil, err
 	}

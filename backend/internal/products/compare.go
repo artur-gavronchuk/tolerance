@@ -38,7 +38,7 @@ type judgment struct{ a, b, winner string }
 func SiteRanking(ctx context.Context, tx pgx.Tx, slug string) ([]Standing, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT e.id, e.user_id, `+votesOf+`, e.passed, e.created_at FROM (
-			SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $1 AND status = 'done'
+			SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $1 AND status = 'done' AND hidden_at IS NULL
 			ORDER BY user_id, created_at DESC) e
 		ORDER BY e.created_at, e.id`, slug)
 	if err != nil {

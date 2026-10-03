@@ -126,7 +126,7 @@ func (s *Service) activeUserBots(ctx context.Context, tx pgx.Tx, seasonID string
 	rows, err := tx.Query(ctx, `SELECT g.id, g.name, coalesce(sr.mu, g.mu), coalesce(sr.sigma, g.sigma), g.active_version_id, g.last_match_at
 		FROM game_bots g
 		LEFT JOIN tanks_season_ratings sr ON sr.season_id = $1 AND sr.bot_id = g.id
-		WHERE g.house = false AND g.active_version_id IS NOT NULL`, seasonID)
+		WHERE g.house = false AND g.active_version_id IS NOT NULL AND g.hidden_at IS NULL`, seasonID)
 	if err != nil {
 		return nil, err
 	}

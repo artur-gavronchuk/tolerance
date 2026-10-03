@@ -1,5 +1,5 @@
 import type {
-  AdminEvent, AdminPulse, NotificationList, Recap, CompareJudged, CompareNext, ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
+  AdminEvent, AdminPulse, ModItem, ModLogItem, ModUser, NotificationList, Recap, CompareJudged, CompareNext, ProductDetail, ProductEntry, ProductList, ProductResults, ProductSourceFile, ProductTask, SeasonDetail, SeasonView, Showcase, StackRow, TournamentView,
 } from './types'
 
 export class ApiError extends Error {
@@ -96,6 +96,17 @@ export const tanks = {
 export const admin = {
   pulse: () => api<AdminPulse>('/admin/pulse'),
   recent: () => api<{ items: AdminEvent[] }>('/admin/recent').then((r) => r.items),
+}
+
+export type ModKind = 'entry' | 'submission' | 'bot'
+export const moderation = {
+  users: (q: string) => api<{ items: ModUser[] }>(`/admin/moderation/users?q=${encodeURIComponent(q)}`).then((r) => r.items),
+  items: (userId: string) => api<{ items: ModItem[] }>(`/admin/moderation/users/${encodeURIComponent(userId)}/items`).then((r) => r.items),
+  log: () => api<{ items: ModLogItem[] }>('/admin/moderation/log').then((r) => r.items),
+  ban: (userId: string, reason: string) => post<{ ok: boolean }>(`/admin/moderation/users/${encodeURIComponent(userId)}/ban`, { reason }),
+  unban: (userId: string, reason: string) => post<{ ok: boolean }>(`/admin/moderation/users/${encodeURIComponent(userId)}/unban`, { reason }),
+  hide: (kind: ModKind, id: string, reason: string) => post<{ ok: boolean }>('/admin/moderation/hide', { kind, id, reason }),
+  unhide: (kind: ModKind, id: string, reason: string) => post<{ ok: boolean }>('/admin/moderation/unhide', { kind, id, reason }),
 }
 
 export const retention = {

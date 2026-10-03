@@ -1,5 +1,6 @@
 'use client'
 
+import { HideButton } from '@/components/admin/hide-button'
 import { useEffect, useState } from 'react'
 import { SectionTitle } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -44,6 +45,7 @@ export function DayRevealView({ day }: { day: string }) {
                   </summary>
                   <Diff text={s.diff} />
                 </details>
+                <HideButton kind="submission" id={s.id} />
               </li>
             ))}
           </ul>

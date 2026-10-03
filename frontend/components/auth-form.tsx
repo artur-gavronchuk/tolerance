@@ -14,7 +14,7 @@ import { useT } from '@/lib/i18n/client'
 import { authMessages } from '@/lib/i18n/messages/auth'
 import type { AuthProviders } from '@/lib/types'
 
-const ERROR_CODES = ['oauth_denied', 'oauth_state', 'oauth_failed', 'email_unverified', 'rate_limited'] as const
+const ERROR_CODES = ['oauth_denied', 'oauth_state', 'oauth_failed', 'email_unverified', 'rate_limited', 'banned'] as const
 
 function ProviderIcon({ id }: { id: 'github' | 'google' }) {
   if (id === 'github') {

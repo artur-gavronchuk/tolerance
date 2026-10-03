@@ -31,14 +31,14 @@ export interface Daily {
 }
 
 export interface DailyRow {
-  place: number; handle: string; made_with: string
+  id?: string; place: number; handle: string; made_with: string
   passed_tests: number; total_tests: number; score: number | null; submitted_at: string
 }
 
 // Published once a day closes (`/daily/{day}/reveal`).
 export interface DayReveal {
   hidden_tests: { path: string; content: string }[]
-  solutions: { place: number; handle: string; made_with: string; submitted_at: string; diff: string }[]
+  solutions: { id?: string; place: number; handle: string; made_with: string; submitted_at: string; diff: string }[]
 }
 
 export interface DayStats {
@@ -291,3 +291,8 @@ export interface AppNotification {
   read: boolean
 }
 export interface NotificationList { items: AppNotification[]; unread: number }
+
+// Moderation (`/admin/moderation/*`).
+export interface ModUser { id: string; handle: string; email: string; role: string; created_at: string; banned_at: string | null; submissions: number; entries: number }
+export interface ModItem { kind: 'entry' | 'submission' | 'bot'; id: string; label: string; status: string; at: string; hidden_at: string | null }
+export interface ModLogItem { at: string; action: 'ban' | 'unban' | 'hide' | 'unhide'; kind: 'user' | 'entry' | 'submission' | 'bot'; id: string; label: string; actor: string; reason: string; active: boolean }

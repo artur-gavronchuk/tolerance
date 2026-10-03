@@ -11,6 +11,7 @@ import { MatchList } from '@/components/tanks/match-list'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, ApiError } from '@/lib/api'
+import { HideButton } from '@/components/admin/hide-button'
 import { resultLabel, seasonName, seasonNameFromId, tournamentName } from '@/lib/i18n/messages/names'
 import { useT } from '@/lib/i18n/client'
 import { tanksHomeMessages as m } from '@/lib/i18n/messages/tanks-home'
@@ -85,6 +86,7 @@ export default function BotPage({ params }: { params: Promise<{ id: string }> })
       >
         {bot.rank > 0 ? <>{tr('bot.rank', { rank: bot.rank, season: seasonName(tr.locale, bot.season.starts_at) })}</> : <>{tr('bot.unranked', { season: seasonName(tr.locale, bot.season.starts_at) })}</>}
         {bot.owner && <> {tr('bot.by')} <HandleLink handle={bot.owner} />.</>}
+        {!bot.house && <div className="mt-2"><HideButton kind="bot" id={bot.bot_id} /></div>}
       </PageHeader>
 
       <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-5">

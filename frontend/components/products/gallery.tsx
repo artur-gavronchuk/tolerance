@@ -2,6 +2,7 @@
 
 import { Download } from 'lucide-react'
 import { HandleLink } from '@/components/daily/handle-link'
+import { HideButton } from '@/components/admin/hide-button'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { ProductEntry, ProductTask } from '@/lib/types'
@@ -73,6 +74,7 @@ export function EntryGallery({ task, entries, signedIn, busy, onToggleVote }: {
               </Button>
             </SourceViewer>
           )}
+          <HideButton kind="entry" id={e.id} />
         </li>
       ))}
     </ul>

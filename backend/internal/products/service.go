@@ -43,7 +43,7 @@ func phaseOf(deadline time.Time) string {
 func published(deadline time.Time) bool { return phaseOf(deadline) != PhaseOpen }
 
 const taskCols = `t.slug, t.title, t.summary, t.kind, t.opens_at, t.deadline, jsonb_array_length(t.scenarios), t.bench IS NOT NULL,
-	(SELECT count(DISTINCT e.user_id) FROM product_entries e WHERE e.task_slug = t.slug AND e.status = 'done')`
+	(SELECT count(DISTINCT e.user_id) FROM product_entries e WHERE e.task_slug = t.slug AND e.status = 'done' AND e.hidden_at IS NULL)`
 
 func scanTask(row scanner) (Task, error) {
 	var t Task
@@ -121,7 +121,7 @@ func (s *Service) Get(ctx context.Context, slug, userID string) (Detail, error) 
 		}
 		if d.Phase != PhaseOpen && d.Kind == KindCLI {
 			pick, _ := rankRule(KindCLI)
-			if err := tx.QueryRow(ctx, `SELECT min(bench_ms) FROM (SELECT DISTINCT ON (user_id) bench_ms FROM product_entries WHERE task_slug = $1 AND status = 'done' ORDER BY user_id, `+pick+`) c`, slug).Scan(&d.FastestMS); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT min(bench_ms) FROM (SELECT DISTINCT ON (user_id) bench_ms FROM product_entries WHERE task_slug = $1 AND status = 'done' AND hidden_at IS NULL ORDER BY user_id, `+pick+`) c`, slug).Scan(&d.FastestMS); err != nil {
 				return err
 			}
 		}
@@ -235,7 +235,7 @@ func (s *Service) Zip(ctx context.Context, entryID string) ([]byte, error) {
 		var deadline time.Time
 		var kind string
 		if err := tx.QueryRow(ctx, `SELECT e.zip, t.deadline, t.kind FROM product_entries e JOIN product_tasks t ON t.slug = e.task_slug
-			WHERE e.id = $1 AND e.status = 'done'`, entryID).Scan(&data, &deadline, &kind); err != nil {
+			WHERE e.id = $1 AND e.status = 'done' AND e.hidden_at IS NULL`, entryID).Scan(&data, &deadline, &kind); err != nil {
 			return err
 		}
 		if !published(deadline) {
@@ -261,7 +261,7 @@ func (s *Service) SiteFiles(ctx context.Context, entryID, viewerID string) (map[
 		var deadline time.Time
 		var owner string
 		if err := tx.QueryRow(ctx, `SELECT e.zip, e.user_id, t.deadline FROM product_entries e JOIN product_tasks t ON t.slug = e.task_slug
-			WHERE e.id = $1 AND e.status = 'done' AND t.kind = 'site'`, entryID).Scan(&data, &owner, &deadline); err != nil {
+			WHERE e.id = $1 AND e.status = 'done' AND t.kind = 'site' AND (e.hidden_at IS NULL OR e.user_id = $2)`, entryID, viewerID).Scan(&data, &owner, &deadline); err != nil {
 			return err
 		}
 		if owner != viewerID && !published(deadline) {

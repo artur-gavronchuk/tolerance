@@ -85,8 +85,8 @@ func (s *Service) UserByToken(ctx context.Context, token string) (string, error)
 	var uid string
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `
-			UPDATE upload_links SET last_used_at = CASE WHEN last_used_at IS NULL OR last_used_at < now() - interval '1 minute' THEN now() ELSE last_used_at END
-			WHERE token_hash = $1 RETURNING user_id`, hash(token)).Scan(&uid)
+			UPDATE upload_links l SET last_used_at = CASE WHEN last_used_at IS NULL OR last_used_at < now() - interval '1 minute' THEN now() ELSE last_used_at END
+			FROM users u WHERE l.token_hash = $1 AND u.id = l.user_id AND u.banned_at IS NULL RETURNING l.user_id`, hash(token)).Scan(&uid)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNoLink

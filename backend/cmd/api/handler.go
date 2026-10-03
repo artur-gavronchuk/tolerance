@@ -13,6 +13,7 @@ import (
 	"tolerance/internal/daily"
 	"tolerance/internal/games"
 	"tolerance/internal/identity"
+	"tolerance/internal/moderation"
 	"tolerance/internal/notify"
 	"tolerance/internal/platform/clientip"
 	"tolerance/internal/platform/db"
@@ -37,6 +38,7 @@ type deps struct {
 	games       *games.Service
 	products    *products.Service
 	admin       *adminpkg.Service
+	moderation  *moderation.Service
 	stacks      *stacks.Service
 	profiles    *profiles.Service
 	recap       *recap.Service
@@ -63,6 +65,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	admin := http.NewServeMux()
 	games.RegisterAdminRoutes(admin, d.games)
 	adminpkg.RegisterRoutes(pulse, d.admin)
+	moderation.RegisterRoutes(pulse, d.moderation)
 
 	public := http.NewServeMux()
 	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
@@ -119,6 +122,7 @@ func newHandler(cfg config, d deps) http.Handler {
 
 	api.Handle("GET /api/v1/admin/pulse", session(adminOrDev(cfg.devLogin)(pulse)))
 	api.Handle("GET /api/v1/admin/recent", session(adminOrDev(cfg.devLogin)(pulse)))
+	api.Handle("/api/v1/admin/moderation/", session(adminOrDev(cfg.devLogin)(pulse)))
 
 	top := http.NewServeMux()
 	top.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

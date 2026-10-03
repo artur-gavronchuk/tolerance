@@ -179,7 +179,7 @@ func winnerOf(ctx context.Context, tx pgx.Tx, slug, kind string) (*Winner, error
 	}
 	err := tx.QueryRow(ctx, `
 		SELECT e.id, u.handle, `+votesOf+`, e.passed, e.total, e.bench_ms FROM (
-			SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $1 AND status = 'done'
+			SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $1 AND status = 'done' AND hidden_at IS NULL
 			ORDER BY user_id, `+pick+`) e
 		JOIN users u ON u.id = e.user_id`+where+`
 		ORDER BY `+order+` LIMIT 1`, args...).Scan(&w.EntryID, &w.Handle, &w.Votes, &w.Passed, &w.Total, &w.BenchMS)

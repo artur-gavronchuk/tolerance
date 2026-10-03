@@ -38,7 +38,7 @@ func (s *Service) ProfileOf(ctx context.Context, handle string) (Profile, error)
 	p := Profile{Tools: []string{}, Days: []ProfileDay{}}
 	var userID string
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `SELECT id, handle, created_at FROM users WHERE lower(handle) = lower($1)`, handle).
+		err := tx.QueryRow(ctx, `SELECT id, handle, created_at FROM users WHERE lower(handle) = lower($1) AND banned_at IS NULL`, handle).
 			Scan(&userID, &p.Handle, &p.JoinedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return httpx.NotFound()
@@ -61,7 +61,7 @@ func (s *Service) ProfileOf(ctx context.Context, handle string) (Profile, error)
 				SELECT DISTINCT ON (s.day) s.day, s.task_slug, s.status, s.passed_tests, s.total_tests, s.score, s.made_with,
 				       count(*) OVER (PARTITION BY s.day) AS attempts
 				FROM submissions s
-				WHERE s.user_id = $1 AND s.day IS NOT NULL AND s.status IN ('passed', 'failed')
+				WHERE s.user_id = $1 AND s.day IS NOT NULL AND s.status IN ('passed', 'failed') AND s.hidden_at IS NULL
 				ORDER BY s.day, (s.status = 'passed') DESC, s.passed_tests DESC, s.score DESC NULLS LAST, s.created_at ASC) b
 			JOIN tasks t ON t.slug = b.task_slug
 			ORDER BY b.day DESC LIMIT 90`, userID)
@@ -84,7 +84,7 @@ func (s *Service) ProfileOf(ctx context.Context, handle string) (Profile, error)
 
 		tools, err := tx.Query(ctx, `
 			SELECT min(trim(made_with)) FROM submissions
-			WHERE user_id = $1 AND day IS NOT NULL AND trim(made_with) <> ''
+			WHERE user_id = $1 AND day IS NOT NULL AND hidden_at IS NULL AND trim(made_with) <> ''
 			GROUP BY lower(trim(made_with)) ORDER BY count(*) DESC, 1 LIMIT 10`, userID)
 		if err != nil {
 			return err

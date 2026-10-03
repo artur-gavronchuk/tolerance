@@ -84,8 +84,8 @@ func (s *Service) compute(ctx context.Context, where string, args []any) ([]Stac
 			LEFT JOIN (
 				SELECT day, max(score) AS best_max,
 					min(score) FILTER (WHERE score > 0 AND passed_tests = total_tests) AS best_min
-				FROM submissions WHERE day IS NOT NULL AND score IS NOT NULL GROUP BY day) db ON db.day = s.day
-			WHERE s.day IS NOT NULL AND s.status IN ('passed', 'failed')`+where+`
+				FROM submissions WHERE day IS NOT NULL AND score IS NOT NULL AND hidden_at IS NULL GROUP BY day) db ON db.day = s.day
+			WHERE s.day IS NOT NULL AND s.status IN ('passed', 'failed') AND s.hidden_at IS NULL`+where+`
 			ORDER BY s.user_id, s.day, s.created_at, s.id`, args...)
 		if err != nil {
 			return err
