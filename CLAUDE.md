@@ -79,6 +79,7 @@ make dev         # postgres in Docker + migrate, then api and web natively (Ctrl
 make up          # whole stack in Docker: postgres, migrate, api (HTTP + all workers), web
 make down        # make reset also wipes the DB volume
 make migrate     # goose migrations + catalog sync
+make seed        # fake 30 days of activity (500 people; --users N via go run ./cmd/seed --yes); local DB only, re-run replaces it
 make run-api     # native API alone;  ARENA_SANDBOX=fake runs without Docker
 make run-web     # pnpm dev, proxying /api to the native API
 make images      # sandbox + bot runtime images, built only when missing

@@ -18,6 +18,7 @@ import (
 type Results struct {
 	Task    Task    `json:"task"`
 	Entries []Entry `json:"entries"`
+	Total   int     `json:"total"` // people with a counted entry; the HTTP route may return fewer Entries
 }
 
 const votesOf = `(SELECT count(*) FROM product_votes v WHERE v.entry_id = e.id)`
@@ -39,6 +40,12 @@ func rankRule(kind string) (pick, order string) {
 }
 
 func (s *Service) Results(ctx context.Context, slug, userID string) (Results, error) {
+	return s.results(ctx, slug, userID, 0)
+}
+
+// results is Results with only the first `limit` ranked entries read for a cli task (0 = all). A site task's
+// ranking needs every entry and judgment, so it is always read in full and the caller cuts the page.
+func (s *Service) results(ctx context.Context, slug, userID string, limit int) (Results, error) {
 	r := Results{Entries: []Entry{}}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
@@ -47,12 +54,16 @@ func (s *Service) Results(ctx context.Context, slug, userID string) (Results, er
 			return err
 		}
 		pick, order := rankRule(r.Task.Kind)
+		args, cut := []any{userID, slug}, ""
+		if limit > 0 && r.Task.Kind == KindCLI {
+			args, cut = append(args, limit), " LIMIT $3"
+		}
 		rows, err := tx.Query(ctx, `
 			SELECT `+entryCols+` FROM (
 				SELECT DISTINCT ON (user_id) * FROM product_entries WHERE task_slug = $2 AND status = 'done' AND hidden_at IS NULL
 				ORDER BY user_id, `+pick+`) e
 			JOIN users u ON u.id = e.user_id
-			ORDER BY `+order, userID, slug)
+			ORDER BY `+order+cut, args...)
 		if err != nil {
 			return err
 		}
@@ -69,6 +80,12 @@ func (s *Service) Results(ctx context.Context, slug, userID string) (Results, er
 			return err
 		}
 		rows.Close()
+		r.Total = len(r.Entries)
+		if len(args) > 2 {
+			if err := tx.QueryRow(ctx, `SELECT count(DISTINCT user_id) FROM product_entries WHERE task_slug = $1 AND status = 'done'`, slug).Scan(&r.Total); err != nil {
+				return err
+			}
+		}
 		if r.Task.Kind == KindSite {
 			if err := rankSiteEntries(ctx, tx, slug, r.Entries); err != nil {
 				return err

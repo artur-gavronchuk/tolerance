@@ -62,7 +62,7 @@ export async function upload<T>(path: string, form: FormData): Promise<T> {
 export const products = {
   list: () => api<ProductList>('/products'),
   get: (slug: string) => api<ProductDetail>(`/products/${encodeURIComponent(slug)}`),
-  results: (slug: string) => api<ProductResults>(`/products/${encodeURIComponent(slug)}/results`),
+  results: (slug: string, limit?: number) => api<ProductResults>(`/products/${encodeURIComponent(slug)}/results${limit ? `?limit=${limit}` : ''}`),
   submit: (slug: string, form: FormData) => upload<ProductEntry>(`/products/${encodeURIComponent(slug)}/entries`, form),
   vote: (entryId: string) => post<ProductEntry>(`/product-entries/${encodeURIComponent(entryId)}/vote`),
   unvote: (entryId: string) => api<ProductEntry>(`/product-entries/${encodeURIComponent(entryId)}/vote`, { method: 'DELETE' }),

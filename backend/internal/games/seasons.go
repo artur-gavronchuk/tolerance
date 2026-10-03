@@ -38,6 +38,7 @@ type SeasonView struct {
 type SeasonDetail struct {
 	Season    SeasonView         `json:"season"`
 	Standings []LeaderboardEntry `json:"standings"`
+	Total     int                `json:"total"` // bots in the standings; the HTTP route may return only the top ones
 	Now       time.Time          `json:"now"`
 }
 
@@ -261,6 +262,7 @@ func (s *Service) Season(ctx context.Context, id string) (SeasonDetail, error) {
 		return SeasonDetail{}, err
 	}
 	out.Now = time.Now().UTC()
+	out.Total = len(out.Standings)
 	return out, nil
 }
 

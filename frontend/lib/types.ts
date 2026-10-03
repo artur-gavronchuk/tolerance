@@ -106,7 +106,7 @@ export interface SeasonView {
   winner: SeasonWinner | null
 }
 
-export interface SeasonDetail { season: SeasonView; standings: LeaderboardEntry[]; now: string }
+export interface SeasonDetail { season: SeasonView; standings: LeaderboardEntry[]; total: number; now: string }
 
 export interface BotSeasonResult { season_id: string; name: string; rank: number; rating: number; matches: number; wins: number }
 
@@ -207,7 +207,7 @@ export interface ProductDetail extends ProductTask { attempts_used: number; mine
 
 export interface ProductSourceFile { path: string; size: number; content?: string; truncated?: boolean; binary?: boolean }
 
-export interface ProductResults { task: ProductTask; entries: ProductEntry[] }
+export interface ProductResults { task: ProductTask; entries: ProductEntry[]; total: number }
 
 // A person's public page (`/users/{handle}`).
 export interface ProfileDay {

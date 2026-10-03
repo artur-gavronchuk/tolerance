@@ -9,6 +9,7 @@ import { BenchTime, fastestOf } from '@/components/products/bench'
 import { QualitySummary } from '@/components/products/quality'
 import { Podium } from '@/components/products/podium'
 import { PhaseBadge, RankingHow, VotingNote, isBlind, rankSummary, usePT, utc } from '@/components/products/phase'
+import { ShowMore } from '@/components/products/show-more'
 import { useResults } from '@/components/products/use-results'
 import { VoteButton } from '@/components/products/vote-button'
 import { Button } from '@/components/ui/button'
@@ -20,7 +21,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
   const t = usePT()
   const { slug } = use(params)
   const { me } = useMe()
-  const { res, error, voteError, busy, toggleVote } = useResults(slug, me?.user.handle)
+  const { res, error, voteError, busy, toggleVote, more } = useResults(slug, me?.user.handle)
 
   if (error) return <p role="alert" className="text-sm text-destructive">{error}</p>
   if (!res) return <Skeleton className="h-64 rounded-[14px]" />
@@ -103,6 +104,7 @@ export default function ProductResultsPage({ params }: { params: Promise<{ slug:
                 ))}
               </TableBody>
             </Table>
+            <div className="mt-4"><ShowMore shown={entries.length} total={res.total} onMore={more} /></div>
           </section>
         </>
       )}

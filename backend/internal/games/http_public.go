@@ -156,10 +156,18 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service) {
 
 	// {id} is a season id like "2026-10", or "current".
 	mux.HandleFunc("GET /api/v1/tanks/seasons/{id}", func(w http.ResponseWriter, r *http.Request) {
+		limit, err := parseLimit(r, 100, 500)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
 		d, err := s.Season(r.Context(), r.PathValue("id"))
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
+		}
+		if len(d.Standings) > limit { // Total keeps the real size
+			d.Standings = d.Standings[:limit]
 		}
 		httpx.Respond(w, http.StatusOK, d)
 	})

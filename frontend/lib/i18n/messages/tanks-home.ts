@@ -92,6 +92,7 @@ export const tanksHomeMessages = defineMessages({
     'season.frozen': 'These standings are frozen.',
     'season.winner': 'Season winner',
     'season.standingsSoFar': 'Standings so far',
+    'season.topOf': 'Top {shown} of {total} bots',
     'season.all': 'All seasons',
     'season.seasons': 'Seasons',
 
@@ -267,6 +268,7 @@ export const tanksHomeMessages = defineMessages({
     'season.frozen': 'Таблица зафиксирована.',
     'season.winner': 'Победитель сезона',
     'season.standingsSoFar': 'Таблица на сейчас',
+    'season.topOf': 'Первые {shown} из {total} ботов',
     'season.all': 'Все сезоны',
     'season.seasons': 'Сезоны',
 

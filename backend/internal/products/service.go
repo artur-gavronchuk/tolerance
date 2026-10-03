@@ -17,12 +17,18 @@ import (
 	"tolerance/internal/platform/jobs"
 	"tolerance/internal/platform/limits"
 	"tolerance/internal/platform/sanitize"
+	"tolerance/internal/platform/ttlcache"
 	"tolerance/internal/submissions"
 )
 
-type Service struct{ pool *db.Pool }
+type Service struct {
+	pool    *db.Pool
+	winners ttlcache.Cache[string, *Winner] // a final task's winner is ranked from every entry and judgment
+}
 
-func NewService(pool *db.Pool) *Service { return &Service{pool: pool} }
+func NewService(pool *db.Pool) *Service {
+	return &Service{pool: pool, winners: ttlcache.Cache[string, *Winner]{TTL: 30 * time.Second}}
+}
 
 func invalid(msg string) error {
 	return httpx.WithField(http.StatusUnprocessableEntity, "invalid_upload", msg, "file", "invalid")
@@ -88,7 +94,7 @@ func (s *Service) List(ctx context.Context) (Listing, error) {
 		rows.Close()
 		for i, t := range out.Items {
 			if t.Phase == PhaseFinal {
-				if out.Items[i].Winner, err = winnerOf(ctx, tx, t.Slug, t.Kind); err != nil {
+				if out.Items[i].Winner, err = s.winners.Get(t.Slug+"|"+t.Kind, func() (*Winner, error) { return winnerOf(ctx, tx, t.Slug, t.Kind) }); err != nil {
 					return err
 				}
 			}

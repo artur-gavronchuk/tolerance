@@ -106,6 +106,9 @@ export default function SeasonPage({ params }: { params: Promise<{ id: string }>
       <section className="mt-8">
         <SectionTitle>{s.status === 'active' ? tr('season.standingsSoFar') : tr('season.final')}</SectionTitle>
         <Leaderboard entries={d.standings} />
+        {d.total > d.standings.length && (
+          <p className="mt-3 text-center text-sm text-muted-foreground">{tr('season.topOf', { shown: d.standings.length, total: d.total })}</p>
+        )}
       </section>
 
       {all.length > 1 && (

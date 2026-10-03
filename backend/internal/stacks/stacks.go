@@ -2,6 +2,7 @@ package stacks
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -10,11 +11,17 @@ import (
 	"tolerance/internal/daily"
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
+	"tolerance/internal/platform/ttlcache"
 )
 
-type Service struct{ pool *db.Pool }
+type Service struct {
+	pool  *db.Pool
+	cache ttlcache.Cache[string, []Stack]
+}
 
-func NewService(pool *db.Pool) *Service { return &Service{pool: pool} }
+func NewService(pool *db.Pool) *Service {
+	return &Service{pool: pool, cache: ttlcache.Cache[string, []Stack]{TTL: 30 * time.Second}}
+}
 
 // Stack is one canonical (tool, model) pair and how its users did at the daily task. A day is worth up to 100
 // points (same scale as the overall leaderboard). "Solved" only exists for bugfix days; optimize days are
@@ -68,7 +75,13 @@ func (s *Service) ForDay(ctx context.Context, day string) ([]Stack, error) {
 
 // The points CASE mirrors daily.Overall: bugfix = share of hidden tests passed; optimize = score relative to
 // the day's best.
+//
+// It reads every attempt in the window, so the result is kept for 30 seconds.
 func (s *Service) compute(ctx context.Context, where string, args []any) ([]Stack, error) {
+	return s.cache.Get(fmt.Sprint(where, args), func() ([]Stack, error) { return s.computeFresh(ctx, where, args) })
+}
+
+func (s *Service) computeFresh(ctx context.Context, where string, args []any) ([]Stack, error) {
 	var uds []*userDay
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `

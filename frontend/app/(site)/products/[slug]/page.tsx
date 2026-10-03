@@ -11,6 +11,7 @@ import { EntryCard } from '@/components/products/entry-card'
 import { EntryGallery } from '@/components/products/gallery'
 import { AgentUpload } from '@/components/upload-link/agent-upload'
 import { PhaseBadge, RankingHow, VotingNote, friendly, isBlind, usePT, utc } from '@/components/products/phase'
+import { ShowMore } from '@/components/products/show-more'
 import { useResults } from '@/components/products/use-results'
 import { useLoginHref } from '@/components/public/return-path'
 import { Button } from '@/components/ui/button'
@@ -115,11 +116,11 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
 // After the deadline: the standings note, the voting window and the gallery of everyone's entries.
 function Published({ task, slug, viewer, signedIn }: { task: ProductDetail; slug: string; viewer: string | undefined; signedIn: boolean }) {
   const t = usePT()
-  const { res, error, voteError, busy, toggleVote } = useResults(slug, viewer, true)
+  const { res, error, voteError, busy, toggleVote, more } = useResults(slug, viewer, true)
   return (
     <section className="space-y-4">
       <SectionTitle aside={isBlind(task) ? undefined : <Link className="font-semibold text-primary hover:underline" href={`/products/${slug}/results`}>{t('task.podiumTable')}</Link>}>
-        {t('task.entries')}{res && ` (${res.entries.length})`}
+        {t('task.entries')}{res && ` (${res.total})`}
       </SectionTitle>
       <VotingNote task={task} />
       {task.kind === 'site' && task.phase === 'voting' && <Compare slug={slug} signedIn={signedIn} />}
@@ -133,6 +134,7 @@ function Published({ task, slug, viewer, signedIn }: { task: ProductDetail; slug
       {res && res.entries.length > 0 && (
         <EntryGallery task={res.task} entries={res.entries} signedIn={signedIn} busy={busy} onToggleVote={(e) => void toggleVote(e)} />
       )}
+      {res && <ShowMore shown={res.entries.length} total={res.total} onMore={more} />}
     </section>
   )
 }

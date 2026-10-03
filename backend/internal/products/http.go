@@ -7,10 +7,17 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 
 	"tolerance/internal/identity"
 	"tolerance/internal/platform/httpx"
+)
+
+// The results list is cut to ?limit= entries (Results.Total says how many there are).
+const (
+	defaultResultsLimit = 40
+	maxResultsLimit     = 500
 )
 
 // RegisterPublicRoutes mounts the routes anyone can call; the viewer (if signed in) only personalises them.
@@ -32,10 +39,22 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service, viewer func(r *http.Re
 		httpx.Respond(w, http.StatusOK, d)
 	})
 	mux.HandleFunc("GET /api/v1/products/{slug}/results", func(w http.ResponseWriter, r *http.Request) {
-		res, err := s.Results(r.Context(), r.PathValue("slug"), viewer(r))
+		limit := defaultResultsLimit
+		if v := r.URL.Query().Get("limit"); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 1 {
+				httpx.WriteError(w, r, httpx.WithField(http.StatusUnprocessableEntity, "validation_failed", "limit must be a positive integer", "limit", "invalid"))
+				return
+			}
+			limit = min(n, maxResultsLimit)
+		}
+		res, err := s.results(r.Context(), r.PathValue("slug"), viewer(r), limit)
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
+		}
+		if len(res.Entries) > limit { // the standings are ranked in full; only the page that goes out is cut
+			res.Entries = res.Entries[:limit]
 		}
 		httpx.Respond(w, http.StatusOK, res)
 	})

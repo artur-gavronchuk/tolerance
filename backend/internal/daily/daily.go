@@ -13,6 +13,7 @@ import (
 
 	"tolerance/internal/platform/db"
 	"tolerance/internal/platform/httpx"
+	"tolerance/internal/platform/ttlcache"
 	"tolerance/internal/tasks"
 )
 
@@ -30,9 +31,14 @@ func ParseDay(s string) (time.Time, bool) {
 	return t, err == nil
 }
 
-type Service struct{ pool *db.Pool }
+type Service struct {
+	pool    *db.Pool
+	overall ttlcache.Cache[struct{}, []OverallRow]
+}
 
-func NewService(pool *db.Pool) *Service { return &Service{pool: pool} }
+func NewService(pool *db.Pool) *Service {
+	return &Service{pool: pool, overall: ttlcache.Cache[struct{}, []OverallRow]{TTL: 15 * time.Second}}
+}
 
 // ErrNoTasks means the catalog has no active task to assign.
 var ErrNoTasks = httpx.New(http.StatusServiceUnavailable, "no_tasks", "No task is available today")
@@ -295,7 +301,13 @@ type OverallRow struct {
 // Overall ranks people by points, then days fully solved, then current streak, then handle. A day is worth
 // up to 100 points: for a bugfix day the share of hidden tests the person's best attempt passed, for an
 // optimize day the best score relative to the day's best (the leader gets 100).
+//
+// The ranking reads every graded submission, so it is kept for 15 seconds (the profile page asks for it too).
 func (s *Service) Overall(ctx context.Context) ([]OverallRow, error) {
+	return s.overall.Get(struct{}{}, func() ([]OverallRow, error) { return s.computeOverall(ctx) })
+}
+
+func (s *Service) computeOverall(ctx context.Context) ([]OverallRow, error) {
 	out := []OverallRow{}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		m, err := solvedDays(ctx, tx, ``)
