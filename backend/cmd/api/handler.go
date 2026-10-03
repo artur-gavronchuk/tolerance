@@ -25,6 +25,7 @@ import (
 	"tolerance/internal/stacks"
 	"tolerance/internal/submissions"
 	"tolerance/internal/tasks"
+	"tolerance/internal/uploadlink"
 )
 
 type deps struct {
@@ -40,6 +41,7 @@ type deps struct {
 	profiles    *profiles.Service
 	recap       *recap.Service
 	notify      *notify.Service
+	uploadLinks *uploadlink.Service
 	limiter     *ratelimit.Limiter
 	providers   map[string]identity.Provider
 }
@@ -55,6 +57,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	products.RegisterOwnerRoutes(owner, d.products, cfg.devLogin)
 	recap.RegisterOwnerRoutes(owner, d.recap)
 	notify.RegisterOwnerRoutes(owner, d.notify)
+	uploadlink.RegisterOwnerRoutes(owner, d.uploadLinks)
 
 	pulse := http.NewServeMux()
 	admin := http.NewServeMux()
@@ -69,6 +72,10 @@ func newHandler(cfg config, d deps) http.Handler {
 	games.RegisterPublicRoutes(public, d.games)
 	products.RegisterPublicRoutes(public, d.products, identity.OptionalUserID(d.users))
 
+	// The personal upload link: the token in the URL is the credential (no session).
+	uploadlink.RegisterPublicRoutes(public, uploadlink.Deps{Links: d.uploadLinks, Pool: d.pool, Daily: d.daily, Submissions: d.submissions,
+		Products: d.products, Games: d.games, Limiter: d.limiter, TrustProxy: cfg.trustProxy})
+
 	session := identity.RequireSession(d.users)
 	api := http.NewServeMux()
 	identity.RegisterAuthRoutes(api, d.users, d.limiter, identity.AuthConfig{
@@ -80,6 +87,8 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("GET /api/v1/me/recap", session(owner))
 	api.Handle("GET /api/v1/me/notifications", session(owner))
 	api.Handle("POST /api/v1/me/notifications/read", session(owner))
+	api.Handle("/api/v1/me/upload-link", session(owner))
+	api.Handle("/api/v1/u/", public)
 	api.Handle("/api/v1/me/tanks", session(owner))
 	api.Handle("/api/v1/me/tanks/", session(owner))
 	api.Handle("/api/v1/submissions", session(owner))
@@ -161,7 +170,7 @@ func withMiddleware(next http.Handler, log *slog.Logger, trustProxy bool) http.H
 		start := time.Now()
 		withRequestID.ServeHTTP(sw, r)
 		ms := time.Since(start).Milliseconds()
-		route := r.Method + " " + r.URL.Path
+		route := r.Method + " " + uploadlink.RedactPath(r.URL.Path) // the upload-link token is a credential
 		fields := []any{
 			"request_id", sw.Header().Get("X-Request-Id"),
 			"route", route,

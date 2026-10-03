@@ -13,6 +13,7 @@ import { ShareResult, shareText } from '@/components/daily/share-result'
 import { SubmissionCard } from '@/components/daily/submission-card'
 import { TaskBadges } from '@/components/daily/task-header'
 import { UploadForm } from '@/components/daily/upload-form'
+import { AgentUpload } from '@/components/upload-link/agent-upload'
 import { CopyBlock } from '@/components/copy-block'
 import { SectionTitle } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
@@ -145,6 +146,7 @@ export function DailyView({ day }: { day?: string }) {
                 {practice && (
                   <p className="text-sm text-muted-foreground">{t('practiceOver')}</p>
                 )}
+                {!practice && <AgentUpload target={{ kind: 'daily' }} />}
                 <UploadForm taskSlug={practice ? task.slug : undefined} attemptsLeft={attemptsLeft} onSubmitted={update} />
               </div>
             ) : signedOut ? (

@@ -29,6 +29,7 @@ import (
 	"tolerance/internal/sandbox"
 	"tolerance/internal/stacks"
 	"tolerance/internal/submissions"
+	"tolerance/internal/uploadlink"
 )
 
 func main() {
@@ -72,7 +73,7 @@ func main() {
 	d := deps{
 		pool: pool, log: log, users: identity.NewService(pool, cfg.adminEmails), daily: dailySvc,
 		submissions: submissions.NewService(pool, dailySvc), games: gamesSvc, products: productsSvc, admin: adminpkg.NewService(pool), stacks: stacks.NewService(pool), profiles: profiles.NewService(pool),
-		recap: recapSvc, notify: notify.NewService(pool, gamesSvc, productsSvc, recapSvc),
+		uploadLinks: uploadlink.NewService(pool), recap: recapSvc, notify: notify.NewService(pool, gamesSvc, productsSvc, recapSvc),
 		limiter:   ratelimit.New(nil),
 		providers: providersFromConfig(cfg),
 	}

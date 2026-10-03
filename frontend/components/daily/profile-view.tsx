@@ -14,6 +14,7 @@ import { useT } from '@/lib/i18n/client'
 import { dailyMessages } from '@/lib/i18n/messages/daily'
 import { formatDate } from '@/lib/i18n/core'
 import { api, ApiError } from '@/lib/api'
+import { UploadLinkManage } from '@/components/upload-link/manage'
 import { useMe } from '@/lib/use-me'
 import type { Profile, ProfileDay } from '@/lib/types'
 
@@ -98,6 +99,8 @@ export function ProfileView({ handle }: { handle: string }) {
         <Stat label={t('daysSolved')} value={`${p.solved_days}/${p.played_days}`} />
       </div>
       <div className="max-w-sm"><StreakStrip hideNumbers solved={p.days.filter((d) => d.status === 'passed').map((d) => d.day)} streak={p.streak} /></div>
+
+      {isMe && <UploadLinkManage />}
 
       <section>
         <SectionTitle>{t('last12')}</SectionTitle>

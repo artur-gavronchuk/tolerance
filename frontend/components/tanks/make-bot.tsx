@@ -6,6 +6,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { CopyBlock } from '@/components/copy-block'
 import { CLI } from '@/lib/brand'
 import { UploadVersion } from './upload-version'
+import { AgentUpload } from '@/components/upload-link/agent-upload'
 import type { VersionView } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n/client'
@@ -59,6 +60,7 @@ export function MakeBot({ onUploaded }: { onUploaded: (v: VersionView) => void }
           <CopyBlock text={BOT_PROMPT} />
         </Step>
         <Step n={3} title={t('make.step3')}>
+          <AgentUpload target={{ kind: 'tanks' }} />
           <UploadVersion onUploaded={onUploaded} />
           <p className="text-xs text-muted-foreground">
             {t('make.step3Help1')}

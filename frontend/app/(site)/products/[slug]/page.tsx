@@ -9,6 +9,7 @@ import { AdminBar } from '@/components/products/admin-bar'
 import { Compare } from '@/components/products/compare'
 import { EntryCard } from '@/components/products/entry-card'
 import { EntryGallery } from '@/components/products/gallery'
+import { AgentUpload } from '@/components/upload-link/agent-upload'
 import { PhaseBadge, RankingHow, VotingNote, friendly, isBlind, usePT, utc } from '@/components/products/phase'
 import { useResults } from '@/components/products/use-results'
 import { useLoginHref } from '@/components/public/return-path'
@@ -96,6 +97,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
         {open && !meLoading && !me && (
           <p className="text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" href={loginTo}>{t('task.signInLink')}</Link>{t('task.signInUpload')}</p>
         )}
+        {open && me && <div className="mb-4"><AgentUpload target={{ kind: 'product', slug, site: task.kind === 'site' }} /></div>}
         {open && me && <UploadForm slug={slug} site={task.kind === 'site'} disabled={task.attempts < 1000 && left <= 0} onDone={refresh} />}
         {!open && task.mine.length === 0 && (
           <p className="text-sm text-muted-foreground">{me ? t('task.noUploads') : t('task.signInSee')}</p>
