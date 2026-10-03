@@ -8,6 +8,7 @@ import { track } from '@/lib/analytics'
 import { Markdown } from '@/components/daily/markdown'
 import { Countdown } from '@/components/daily/countdown'
 import { DailyBoard, fmtScore } from '@/components/daily/daily-board'
+import { Discussion } from '@/components/discussion/discussion'
 import { DayRevealView } from '@/components/daily/day-reveal'
 import { DayStatsPanel } from '@/components/daily/day-stats'
 import { HouseStrip, houseShareLine } from '@/components/daily/house-strip'
@@ -223,6 +224,7 @@ export function DailyView({ day }: { day?: string }) {
       </section>
 
       {practice && <DayRevealView day={daily.day} />}
+      {practice && <Discussion day={daily.day} />}
     </div>
   )
 }

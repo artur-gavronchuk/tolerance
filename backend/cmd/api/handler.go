@@ -14,6 +14,7 @@ import (
 	"tolerance/internal/analytics"
 	"tolerance/internal/badges"
 	"tolerance/internal/daily"
+	"tolerance/internal/discussion"
 	"tolerance/internal/fairplay"
 	"tolerance/internal/games"
 	"tolerance/internal/identity"
@@ -42,6 +43,7 @@ type deps struct {
 	admin       *adminpkg.Service
 	moderation  *moderation.Service
 	fairplay    *fairplay.Service
+	discussion  *discussion.Service
 	profiles    *profiles.Service
 	recap       *recap.Service
 	notify      *notify.Service
@@ -60,6 +62,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	})
 	submissions.RegisterOwnerRoutes(owner, d.submissions)
 	fairplay.RegisterOwnerRoutes(owner, d.fairplay, d.limiter)
+	discussion.RegisterOwnerRoutes(owner, d.discussion, d.limiter)
 	games.RegisterOwnerRoutes(owner, d.games)
 	recap.RegisterOwnerRoutes(owner, d.recap)
 	notify.RegisterOwnerRoutes(owner, d.notify)
@@ -76,6 +79,7 @@ func newHandler(cfg config, d deps) http.Handler {
 
 	public := http.NewServeMux()
 	daily.RegisterPublicRoutes(public, d.daily, identity.OptionalUserID(d.users), d.submissions.MyDay)
+	discussion.RegisterPublicRoutes(public, d.discussion, identity.OptionalUserID(d.users))
 	tasks.RegisterPublicRoutes(public, d.pool, identity.OptionalUserID(d.users))
 	analytics.RegisterPublicRoutes(public, d.analytics, identity.OptionalUserID(d.users), d.limiter, cfg.trustProxy)
 	profiles.RegisterPublicRoutes(public, d.profiles)
@@ -105,6 +109,9 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("/api/v1/submissions", session(owner))
 	api.Handle("/api/v1/submissions/", session(owner))
 	api.Handle("POST /api/v1/events", public)
+	api.Handle("POST /api/v1/daily/{day}/comments", session(owner))
+	api.Handle("PATCH /api/v1/comments/{id}", session(owner))
+	api.Handle("DELETE /api/v1/comments/{id}", session(owner))
 	api.Handle("/api/v1/daily", public)
 	api.Handle("/api/v1/daily/", public)
 	api.Handle("/api/v1/days", public)

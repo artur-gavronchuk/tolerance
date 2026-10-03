@@ -23,7 +23,7 @@ type Service struct{ pool *db.Pool }
 func NewService(pool *db.Pool) *Service { return &Service{pool: pool} }
 
 // kinds maps the API name of a hideable thing to its table.
-var kinds = map[string]string{"submission": "submissions", "bot": "game_bots"}
+var kinds = map[string]string{"submission": "submissions", "bot": "game_bots", "comment": "discussion_comments"}
 
 const maxReason = 500
 
@@ -66,6 +66,7 @@ func (s *Service) Ban(ctx context.Context, actorID, userID, reason string) error
 			`DELETE FROM upload_links WHERE user_id = $1`,
 			`UPDATE submissions SET hidden_at = now(), hidden_by_ban = true WHERE user_id = $1 AND hidden_at IS NULL`,
 			`UPDATE game_bots SET hidden_at = now(), hidden_by_ban = true WHERE owner_user_id = $1 AND hidden_at IS NULL`,
+			`UPDATE discussion_comments SET hidden_at = now(), hidden_by_ban = true WHERE user_id = $1 AND hidden_at IS NULL`,
 		} {
 			if _, err := tx.Exec(ctx, q, userID); err != nil {
 				return err
@@ -93,6 +94,7 @@ func (s *Service) Unban(ctx context.Context, actorID, userID, reason string) err
 		for _, q := range []string{
 			`UPDATE submissions SET hidden_at = NULL, hidden_by_ban = false WHERE user_id = $1 AND hidden_by_ban`,
 			`UPDATE game_bots SET hidden_at = NULL, hidden_by_ban = false WHERE owner_user_id = $1 AND hidden_by_ban`,
+			`UPDATE discussion_comments SET hidden_at = NULL, hidden_by_ban = false WHERE user_id = $1 AND hidden_by_ban`,
 		} {
 			if _, err := tx.Exec(ctx, q, userID); err != nil {
 				return err
@@ -107,12 +109,13 @@ func (s *Service) Unban(ctx context.Context, actorID, userID, reason string) err
 var labelSQL = map[string]string{
 	"submission": `SELECT u.handle || ' / ' || coalesce(s.day::text, 'practice') FROM submissions s JOIN users u ON u.id = s.user_id WHERE s.id = $1`,
 	"bot":        `SELECT g.name FROM game_bots g WHERE g.id = $1`,
+	"comment":    `SELECT u.handle || ' / ' || c.day::text || ': ' || left(c.body, 60) FROM discussion_comments c JOIN users u ON u.id = c.user_id WHERE c.id = $1`,
 }
 
 func (s *Service) SetHidden(ctx context.Context, actorID, kind, id, reason string, hide bool) error {
 	table, ok := kinds[kind]
 	if !ok {
-		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "kind must be submission or bot", "kind", "invalid")
+		return httpx.WithField(http.StatusUnprocessableEntity, "invalid_body", "kind must be submission, bot or comment", "kind", "invalid")
 	}
 	reason, err := cleanReason(reason)
 	if err != nil {
@@ -255,7 +258,8 @@ func (s *Service) Log(ctx context.Context) ([]LogItem, error) {
 			         WHEN 'moderation.ban' THEN coalesce((SELECT banned_at IS NOT NULL FROM users WHERE id = a.aggregate_id), false)
 			         WHEN 'moderation.hide' THEN coalesce(CASE a.aggregate_kind
 			           WHEN 'submission' THEN (SELECT hidden_at IS NOT NULL FROM submissions WHERE id = a.aggregate_id)
-			           WHEN 'bot' THEN (SELECT hidden_at IS NOT NULL FROM game_bots WHERE id = a.aggregate_id) END, false)
+			           WHEN 'bot' THEN (SELECT hidden_at IS NOT NULL FROM game_bots WHERE id = a.aggregate_id)
+           WHEN 'comment' THEN (SELECT hidden_at IS NOT NULL FROM discussion_comments WHERE id = a.aggregate_id) END, false)
 			         ELSE false END
 			FROM audit_events a LEFT JOIN users u ON u.id = a.actor_id
 			WHERE a.action LIKE 'moderation.%' ORDER BY a.at DESC LIMIT 50`)

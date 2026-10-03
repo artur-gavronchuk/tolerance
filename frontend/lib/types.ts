@@ -256,8 +256,8 @@ export interface NotificationList { items: AppNotification[]; unread: number }
 
 // Moderation (`/admin/moderation/*`).
 export interface ModUser { id: string; handle: string; email: string; role: string; created_at: string; banned_at: string | null; submissions: number }
-export interface ModItem { kind: 'submission' | 'bot'; id: string; label: string; status: string; at: string; hidden_at: string | null }
-export interface ModLogItem { at: string; action: 'ban' | 'unban' | 'hide' | 'unhide'; kind: 'user' | 'submission' | 'bot'; id: string; label: string; actor: string; reason: string; active: boolean }
+export interface ModItem { kind: 'submission' | 'bot' | 'comment'; id: string; label: string; status: string; at: string; hidden_at: string | null }
+export interface ModLogItem { at: string; action: 'ban' | 'unban' | 'hide' | 'unhide'; kind: 'user' | 'submission' | 'bot' | 'comment'; id: string; label: string; actor: string; reason: string; active: boolean }
 
 // Fair play (`/admin/fairplay`, `POST /reports`).
 export type FairSignal = 'fast_solve' | 'burst' | 'shared_device' | 'shared_ip' | 'near_duplicate'

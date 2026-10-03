@@ -18,6 +18,7 @@ import (
 	adminpkg "tolerance/internal/admin"
 	"tolerance/internal/analytics"
 	"tolerance/internal/daily"
+	"tolerance/internal/discussion"
 	"tolerance/internal/fairplay"
 	"tolerance/internal/games"
 	"tolerance/internal/games/match"
@@ -100,6 +101,7 @@ func main() {
 		providers: providersFromConfig(cfg),
 	}
 
+	d.discussion = discussion.NewService(pool)
 	d.fairplay = fairplay.NewService(pool, os.Getenv("ARENA_FAIRPLAY_SECRET"))
 	d.submissions.OnUpload = d.fairplay.Observe
 

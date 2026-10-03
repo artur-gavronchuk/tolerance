@@ -75,7 +75,7 @@ export const admin = {
   recent: () => api<{ items: AdminEvent[] }>('/admin/recent').then((r) => r.items),
 }
 
-export type ModKind = 'submission' | 'bot'
+export type ModKind = 'submission' | 'bot' | 'comment'
 export const moderation = {
   users: (q: string) => api<{ items: ModUser[] }>(`/admin/moderation/users?q=${encodeURIComponent(q)}`).then((r) => r.items),
   items: (userId: string) => api<{ items: ModItem[] }>(`/admin/moderation/users/${encodeURIComponent(userId)}/items`).then((r) => r.items),
