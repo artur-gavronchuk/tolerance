@@ -194,7 +194,7 @@ targets, heals, avoids crossfire and the shrinking zone) and `house:ace`
 play in the ladder, so a new bot starts near the bottom of the table and climbs
 as it beats them.
 
-## 10. Joining the tournament
+## 10. Qualifying checks
 
 Every uploaded or agent-written version goes through `Qualify` before it can
 play in the ladder:
@@ -221,11 +221,10 @@ TrueSkill/OpenSkill: every bot has a skill estimate `μ` and an uncertainty
 `σ`, both updated from where it placed relative to everyone else in the
 match. Starting values are `μ₀ = 25`, `σ₀ = 25/3`; the model's own
 parameters are `β = σ₀ / 2` and `κ = 0.0001`. A brand new *version* of an
-existing bot doesn't reset its rating, but its uncertainty is bumped back up
-to at least `5.0` — a new version is only weak evidence about how it'll
-actually do.
+existing bot keeps its rating, with its uncertainty raised back to at least
+`5.0`.
 
-The number shown on the leaderboard is:
+The number shown on the ladder is:
 
 ```
 displayed_rating = round(1000 + 40 × (μ − 3σ))
@@ -233,3 +232,6 @@ displayed_rating = round(1000 + 40 × (μ − 3σ))
 
 — a conservative estimate that starts low and climbs as the bot proves
 itself, the same shape TrueSkill's public displays use.
+
+A bot with fewer than 10 season matches is marked *provisional*: its rating can
+still move a lot, and tournament seeding prefers bots that are not provisional.

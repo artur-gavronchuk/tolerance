@@ -258,8 +258,9 @@ export default function TanksDocsPage() {
           match. Starting values are μ₀ = 25, σ₀ = 25/3; the model&apos;s own parameters are β = σ₀ / 2 and κ = 0.0001.
           A new version of an existing bot keeps its rating, with its uncertainty raised back to at least 5.0.
         </p>
-        <p>The number shown on the ladder is a conservative estimate that starts low and climbs as the bot proves itself. A bot with fewer than 10 season matches is marked provisional:</p>
+        <p>The number shown on the ladder is a conservative estimate that starts low and climbs as the bot proves itself:</p>
         <Code>{'displayed_rating = round(1000 + 40 × (μ − 3σ))'}</Code>
+        <p>A bot with fewer than 10 season matches is marked provisional: its rating can still move a lot, and tournament seeding prefers bots that are not provisional.</p>
       </Section>
 
       <Section id="local" title="Playing locally">
