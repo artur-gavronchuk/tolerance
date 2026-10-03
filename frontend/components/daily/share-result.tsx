@@ -14,6 +14,7 @@ export function shareText({ day, title, subs, streak }: { day: string; title: st
       const squares = s.tests.length > 0
         ? s.tests.map((t) => (t.passed ? '🟩' : '🟥')).join('')
         : '⬛'.repeat(Math.max(1, s.total_tests))
+      if (s.score != null) return `${s.tests.length > 20 ? '' : squares + ' '}score ${Math.round(s.score * 100) / 100}`
       return `${squares} ${s.passed_tests}/${s.total_tests}`
     })
   if (rows.length === 0) return null

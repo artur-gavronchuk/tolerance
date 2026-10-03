@@ -292,7 +292,8 @@ type OverallRow struct {
 }
 
 // Overall ranks people by points, then days fully solved, then current streak, then handle. A day is worth
-// up to 100 points: the share of hidden tests the person's best attempt that day passed.
+// up to 100 points: for a bugfix day the share of hidden tests the person's best attempt passed, for an
+// optimize day the best score relative to the day's best (the leader gets 100).
 func (s *Service) Overall(ctx context.Context) ([]OverallRow, error) {
 	out := []OverallRow{}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
@@ -302,10 +303,19 @@ func (s *Service) Overall(ctx context.Context) ([]OverallRow, error) {
 		}
 		rows, err := tx.Query(ctx, `
 			SELECT u.handle, u.id, sum(best.points)::int FROM (
-				SELECT user_id, max(round(100.0 * passed_tests / total_tests)) AS points
-				FROM submissions
-				WHERE day IS NOT NULL AND status IN ('passed', 'failed') AND passed_tests > 0 AND total_tests > 0
-				GROUP BY user_id, day) best
+				SELECT user_id, max(CASE
+					WHEN t.kind = 'optimize' AND t.direction = 'max' AND db.best_max > 0 THEN round(100.0 * s.score / db.best_max)
+					WHEN t.kind = 'optimize' AND t.direction = 'min' AND s.score > 0 AND s.passed_tests = s.total_tests THEN round(100.0 * db.best_min / s.score)
+					WHEN t.kind = 'optimize' THEN 0
+					ELSE round(100.0 * s.passed_tests / s.total_tests) END) AS points
+				FROM submissions s
+				JOIN tasks t ON t.slug = s.task_slug
+				LEFT JOIN (
+					SELECT day, max(score) AS best_max,
+						min(score) FILTER (WHERE score > 0 AND passed_tests = total_tests) AS best_min
+					FROM submissions WHERE day IS NOT NULL AND score IS NOT NULL GROUP BY day) db ON db.day = s.day
+				WHERE s.day IS NOT NULL AND s.status IN ('passed', 'failed') AND s.passed_tests > 0 AND s.total_tests > 0
+				GROUP BY s.user_id, s.day) best
 			JOIN users u ON u.id = best.user_id
 			GROUP BY u.id, u.handle`)
 		if err != nil {
