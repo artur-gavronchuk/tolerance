@@ -9,17 +9,11 @@ import { Label } from '@/components/ui/label'
 import { Brand } from '@/components/brand'
 import { api, post, ApiError } from '@/lib/api'
 import { safeReturnPath } from '@/components/public/return-path'
+import { useT } from '@/lib/i18n/client'
+import { authMessages } from '@/lib/i18n/messages/auth'
 import type { AuthProviders } from '@/lib/types'
 
-const errors: Record<string, string> = {
-  oauth_denied: 'Sign-in was cancelled.',
-  oauth_state: 'That sign-in link expired. Try again.',
-  oauth_failed: 'The provider did not let us in. Try again in a moment.',
-  email_unverified: 'Your account needs a verified email address. Verify one with the provider and try again.',
-  rate_limited: 'Too many attempts, wait a minute.',
-}
-
-const labels = { github: 'Continue with GitHub', google: 'Continue with Google' } as const
+const ERROR_CODES = ['oauth_denied', 'oauth_state', 'oauth_failed', 'email_unverified', 'rate_limited'] as const
 
 function ProviderIcon({ id }: { id: 'github' | 'google' }) {
   if (id === 'github') {
@@ -40,6 +34,7 @@ function ProviderIcon({ id }: { id: 'github' | 'google' }) {
 }
 
 export function AuthForm() {
+  const t = useT(authMessages)
   const router = useRouter()
   const [options, setOptions] = useState<AuthProviders | null>(null)
   const [providersFailed, setProvidersFailed] = useState(false)
@@ -52,13 +47,13 @@ export function AuthForm() {
     const q = new URLSearchParams(window.location.search)
     setNext(safeReturnPath(q.get('next')) ?? '/')
     const code = q.get('error')
-    if (code) setError(Object.hasOwn(errors, code) ? errors[code] : 'Sign-in failed. Try again.')
+    if (code) setError((ERROR_CODES as readonly string[]).includes(code) ? t(`err.${code}` as 'err.oauth_denied') : t('err.generic'))
     api<AuthProviders>('/auth/providers')
       .then(setOptions)
       .catch(() => {
         setOptions({ providers: [], dev_login: false })
         setProvidersFailed(true)
-        setError("Can't reach the server. Try again in a moment.")
+        setError(t('err.unreachable'))
       })
   }, [])
 
@@ -71,7 +66,7 @@ export function AuthForm() {
       router.replace(next)
     } catch (err) {
       const a = err as ApiError
-      setError(a.status === 429 ? errors.rate_limited : a.message)
+      setError(a.status === 429 || a.code === 'rate_limited' ? t('err.rate_limited') : a.message)
     } finally {
       setBusy(false)
     }
@@ -83,42 +78,42 @@ export function AuthForm() {
       <div className="flex flex-col px-4 py-6 sm:px-10">
         <Brand />
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">
-          <h1 className="display text-[2.2rem]">Sign in</h1>
+          <h1 className="display text-[2.2rem]">{t('title')}</h1>
           <p className="mt-2 text-muted-foreground">
-            Sign in to submit, vote or enter a bot. New here? The same buttons create your account.
+            {t('lead')}
           </p>
           <div className={`mt-8 flex flex-col gap-3 ${options ? '' : 'min-h-24'} ${options && !options.providers.length && !nothing ? 'hidden' : ''}`}>
             {options?.providers.map((p) => (
               <Button key={p} size="lg" variant="outline" className="gap-2.5"
                 render={<a href={`/api/v1/auth/${p}/start?next=${encodeURIComponent(next)}`} />} nativeButton={false}>
                 <ProviderIcon id={p} />
-                {labels[p]}
+                {t(p)}
               </Button>
             ))}
-            {nothing && <p className="text-sm text-muted-foreground">Sign-in is not configured on this server yet.</p>}
+            {nothing && <p className="text-sm text-muted-foreground">{t('notConfigured')}</p>}
           </div>
           {error && <p role="alert" className="mt-4 rounded-[9px] bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
           {options?.dev_login && (
             <form onSubmit={devSignIn} className={`flex flex-col gap-3 ${options.providers.length ? 'mt-6 border-t border-dashed pt-6' : 'mt-8'}`}>
-              <Label htmlFor="email">Development sign-in</Label>
+              <Label htmlFor="email">{t('devTitle')}</Label>
               <Input id="email" type="email" autoComplete="email" required placeholder="you@example.com"
                 value={email} onChange={(e) => setEmail(e.target.value)} />
-              <p className="text-xs text-muted-foreground">Any email, no password. Only on local and CI servers.</p>
-              <Button type="submit" variant="secondary" disabled={busy}>{busy ? 'Please wait…' : 'Dev sign in'}</Button>
+              <p className="text-xs text-muted-foreground">{t('devHint')}</p>
+              <Button type="submit" variant="secondary" disabled={busy}>{busy ? t('wait') : t('devButton')}</Button>
             </form>
           )}
           <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
-            By continuing you accept the <Link className="font-semibold text-foreground underline underline-offset-2" href="/terms">terms and fair play rules</Link>.
+            {t('termsPre')}<Link className="font-semibold text-foreground underline underline-offset-2" href="/terms">{t('termsLink')}</Link>{t('termsPost')}
           </p>
-          <p className="mt-6 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/">Just looking? Browse without an account</Link></p>
+          <p className="mt-6 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/">{t('browse')}</Link></p>
         </div>
       </div>
       <aside className="relative hidden overflow-hidden bg-[#15212b] lg:flex lg:flex-col lg:justify-center lg:px-14">
-        <p className="display max-w-md text-[2rem] text-[#eef2f5]">Three ways to put your agent to the test.</p>
+        <p className="display max-w-md text-[2rem] text-[#eef2f5]">{t('asideTitle')}</p>
         <ul className="mt-6 flex max-w-md flex-col gap-4 text-[#eef2f5]/70">
-          <li><b className="text-[#eef2f5]">Task of the day.</b> One repo, hidden tests decide. Upload what your agent wrote.</li>
-          <li><b className="text-[#eef2f5]">Product of the week.</b> Your agent builds a tool or a site, people vote.</li>
-          <li><b className="text-[#eef2f5]">Tanks arena.</b> Your agent writes a bot, bots fight on a public ladder.</li>
+          <li><b className="text-[#eef2f5]">{t('asideDaily')}</b> {t('asideDailyText')}</li>
+          <li><b className="text-[#eef2f5]">{t('asideProduct')}</b> {t('asideProductText')}</li>
+          <li><b className="text-[#eef2f5]">{t('asideTanks')}</b> {t('asideTanksText')}</li>
         </ul>
       </aside>
     </main>

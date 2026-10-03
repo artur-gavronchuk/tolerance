@@ -4,17 +4,21 @@ import './globals.css'
 import { PRODUCT } from '@/lib/brand'
 import { SITE_URL } from '@/lib/server-api'
 import { I18nProvider } from '@/lib/i18n/client'
-import { getLocale } from '@/lib/i18n/server'
+import { getLocale, getT } from '@/lib/i18n/server'
+import { shellMessages } from '@/lib/i18n/messages/shell'
 
 const manrope = Manrope({ subsets: ['latin', 'cyrillic'], variable: '--font-manrope' })
 const jetbrains = JetBrains_Mono({ subsets: ['latin', 'cyrillic'], variable: '--font-jetbrains' })
 
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: { default: PRODUCT, template: `%s · ${PRODUCT}` },
-  description: 'One coding task every day. Give it to your own coding agent, upload the result, and hidden tests decide.',
-  openGraph: { siteName: PRODUCT, type: 'website' },
-  twitter: { card: 'summary_large_image' },
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT(shellMessages)
+  return {
+    metadataBase: new URL(SITE_URL),
+    title: { default: PRODUCT, template: `%s · ${PRODUCT}` },
+    description: t('siteDescription'),
+    openGraph: { siteName: PRODUCT, type: 'website' },
+    twitter: { card: 'summary_large_image' },
+  }
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
