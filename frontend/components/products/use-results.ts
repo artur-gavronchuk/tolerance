@@ -1,12 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { friendlyMessage, products } from '@/lib/api'
+import { products } from '@/lib/api'
+import { friendly, usePT } from './phase'
 import type { ProductEntry, ProductResults } from '@/lib/types'
 
 // A task's standings plus the vote actions. With `stable` the entries keep the order they first loaded in, so
 // a gallery does not reshuffle under the pointer while people vote; the numbers still update.
 export function useResults(slug: string, viewer: string | undefined, stable = false) {
+  const t = usePT()
   const [res, setRes] = useState<ProductResults | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [voteError, setVoteError] = useState<string | null>(null)
@@ -23,9 +25,9 @@ export function useResults(slug: string, viewer: string | undefined, stable = fa
       }
       setRes(r)
     } catch (e) {
-      setError(friendlyMessage(e))
+      setError(friendly(t, e))
     }
-  }, [slug, stable])
+  }, [slug, stable, t])
   useEffect(() => { void refresh() }, [refresh, viewer])
 
   // Clicking your vote again takes it back; clicking another entry moves it.
@@ -37,7 +39,7 @@ export function useResults(slug: string, viewer: string | undefined, stable = fa
       else await products.vote(e.id)
       await refresh()
     } catch (err) {
-      setVoteError(friendlyMessage(err))
+      setVoteError(friendly(t, err))
     } finally {
       setBusy(null)
     }

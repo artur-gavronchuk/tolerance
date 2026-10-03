@@ -6,16 +6,17 @@ import { ArrowLeft, ArrowRight, ArrowDown, ExternalLink } from 'lucide-react'
 import { useLoginHref } from '@/components/public/return-path'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { friendlyMessage, products } from '@/lib/api'
+import { products } from '@/lib/api'
 import type { CompareJudged, CompareNext } from '@/lib/types'
 import { siteURL } from './entry-card'
-import { JUDGE_SENTENCE } from './phase'
+import { friendly, usePT } from './phase'
 
 type Verdict = 'a' | 'b' | 'tie'
 
 // Blind comparison: two anonymous sites side by side (tabs on a phone), a verdict, then the authors are
 // revealed and the next pair comes. The standings come from everybody's verdicts.
 export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean }) {
+  const t = usePT()
   const loginTo = useLoginHref()
   const [next, setNext] = useState<CompareNext | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -29,9 +30,9 @@ export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean })
       setNext(await products.compareNext(slug))
       setTab('a')
     } catch (e) {
-      setError(friendlyMessage(e))
+      setError(friendly(t, e))
     }
-  }, [slug])
+  }, [slug, t])
   useEffect(() => { if (signedIn) void load() }, [signedIn, load])
   useEffect(() => () => { if (toast.current) clearTimeout(toast.current) }, [])
 
@@ -47,11 +48,11 @@ export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean })
       toast.current = setTimeout(() => setRevealed(null), 6000)
       await load()
     } catch (e) {
-      setError(friendlyMessage(e))
+      setError(friendly(t, e))
     } finally {
       setBusy(false)
     }
-  }, [pair, busy, slug, load])
+  }, [pair, busy, slug, load, t])
 
   // ← A is better, ↓ tie, → B is better.
   useEffect(() => {
@@ -69,21 +70,21 @@ export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean })
   }, [pair, judge])
 
   return (
-    <section aria-label="Compare" className="space-y-4 rounded-[14px] border border-primary/40 bg-card p-4 sm:p-5">
+    <section aria-label={t('cmp.title')} className="space-y-4 rounded-[14px] border border-primary/40 bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="heading text-lg">Compare</h2>
+        <h2 className="heading text-lg">{t('cmp.title')}</h2>
         {next && next.target > 0 && (
           <span className="font-mono text-sm text-muted-foreground" aria-live="polite">
-            {pair ? `${next.judged + 1} of ${next.target}` : `${next.judged} of ${next.target} judged`}
+            {pair ? t('cmp.of', { a: next.judged + 1, b: next.target }) : t('cmp.judged', { a: next.judged, b: next.target })}
           </span>
         )}
       </div>
       <p className="max-w-2xl text-sm text-muted-foreground">
-        {JUDGE_SENTENCE} Open both and use them before you decide.
+        {t('judge.sentence')} {t('cmp.openBoth')}
       </p>
 
       {!signedIn && (
-        <p className="text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" href={loginTo}>Sign in</Link> to judge sites.</p>
+        <p className="text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" href={loginTo}>{t('cmp.signInLink')}</Link>{t('cmp.signInTail')}</p>
       )}
       {signedIn && !next && !error && <Skeleton className="h-80 rounded-[10px]" />}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -93,17 +94,17 @@ export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean })
       {signedIn && next && !pair && (
         <p className="rounded-[10px] border border-dashed border-input px-4 py-8 text-center text-sm text-muted-foreground">
           {next.target === 0
-            ? 'There are not enough other sites to compare yet.'
-            : `You judged ${next.judged} ${next.judged === 1 ? 'pair' : 'pairs'}. Thank you, that is all we need from you for this task.`}
+            ? t('cmp.notEnough')
+            : t('cmp.done', { pairs: t.plural('pairs', next.judged) })}
         </p>
       )}
 
       {pair && (
         <>
-          <div role="tablist" aria-label="Site to show" className="grid grid-cols-2 gap-2 md:hidden">
+          <div role="tablist" aria-label={t('cmp.showSite')} className="grid grid-cols-2 gap-2 md:hidden">
             {(['a', 'b'] as const).map((k) => (
               <Button key={k} role="tab" aria-selected={tab === k} variant={tab === k ? 'default' : 'outline'} onClick={() => setTab(k)}>
-                Site {k.toUpperCase()}
+                {t('cmp.tab', { k: k.toUpperCase() })}
               </Button>
             ))}
           </div>
@@ -113,17 +114,17 @@ export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean })
             ))}
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <Button disabled={busy} onClick={() => void judge('a')} title="Shortcut: left arrow">
-              <ArrowLeft /><span className="truncate">A is better</span>
+            <Button disabled={busy} onClick={() => void judge('a')} title={t('cmp.keyLeft')}>
+              <ArrowLeft /><span className="truncate">{t('cmp.aBetter')}</span>
             </Button>
-            <Button disabled={busy} variant="outline" onClick={() => void judge('tie')} title="Shortcut: down arrow">
-              <ArrowDown /><span className="truncate">Tie</span>
+            <Button disabled={busy} variant="outline" onClick={() => void judge('tie')} title={t('cmp.keyDown')}>
+              <ArrowDown /><span className="truncate">{t('cmp.tie')}</span>
             </Button>
-            <Button disabled={busy} onClick={() => void judge('b')} title="Shortcut: right arrow">
-              <span className="truncate">B is better</span><ArrowRight />
+            <Button disabled={busy} onClick={() => void judge('b')} title={t('cmp.keyRight')}>
+              <span className="truncate">{t('cmp.bBetter')}</span><ArrowRight />
             </Button>
           </div>
-          <p className="hidden text-xs text-muted-foreground md:block">Keyboard: ← A is better, ↓ tie, → B is better.</p>
+          <p className="hidden text-xs text-muted-foreground md:block">{t('cmp.keyboard')}</p>
         </>
       )}
     </section>
@@ -131,15 +132,16 @@ export function Compare({ slug, signedIn }: { slug: string; signedIn: boolean })
 }
 
 function Frame({ id, label, className }: { id: string; label: string; className: string }) {
+  const t = usePT()
   return (
     <div className={`min-w-0 overflow-hidden rounded-[10px] border border-border ${className}`}>
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <span className="font-mono text-sm font-semibold">{label}</span>
         <Button size="sm" variant="ghost" nativeButton={false} render={<a href={siteURL(id)} target="_blank" rel="noreferrer" />}>
-          <ExternalLink />Open full size
+          <ExternalLink />{t('entry.openFull')}
         </Button>
       </div>
-      <iframe src={siteURL(id)} title={`Site ${label}`} sandbox="allow-scripts allow-forms allow-modals"
+      <iframe src={siteURL(id)} title={t('cmp.frameTitle', { k: label })} sandbox="allow-scripts allow-forms allow-modals"
         className="block h-[26rem] w-full bg-white md:h-[34rem]" />
     </div>
   )
@@ -147,12 +149,19 @@ function Frame({ id, label, className }: { id: string; label: string; className:
 
 // After a verdict: whose sites those were.
 function RevealToast({ j }: { j: CompareJudged }) {
+  const t = usePT()
   const name = (r: CompareJudged['a']) => <b className="text-foreground">{r.handle}</b>
   const made = (r: CompareJudged['a']) => (r.made_with ? ` (${r.made_with})` : '')
+  const who = (r: CompareJudged['a']) => <>{name(r)}{made(r)}</>
   return (
     <p role="status" className="rounded-[10px] border border-border bg-muted/50 px-4 py-2.5 text-sm text-muted-foreground">
-      You judged: A was {name(j.a)}{made(j.a)}, B was {name(j.b)}{made(j.b)}.{' '}
-      {j.winner === 'tie' ? 'You called it a tie.' : <>You picked {name(j.winner === 'a' ? j.a : j.b)}.</>}
+      {splice(t('cmp.revealed', { a: '\u0000', b: '\u0001' }), { '\u0000': who(j.a), '\u0001': who(j.b) })}{' '}
+      {j.winner === 'tie' ? t('cmp.tied') : splice(t('cmp.picked', { who: '\u0000' }), { '\u0000': name(j.winner === 'a' ? j.a : j.b) })}
     </p>
   )
+}
+
+// Fills marker characters in a translated sentence with JSX.
+function splice(s: string, parts: Record<string, React.ReactNode>) {
+  return s.split(/([\u0000\u0001])/).map((p, i) => (p in parts ? <span key={i}>{parts[p]}</span> : p))
 }
