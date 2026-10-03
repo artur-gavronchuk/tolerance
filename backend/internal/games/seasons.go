@@ -103,7 +103,12 @@ func seasonLadder(ctx context.Context, tx pgx.Tx, seasonID string, playedOnly bo
 		if out[i].Rating != out[j].Rating {
 			return out[i].Rating > out[j].Rating
 		}
-		return out[i].Matches > out[j].Matches
+		if out[i].Matches != out[j].Matches {
+			return out[i].Matches > out[j].Matches
+		}
+		// Early in a season everyone sits at the fresh rating; lifetime strength breaks the tie so
+		// tournament seeds and the showcase ladder stay meaningful.
+		return out[i].LifetimeRating > out[j].LifetimeRating
 	})
 	for i := range out {
 		out[i].Rank = i + 1
