@@ -56,7 +56,14 @@ func (s *Service) ScheduleTick(ctx context.Context, concurrency int, interval ti
 			return nil
 		}
 
-		userBots, err := s.activeUserBots(ctx, tx)
+		// Opponents are matched by the rating in the current season (a bot with no season row yet falls back
+		// to its lifetime rating), so a fresh month starts a fresh ladder.
+		season, err := ensureSeasonTx(ctx, tx)
+		if err != nil {
+			return err
+		}
+
+		userBots, err := s.activeUserBots(ctx, tx, season.ID)
 		if err != nil {
 			return err
 		}
@@ -68,7 +75,7 @@ func (s *Service) ScheduleTick(ctx context.Context, concurrency int, interval ti
 			if lastCreated != nil && time.Since(*lastCreated) < houseOnlyGap {
 				return nil
 			}
-			houseBots, err := s.houseLadderBots(ctx, tx)
+			houseBots, err := s.houseLadderBots(ctx, tx, season.ID)
 			if err != nil {
 				return err
 			}
@@ -77,7 +84,7 @@ func (s *Service) ScheduleTick(ctx context.Context, concurrency int, interval ti
 			}
 			players = houseBots
 		} else {
-			players, err = s.pickLeadAndOpponents(ctx, tx, userBots, rng)
+			players, err = s.pickLeadAndOpponents(ctx, tx, season.ID, userBots, rng)
 			if err != nil {
 				return err
 			}
@@ -112,9 +119,11 @@ func scanLadderBots(rows pgx.Rows) ([]ladderBot, error) {
 }
 
 // activeUserBots lists every owner bot (not house) with an active version.
-func (s *Service) activeUserBots(ctx context.Context, tx pgx.Tx) ([]ladderBot, error) {
-	rows, err := tx.Query(ctx, `SELECT id, name, mu, sigma, active_version_id, last_match_at
-		FROM game_bots WHERE house = false AND active_version_id IS NOT NULL`)
+func (s *Service) activeUserBots(ctx context.Context, tx pgx.Tx, seasonID string) ([]ladderBot, error) {
+	rows, err := tx.Query(ctx, `SELECT g.id, g.name, coalesce(sr.mu, g.mu), coalesce(sr.sigma, g.sigma), g.active_version_id, g.last_match_at
+		FROM game_bots g
+		LEFT JOIN tanks_season_ratings sr ON sr.season_id = $1 AND sr.bot_id = g.id
+		WHERE g.house = false AND g.active_version_id IS NOT NULL`, seasonID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,13 +132,15 @@ func (s *Service) activeUserBots(ctx context.Context, tx pgx.Tx) ([]ladderBot, e
 }
 
 // houseLadderBots loads the house.Ladder bots (hunter, sniper - not idle, which never plays in the ladder).
-func (s *Service) houseLadderBots(ctx context.Context, tx pgx.Tx) ([]ladderBot, error) {
+func (s *Service) houseLadderBots(ctx context.Context, tx pgx.Tx, seasonID string) ([]ladderBot, error) {
 	ids := make([]string, len(house.Ladder))
 	for i, name := range house.Ladder {
 		ids[i] = "bot_house_" + name
 	}
-	rows, err := tx.Query(ctx, `SELECT id, name, mu, sigma, active_version_id, last_match_at
-		FROM game_bots WHERE id = ANY($1)`, ids)
+	rows, err := tx.Query(ctx, `SELECT g.id, g.name, coalesce(sr.mu, g.mu), coalesce(sr.sigma, g.sigma), g.active_version_id, g.last_match_at
+		FROM game_bots g
+		LEFT JOIN tanks_season_ratings sr ON sr.season_id = $2 AND sr.bot_id = g.id
+		WHERE g.id = ANY($1)`, ids, seasonID)
 	if err != nil {
 		return nil, err
 	}
@@ -146,9 +157,9 @@ func absInt(v int) int {
 
 // pickLeadAndOpponents picks the ladder match's lead (the user bot with the oldest last_match_at, NULL
 // first, ties broken by larger sigma) plus up to three opponents drawn from the six other active bots
-// (other user bots and the house ladder bots) nearest the lead's displayed rating, shuffled with rng and
+// (other user bots and the house ladder bots) nearest the lead's displayed season rating, shuffled with rng and
 // topped up with any as-yet-unused house.Ladder bot if that pool came up short.
-func (s *Service) pickLeadAndOpponents(ctx context.Context, tx pgx.Tx, userBots []ladderBot, rng *rand.Rand) ([]ladderBot, error) {
+func (s *Service) pickLeadAndOpponents(ctx context.Context, tx pgx.Tx, seasonID string, userBots []ladderBot, rng *rand.Rand) ([]ladderBot, error) {
 	sort.Slice(userBots, func(i, j int) bool {
 		li, lj := userBots[i].LastMatchAt, userBots[j].LastMatchAt
 		if (li == nil) != (lj == nil) {
@@ -162,7 +173,7 @@ func (s *Service) pickLeadAndOpponents(ctx context.Context, tx pgx.Tx, userBots 
 	lead := userBots[0]
 	leadRating := rating.Display(rating.Rating{Mu: lead.Mu, Sigma: lead.Sigma})
 
-	houseBots, err := s.houseLadderBots(ctx, tx)
+	houseBots, err := s.houseLadderBots(ctx, tx, seasonID)
 	if err != nil {
 		return nil, err
 	}
