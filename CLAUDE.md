@@ -61,6 +61,12 @@ anyone when `ARENA_DEV_LOGIN=true` — the same rule gates "start a tournament n
 Products ("product of the week") and the `/agents` stacks page were removed on
 2026-10-03; they live in the commit history.
 
+**Build challenges** (`internal/builds`, since 2026-10-05 the whole visible site; daily and tanks are hidden
+behind redirects in `frontend/next.config.mjs`): the public half is `catalog/<slug>/` (manifest, contract
+en/ru) and `catalog/season.json` (order, dates); hidden tests, references and broken versions live in the
+private `arena-tasks/builds/<slug>/`. Locally set `ARENA_BUILDS_TESTS_SOURCE=<arena-tasks>/builds` in `.env`;
+check a challenge with `python3 <arena-tasks>/builds/verify.py <slug> --tolerance <this repo>`.
+
 This repository is public: `backend/fixtures/*` tasks are practice tasks. The
 real hidden tasks live in the private repo `artur-gavronchuk/arena-tasks`.
 Never copy those tasks here.
