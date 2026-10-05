@@ -43,7 +43,9 @@ const maxPracticePerDay = 20
 func (s *Service) Create(ctx context.Context, userID, taskSlug, filename string, data []byte, madeWith string) (Submission, error) {
 	today := daily.Today()
 	todaySlug, err := s.daily.TaskFor(ctx, today)
-	if err != nil {
+	// Exhausting today's pool must not block an explicit upload for an already-played task.
+	// Keep every other assignment error visible, and keep no_tasks for uploads without a slug.
+	if err != nil && (taskSlug == "" || !errors.Is(err, daily.ErrNoTasks)) {
 		return Submission{}, err
 	}
 	if taskSlug == "" {

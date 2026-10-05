@@ -53,7 +53,7 @@ export function DailyView({ day }: { day?: string }) {
   const [missing, setMissing] = useState(false)
   // Today only: the pool of never-played tasks is exhausted (no_tasks); past days stay open for practice.
   const [poolEmpty, setPoolEmpty] = useState(false)
-  // Submissions made or polled in this session, kept apart from the server's list.
+  // Just-uploaded submissions, kept only until the server's list includes them.
   const [local, setLocal] = useState<Submission[]>([])
 
   // How many board rows are shown, so a background refresh keeps the pages "show more" already opened.
@@ -62,6 +62,9 @@ export function DailyView({ day }: { day?: string }) {
     try {
       const d = await api<Daily>(day ? `/daily/${day}` : '/daily')
       setDaily(d)
+      setPoolEmpty(false)
+      const serverIds = new Set([...(d.my?.submissions ?? []), ...(d.my?.practice ?? [])].map((s) => s.id))
+      setLocal((cur) => cur.filter((s) => !serverIds.has(s.id)))
       setError(null)
       const [lb, st] = await Promise.all([
         api<{ items: DailyRow[]; total: number }>(`/daily/${d.day}/leaderboard?limit=${Math.min(500, Math.max(BOARD_PAGE, shownRef.current))}`),

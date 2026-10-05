@@ -299,6 +299,45 @@ func TestAttemptsAndPractice(t *testing.T) {
 	}
 }
 
+func TestPracticeWithExhaustedDailyPool(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	var pastDay string
+	if err := f.d.AdminPool.Raw().QueryRow(ctx, `INSERT INTO daily_tasks (day, task_slug)
+		VALUES ($1::date - 1, 'go-fix-retry') RETURNING day::text`, daily.Today()).Scan(&pastDay); err != nil {
+		t.Fatal(err)
+	}
+	// The only task has already been played. Default uploads still report an exhausted daily pool.
+	if _, err := f.svc.Create(ctx, f.userID, "", "fix.patch", []byte(goodDiff), ""); !errors.Is(err, daily.ErrNoTasks) {
+		t.Fatalf("default upload with no new task: %v", err)
+	}
+	s, err := f.svc.Create(ctx, f.userID, "go-fix-retry", "fix.patch", []byte(goodDiff), "practice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Day != nil || s.Status != submissions.StatusQueued {
+		t.Fatalf("practice must be queued without a graded day: %+v", s)
+	}
+	if err := f.worker(&sandbox.Fake{Result: sandbox.Result{ExitCode: 0, Tests: passing()}}, t.TempDir()).RunSubmission(ctx, s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.get(t, s.ID); got.Status != submissions.StatusPassed || got.Day != nil {
+		t.Fatalf("practice verdict: %+v", got)
+	}
+	my, err := f.svc.MyDay(ctx, f.userID, pastDay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history := my.(submissions.My)
+	if history.AttemptsUsed != 0 || len(history.Submissions) != 0 || len(history.Practice) != 1 || history.Practice[0].ID != s.ID {
+		t.Fatalf("practice must be recoverable without spending daily attempts: %+v", history)
+	}
+	var p *httpx.Problem
+	if _, err := f.svc.Create(ctx, f.userID, "unknown-task", "fix.patch", []byte(goodDiff), ""); !errors.As(err, &p) || p.Code != "invalid_task" {
+		t.Fatalf("unknown task must still be rejected: %v", err)
+	}
+}
+
 func repoFiles(t *testing.T, f fixture) map[string][]byte {
 	t.Helper()
 	var tarball []byte
