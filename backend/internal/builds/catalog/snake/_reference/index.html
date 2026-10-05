@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snake</title>
+<style>
+  :root { color-scheme: dark; --bg: #0b1020; --panel: #121a33; --text: #e8ecff; --muted: #a9b3d6; --snake: #4ade80; --food: #f472b6; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% 0%, #1e2a5a, var(--bg) 60%); color: var(--text);
+    font: 16px/1.4 system-ui, sans-serif; display: flex; justify-content: center; }
+  main { width: min(100%, 520px); padding: 16px; }
+  header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 12px; }
+  h1 { margin: 0 auto 0 0; font-size: 28px; letter-spacing: -0.02em; }
+  .stat { color: var(--muted); } .stat b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .board { position: relative; border-radius: 14px; overflow: hidden; box-shadow: 0 0 40px #4ade8033; }
+  canvas { display: block; width: 100%; height: auto; background: var(--panel); touch-action: none; }
+  .overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; background: #0b1020cc; text-align: center; padding: 16px; }
+  .overlay p { margin: 0; font-size: 24px; font-weight: 800; }
+  button { font: inherit; font-weight: 700; color: var(--bg); background: var(--snake); border: 0; border-radius: 10px;
+    min-width: 48px; min-height: 48px; padding: 0 18px; cursor: pointer; }
+  .pad { display: grid; grid-template-columns: repeat(3, 64px); gap: 8px; justify-content: center; margin-top: 14px; }
+  .pad button { background: #26315f; color: var(--text); font-size: 22px; padding: 0; }
+  .pad .up { grid-column: 2; } .pad .left { grid-column: 1; grid-row: 2; } .pad .down { grid-column: 2; grid-row: 2; } .pad .right { grid-column: 3; grid-row: 2; }
+  .hint { color: var(--muted); font-size: 14px; text-align: center; margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Snake</h1>
+    <span class="stat">Score <b data-testid="score" id="score">0</b></span>
+    <span class="stat">Best <b data-testid="best" id="best">0</b></span>
+  </header>
+  <div class="board">
+    <canvas id="c" width="400" height="400" role="img" aria-label="Snake game board"></canvas>
+    <div class="overlay" id="start"><p>Snake</p><span>Press an arrow key or a button to start</span></div>
+    <div class="overlay" id="over" data-testid="game-over" hidden><p>Game over</p><button id="restart" data-testid="restart">Play again</button></div>
+  </div>
+  <div class="pad">
+    <button class="up" data-testid="ctl-up" data-dir="up" aria-label="Up">▲</button>
+    <button class="left" data-testid="ctl-left" data-dir="left" aria-label="Left">◀</button>
+    <button class="down" data-testid="ctl-down" data-dir="down" aria-label="Down">▼</button>
+    <button class="right" data-testid="ctl-right" data-dir="right" aria-label="Right">▶</button>
+  </div>
+  <p class="hint">Arrows or WASD to turn · Space to pause · R to restart</p>
+</main>
+<script>
+(() => {
+  const N = 20
+  const TEST = new URLSearchParams(location.search).has('test')
+  const D = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }
+  const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' }
+  const KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' }
+  const canvas = document.getElementById('c'), ctx = canvas.getContext('2d'), C = canvas.width / N
+  const $ = (id) => document.getElementById(id)
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0
+      let t = Math.imul(a ^ (a >>> 15), 1 | a)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+  }
+
+  let best = 0
+  try { best = Number(localStorage.getItem('snake.best')) || 0 } catch {}
+  let g, seed, rng, flash = 0
+
+  function placeFood() {
+    const occ = new Set(g.snake.map(([x, y]) => y * N + x))
+    const free = []
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!occ.has(y * N + x)) free.push([x, y])
+    return free.length ? free[Math.floor(rng() * free.length)] : null
+  }
+
+  function reset(s, o = {}) {
+    seed = s
+    rng = mulberry32(s)
+    g = { snake: (o.snake || [[10, 10], [9, 10], [8, 10]]).map(([x, y]) => [x, y]), dir: o.dir || 'right', queue: [],
+      score: 0, over: false, paused: false, started: TEST, food: null }
+    g.food = o.food ? [o.food[0], o.food[1]] : placeFood()
+    if (!g.food) g.over = true
+    draw()
+  }
+
+  function turn(d) {
+    if (g.over) return
+    const last = g.queue.length ? g.queue[g.queue.length - 1] : g.dir
+    if (g.queue.length >= 2 || d === last || d === OPP[last]) return
+    g.queue.push(d)
+  }
+
+  function step() {
+    if (g.over || g.paused) return
+    if (g.queue.length) g.dir = g.queue.shift()
+    const [dx, dy] = D[g.dir]
+    const head = [g.snake[0][0] + dx, g.snake[0][1] + dy]
+    if (head[0] < 0 || head[0] >= N || head[1] < 0 || head[1] >= N) return die()
+    const eat = g.food && head[0] === g.food[0] && head[1] === g.food[1]
+    const body = eat ? g.snake : g.snake.slice(0, -1)
+    if (body.some(([x, y]) => x === head[0] && y === head[1])) return die()
+    g.snake.unshift(head)
+    if (!eat) g.snake.pop()
+    else {
+      g.score++
+      if (g.score > best) {
+        best = g.score
+        try { localStorage.setItem('snake.best', String(best)) } catch {}
+      }
+      g.food = placeFood()
+      if (!g.food) g.over = true
+      flash = reduced ? 0 : 1
+    }
+    draw()
+  }
+
+  function die() { g.over = true; draw() }
+
+  function start() { if (!g.started) { g.started = true; draw() } }
+
+  function draw() {
+    ctx.fillStyle = '#121a33'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = '#ffffff08'
+    for (let i = 0; i < N; i++) for (let j = (i % 2); j < N; j += 2) ctx.fillRect(i * C, j * C, C, C)
+    if (g.food) {
+      ctx.fillStyle = '#f472b6'
+      ctx.shadowColor = '#f472b6'; ctx.shadowBlur = 16
+      ctx.beginPath(); ctx.arc(g.food[0] * C + C / 2, g.food[1] * C + C / 2, C * 0.38, 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 12 + flash * 20
+    g.snake.forEach(([x, y], i) => {
+      ctx.fillStyle = i === 0 ? '#bbf7d0' : `hsl(${142 - i * 2}, 70%, ${58 - Math.min(i, 20)}%)`
+      ctx.fillRect(x * C + 1, y * C + 1, C - 2, C - 2)
+    })
+    ctx.shadowBlur = 0
+    $('score').textContent = g.score
+    $('best').textContent = best
+    $('over').hidden = !g.over
+    $('start').hidden = g.started || g.over
+  }
+
+  addEventListener('keydown', (e) => {
+    const d = KEYS[e.key] || KEYS[e.key.toLowerCase?.()]
+    if (d) {
+      e.preventDefault()
+      start()
+      turn(d)
+    } else if (e.key === ' ') {
+      e.preventDefault()
+      if (g.started && !g.over) { g.paused = !g.paused; draw() }
+    } else if (e.key === 'r' || e.key === 'R') {
+      restart()
+    } else if (e.key === 'Enter' && !g.started) {
+      start()
+    }
+  })
+
+  function restart() { reset(seed); if (!TEST) start() }
+  $('restart').addEventListener('click', restart)
+  document.querySelectorAll('[data-dir]').forEach((b) => b.addEventListener('click', () => { start(); turn(b.dataset.dir) }))
+
+  let touch = null
+  canvas.addEventListener('pointerdown', (e) => { touch = [e.clientX, e.clientY] })
+  canvas.addEventListener('pointerup', (e) => {
+    if (!touch) return
+    const dx = e.clientX - touch[0], dy = e.clientY - touch[1]
+    touch = null
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return
+    start()
+    turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'))
+  })
+
+  window.snake = {
+    reset,
+    step,
+    state: () => ({ snake: g.snake.map(([x, y]) => [x, y]), food: g.food && [g.food[0], g.food[1]], dir: g.dir,
+      score: g.score, best, over: g.over }),
+  }
+
+  reset(Math.floor(Math.random() * 2 ** 32))
+  if (!TEST) {
+    let acc = 0, last = performance.now()
+    const loop = (now) => {
+      const speed = Math.min(14, 6 + g.score * 0.4) // cells per second
+      acc += now - last; last = now
+      if (g.started && !g.paused && !g.over) {
+        while (acc >= 1000 / speed) { acc -= 1000 / speed; step() }
+      } else acc = 0
+      if (flash > 0) { flash = Math.max(0, flash - 0.06); draw() }
+      requestAnimationFrame(loop)
+    }
+    requestAnimationFrame(loop)
+  }
+})()
+</script>
+</body>
+</html>

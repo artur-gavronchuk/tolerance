@@ -15,8 +15,7 @@ export default async function NotFound() {
         <h1 className="display mt-2 text-[2.6rem]">{t('notFoundTitle')}</h1>
         <p className="mt-3 max-w-xl text-muted-foreground">{t('notFoundText')}</p>
         <div className="mt-8 flex flex-wrap gap-2">
-          <Button render={<Link href="/" />} nativeButton={false}>{t('today')}</Button>
-          <Button variant="outline" render={<Link href="/tanks" />} nativeButton={false}>{t('tanks')}</Button>
+          <Button render={<Link href="/" />} nativeButton={false}>{t('toHome')}</Button>
         </div>
       </main>
       <SiteFooter />

@@ -366,7 +366,7 @@ func (s *Service) TaskZip(slug, publicURL string) ([]byte, error) {
 	readme := "# " + c.Title + "\n\n" +
 		"Give TASK.md to your coding agent and let it build the site.\n\n" +
 		"Hand-in: a zip with `index.html` at its root (plus any CSS, JS and images), or a single `.html` file,\n" +
-		"up to 5 MB, static files only, no network. Upload it at " + strings.TrimRight(publicURL, "/") + "/build?c=" + c.Slug + "\n"
+		"up to 5 MB, static files only, no network. Upload it at " + strings.TrimRight(publicURL, "/") + "/?c=" + c.Slug + "\n"
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	for _, f := range []struct{ name, body string }{{"TASK.md", c.TaskMD}, {"README.md", readme}} {

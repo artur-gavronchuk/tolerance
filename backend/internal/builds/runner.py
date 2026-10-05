@@ -72,6 +72,11 @@ def step(page, s):
     elif op == "set_time":
         # Date.now() and new Date() return this instant (an ISO string with Z or an offset); timers keep running.
         page.clock.set_fixed_time(s["time"])
+    elif op == "js":
+        # Trusted platform expression evaluated once in the page (drives a test hook); its result is ignored.
+        page.evaluate(s["expr"])
+    elif op == "wait":
+        page.wait_for_timeout(s["ms"])
     elif op == "expect_js":
         # Trusted platform expression evaluated in the page; its JSON result must equal "value".
         got = None

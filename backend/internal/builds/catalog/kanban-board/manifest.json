@@ -1,8 +1,0 @@
-{
-  "title": "Kanban board",
-  "title_ru": "Канбан-доска",
-  "summary": "A three-column kanban board: add, rename and delete cards, move them by drag and by keyboard, everything kept in the browser.",
-  "summary_ru": "Канбан-доска на три колонки: добавить, переименовать и удалить карточку, двигать мышкой и с клавиатуры, всё хранится в браузере.",
-  "starts": "2026-10-05",
-  "timeout_s": 300
-}

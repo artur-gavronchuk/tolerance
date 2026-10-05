@@ -1,0 +1,8 @@
+{
+  "title": "Snake",
+  "title_ru": "Змейка",
+  "summary": "The classic snake game, but one people can't put down: tight controls, a best score, juice. Everyone plays your entry right in the gallery.",
+  "summary_ru": "Классическая змейка, но такая, от которой не оторваться: чёткое управление, рекорд, сочность. Твою игру будут играть прямо в галерее.",
+  "starts": "2026-10-05",
+  "timeout_s": 240
+}

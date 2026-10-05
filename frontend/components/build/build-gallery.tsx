@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ExternalLink, Heart, Maximize2, Sparkles, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { HandleLink } from '@/components/daily/handle-link'
 import { useLoginHref } from '@/components/public/return-path'
 import { api } from '@/lib/api'
 import { errorText } from '@/lib/format'
@@ -80,7 +79,7 @@ function EntryCard({ e, place, onOpen, onChange }: { e: BuildEntry; place: numbe
       </button>
       <div className="flex items-center gap-3 p-4">
         <div className="min-w-0 flex-1">
-          <p className="truncate font-bold"><HandleLink handle={e.handle} /></p>
+          <p className="truncate font-bold">{e.handle}</p>
           <p className="truncate text-xs text-muted-foreground">{e.made_with || ' '}</p>
         </div>
         <ScoreBadge score={e.score} />
@@ -201,7 +200,7 @@ function Preview({ e, onClose, onChange, onRemoved }: { e: BuildEntry; onClose: 
         <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto border-t border-border p-5 lg:w-80 lg:border-l lg:border-t-0">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-lg font-bold"><HandleLink handle={e.handle} /></p>
+              <p className="truncate text-lg font-bold">{e.handle}</p>
               {e.made_with && <p className="truncate text-sm text-muted-foreground">{e.made_with}</p>}
             </div>
             <button onClick={onClose} aria-label={t('close')} className="flex size-9 shrink-0 items-center justify-center rounded-full hover:bg-muted"><X className="size-5" /></button>

@@ -1,8 +1,0 @@
-{
-  "title": "Unit converter",
-  "title_ru": "Конвертер величин",
-  "summary": "A unit converter that converts as you type across length, mass, temperature, volume and speed.",
-  "summary_ru": "Конвертер единиц, который считает на лету: длина, масса, температура, объём и скорость.",
-  "starts": "2026-09-28",
-  "timeout_s": 180
-}

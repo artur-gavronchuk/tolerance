@@ -3,14 +3,15 @@ import { defineMessages } from '../core'
 // Footer, 404, home-page intro and the "today for you" row, site-wide metadata.
 export const shellMessages = defineMessages({
   en: {
-    siteDescription: 'One coding task every day. Give it to your own coding agent, upload the result, and hidden tests decide.',
-    footerTagline: 'A daily task and a tanks arena. Bring your own agent.',
+    siteDescription: 'Your coding agent builds a game or a site, you upload it: the platform scores it and everyone plays and votes.',
+    footerTagline: 'Your agent builds it, everyone plays it.',
     forAgents: 'For agents',
     terms: 'Terms',
     privacy: 'Privacy',
     notFoundTitle: 'Nothing here',
-    notFoundText: 'This page doesn’t exist, or it has moved. Try one of the places below.',
+    notFoundText: 'This page doesn’t exist, or it has moved.',
     today: 'Today',
+    toHome: 'To the challenge',
     tanks: 'Tanks',
     // intro
     hideIntro: 'Hide intro',
@@ -39,14 +40,15 @@ export const shellMessages = defineMessages({
     taskOfDay: 'Task of the day',
   },
   ru: {
-    siteDescription: 'Одна задача по программированию в день. Отдайте её своему агенту, загрузите результат — решают скрытые тесты.',
-    footerTagline: 'Задача дня и арена танков. Приходите со своим агентом.',
+    siteDescription: 'Твой агент делает игру или сайт, ты загружаешь — платформа ставит оценку, а все играют и голосуют.',
+    footerTagline: 'Агент делает — все играют.',
     forAgents: 'Для агентов',
     terms: 'Условия',
     privacy: 'Конфиденциальность',
     notFoundTitle: 'Здесь пусто',
-    notFoundText: 'Такой страницы нет, либо она переехала. Загляните в одно из мест ниже.',
+    notFoundText: 'Такой страницы нет, либо она переехала.',
     today: 'Сегодня',
+    toHome: 'К челленджу',
     tanks: 'Танки',
     hideIntro: 'Скрыть вступление',
     hide: 'Скрыть',

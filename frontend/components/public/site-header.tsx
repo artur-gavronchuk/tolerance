@@ -13,18 +13,11 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/lib/i18n/client'
 import { navMessages } from '@/lib/i18n/messages/nav'
 import { LocaleSwitch } from '@/components/public/locale-switch'
-import { NotificationBell } from '@/components/public/notification-bell'
 
 type NavKey = keyof typeof navMessages.en
 
-// The modes first, then the cross-cutting pages.
-const SITE_NAV = [
-  { label: 'build' as NavKey, href: '/build' },
-  { label: 'today' as NavKey, href: '/' },
-  { label: 'tanks' as NavKey, href: '/tanks' },
-  { label: 'leaderboard' as NavKey, href: '/leaderboard' },
-  { label: 'archive' as NavKey, href: '/days' },
-]
+// Only the build challenge is open for now (the home page); the other modes are hidden.
+const SITE_NAV: { label: NavKey; href: string }[] = []
 
 const TANKS_NAV = [
   { label: 'live' as NavKey, href: '/tanks' },
@@ -88,14 +81,10 @@ export function SiteHeader({ returnTo }: { returnTo?: string }) {
               {me.can_admin && (
                 <Link href="/admin" className="hidden h-9 items-center rounded-full px-3 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground sm:flex">{t('admin')}</Link>
               )}
-              <NotificationBell />
-              <Link href={`/u/${encodeURIComponent(me.user.handle)}`} title={t('myProfile')}
-                className="flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-sm hover:border-primary sm:gap-2 sm:px-3">
+              <span className="flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-sm sm:gap-2 sm:px-3">
                 <span aria-hidden className="flex size-5 items-center justify-center rounded-full bg-muted text-[11px] font-bold uppercase sm:hidden">{me.user.handle.charAt(0)}</span>
                 <span className="hidden max-w-[8rem] truncate font-bold sm:inline">{me.user.handle}</span>
-                <span className="font-mono text-xs text-muted-foreground" title={t('streakHelp')}
-                  aria-label={t('streakLabel', { n: me.streak.current, help: t('streakHelp') })}>🔥 {me.streak.current}</span>
-              </Link>
+              </span>
               <button onClick={() => void signOut()} aria-label={t('signOut')} title={t('signOut')}
                 className="flex size-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
                 <LogOut className="size-4" />
@@ -106,14 +95,14 @@ export function SiteHeader({ returnTo }: { returnTo?: string }) {
           )}
         </div>
       </div>
-      <div className="border-t border-border sm:hidden">
+      {(SITE_NAV.length > 0 || me?.can_admin) && <div className="border-t border-border sm:hidden">
         <div ref={stripRef} className="flex h-11 items-center gap-1 overflow-x-auto pl-4 [mask-image:linear-gradient(to_right,#000_calc(100%-2rem),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {SITE_NAV.map((item) => link(item, SITE_NAV))}
           {me?.can_admin && link({ label: 'admin', href: '/admin' }, SITE_NAV)}
           {/* As wide as the fade, so the last tab clears it at the end of the scroll. */}
           <span aria-hidden className="w-8 shrink-0" />
         </div>
-      </div>
+      </div>}
       {inTanks && (
         <div className="border-t border-border">
           <div className="mx-auto flex h-11 max-w-6xl items-center overflow-x-auto px-4 sm:px-6">

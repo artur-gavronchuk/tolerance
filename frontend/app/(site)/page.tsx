@@ -1,17 +1,11 @@
-import { BuildBanner } from '@/components/build/build-banner'
-import { DailyView } from '@/components/daily/daily-view'
-import { Intro } from '@/components/public/intro'
-import { TodayForYou } from '@/components/public/today-for-you'
+import { Suspense } from 'react'
+import { BuildView } from '@/components/build/build-view'
 
-export default function TodayPage() {
+// The build challenge is the whole site for now; the daily task and tanks are hidden (see next.config.mjs).
+export default function HomePage() {
   return (
-    <>
-      <BuildBanner />
-      <Intro />
-      <TodayForYou />
-      <div id="today">
-        <DailyView />
-      </div>
-    </>
+    <Suspense>
+      <BuildView />
+    </Suspense>
   )
 }

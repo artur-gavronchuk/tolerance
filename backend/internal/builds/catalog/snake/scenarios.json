@@ -1,0 +1,1433 @@
+[
+ {
+  "name": "a new game starts with the documented snake, direction and score",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      10,
+      10
+     ],
+     [
+      9,
+      10
+     ],
+     [
+      8,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().dir",
+    "value": "right"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().score",
+    "value": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().over",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "the first food is drawn from the seed",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().food",
+    "value": [
+     11,
+     12
+    ]
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(42)"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().food",
+    "value": [
+     1,
+     12
+    ]
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(123456789)"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().food",
+    "value": [
+     2,
+     5
+    ]
+   }
+  ]
+ },
+ {
+  "name": "food is drawn from the free cells in row-major order",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(7, {\"snake\": [[19, 0], [18, 0], [17, 0], [16, 0], [15, 0], [14, 0], [13, 0], [12, 0], [11, 0], [10, 0], [9, 0], [8, 0], [7, 0], [6, 0], [5, 0], [4, 0], [3, 0], [2, 0], [1, 0], [0, 0]]})"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().food",
+    "value": [
+     4,
+     1
+    ]
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(99, {\"snake\": [[19, 0], [18, 0], [17, 0], [16, 0], [15, 0], [14, 0], [13, 0], [12, 0], [11, 0], [10, 0], [9, 0], [8, 0], [7, 0], [6, 0], [5, 0], [4, 0], [3, 0], [2, 0], [1, 0], [0, 0]]})"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().food",
+    "value": [
+     18,
+     5
+    ]
+   }
+  ]
+ },
+ {
+  "name": "the snake moves one cell per tick",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 3; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      13,
+      10
+     ],
+     [
+      12,
+      10
+     ],
+     [
+      11,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().score",
+    "value": 0
+   }
+  ]
+ },
+ {
+  "name": "arrow keys turn the snake",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "press",
+    "key": "ArrowUp"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "ArrowLeft"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 2; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "ArrowDown"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      8,
+      10
+     ],
+     [
+      8,
+      9
+     ],
+     [
+      9,
+      9
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().dir",
+    "value": "down"
+   }
+  ]
+ },
+ {
+  "name": "WASD turns the snake",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "press",
+    "key": "s"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "a"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "w"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "d"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      10,
+      10
+     ],
+     [
+      9,
+      10
+     ],
+     [
+      9,
+      11
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().dir",
+    "value": "right"
+   }
+  ]
+ },
+ {
+  "name": "a turn into the opposite direction is ignored",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "press",
+    "key": "ArrowLeft"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      11,
+      10
+     ],
+     [
+      10,
+      10
+     ],
+     [
+      9,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().dir",
+    "value": "right"
+   }
+  ]
+ },
+ {
+  "name": "two quick turns between ticks are both kept",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "press",
+    "key": "ArrowUp"
+   },
+   {
+    "op": "press",
+    "key": "ArrowLeft"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 2; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      9,
+      9
+     ],
+     [
+      10,
+      9
+     ],
+     [
+      10,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().dir",
+    "value": "left"
+   }
+  ]
+ },
+ {
+  "name": "a quick turn back is dropped from the buffer",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "press",
+    "key": "ArrowUp"
+   },
+   {
+    "op": "press",
+    "key": "ArrowDown"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 2; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      10,
+      8
+     ],
+     [
+      10,
+      9
+     ],
+     [
+      10,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().dir",
+    "value": "up"
+   }
+  ]
+ },
+ {
+  "name": "at most two turns are pending",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "press",
+    "key": "ArrowUp"
+   },
+   {
+    "op": "press",
+    "key": "ArrowLeft"
+   },
+   {
+    "op": "press",
+    "key": "ArrowDown"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 3; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      8,
+      9
+     ],
+     [
+      9,
+      9
+     ],
+     [
+      10,
+      9
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().dir",
+    "value": "left"
+   }
+  ]
+ },
+ {
+  "name": "a turn the snake is already making is not queued twice",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "press",
+    "key": "ArrowUp"
+   },
+   {
+    "op": "press",
+    "key": "ArrowUp"
+   },
+   {
+    "op": "press",
+    "key": "ArrowRight"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 3; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      12,
+      9
+     ],
+     [
+      11,
+      9
+     ],
+     [
+      10,
+      9
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "name": "eating grows the snake, scores and draws new food from the seed",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(3, {\"food\": [12, 10]})"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 2; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      12,
+      10
+     ],
+     [
+      11,
+      10
+     ],
+     [
+      10,
+      10
+     ],
+     [
+      9,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().score",
+    "value": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().food",
+    "value": [
+     9,
+     14
+    ]
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=score]",
+    "text": "1"
+   }
+  ]
+ },
+ {
+  "name": "the snake keeps eating and growing",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(3, {\"food\": [11, 10]})"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "ArrowDown"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "ArrowLeft"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "ArrowDown"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "ArrowRight"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "ArrowUp"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "ArrowLeft"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "ArrowDown"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      5,
+      9
+     ],
+     [
+      5,
+      8
+     ],
+     [
+      5,
+      7
+     ],
+     [
+      5,
+      6
+     ],
+     [
+      5,
+      5
+     ],
+     [
+      5,
+      4
+     ],
+     [
+      5,
+      3
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().score",
+    "value": 4
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().food",
+    "value": [
+     9,
+     1
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().over",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "leaving the field ends the game (no wrap-around), and ticks after it do nothing",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(5, {\"food\": [0, 0]})"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 9; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      19,
+      10
+     ],
+     [
+      18,
+      10
+     ],
+     [
+      17,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().over",
+    "value": false
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().over",
+    "value": true
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      19,
+      10
+     ],
+     [
+      18,
+      10
+     ],
+     [
+      17,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().over",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "running into the body ends the game",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1, {\"snake\": [[5, 5], [5, 6], [6, 6], [6, 5], [7, 5]], \"dir\": \"up\", \"food\": [0, 0]})"
+   },
+   {
+    "op": "press",
+    "key": "ArrowRight"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().over",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "moving into the cell the tail is leaving is allowed",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1, {\"snake\": [[5, 5], [5, 6], [6, 6], [6, 5]], \"dir\": \"up\", \"food\": [0, 0]})"
+   },
+   {
+    "op": "press",
+    "key": "ArrowRight"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "press",
+    "key": "ArrowDown"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      6,
+      6
+     ],
+     [
+      6,
+      5
+     ],
+     [
+      5,
+      5
+     ],
+     [
+      5,
+      6
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().over",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "game over is hidden while playing",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=game-over]"
+   }
+  ]
+ },
+ {
+  "name": "game over shows a restart button that starts the same seed again",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(5, {\"food\": [0, 0]})"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 10; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=game-over]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=restart]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      10,
+      10
+     ],
+     [
+      9,
+      10
+     ],
+     [
+      8,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().dir",
+    "value": "right"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().score",
+    "value": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().over",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().food",
+    "value": [
+     16,
+     13
+    ]
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=game-over]"
+   }
+  ]
+ },
+ {
+  "name": "R restarts with the same seed",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(11)"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 12; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().over",
+    "value": true
+   },
+   {
+    "op": "press",
+    "key": "r"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      10,
+      10
+     ],
+     [
+      9,
+      10
+     ],
+     [
+      8,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().score",
+    "value": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().over",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().food",
+    "value": [
+     3,
+     10
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Space pauses and resumes",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "press",
+    "key": " "
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 2; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      10,
+      10
+     ],
+     [
+      9,
+      10
+     ],
+     [
+      8,
+      10
+     ]
+    ]
+   },
+   {
+    "op": "press",
+    "key": " "
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 2; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      12,
+      10
+     ],
+     [
+      11,
+      10
+     ],
+     [
+      10,
+      10
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "name": "the best score survives a reload",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(2, {\"food\": [11, 10]})"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().best",
+    "value": 1
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=best]",
+    "text": "1"
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(2)"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().best",
+    "value": 1
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=best]",
+    "text": "1"
+   }
+  ]
+ },
+ {
+  "name": "on-screen buttons turn the snake on a phone",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "js",
+    "expr": "window.snake.reset(1)"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=ctl-up]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=ctl-down]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=ctl-left]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=ctl-right]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=ctl-up]"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=ctl-left]"
+   },
+   {
+    "op": "js",
+    "expr": "(() => { for (let i = 0; i < 1; i++) window.snake.step() })()"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake",
+    "value": [
+     [
+      9,
+      9
+     ],
+     [
+      10,
+      9
+     ],
+     [
+      10,
+      10
+     ]
+    ]
+   }
+  ],
+  "viewport": 375
+ },
+ {
+  "name": "the game fits a phone screen",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "wait",
+    "ms": 300
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "expect_no_hscroll"
+   }
+  ],
+  "viewport": 375
+ },
+ {
+  "name": "outside test mode the game runs on its own after the first key",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "wait",
+    "ms": 300
+   },
+   {
+    "op": "press",
+    "key": "ArrowUp"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake[0][1] <= 8",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "Space pauses the running game",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "wait",
+    "ms": 300
+   },
+   {
+    "op": "press",
+    "key": "ArrowUp"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.snake.state().snake[0][1] < 10",
+    "value": true
+   },
+   {
+    "op": "press",
+    "key": " "
+   },
+   {
+    "op": "js",
+    "expr": "window.__held = JSON.stringify(window.snake.state().snake)"
+   },
+   {
+    "op": "wait",
+    "ms": 800
+   },
+   {
+    "op": "expect_js",
+    "expr": "JSON.stringify(window.snake.state().snake) === window.__held",
+    "value": true
+   }
+  ]
+ }
+]

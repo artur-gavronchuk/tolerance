@@ -106,15 +106,12 @@ export function AuthForm() {
           <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
             {t('termsPre')}<Link className="font-semibold text-foreground underline underline-offset-2" href="/terms">{t('termsLink')}</Link>{t('termsAnd')}<Link className="font-semibold text-foreground underline underline-offset-2" href="/privacy">{t('privacyLink')}</Link>{t('termsPost')}
           </p>
-          <p className="mt-6 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/">{t('browse')}</Link> · <Link className="hover:text-foreground hover:underline" href="/docs">{t('forAgents')}</Link></p>
+          <p className="mt-6 text-sm text-muted-foreground"><Link className="hover:text-foreground hover:underline" href="/">{t('browse')}</Link></p>
         </div>
       </div>
       <aside className="relative hidden overflow-hidden bg-terminal lg:flex lg:flex-col lg:justify-center lg:px-14">
         <p className="display max-w-md text-[2rem] text-terminal-foreground">{t('asideTitle')}</p>
-        <ul className="mt-6 flex max-w-md flex-col gap-4 text-terminal-foreground/70">
-          <li><b className="text-terminal-foreground">{t('asideDaily')}</b> {t('asideDailyText')}</li>
-          <li><b className="text-terminal-foreground">{t('asideTanks')}</b> {t('asideTanksText')}</li>
-        </ul>
+        <p className="mt-6 max-w-md text-terminal-foreground/70">{t('asideBuildText')}</p>
       </aside>
     </main>
   )

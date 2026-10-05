@@ -72,7 +72,7 @@ export function BuildView() {
                 ? c.ends ? t('ends', { date: formatDate(t.locale, c.ends, { day: 'numeric', month: 'long' }) }) : null
                 : t('archived')}
             </span>
-            <span className="text-terminal-foreground/70">· {c.entries} {t('entries')}</span>
+            <span className="text-terminal-foreground/70">· {t.plural('entries', c.entries)}</span>
           </div>
           <h1 className="display mt-4 max-w-3xl text-[2.2rem] sm:text-[3.4rem]">
             <span className="block text-[0.5em] font-bold tracking-tight text-terminal-foreground/80">{t('heroBuild')}</span>
@@ -121,7 +121,7 @@ export function BuildView() {
           <h2 className="heading mb-3 text-lg">{t('otherTasks')}</h2>
           <div className="flex flex-wrap gap-2">
             {page.all.map((o) => (
-              <Link key={o.slug} href={o.current ? '/build' : `/build?c=${encodeURIComponent(o.slug)}`}
+              <Link key={o.slug} href={o.current ? '/' : `/?c=${encodeURIComponent(o.slug)}`}
                 className={cn('rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors',
                   o.slug === c.slug ? 'border-primary bg-accent text-accent-foreground' : 'border-border bg-card hover:border-primary')}>
                 {(ru && o.title_ru) || o.title}

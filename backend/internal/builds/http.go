@@ -1,6 +1,7 @@
 package builds
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"mime"
@@ -8,6 +9,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"tolerance/internal/identity"
@@ -69,9 +71,34 @@ func RegisterPublicRoutes(mux *http.ServeMux, s *Service, viewer func(r *http.Re
 		if ct == "" {
 			ct = http.DetectContentType(body)
 		}
+		if strings.HasPrefix(ct, "text/html") {
+			body = withStorageShim(body)
+		}
 		w.Header().Set("Content-Type", ct)
 		_, _ = w.Write(body)
 	})
+}
+
+// storageShim swaps localStorage/sessionStorage for in-memory ones when the browser refuses them, as it does
+// in the sandboxed (opaque-origin) preview: games that keep a best score would otherwise crash there.
+const storageShim = `<script>(function(){function mk(){var d={};return{getItem:function(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},` +
+	`setItem:function(k,v){d[k]=String(v)},removeItem:function(k){delete d[k]},clear:function(){d={}},key:function(i){return Object.keys(d)[i]||null},` +
+	`get length(){return Object.keys(d).length}}}["localStorage","sessionStorage"].forEach(function(n){try{window[n].length}catch(e){` +
+	`try{Object.defineProperty(window,n,{value:mk(),configurable:true})}catch(e2){}}})})()</script>`
+
+// withStorageShim puts storageShim before the page's own scripts: right after <head>, else at the very start.
+func withStorageShim(body []byte) []byte {
+	lower := bytes.ToLower(body[:min(len(body), 4096)])
+	at := 0
+	if i := bytes.Index(lower, []byte("<head")); i >= 0 {
+		if j := bytes.IndexByte(lower[i:], '>'); j >= 0 {
+			at = i + j + 1
+		}
+	}
+	out := make([]byte, 0, len(body)+len(storageShim))
+	out = append(out, body[:at]...)
+	out = append(out, storageShim...)
+	return append(out, body[at:]...)
 }
 
 // RegisterOwnerRoutes mounts the session-protected writes.
