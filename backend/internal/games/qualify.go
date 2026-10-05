@@ -160,6 +160,14 @@ func (s *Service) Qualify(ctx context.Context, versionID string) (bool, []Check,
 				v.botID, versionID, refreshed.Sigma); err != nil {
 				return err
 			}
+			// A new version is a new bot on the ladder: widen the uncertainty of its CURRENT-season rating
+			// too, not just the lifetime one, keeping the accumulated mean. Past (archived) seasons are
+			// frozen and untouched; if the bot has no current-season row yet there is nothing to widen.
+			if _, err := tx.Exec(ctx, `UPDATE tanks_season_ratings SET sigma = GREATEST(sigma, $2)
+				WHERE bot_id = $1 AND season_id = (SELECT id FROM tanks_seasons WHERE status = 'active' ORDER BY starts_at DESC LIMIT 1)`,
+				v.botID, rating.RefreshSigma); err != nil {
+				return err
+			}
 		}
 		return nil
 	})

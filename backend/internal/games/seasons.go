@@ -96,7 +96,7 @@ func seasonLadder(ctx context.Context, tx pgx.Tx, seasonID string, playedOnly bo
 		}
 		e.Rating = rating.Display(rating.Rating{Mu: e.Mu, Sigma: e.Sigma})
 		e.LifetimeRating = rating.Display(rating.Rating{Mu: lifeMu, Sigma: lifeSigma})
-		e.Provisional = e.Matches < ProvisionalMatches
+		e.Provisional = provisional(e.Matches, e.Sigma)
 		out = append(out, e)
 	}
 	if err := rows.Err(); err != nil {
@@ -285,7 +285,7 @@ func frozenStandings(ctx context.Context, tx pgx.Tx, id string) ([]LeaderboardEn
 			&e.Rating, &e.Mu, &e.Sigma, &e.Matches, &e.Wins, &e.LifetimeRating, &e.ownerID); err != nil {
 			return nil, err
 		}
-		e.Provisional = e.Matches < ProvisionalMatches
+		e.Provisional = provisional(e.Matches, e.Sigma)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -321,4 +321,11 @@ func botSeasonResultsTx(ctx context.Context, tx pgx.Tx, botID string) ([]BotSeas
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// provisional reports whether a season rating is too uncertain to rank with confidence: too few matches,
+// or a sigma still as wide as a fresh version's (set by rating.Refresh on a version change), so a long
+// match history from an older version cannot mask the new version's uncertainty.
+func provisional(matches int, sigma float64) bool {
+	return matches < ProvisionalMatches || sigma >= rating.RefreshSigma
 }
