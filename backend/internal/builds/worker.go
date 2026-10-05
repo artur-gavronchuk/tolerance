@@ -150,7 +150,12 @@ func (w *Worker) score(ctx context.Context, c claimed) error {
 		}
 	}
 	marker := "@@" + idgen.New("verdict") + "@@"
-	spec, err := json.Marshal(map[string]any{"scenarios": ch.Scenarios, "marker": marker})
+	specDoc := map[string]any{"scenarios": ch.Scenarios, "marker": marker}
+	if ch.Mobile { // try.py mirrors this
+		specDoc["viewport"] = 390
+		specDoc["shot"] = map[string]any{"width": 390, "height": 844, "scale": 2, "touch": true}
+	}
+	spec, err := json.Marshal(specDoc)
 	if err != nil {
 		return err
 	}

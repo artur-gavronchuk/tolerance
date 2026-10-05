@@ -1,0 +1,5877 @@
+[
+ {
+  "name": "the canvas is 16 by 16 and starts empty and ready",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid^=cell-]",
+    "count": 256
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=cell-15-15]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=cell-16-0]",
+    "count": 0
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=cell-0-16]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "the palette has the 16 fixed colors, reported as lowercase hex",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid^=color-]",
+    "count": 16
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-6]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-9]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-10]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-13]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-14]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-15]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-0]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "0123456789abcdef",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().grid[0]",
+    "value": [
+     "#000000",
+     "#1d2b53",
+     "#7e2553",
+     "#008751",
+     "#ab5236",
+     "#5f574f",
+     "#c2c3c7",
+     "#fff1e8",
+     "#ff004d",
+     "#ffa300",
+     "#ffec27",
+     "#00e436",
+     "#29adff",
+     "#83769c",
+     "#ff77a8",
+     "#ffccaa"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().grid[1]",
+    "value": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 15
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "the selected color is marked with aria-pressed",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=color-0]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=color-5]').getAttribute('aria-pressed')",
+    "value": "false"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-5]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=color-5]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=color-0]').getAttribute('aria-pressed')",
+    "value": "false"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid^=color-][aria-pressed=true]').length",
+    "value": 1
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=color-12]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=color-5]').getAttribute('aria-pressed')",
+    "value": "false"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid^=color-][aria-pressed=true]').length",
+    "value": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   }
+  ]
+ },
+ {
+  "name": "the pencil paints the clicked cell and x runs left to right, y top to bottom",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-15]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-15]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-14]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-4]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "b..............c",
+     "................",
+     "................",
+     "................",
+     "...e............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "c..............b"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 14
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().grid[4][3]",
+    "value": "#ff77a8"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().grid[0][15]",
+    "value": "#29adff"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().grid[15][0]",
+    "value": "#29adff"
+   }
+  ]
+ },
+ {
+  "name": "the cells show what the hook reports",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-10]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-14]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-14]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-eraser]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-2]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; const rows = []; for (let y = 0; y < 16; y++) { let s = ''; for (let x = 0; x < 16; x++) { const c = document.querySelector('[data-testid=cell-' + x + '-' + y + ']').getAttribute('data-color'); s += c === null ? '.' : '0123456789abcdef'[P.indexOf(c)] } rows.push(s) } return rows })()",
+    "value": [
+     "................",
+     "................",
+     "..e.............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     ".......a........",
+     "................",
+     "................",
+     "...............3",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "..e.............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     ".......a........",
+     "................",
+     "................",
+     "...............3",
+     "................"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a stroke paints a straight line even when the pointer jumps over cells",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-2-3]",
+    "target": "[data-testid=cell-9-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-12-1]",
+    "target": "[data-testid=cell-12-9]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-11]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-1-14]",
+    "target": "[data-testid=cell-6-9]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-14]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-8-6]",
+    "target": "[data-testid=cell-14-12]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "............c...",
+     "............c...",
+     "..88888888..c...",
+     "............c...",
+     "............c...",
+     "........e...c...",
+     ".........e..c...",
+     "..........e.c...",
+     "......b....ec...",
+     ".....b......e...",
+     "....b........e..",
+     "...b..........e.",
+     "..b.............",
+     ".b..............",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 14
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "strokes work in every direction",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-9]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-13-2]",
+    "target": "[data-testid=cell-4-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-10]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-2-14]",
+    "target": "[data-testid=cell-2-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-3]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-14-14]",
+    "target": "[data-testid=cell-8-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-13]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-14-6]",
+    "target": "[data-testid=cell-9-11]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "....9999999999..",
+     "................",
+     "................",
+     "..a.............",
+     "..a...........d.",
+     "..a..........d..",
+     "..a.....3...d...",
+     "..a......3.d....",
+     "..a.......d.....",
+     "..a......d.3....",
+     "..a.........3...",
+     "..a..........3..",
+     "..a...........3.",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 13
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "one press-drag-release is one undo step, however many cells it touched",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-1-1]",
+    "target": "[data-testid=cell-14-1]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-1-3]",
+    "target": "[data-testid=cell-1-12]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".88888888888888.",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "a press that changes nothing creates no undo step",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-eraser]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-6]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-7-7]",
+    "target": "[data-testid=cell-7-12]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-pencil]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-10]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-0-8]",
+    "target": "[data-testid=cell-7-8]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-2-8]",
+    "target": "[data-testid=cell-6-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-10]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-0-8]",
+    "target": "[data-testid=cell-7-8]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 10
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "undo and redo walk through the history",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "..c.............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 11
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 11
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=redo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "..c.............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 11
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=redo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "..c.............",
+     "...b............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 11
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 11
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "undo and redo are disabled when there is nothing to undo or redo",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=undo]').disabled",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=redo]').disabled",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-4]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=undo]').disabled",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=redo]').disabled",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=undo]').disabled",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=redo]').disabled",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=redo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=undo]').disabled",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=redo]').disabled",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "a new action after undo clears the redo stack",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-9]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     ".........c......",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=redo]').disabled",
+    "value": true
+   },
+   {
+    "op": "press",
+    "key": "Control+Shift+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     ".........c......",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y undo and redo",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-4]"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "..8.............",
+     "...8............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "..8.............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "press",
+    "key": "Control+Shift+z"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "..8.............",
+     "...8............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "..8.............",
+     "...8............",
+     "....8...........",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "the history is at least 100 steps deep",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-6]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-6]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-6]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-6]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "press",
+    "key": "Control+z"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 2
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "press",
+    "key": "Control+y"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "2222222222222222",
+     "2222222222222222",
+     "2222222222222222",
+     "2222222222222222",
+     "2222222222222222",
+     "2222222222222222",
+     "2222............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 2
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "the eraser empties cells, one stroke is one step, erasing nothing is no step",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-1-2]",
+    "target": "[data-testid=cell-12-2]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-1-4]",
+    "target": "[data-testid=cell-12-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-eraser]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tool-eraser]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tool-pencil]').getAttribute('aria-pressed')",
+    "value": "false"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-4-2]",
+    "target": "[data-testid=cell-9-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-14]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-2-10]",
+    "target": "[data-testid=cell-2-15]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     ".888......888...",
+     "................",
+     ".88888.888888...",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "eraser"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     ".888......888...",
+     "................",
+     ".888888888888...",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "eraser"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     ".888888888888...",
+     "................",
+     ".888888888888...",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "eraser"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     ".888888888888...",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "eraser"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "the eraser keeps the color, and picking a color goes back to the pencil",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-eraser]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "eraser"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-9]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 9
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tool-pencil]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 10
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-eraser]"
+   },
+   {
+    "op": "press",
+    "key": "b"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "a...............",
+     "................",
+     "................",
+     "................",
+     "................",
+     ".....9..........",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 10
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "fill floods an empty canvas, in one undo step",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-14]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-7]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 14
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 14
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=redo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee",
+     "eeeeeeeeeeeeeeee"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 14
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "fill stops at a closed wall and fills inside or outside only",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-6]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-6]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-10]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-5]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "...7777777......",
+     "...7aaaaa7......",
+     "...7aaaaa7......",
+     "...7aaaaa7......",
+     "...7aaaaa7......",
+     "...7777777......",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 10
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "ccc7777777cccccc",
+     "ccc7aaaaa7cccccc",
+     "ccc7aaaaa7cccccc",
+     "ccc7aaaaa7cccccc",
+     "ccc7aaaaa7cccccc",
+     "ccc7777777cccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "...7777777......",
+     "...7.....7......",
+     "...7.....7......",
+     "...7.....7......",
+     "...7.....7......",
+     "...7777777......",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "fill is 4-connected: it does not leak through a diagonal wall",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-6]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-6]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-9]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-10]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-13]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-14]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-15]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-0]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "6888888888888888",
+     ".688888888888888",
+     "..68888888888888",
+     "...6888888888888",
+     "....688888888888",
+     ".....68888888888",
+     "......6888888888",
+     ".......688888888",
+     "........68888888",
+     ".........6888888",
+     "..........688888",
+     "...........68888",
+     "............6888",
+     ".............688",
+     "..............68",
+     "...............6"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-15]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "6888888888888888",
+     "b688888888888888",
+     "bb68888888888888",
+     "bbb6888888888888",
+     "bbbb688888888888",
+     "bbbbb68888888888",
+     "bbbbbb6888888888",
+     "bbbbbbb688888888",
+     "bbbbbbbb68888888",
+     "bbbbbbbbb6888888",
+     "bbbbbbbbbb688888",
+     "bbbbbbbbbbb68888",
+     "bbbbbbbbbbbb6888",
+     "bbbbbbbbbbbbb688",
+     "bbbbbbbbbbbbbb68",
+     "bbbbbbbbbbbbbbb6"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 11
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "6888888888888888",
+     ".688888888888888",
+     "..68888888888888",
+     "...6888888888888",
+     "....688888888888",
+     ".....68888888888",
+     "......6888888888",
+     ".......688888888",
+     "........68888888",
+     ".........6888888",
+     "..........688888",
+     "...........68888",
+     "............6888",
+     ".............688",
+     "..............68",
+     "...............6"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 11
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "fill follows a winding corridor but not past a sealed wall",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-3-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-4-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-6-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-11-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-12-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-13-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-14-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-9]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "9999999999999999",
+     "9999999999999999",
+     "9999999999999999",
+     "1111111111111199",
+     "9999999999999999",
+     "9999999999999999",
+     "9999999999999999",
+     "9911111111111111",
+     "9999999999999999",
+     "9999999999999999",
+     "9999999999999999",
+     "1111111111111111",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 9
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-15]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "9999999999999999",
+     "9999999999999999",
+     "9999999999999999",
+     "1111111111111199",
+     "9999999999999999",
+     "9999999999999999",
+     "9999999999999999",
+     "9911111111111111",
+     "9999999999999999",
+     "9999999999999999",
+     "9999999999999999",
+     "1111111111111111",
+     "3333333333333333",
+     "3333333333333333",
+     "3333333333333333",
+     "3333333333333333"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 3
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "fill recolors only the clicked color region, other regions of that color stay",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-pencil]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-5]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-6]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-9]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-10]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-13]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-14]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-15]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 3
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-4]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-5-9]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111",
+     "3333341111111111"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 4
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-13]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd",
+     "333334dddddddddd"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 13
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111",
+     "3333321111111111"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 13
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "filling with the color the region already has changes nothing and is not an undo step",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-9]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-9]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cc8ccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "..8.............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "actions that change nothing keep the redo stack",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-eraser]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=redo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "..8.............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "eraser"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=clear]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=redo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 8
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "eraser"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "B, E and F pick the tool and the buttons show it",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "press",
+    "key": "e"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tool-eraser]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid^=tool-][aria-pressed=true]').length",
+    "value": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "eraser"
+   },
+   {
+    "op": "press",
+    "key": "f"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tool-fill]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid^=tool-][aria-pressed=true]').length",
+    "value": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "press",
+    "key": "b"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tool-pencil]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid^=tool-][aria-pressed=true]').length",
+    "value": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "press",
+    "key": "E"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tool-eraser]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid^=tool-][aria-pressed=true]').length",
+    "value": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "eraser"
+   },
+   {
+    "op": "press",
+    "key": "Shift+f"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tool-fill]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid^=tool-][aria-pressed=true]').length",
+    "value": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "press",
+    "key": "Shift+b"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tool-pencil]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid^=tool-][aria-pressed=true]').length",
+    "value": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "press",
+    "key": "Control+e"
+   },
+   {
+    "op": "press",
+    "key": "Control+f"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "press",
+    "key": "e"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   }
+  ]
+ },
+ {
+  "name": "clear empties the canvas as one undoable step, and clearing nothing is no step",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=clear]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-2]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-4-4]",
+    "target": "[data-testid=cell-4-9]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=clear]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "..c.............",
+     "................",
+     "....c...........",
+     "....c...........",
+     "....c...........",
+     "....c...........",
+     "....c...........",
+     "....c...........",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=redo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".8..............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "pencil"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "the drawing and the selected color survive a reload",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-1-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-2-1]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-8-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-9-9]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-9]"
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".88.............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "........c.......",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 9
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=color-9]').getAttribute('aria-pressed')",
+    "value": "true"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     ".88.............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "........c.......",
+     "................",
+     "..........9.....",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=clear]"
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "the picture is exported as a 16 by 16 PNG, transparent where empty",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(async () => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; const u = await window.pixel.exportPNG(); const img = new Image(); img.src = u; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const x = c.getContext('2d'); x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; const rows = []; for (let y = 0; y < c.height; y++) { let s = ''; for (let i = 0; i < c.width; i++) { const o = (y * c.width + i) * 4; if (d[o + 3] === 0) { s += '.'; continue } const hex = '#' + [d[o], d[o + 1], d[o + 2]].map(v => v.toString(16).padStart(2, '0')).join(''); s += d[o + 3] === 255 ? '0123456789abcdef'[P.indexOf(hex)] : '?' } rows.push(s) } return { head: u.slice(0, 22), size: [img.width, img.height], rows } })()",
+    "value": {
+     "head": "data:image/png;base64,",
+     "size": [
+      16,
+      16
+     ],
+     "rows": [
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................"
+     ]
+    }
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-11]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-15]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-14]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-15]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-10]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-5-7]",
+    "target": "[data-testid=cell-10-7]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-eraser]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-7-7]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(async () => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; const u = await window.pixel.exportPNG(); const img = new Image(); img.src = u; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const x = c.getContext('2d'); x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; const rows = []; for (let y = 0; y < c.height; y++) { let s = ''; for (let i = 0; i < c.width; i++) { const o = (y * c.width + i) * 4; if (d[o + 3] === 0) { s += '.'; continue } const hex = '#' + [d[o], d[o + 1], d[o + 2]].map(v => v.toString(16).padStart(2, '0')).join(''); s += d[o + 3] === 255 ? '0123456789abcdef'[P.indexOf(hex)] : '?' } rows.push(s) } return { head: u.slice(0, 22), size: [img.width, img.height], rows } })()",
+    "value": {
+     "head": "data:image/png;base64,",
+     "size": [
+      16,
+      16
+     ],
+     "rows": [
+      "8..............b",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      ".....aa.aaa.....",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "c..............e"
+     ]
+    }
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(async () => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; const u = await window.pixel.exportPNG(); const img = new Image(); img.src = u; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const x = c.getContext('2d'); x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; const rows = []; for (let y = 0; y < c.height; y++) { let s = ''; for (let i = 0; i < c.width; i++) { const o = (y * c.width + i) * 4; if (d[o + 3] === 0) { s += '.'; continue } const hex = '#' + [d[o], d[o + 1], d[o + 2]].map(v => v.toString(16).padStart(2, '0')).join(''); s += d[o + 3] === 255 ? '0123456789abcdef'[P.indexOf(hex)] : '?' } rows.push(s) } return { head: u.slice(0, 22), size: [img.width, img.height], rows } })()",
+    "value": {
+     "head": "data:image/png;base64,",
+     "size": [
+      16,
+      16
+     ],
+     "rows": [
+      "8..............b",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "c..............e"
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "the editor fits a phone screen and drawing works there",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "wait",
+    "ms": 300
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=cell-15-15]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=clear]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-15]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-0-0]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-15-15]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-8]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=cell-3-3]",
+    "target": "[data-testid=cell-8-3]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tool-fill]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=color-12]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=cell-10-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "fccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "ccc888888ccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccc",
+     "cccccccccccccccf"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": false
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=undo]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const P = [\"#000000\", \"#1d2b53\", \"#7e2553\", \"#008751\", \"#ab5236\", \"#5f574f\", \"#c2c3c7\", \"#fff1e8\", \"#ff004d\", \"#ffa300\", \"#ffec27\", \"#00e436\", \"#29adff\", \"#83769c\", \"#ff77a8\", \"#ffccaa\"]; return window.pixel.state().grid.map(r => r.map(c => c === null ? '.' : '0123456789abcdef'[P.indexOf(c)]).join('')) })()",
+    "value": [
+     "f...............",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "................",
+     "...............f"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().color",
+    "value": 12
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().tool",
+    "value": "fill"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canUndo",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.pixel.state().canRedo",
+    "value": true
+   }
+  ],
+  "viewport": 375
+ }
+]

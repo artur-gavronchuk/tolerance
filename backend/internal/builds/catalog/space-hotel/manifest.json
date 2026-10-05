@@ -1,0 +1,10 @@
+{
+  "title": "Space Hotel",
+  "title_ru": "Космический отель",
+  "summary": "A landing page for an orbital hotel: a working booking calculator, a newsletter form, an FAQ, a burger menu and a light/dark theme. The gallery votes on the looks, and everyone can open your entry.",
+  "summary_ru": "Лендинг орбитального отеля: калькулятор брони, подписка, FAQ, бургер-меню и светлая/тёмная тема. Строить приятно: звёзды, иллюминаторы и станция рисуются чистым CSS и SVG. Голосовать тоже: каждую страницу можно открыть и потрогать прямо в галерее.",
+  "starts": "2026-10-05",
+  "timeout_s": 240,
+  "kind": "site",
+  "mobile": false
+}

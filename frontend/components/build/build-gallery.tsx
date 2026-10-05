@@ -1,16 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { ExternalLink, Heart, Maximize2, Sparkles, Trash2, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Bot, Heart, Maximize2, Sparkles } from 'lucide-react'
 import { useLoginHref } from '@/components/public/return-path'
 import { api } from '@/lib/api'
 import { errorText } from '@/lib/format'
 import { useT } from '@/lib/i18n/client'
 import { buildMessages } from '@/lib/i18n/messages/build'
 import type { BuildEntry } from '@/lib/types'
-import { useCanAdmin } from '@/lib/use-can-admin'
 import { useMyHandle } from '@/lib/use-signed-in'
 import { cn } from '@/lib/utils'
 
@@ -19,16 +17,15 @@ export const shotUrl = (e: BuildEntry) => `/api/v1/build-entries/${encodeURIComp
 
 type Sort = 'votes' | 'score'
 
-export function BuildGallery({ entries, onChange, onRemoved }: {
+export function BuildGallery({ slug, mobile, entries, onChange }: {
+  slug: string
+  mobile: boolean
   entries: BuildEntry[]
   onChange: (e: BuildEntry) => void
-  onRemoved: () => void
 }) {
   const t = useT(buildMessages)
   const [sort, setSort] = useState<Sort>('votes')
-  const [open, setOpen] = useState<string | null>(null)
   const sorted = sort === 'votes' ? entries : [...entries].sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || b.votes - a.votes)
-  const opened = entries.find((e) => e.id === open) ?? null
 
   return (
     <section>
@@ -51,37 +48,39 @@ export function BuildGallery({ entries, onChange, onRemoved }: {
       {entries.length === 0 ? (
         <p className="rounded-[14px] border-2 border-dashed border-strong px-6 py-12 text-center text-muted-foreground">{t('galleryEmpty')}</p>
       ) : (
-        <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className={cn('grid gap-5', mobile ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'sm:grid-cols-2 lg:grid-cols-3')}>
           {sorted.map((e, i) => (
             <li key={e.id}>
-              <EntryCard e={e} place={i + 1} onOpen={() => setOpen(e.id)} onChange={onChange} />
+              <EntryCard e={e} href={entryHref(slug, e)} mobile={mobile} place={i + 1} onChange={onChange} />
             </li>
           ))}
         </ul>
       )}
-      {opened && <Preview e={opened} onClose={() => setOpen(null)} onChange={onChange} onRemoved={() => { setOpen(null); onRemoved() }} />}
     </section>
   )
 }
 
-function EntryCard({ e, place, onOpen, onChange }: { e: BuildEntry; place: number; onOpen: () => void; onChange: (e: BuildEntry) => void }) {
+export const entryHref = (slug: string, e: { id: string }) => `/c/${encodeURIComponent(slug)}/${encodeURIComponent(e.id)}`
+
+function EntryCard({ e, href, mobile, place, onChange }: { e: BuildEntry; href: string; mobile: boolean; place: number; onChange: (e: BuildEntry) => void }) {
   const t = useT(buildMessages)
   return (
     <article className={cn('group overflow-hidden rounded-[16px] border bg-card transition-shadow hover:shadow-lg',
       e.mine ? 'border-primary' : 'border-border')}>
-      <button onClick={onOpen} className="relative block aspect-[16/10] w-full overflow-hidden bg-muted text-left" aria-label={`${t('open')}: ${e.handle}`}>
+      <Link href={href} className={cn('relative block w-full overflow-hidden bg-muted', mobile ? 'aspect-[390/640]' : 'aspect-[16/10]')}
+        aria-label={`${t('open')}: ${e.handle}`}>
         <Thumb e={e} />
         <span className={cn('absolute left-3 top-3 flex size-8 items-center justify-center rounded-full font-mono text-sm font-bold shadow',
           place <= 3 ? 'bg-gradient-to-br from-pop-1 via-pop-2 to-pop-3 text-white' : 'bg-card text-foreground')}>{place}</span>
         <span className="absolute inset-0 flex items-center justify-center bg-terminal/0 opacity-0 transition-all group-hover:bg-terminal/40 group-hover:opacity-100">
           <span className="flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-sm font-bold text-foreground"><Maximize2 className="size-4" />{t('open')}</span>
         </span>
-      </button>
-      <div className="flex items-center gap-3 p-4">
-        <div className="min-w-0 flex-1">
+      </Link>
+      <div className="flex items-center gap-2 p-3 sm:gap-3 sm:p-4">
+        <Link href={href} className="min-w-0 flex-1 hover:text-primary">
           <p className="truncate font-bold">{e.handle}</p>
-          <p className="truncate text-xs text-muted-foreground">{e.made_with || ' '}</p>
-        </div>
+          <p className="flex items-center gap-1 truncate text-xs text-muted-foreground"><Bot className="size-3 shrink-0" />{e.made_with || t('agentUnknown')}</p>
+        </Link>
         <ScoreBadge score={e.score} />
         <VoteButton e={e} onChange={onChange} />
       </div>
@@ -137,7 +136,7 @@ export function ScoreBreakdown({ e }: { e: BuildEntry }) {
   )
 }
 
-function VoteButton({ e, onChange, big }: { e: BuildEntry; onChange: (e: BuildEntry) => void; big?: boolean }) {
+export function VoteButton({ e, onChange, big }: { e: BuildEntry; onChange: (e: BuildEntry) => void; big?: boolean }) {
   const t = useT(buildMessages)
   const handle = useMyHandle()
   const loginHref = useLoginHref()
@@ -146,7 +145,7 @@ function VoteButton({ e, onChange, big }: { e: BuildEntry; onChange: (e: BuildEn
   const label = e.mine ? t('ownEntry') : e.voted ? t('voted') : t('vote')
   const cls = cn('flex shrink-0 items-center gap-1.5 rounded-full border font-bold tabular-nums transition-colors disabled:opacity-60',
     big ? 'h-11 px-4' : 'h-9 px-3 text-sm',
-    e.voted ? 'border-transparent bg-pop-2 text-white' : 'border-border bg-card hover:border-pop-2 hover:text-pop-2')
+    e.voted ? 'border-transparent bg-pop-2 text-white' : 'border-border bg-card text-foreground hover:border-pop-2 hover:text-pop-2')
   const inner = <><Heart className={cn('size-4', e.voted && 'fill-current')} />{e.votes}{big && <span className="ml-1">{label}</span>}</>
 
   if (!handle) {
@@ -168,59 +167,5 @@ function VoteButton({ e, onChange, big }: { e: BuildEntry; onChange: (e: BuildEn
       <button onClick={() => void toggle()} disabled={busy || e.mine} aria-pressed={e.voted}
         title={error ?? label} aria-label={`${label}. ${t('votesLabel', { n: e.votes })}`} className={cls}>{inner}</button>
     </span>
-  )
-}
-
-function Preview({ e, onClose, onChange, onRemoved }: { e: BuildEntry; onClose: () => void; onChange: (e: BuildEntry) => void; onRemoved: () => void }) {
-  const t = useT(buildMessages)
-  const canAdmin = useCanAdmin()
-  const [armed, setArmed] = useState(false)
-
-  useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    const overflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = overflow }
-  }, [onClose])
-
-  async function remove() {
-    if (!armed) { setArmed(true); return }
-    try {
-      await api(`/build-entries/${encodeURIComponent(e.id)}`, { method: 'DELETE' })
-      onRemoved()
-    } catch {}
-  }
-
-  return (
-    <div role="dialog" aria-modal="true" aria-label={e.handle} className="fixed inset-0 z-50 flex flex-col bg-terminal/90 p-2 backdrop-blur-sm sm:p-5" onClick={onClose}>
-      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden rounded-[16px] bg-card shadow-2xl lg:flex-row" onClick={(ev) => ev.stopPropagation()}>
-        <iframe src={siteUrl(e)} title={e.handle} sandbox="allow-scripts allow-forms allow-modals allow-popups"
-          className="min-h-[55vh] w-full flex-1 border-0 bg-white lg:min-h-0" />
-        <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto border-t border-border p-5 lg:w-80 lg:border-l lg:border-t-0">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-lg font-bold">{e.handle}</p>
-              {e.made_with && <p className="truncate text-sm text-muted-foreground">{e.made_with}</p>}
-            </div>
-            <button onClick={onClose} aria-label={t('close')} className="flex size-9 shrink-0 items-center justify-center rounded-full hover:bg-muted"><X className="size-5" /></button>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-bold text-muted-foreground">{t('yourScore')}</span>
-            <ScoreBadge score={e.score} large />
-          </div>
-          <ScoreBreakdown e={e} />
-          <VoteButton e={e} onChange={onChange} big />
-          <Button variant="outline" nativeButton={false} render={<a href={siteUrl(e)} target="_blank" rel="noreferrer" />}>
-            <ExternalLink />{t('openNewTab')}
-          </Button>
-          {(canAdmin || e.mine) && (
-            <Button variant="destructive" size="sm" onClick={() => void remove()} className="mt-auto">
-              <Trash2 />{armed ? t('deleteConfirm') : t('deleteEntry')}
-            </Button>
-          )}
-        </aside>
-      </div>
-    </div>
   )
 }

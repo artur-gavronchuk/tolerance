@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
-import { Accessibility, Bot, Check, ChevronDown, Copy, Download, Gauge, ListChecks, Smartphone, Upload } from 'lucide-react'
+import { Accessibility, ArrowLeft, Bot, Check, ChevronDown, Copy, Download, Gauge, ListChecks, Smartphone, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Markdown } from '@/components/daily/markdown'
@@ -11,24 +10,23 @@ import { BuildUpload } from '@/components/build/build-upload'
 import { BuildGallery } from '@/components/build/build-gallery'
 import { api } from '@/lib/api'
 import { errorText } from '@/lib/format'
-import { formatDate } from '@/lib/i18n/core'
+import { KINDS } from '@/lib/build-kinds'
 import { useT } from '@/lib/i18n/client'
 import { buildMessages } from '@/lib/i18n/messages/build'
 import type { BuildEntry, BuildPage } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 // What people paste into their agent; agents read English, like TASK.md itself.
-const PROMPT = 'Read TASK.md in this folder and build the site it describes as static files (index.html at the root, plus any CSS/JS/images; no CDNs, no network). Follow every data-testid in it exactly. When done, zip the folder so index.html is at the root of the zip.'
+const PROMPT = 'Read TASK.md in this folder and build what it describes as static files (index.html at the root, plus any CSS/JS/images; no CDNs, no network). Follow every data-testid in it exactly. When done, zip the folder so index.html is at the root of the zip.'
 
-export function BuildView() {
+export function BuildView({ slug }: { slug: string }) {
   const t = useT(buildMessages)
-  const slug = useSearchParams().get('c') ?? ''
   const [page, setPage] = useState<BuildPage | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      setPage(await api<BuildPage>(`/builds${slug ? `?c=${encodeURIComponent(slug)}` : ''}`))
+      setPage(await api<BuildPage>(`/builds/${encodeURIComponent(slug)}`))
       setError(null)
     } catch (e) {
       setError(errorText(e, t.locale))
@@ -58,25 +56,26 @@ export function BuildView() {
   const ru = t.locale === 'ru'
   const title = (ru && c.title_ru) || c.title
   const summary = (ru && c.summary_ru) || c.summary
+  const k = KINDS[c.kind]
 
   return (
     <div className="space-y-10">
+      <Link href="/" className="-mb-6 inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-4" />{t('allChallenges')}
+      </Link>
       <section className="relative overflow-hidden rounded-[20px] bg-terminal px-5 py-7 text-terminal-foreground sm:px-9 sm:py-10">
-        <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-pop-2/30 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-32 left-1/3 size-80 rounded-full bg-pop-1/30 blur-3xl" />
+        <div aria-hidden className={cn('pointer-events-none absolute -right-24 -top-24 size-80 rounded-full blur-3xl', k.glow)} />
+        <div aria-hidden className="pointer-events-none absolute -bottom-32 left-1/3 size-80 rounded-full bg-pop-1/25 blur-3xl" />
+        <k.icon aria-hidden className="pointer-events-none absolute -right-8 top-6 size-56 rotate-12 text-white opacity-[0.06]" />
         <div className="relative">
           <div className="flex flex-wrap items-center gap-2 text-[13px] font-bold">
-            <span className="rounded-full bg-gradient-to-r from-pop-1 via-pop-2 to-pop-3 px-3 py-1 text-white">{t('kicker')}</span>
-            <span className="text-terminal-foreground/70">
-              {c.current
-                ? c.ends ? t('ends', { date: formatDate(t.locale, c.ends, { day: 'numeric', month: 'long' }) }) : null
-                : t('archived')}
+            <span className={cn('inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r px-3 py-1 text-white', k.gradient)}>
+              <k.icon className="size-3.5" />{t(`kind_${c.kind}`)}
             </span>
-            <span className="text-terminal-foreground/70">· {t.plural('entries', c.entries)}</span>
+            <span className="text-terminal-foreground/70">{t.plural('solutions', c.entries)}</span>
           </div>
-          <h1 className="display mt-4 max-w-3xl text-[2.2rem] sm:text-[3.4rem]">
-            <span className="block text-[0.5em] font-bold tracking-tight text-terminal-foreground/80">{t('heroBuild')}</span>
-            <span className="bg-gradient-to-r from-pop-1 via-pop-2 to-pop-3 bg-clip-text text-transparent">{title}</span>
+          <h1 className="display mt-4 max-w-3xl text-[2.6rem] sm:text-[4rem]">
+            <span className={cn('bg-gradient-to-r bg-clip-text text-transparent', k.gradient)}>{title}</span>
           </h1>
           <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-terminal-foreground/80 sm:text-lg">{summary}</p>
 
@@ -91,7 +90,7 @@ export function BuildView() {
               <CopyPrompt />
             </Step>
             <Step n={3} title={t('step3')} text={t('step3Text')}>
-              <Button size="lg" className="w-full border-0 bg-gradient-to-r from-pop-1 via-pop-2 to-pop-3 text-white hover:opacity-90" nativeButton={false}
+              <Button size="lg" className={cn('w-full border-0 bg-gradient-to-r text-white hover:opacity-90', k.gradient)} nativeButton={false}
                 render={<a href="#upload" />}>
                 <Upload />{t('toUpload')}
               </Button>
@@ -114,23 +113,8 @@ export function BuildView() {
         </div>
       </section>
 
-      <BuildGallery entries={page.entries} onChange={replaceEntry} onRemoved={() => void load()} />
+      <BuildGallery slug={c.slug} mobile={c.mobile} entries={page.entries} onChange={replaceEntry} />
 
-      {page.all.length > 1 && (
-        <section>
-          <h2 className="heading mb-3 text-lg">{t('otherTasks')}</h2>
-          <div className="flex flex-wrap gap-2">
-            {page.all.map((o) => (
-              <Link key={o.slug} href={o.current ? '/' : `/?c=${encodeURIComponent(o.slug)}`}
-                className={cn('rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors',
-                  o.slug === c.slug ? 'border-primary bg-accent text-accent-foreground' : 'border-border bg-card hover:border-primary')}>
-                {(ru && o.title_ru) || o.title}
-                {o.current && <span className="ml-1.5 text-xs text-muted-foreground">· {t('current')}</span>}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   )
 }

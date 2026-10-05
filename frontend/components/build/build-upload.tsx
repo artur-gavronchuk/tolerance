@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useLoginHref } from '@/components/public/return-path'
-import { ScoreBreakdown, ScoreBadge, shotUrl, siteUrl } from '@/components/build/build-gallery'
+import { ScoreBreakdown, ScoreBadge, entryHref, shotUrl, siteUrl } from '@/components/build/build-gallery'
 import { upload } from '@/lib/api'
 import { errorText } from '@/lib/format'
 import { formatNumber } from '@/lib/i18n/core'
@@ -60,7 +60,7 @@ export function BuildUpload({ slug, mine, onUploaded }: { slug: string; mine: Bu
   return (
     <div className="rounded-[14px] border border-border bg-card p-5">
       <h2 className="heading text-lg">{t('uploadTitle')}</h2>
-      {mine && <MyEntry e={mine} />}
+      {mine && <MyEntry slug={slug} e={mine} />}
       {loading ? null : !me ? (
         <div className="mt-4 rounded-[12px] border-2 border-dashed border-strong px-4 py-8 text-center">
           <p className="text-sm text-muted-foreground">{t('signInToUpload')}</p>
@@ -112,7 +112,7 @@ export function BuildUpload({ slug, mine, onUploaded }: { slug: string; mine: Bu
   )
 }
 
-function MyEntry({ e }: { e: BuildEntry }) {
+function MyEntry({ slug, e }: { slug: string; e: BuildEntry }) {
   const t = useT(buildMessages)
   if (e.status === 'queued' || e.status === 'running') {
     return (
@@ -135,16 +135,16 @@ function MyEntry({ e }: { e: BuildEntry }) {
   }
   return (
     <div className="mt-4 overflow-hidden rounded-[12px] border border-border">
-      <a href={siteUrl(e)} target="_blank" rel="noreferrer" className="group relative block aspect-[16/10] bg-muted">
+      <Link href={entryHref(slug, e)} className="group relative block aspect-[16/10] bg-muted">
         {e.has_shot
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={shotUrl(e)} alt="" className="size-full object-cover object-top" />
           : <iframe src={siteUrl(e)} title={e.handle} sandbox="allow-scripts" loading="lazy" tabIndex={-1}
               className="pointer-events-none h-[250%] w-[250%] origin-top-left scale-[0.4] border-0 bg-white" />}
         <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-terminal/80 px-2.5 py-1 text-xs font-bold text-terminal-foreground opacity-0 transition-opacity group-hover:opacity-100">
-          <ExternalLink className="size-3" />{t('openNewTab')}
+          <ExternalLink className="size-3" />{t('open')}
         </span>
-      </a>
+      </Link>
       <div className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm font-bold text-muted-foreground">{t('yourScore')}</span>

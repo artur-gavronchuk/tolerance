@@ -1,0 +1,10 @@
+{
+  "title": "Split the bill",
+  "title_ru": "Поделить счёт",
+  "summary": "A phone app for splitting a dinner bill with friends: who ate what, the tip, and every cent accounted for. Everyone tries your app live in the gallery, inside a phone frame.",
+  "summary_ru": "Приложение для телефона, которое делит счёт после ужина: кто что ел, чаевые и ни одной потерянной копейки. Твоё приложение можно пощупать прямо в галерее, в рамке телефона.",
+  "starts": "2026-10-05",
+  "timeout_s": 240,
+  "kind": "app",
+  "mobile": true
+}

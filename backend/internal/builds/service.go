@@ -45,27 +45,27 @@ func NewService(pool *db.Pool) *Service {
 	return &Service{pool: pool, now: time.Now, sites: map[string]siteCache{}}
 }
 
-// ChallengeView is a challenge as the page shows it.
+// ChallengeView is a challenge as its page shows it.
 type ChallengeView struct {
 	Challenge
-	TaskMD        string     `json:"task_md"`
-	ScenarioCount int        `json:"scenario_count"`
-	Ends          *time.Time `json:"ends"` // when the next challenge takes over the page; nil when none is planned
-	Current       bool       `json:"current"`
-	Entries       int        `json:"entries"`
+	TaskMD        string `json:"task_md"`
+	ScenarioCount int    `json:"scenario_count"`
+	Entries       int    `json:"entries"`
 }
 
-type ChallengeRef struct {
-	Slug    string    `json:"slug"`
-	Title   string    `json:"title"`
-	TitleRu string    `json:"title_ru"`
-	Starts  time.Time `json:"starts"`
-	Current bool      `json:"current"`
+// Card is a challenge on the home page: its numbers and its best entries.
+type Card struct {
+	Challenge
+	Entries int     `json:"entries"`
+	Votes   int     `json:"votes"`
+	Top     []Entry `json:"top"` // up to 3, gallery order
+	Mine    *Entry  `json:"mine"`
 }
 
 // Entry is one person's upload. Checks is the score breakdown (see score.go), {} until scored.
 type Entry struct {
 	ID            string          `json:"id"`
+	Challenge     string          `json:"challenge"`
 	Handle        string          `json:"handle"`
 	MadeWith      string          `json:"made_with"`
 	Status        string          `json:"status"`
@@ -78,38 +78,53 @@ type Entry struct {
 	Votes         int             `json:"votes"`
 	Voted         bool            `json:"voted"`
 	Mine          bool            `json:"mine"`
+	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
 type Page struct {
-	Challenge ChallengeView  `json:"challenge"`
-	All       []ChallengeRef `json:"all"`
-	Entries   []Entry        `json:"entries"`
-	Mine      *Entry         `json:"mine"`
-	Now       time.Time      `json:"now"`
+	Challenge ChallengeView `json:"challenge"`
+	Entries   []Entry       `json:"entries"`
+	Mine      *Entry        `json:"mine"`
+}
+
+// EntryPage is one solution with its challenge and its place in the gallery.
+type EntryPage struct {
+	Entry     Entry     `json:"entry"`
+	Challenge Challenge `json:"challenge"`
+	Place     int       `json:"place"` // 0 while not in the gallery (not scored yet)
+	Of        int       `json:"of"`
+	Prev      *string   `json:"prev"` // neighbours in gallery order
+	Next      *string   `json:"next"`
 }
 
 func notFound() error { return httpx.NotFound() }
 
 func invalid(msg string) error {
-	return httpx.WithField(http.StatusUnprocessableEntity, "invalid_upload", msg, "file", "invalid")
+	return httpx.New(http.StatusUnprocessableEntity, "invalid_upload", msg)
 }
 
 // entryCols expects aliases e (build_entries), u (users) and $1 = the viewer's user id (” when anonymous).
-const entryCols = `e.id, u.handle, e.made_with, e.status, e.score, e.checks, e.failure_reason, e.log_tail, e.shot IS NOT NULL, e.uploads,
+const entryCols = `e.id, e.challenge, u.handle, e.made_with, e.status, e.score, e.checks, e.failure_reason, e.log_tail, e.shot IS NOT NULL, e.uploads,
 	(SELECT count(*) FROM build_votes v WHERE v.entry_id = e.id),
-	EXISTS (SELECT 1 FROM build_votes v WHERE v.entry_id = e.id AND v.user_id = $1), e.user_id = $1, e.updated_at`
+	EXISTS (SELECT 1 FROM build_votes v WHERE v.entry_id = e.id AND v.user_id = $1), e.user_id = $1, e.created_at, e.updated_at`
+
+// galleryWhere and galleryOrder define the public gallery of challenge $2.
+const (
+	galleryWhere = `e.challenge = $2 AND e.status = 'done' AND e.score IS NOT NULL AND u.banned_at IS NULL`
+	galleryOrder = `(SELECT count(*) FROM build_votes v WHERE v.entry_id = e.id) DESC, e.score DESC, e.finished_at, e.id`
+)
 
 type scanner interface{ Scan(...any) error }
 
 func scanEntry(row scanner) (Entry, error) {
 	var e Entry
 	var checks []byte
-	if err := row.Scan(&e.ID, &e.Handle, &e.MadeWith, &e.Status, &e.Score, &checks, &e.FailureReason, &e.LogTail, &e.HasShot, &e.Version,
-		&e.Votes, &e.Voted, &e.Mine, &e.UpdatedAt); err != nil {
+	if err := row.Scan(&e.ID, &e.Challenge, &e.Handle, &e.MadeWith, &e.Status, &e.Score, &checks, &e.FailureReason, &e.LogTail, &e.HasShot, &e.Version,
+		&e.Votes, &e.Voted, &e.Mine, &e.CreatedAt, &e.UpdatedAt); err != nil {
 		return Entry{}, err
 	}
-	e.UpdatedAt = e.UpdatedAt.UTC()
+	e.CreatedAt, e.UpdatedAt = e.CreatedAt.UTC(), e.UpdatedAt.UTC()
 	e.Checks = checks
 	if !e.Mine {
 		e.LogTail = ""
@@ -117,66 +132,140 @@ func scanEntry(row scanner) (Entry, error) {
 	return e, nil
 }
 
-// Page is everything the build page shows for a challenge ("" = the current one).
+func (s *Service) gallery(ctx context.Context, tx pgx.Tx, slug, viewer string, limit int) ([]Entry, error) {
+	rows, err := tx.Query(ctx, `SELECT `+entryCols+` FROM build_entries e JOIN users u ON u.id = e.user_id
+		WHERE `+galleryWhere+` ORDER BY `+galleryOrder+` LIMIT $3`, viewer, slug, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Entry{}
+	for rows.Next() {
+		e, err := scanEntry(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+func (s *Service) mine(ctx context.Context, tx pgx.Tx, slug, viewer string) (*Entry, error) {
+	if viewer == "" {
+		return nil, nil
+	}
+	e, err := scanEntry(tx.QueryRow(ctx, `SELECT `+entryCols+` FROM build_entries e JOIN users u ON u.id = e.user_id
+		WHERE e.challenge = $2 AND e.user_id = $1`, viewer, slug))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+// List is the home page: every open challenge with its numbers and best entries.
+func (s *Service) List(ctx context.Context, viewer string) ([]Card, error) {
+	cs := open(s.now().UTC())
+	out := make([]Card, 0, len(cs))
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		for _, c := range cs {
+			card := Card{Challenge: *c}
+			if err := tx.QueryRow(ctx, `SELECT count(*), coalesce(sum((SELECT count(*) FROM build_votes v WHERE v.entry_id = e.id)), 0)
+				FROM build_entries e JOIN users u ON u.id = e.user_id WHERE `+strings.ReplaceAll(galleryWhere, "$2", "$1"), c.Slug).Scan(&card.Entries, &card.Votes); err != nil {
+				return err
+			}
+			var err error
+			if card.Top, err = s.gallery(ctx, tx, c.Slug, viewer, 3); err != nil {
+				return err
+			}
+			if card.Mine, err = s.mine(ctx, tx, c.Slug, viewer); err != nil {
+				return err
+			}
+			out = append(out, card)
+		}
+		return nil
+	})
+	return out, err
+}
+
+// Page is everything a challenge's page shows.
 func (s *Service) Page(ctx context.Context, slug, viewer string) (Page, error) {
-	now := s.now().UTC()
-	all := started(now)
-	if len(all) == 0 {
+	c := find(slug, s.now().UTC())
+	if c == nil {
 		return Page{}, notFound()
 	}
-	c := all[0]
-	if slug != "" {
-		if c = find(slug, now); c == nil {
-			return Page{}, notFound()
-		}
-	}
-	p := Page{Now: now, Entries: []Entry{}}
-	p.Challenge = ChallengeView{Challenge: *c, TaskMD: c.TaskMD, ScenarioCount: len(c.Scenarios), Current: c == all[0]}
-	if n := next(now); n != nil && p.Challenge.Current {
-		t := n.Starts
-		p.Challenge.Ends = &t
-	}
-	for _, o := range all {
-		p.All = append(p.All, ChallengeRef{Slug: o.Slug, Title: o.Title, TitleRu: o.TitleRu, Starts: o.Starts, Current: o == all[0]})
-	}
+	p := Page{Challenge: ChallengeView{Challenge: *c, TaskMD: c.TaskMD, ScenarioCount: len(c.Scenarios)}}
 	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+entryCols+` FROM build_entries e JOIN users u ON u.id = e.user_id
-			WHERE e.challenge = $2 AND e.status = 'done' AND e.score IS NOT NULL AND u.banned_at IS NULL
-			ORDER BY (SELECT count(*) FROM build_votes v WHERE v.entry_id = e.id) DESC, e.score DESC, e.finished_at
-			LIMIT $3`, viewer, c.Slug, galleryLimit)
+		var err error
+		if p.Entries, err = s.gallery(ctx, tx, c.Slug, viewer, galleryLimit); err != nil {
+			return err
+		}
+		p.Challenge.Entries = len(p.Entries)
+		p.Mine, err = s.mine(ctx, tx, c.Slug, viewer)
+		return err
+	})
+	return p, err
+}
+
+// EntryPage is one solution: public once scored, its owner sees it from the upload on.
+func (s *Service) EntryPage(ctx context.Context, id, viewer string) (EntryPage, error) {
+	var p EntryPage
+	err := s.pool.Tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		e, err := scanEntry(tx.QueryRow(ctx, `SELECT `+entryCols+` FROM build_entries e JOIN users u ON u.id = e.user_id
+			WHERE e.id = $2 AND u.banned_at IS NULL`, viewer, id))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return notFound()
+		}
+		if err != nil {
+			return err
+		}
+		if !e.Mine && (e.Status != "done" || e.Score == nil) {
+			return notFound()
+		}
+		p.Entry = e
+		var ids []string
+		rows, err := tx.Query(ctx, `SELECT e.id FROM build_entries e JOIN users u ON u.id = e.user_id
+			WHERE `+strings.ReplaceAll(galleryWhere, "$2", "$1")+` ORDER BY `+galleryOrder, e.Challenge)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
-			e, err := scanEntry(rows)
-			if err != nil {
+			var x string
+			if err := rows.Scan(&x); err != nil {
 				return err
 			}
-			p.Entries = append(p.Entries, e)
+			ids = append(ids, x)
 		}
 		if err := rows.Err(); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM build_entries e JOIN users u ON u.id = e.user_id
-			WHERE e.challenge = $1 AND e.status = 'done' AND u.banned_at IS NULL`, c.Slug).Scan(&p.Challenge.Entries); err != nil {
-			return err
+		p.Of = len(ids)
+		for i, x := range ids {
+			if x != id {
+				continue
+			}
+			p.Place = i + 1
+			if i > 0 {
+				p.Prev = &ids[i-1]
+			}
+			if i+1 < len(ids) {
+				p.Next = &ids[i+1]
+			}
 		}
-		if viewer == "" {
-			return nil
-		}
-		e, err := scanEntry(tx.QueryRow(ctx, `SELECT `+entryCols+` FROM build_entries e JOIN users u ON u.id = e.user_id
-			WHERE e.challenge = $2 AND e.user_id = $1`, viewer, c.Slug))
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		p.Mine = &e
 		return nil
 	})
-	return p, err
+	if err != nil {
+		return EntryPage{}, err
+	}
+	for i := range catalog {
+		if catalog[i].Slug == p.Entry.Challenge {
+			p.Challenge = catalog[i]
+		}
+	}
+	return p, nil
 }
 
 // Create stores an upload as the person's entry for the challenge (replacing the previous one) and queues it.
@@ -366,7 +455,7 @@ func (s *Service) TaskZip(slug, publicURL string) ([]byte, error) {
 	readme := "# " + c.Title + "\n\n" +
 		"Give TASK.md to your coding agent and let it build the site.\n\n" +
 		"Hand-in: a zip with `index.html` at its root (plus any CSS, JS and images), or a single `.html` file,\n" +
-		"up to 5 MB, static files only, no network. Upload it at " + strings.TrimRight(publicURL, "/") + "/?c=" + c.Slug + "\n"
+		"up to 5 MB, static files only, no network. Upload it at " + strings.TrimRight(publicURL, "/") + "/c/" + c.Slug + "\n"
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	for _, f := range []struct{ name, body string }{{"TASK.md", c.TaskMD}, {"README.md", readme}} {

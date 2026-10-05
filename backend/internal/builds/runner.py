@@ -197,7 +197,9 @@ def quality(browser):
 
 
 def screenshot(browser):
-    ctx = browser.new_context(viewport={"width": 1280, "height": 800})
+    shot = spec.get("shot") or {}
+    ctx = browser.new_context(viewport={"width": shot.get("width", 1280), "height": shot.get("height", 800)},
+                              device_scale_factor=shot.get("scale", 1), has_touch=bool(shot.get("touch")))
     try:
         page = ctx.new_page()
         page.goto(base + "/", timeout=STEP_MS * 2, wait_until="load")
@@ -217,7 +219,10 @@ with sync_playwright() as p:
     screenshot(browser)
     for sc in spec["scenarios"]:
         ok = False
-        opts = {"viewport": {"width": sc.get("viewport") or 1024, "height": 768}}
+        width = sc.get("viewport") or spec.get("viewport") or 1024
+        opts = {"viewport": {"width": width, "height": 844 if width < 600 else 768}}
+        if width < 600:
+            opts["has_touch"] = True
         if sc.get("timezone"):
             opts["timezone_id"] = sc["timezone"]
         ctx = browser.new_context(**opts)

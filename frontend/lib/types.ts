@@ -275,19 +275,32 @@ export interface FairReport {
 export interface FairCluster { kind: 'ip' | 'device'; hash: string; users: { id: string; handle: string; banned: boolean }[] }
 export interface FairOverview { flags: FairItem[]; reports: FairReport[]; clusters: FairCluster[] }
 
-// Build challenges (GET /builds): a site to build, uploads scored by the platform and voted on.
-export type BuildChallenge = {
+// Build challenges: several open side by side (GET /builds), each with its page (GET /builds/{slug}) and
+// solution pages (GET /build-entries/{id}).
+export type BuildKind = 'game' | 'site' | 'app' | 'tool'
+
+export type BuildChallengeBase = {
   slug: string
   title: string
   title_ru: string
   summary: string
   summary_ru: string
   starts: string
-  ends: string | null
+  kind: BuildKind
+  mobile: boolean
+}
+
+export type BuildChallenge = BuildChallengeBase & {
   task_md: string
   scenario_count: number
-  current: boolean
   entries: number
+}
+
+export type BuildCard = BuildChallengeBase & {
+  entries: number
+  votes: number
+  top: BuildEntry[]
+  mine: BuildEntry | null
 }
 
 export type BuildChecks = {
@@ -299,6 +312,7 @@ export type BuildChecks = {
 
 export type BuildEntry = {
   id: string
+  challenge: string
   handle: string
   made_with: string
   status: 'queued' | 'running' | 'done' | 'infra_error'
@@ -311,13 +325,21 @@ export type BuildEntry = {
   votes: number
   voted: boolean
   mine: boolean
+  created_at: string
   updated_at: string
 }
 
 export type BuildPage = {
   challenge: BuildChallenge
-  all: { slug: string; title: string; title_ru: string; starts: string; current: boolean }[]
   entries: BuildEntry[]
   mine: BuildEntry | null
-  now: string
+}
+
+export type BuildEntryPage = {
+  entry: BuildEntry
+  challenge: BuildChallengeBase
+  place: number
+  of: number
+  prev: string | null
+  next: string | null
 }

@@ -33,7 +33,23 @@ func siteCSP(publicURL string) string {
 func RegisterPublicRoutes(mux *http.ServeMux, s *Service, viewer func(r *http.Request) string, publicURL string) {
 	csp := siteCSP(publicURL)
 	mux.HandleFunc("GET /api/v1/builds", func(w http.ResponseWriter, r *http.Request) {
-		p, err := s.Page(r.Context(), r.URL.Query().Get("c"), viewer(r))
+		cards, err := s.List(r.Context(), viewer(r))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, map[string]any{"items": cards})
+	})
+	mux.HandleFunc("GET /api/v1/builds/{slug}", func(w http.ResponseWriter, r *http.Request) {
+		p, err := s.Page(r.Context(), r.PathValue("slug"), viewer(r))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		httpx.Respond(w, http.StatusOK, p)
+	})
+	mux.HandleFunc("GET /api/v1/build-entries/{id}", func(w http.ResponseWriter, r *http.Request) {
+		p, err := s.EntryPage(r.Context(), r.PathValue("id"), viewer(r))
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return

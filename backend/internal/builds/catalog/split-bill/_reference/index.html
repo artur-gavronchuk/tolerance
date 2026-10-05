@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d1a16">
+<title>Split the bill</title>
+<style>
+  :root {
+    --bg: #f3ecdd; --paper: #fffcf5; --ink: #1d1a16; --muted: #645c50; --line: #e4d9c3; --field: #8a7d66;
+    --accent: #c8321b; --leaf: #1f6f50; --leaf-soft: #e1f1e8; --warn-bg: #fdebe7; --warn-line: #f1b5a9; --warn-ink: #8c2413;
+    --on-dark: #f6efe0; --on-dark-muted: #cfc5af;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  html { scroll-padding-bottom: 120px; }
+  body {
+    margin: 0; color: var(--ink); background: var(--bg); min-height: 100vh;
+    background-image: radial-gradient(900px 420px at 50% -120px, #ffd9a8 0%, rgba(255, 217, 168, 0) 70%);
+    font: 16px/1.4 ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  .app { max-width: 480px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 16px 132px; }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 8px 0 4px; }
+  .logo { width: 44px; height: 44px; border-radius: 14px; background: var(--ink); color: var(--on-dark); display: grid; place-items: center; flex: none;
+    box-shadow: 0 6px 16px rgba(29, 26, 22, .25); transform: rotate(-4deg); }
+  h1 { font-size: 26px; line-height: 1.1; letter-spacing: -.02em; margin: 0 auto 0 0; }
+  h1 small { display: block; font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--muted); margin-top: 2px; }
+  h2 { margin: 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 22px; padding: 16px; margin-top: 16px;
+    box-shadow: 0 1px 0 #fff inset, 0 10px 24px -14px rgba(60, 40, 10, .35); }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+  .count { font-size: 13px; color: var(--muted); }
+  .empty { margin: 4px 0 12px; padding: 16px; border: 2px dashed #cdbf9f; border-radius: 16px; color: var(--muted); text-align: center; font-size: 15px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+
+  label.lbl { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin: 0 0 4px 2px; }
+  input[type=text] { width: 100%; height: 48px; border: 1.5px solid var(--field); border-radius: 14px; background: #fff; padding: 0 14px; font: inherit; color: var(--ink); }
+  input[type=text]::placeholder { color: #756b5b; }
+  input[aria-invalid=true] { border-color: var(--accent); background: var(--warn-bg); }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row > .grow { flex: 1; min-width: 0; }
+  .err { margin: 8px 2px 0; font-size: 14px; font-weight: 600; color: var(--warn-ink); }
+  .hint { margin: 8px 2px 0; font-size: 13px; color: var(--muted); }
+
+  .btn { min-width: 48px; min-height: 48px; padding: 0 18px; border: 0; border-radius: 14px; font: inherit; font-weight: 800; cursor: pointer;
+    background: var(--ink); color: var(--on-dark); transition: transform .12s ease, background .12s ease; }
+  .btn:active { transform: scale(.96); }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--field); font-weight: 700; }
+  .btn.icon { padding: 0; width: 44px; min-width: 44px; min-height: 44px; height: 44px; background: transparent; color: var(--muted); border-radius: 12px; font-size: 22px; line-height: 1; }
+  .btn.icon:hover { background: var(--warn-bg); color: var(--warn-ink); }
+  .btn.wide { width: 100%; margin-top: 8px; }
+  header .btn { min-height: 44px; height: 44px; padding: 0 14px; font-size: 15px; }
+
+  /* people */
+  .person { display: grid; grid-template-columns: 40px 1fr auto 44px; gap: 8px 10px; align-items: center; min-height: 56px; padding: 6px 0; border-bottom: 1px solid var(--line); animation: rise .22s ease both; }
+  .person:last-child { border-bottom: 0; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 16px; color: var(--ink); }
+  .pname { min-width: 0; }
+  .pname b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
+  .bar { display: block; height: 5px; border-radius: 3px; background: #ece3d0; margin-top: 5px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--leaf); border-radius: 3px; transition: width .35s cubic-bezier(.2, .8, .2, 1); }
+  .ptotal { font-weight: 800; font-size: 18px; min-width: 88px; text-align: right; }
+
+  /* items */
+  .item { padding: 12px 0 14px; border-bottom: 1px solid var(--line); animation: rise .22s ease both; }
+  .item:last-child { border-bottom: 0; }
+  .item-top { display: grid; grid-template-columns: 1fr auto 44px; gap: 8px; align-items: center; }
+  .item-title { font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
+  .item-price { font-weight: 800; font-size: 17px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .chip { position: relative; display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; max-width: 100%; padding: 0 14px; border: 1.5px solid var(--field);
+    border-radius: 22px; background: #fff; font-size: 15px; font-weight: 600; color: var(--ink); cursor: pointer; transition: background .12s, transform .12s; }
+  .chip input { position: absolute; left: -2px; top: -2px; width: calc(100% + 4px); height: calc(100% + 4px); margin: 0; opacity: 0; cursor: pointer; }
+  .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip:has(input:checked) { background: var(--leaf); border-color: var(--leaf); color: #fff; }
+  .chip:has(input:checked)::before { content: "\2713"; margin-right: 6px; font-weight: 800; }
+  .chip:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .chip:active { transform: scale(.95); }
+  .flag { margin: 8px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-ink); font-size: 14px; font-weight: 600; }
+  .add-item { display: grid; gap: 8px; margin-top: 4px; padding-top: 14px; border-top: 1px dashed #cdbf9f; }
+  .add-item .row { align-items: flex-end; }
+  .price { width: 128px; flex: none; }
+
+  /* tip */
+  .segs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .seg { min-height: 48px; border: 1.5px solid var(--field); border-radius: 14px; background: #fff; font: inherit; font-weight: 800; color: var(--ink); cursor: pointer; transition: transform .12s, background .12s; }
+  .seg:active { transform: scale(.95); }
+  .seg[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tip-custom { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
+  .tip-custom .grow { flex: 1; }
+  .sum { margin-top: 14px; display: grid; grid-template-columns: 1fr auto; row-gap: 4px; font-size: 15px; color: var(--muted); }
+  .sum b { color: var(--ink); text-align: right; }
+
+  /* bottom bar */
+  footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; }
+  .dock { max-width: 480px; margin: 0 auto; background: var(--ink); color: var(--on-dark); padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+    border-radius: 26px 26px 0 0; display: flex; align-items: center; gap: 12px; box-shadow: 0 -12px 30px rgba(29, 26, 22, .28); }
+  .dock .lab { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--on-dark-muted); font-weight: 700; }
+  .dock .total { font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; }
+  .dock .total.pop { animation: pop .3s ease; }
+  .dock .grow { flex: 1; min-width: 0; }
+  .dock .btn { background: var(--accent); color: #fff; }
+  .toast { position: fixed; left: 50%; bottom: 104px; transform: translate(-50%, 20px); background: var(--leaf); color: #fff; padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: 14px;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: calc(100% - 32px); }
+  .toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes pop { 40% { transform: scale(1.06); } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo" aria-hidden="true">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
+    </div>
+    <h1>Split the bill<small>Every cent, accounted for</small></h1>
+    <button class="btn ghost" type="button" id="new-bill" data-testid="new-bill">New bill</button>
+  </header>
+
+  <main>
+    <section class="card" aria-labelledby="h-people">
+      <div class="card-head"><h2 id="h-people">Who is at the table</h2><span class="count" id="people-count"></span></div>
+      <p class="empty" id="people-empty">Add everyone at the table to start.</p>
+      <ul id="people"></ul>
+      <form id="person-form" novalidate style="margin-top:12px">
+        <label class="lbl" for="new-person">Name</label>
+        <div class="row">
+          <div class="grow"><input type="text" id="new-person" data-testid="new-person" placeholder="e.g. Mia" autocomplete="off" autocapitalize="words" enterkeyhint="done"></div>
+          <button class="btn" type="submit" data-testid="add-person">Add</button>
+        </div>
+        <p class="err" role="alert" data-testid="person-error" id="person-error" hidden></p>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="h-items">
+      <div class="card-head"><h2 id="h-items">What you ordered</h2><span class="count" id="items-count"></span></div>
+      <p class="empty" id="items-empty">Add the dishes and drinks, then tap who shared each one.</p>
+      <ul id="items"></ul>
+      <form class="add-item" id="item-form" novalidate>
+        <div>
+          <label class="lbl" for="new-item-name">Item</label>
+          <input type="text" id="new-item-name" data-testid="new-item-name" placeholder="e.g. Margherita" autocomplete="off" enterkeyhint="next">
+        </div>
+        <div class="row">
+          <div class="price">
+            <label class="lbl" for="new-item-price">Price</label>
+            <input type="text" id="new-item-price" data-testid="new-item-price" placeholder="12.50" inputmode="decimal" autocomplete="off" enterkeyhint="done">
+          </div>
+          <button class="btn grow" style="flex:1" type="submit" data-testid="add-item">Add item</button>
+        </div>
+        <p class="err" role="alert" data-testid="item-error" id="item-error" hidden></p>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="h-tip">
+      <div class="card-head"><h2 id="h-tip">Tip</h2></div>
+      <div class="segs" role="group" aria-label="Tip presets">
+        <button class="seg" type="button" data-testid="tip-0" data-p="0" aria-pressed="false">0%</button>
+        <button class="seg" type="button" data-testid="tip-10" data-p="10" aria-pressed="false">10%</button>
+        <button class="seg" type="button" data-testid="tip-15" data-p="15" aria-pressed="false">15%</button>
+        <button class="seg" type="button" data-testid="tip-20" data-p="20" aria-pressed="false">20%</button>
+      </div>
+      <div class="tip-custom">
+        <label class="lbl" for="tip-custom" style="margin:0">Custom %</label>
+        <div class="grow"><input type="text" id="tip-custom" data-testid="tip-custom" inputmode="decimal" placeholder="e.g. 12.5" autocomplete="off"></div>
+      </div>
+      <p class="err" role="alert" data-testid="tip-error" id="tip-error" hidden></p>
+      <div class="sum">
+        <span>Subtotal</span><b data-testid="subtotal" id="subtotal">$0.00</b>
+        <span>Tip</span><b data-testid="tip-amount" id="tip-amount">$0.00</b>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <div class="dock">
+    <div class="grow"><div class="lab">Total</div><div class="total" data-testid="grand-total" id="grand-total">$0.00</div></div>
+    <button class="btn" type="button" id="copy">Copy split</button>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</footer>
+
+<script>
+(() => {
+  'use strict'
+  const KEY = 'split-bill:v1'
+  const TEST = new URLSearchParams(location.search).has('test')
+  const COLORS = ['#ffd9a8', '#cfe8d5', '#d9d3f5', '#ffc9c0', '#c9e4f2', '#f6e3a1', '#f2c9e3', '#d4ead0']
+  const $ = (id) => document.getElementById(id)
+  const tid = (t) => document.querySelector('[data-testid="' + t + '"]')
+
+  // ---------- state: people {id,name}, items {id,name,cents,sharers:[person id]}, tip in basis points (1250 = 12.5%)
+  let S = { seq: 1, people: [], items: [], bp: 0, custom: '' }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY)
+      if (raw === null) return null
+      const d = JSON.parse(raw)
+      if (!d || !Array.isArray(d.people) || !Array.isArray(d.items)) return null
+      return { seq: +d.seq || 1, people: d.people, items: d.items, bp: +d.bp || 0, custom: typeof d.custom === 'string' ? d.custom : '' }
+    } catch (e) { return null }
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)) } catch (e) { /* storage may be unavailable */ } }
+
+  function sample() {
+    const ids = [1, 2, 3, 4]
+    return {
+      seq: 20, bp: 1500, custom: '',
+      people: [{ id: 1, name: 'Mia' }, { id: 2, name: 'Leo' }, { id: 3, name: 'Zoe' }, { id: 4, name: 'Sam' }],
+      items: [
+        { id: 11, name: 'Margherita pizza', cents: 1800, sharers: ids },
+        { id: 12, name: 'Truffle fries', cents: 950, sharers: [1, 2] },
+        { id: 13, name: 'Negroni', cents: 1300, sharers: [3] },
+        { id: 14, name: 'Tiramisu to share', cents: 1100, sharers: [2, 3, 4] },
+      ],
+    }
+  }
+
+  // ---------- parsing and money
+  function parseMoney(text) {
+    const m = /^(\d{1,6})(?:[.,](\d{1,2}))?$/.exec(text.trim())
+    if (!m) return null
+    const cents = Number(m[1]) * 100 + (m[2] ? Number(m[2].padEnd(2, '0')) : 0)
+    return cents >= 1 ? cents : null
+  }
+  function parsePct(text) {
+    const m = /^(\d{1,3})(?:[.,](\d{1,2}))?$/.exec(text.trim())
+    if (!m) return null
+    const bp = Number(m[1]) * 100 + (m[2] ? Number(m[2].padEnd(2, '0')) : 0)
+    return bp <= 10000 ? bp : null
+  }
+  function fmt(cents) {
+    return '$' + String(Math.floor(cents / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + String(cents % 100).padStart(2, '0')
+  }
+
+  // ---------- the split: exact rational shares in BigInt, floor, leftover cents by largest remainder (ties: earlier person)
+  const gcd = (a, b) => (b === 0n ? a : gcd(b, a % b))
+  function compute() {
+    const n = S.people.length
+    const included = S.items.filter((it) => it.sharers.length > 0)
+    const subtotal = included.reduce((a, it) => a + it.cents, 0)
+    const tip = Math.floor((subtotal * S.bp + 5000) / 10000) // half up, integers only
+    const shares = new Array(n).fill(0)
+    if (subtotal > 0 && n > 0) {
+      let L = 1n
+      for (const it of included) { const k = BigInt(it.sharers.length); L = (L / gcd(L, k)) * k }
+      const own = S.people.map(() => 0n) // own[i] / L = person i's item cents (exact)
+      for (const it of included) {
+        const per = BigInt(it.cents) * (L / BigInt(it.sharers.length))
+        for (const id of it.sharers) { const i = S.people.findIndex((p) => p.id === id); if (i >= 0) own[i] += per }
+      }
+      const den = L * BigInt(subtotal)
+      const total = BigInt(subtotal + tip)
+      const rem = []
+      let given = 0n
+      own.forEach((o, i) => { const num = o * total; shares[i] = Number(num / den); rem.push(num % den); given += BigInt(shares[i]) })
+      let left = Number(total - given)
+      const order = rem.map((r, i) => i).sort((a, b) => (rem[a] === rem[b] ? a - b : rem[a] > rem[b] ? -1 : 1))
+      for (const i of order) { if (left <= 0) break; shares[i] += 1; left-- }
+    }
+    return { subtotal, tip, total: subtotal + tip, shares }
+  }
+
+  // ---------- rendering
+  const h = (tag, attrs, ...kids) => {
+    const el = document.createElement(tag)
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === 'class') el.className = v
+      else if (k === 'text') el.textContent = v
+      else if (v === true) el.setAttribute(k, '')
+      else if (v !== false && v != null) el.setAttribute(k, v)
+    }
+    for (const kid of kids) if (kid) el.append(kid)
+    return el
+  }
+  const initials = (name) => { const parts = name.split(/\s+/).filter(Boolean); return ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() }
+  let lastTotal = null
+
+  function render() {
+    const c = compute()
+    const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.fk : null
+
+    // people
+    const ul = $('people'); ul.textContent = ''
+    $('people-empty').hidden = S.people.length > 0
+    $('people-count').textContent = S.people.length ? S.people.length + (S.people.length === 1 ? ' person' : ' people') : ''
+    S.people.forEach((p, i) => {
+      const pct = c.total > 0 ? Math.round((c.shares[i] / c.total) * 100) : 0
+      ul.append(h('li', { class: 'person', 'data-testid': 'person' },
+        h('span', { class: 'avatar', style: 'background:' + COLORS[i % COLORS.length], 'aria-hidden': 'true', text: initials(p.name) }),
+        h('span', { class: 'pname' }, h('b', { 'data-testid': 'person-name', text: p.name }), h('span', { class: 'bar', 'aria-hidden': 'true' }, h('i', { style: 'width:' + pct + '%' }))),
+        h('span', { class: 'ptotal', 'data-testid': 'person-total', text: fmt(c.shares[i]) }),
+        h('button', { class: 'btn icon', type: 'button', 'data-testid': 'remove-person', 'aria-label': 'Remove ' + p.name, 'data-fk': 'rp' + p.id, 'data-act': 'rm-person', 'data-id': p.id, text: '×' })))
+    })
+
+    // items
+    const il = $('items'); il.textContent = ''
+    $('items-empty').hidden = S.items.length > 0
+    $('items-count').textContent = S.items.length ? S.items.length + (S.items.length === 1 ? ' item' : ' items') : ''
+    for (const it of S.items) {
+      const chips = S.people.map((p) => {
+        const cb = h('input', { type: 'checkbox', 'data-testid': 'sharer', 'aria-label': p.name + ' shares ' + it.name, 'data-fk': 's' + it.id + '_' + p.id, 'data-act': 'toggle', 'data-item': it.id, 'data-id': p.id })
+        cb.checked = it.sharers.includes(p.id)
+        return h('label', { class: 'chip' }, cb, h('span', { text: p.name }))
+      })
+      il.append(h('li', { class: 'item', 'data-testid': 'item' },
+        h('div', { class: 'item-top' },
+          h('span', { class: 'item-title', 'data-testid': 'item-title', text: it.name }),
+          h('span', { class: 'item-price', 'data-testid': 'item-price', text: fmt(it.cents) }),
+          h('button', { class: 'btn icon', type: 'button', 'data-testid': 'remove-item', 'aria-label': 'Remove ' + it.name, 'data-fk': 'ri' + it.id, 'data-act': 'rm-item', 'data-id': it.id, text: '×' })),
+        it.sharers.length === 0 ? h('p', { class: 'flag', 'data-testid': 'item-flag', text: 'Nobody shares this yet, so it is not counted. Tap who had some.' }) : null,
+        S.people.length ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Who shares ' + it.name }, ...chips) : null))
+    }
+
+    // tip + totals
+    document.querySelectorAll('.seg').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.p) * 100 === S.bp)))
+    $('subtotal').textContent = fmt(c.subtotal)
+    $('tip-amount').textContent = fmt(c.tip)
+    $('grand-total').textContent = fmt(c.total)
+    if (lastTotal !== null && lastTotal !== c.total) { const g = $('grand-total'); g.classList.remove('pop'); void g.offsetWidth; g.classList.add('pop') }
+    lastTotal = c.total
+
+    if (focusKey) { const el = document.querySelector('[data-fk="' + focusKey + '"]'); if (el && el !== document.activeElement) el.focus() }
+  }
+  function changed() { save(); render() }
+
+  function showError(id, inputEl, msg) {
+    const e = $(id); e.textContent = msg; e.hidden = false
+    if (inputEl) inputEl.setAttribute('aria-invalid', 'true')
+  }
+  function clearError(id, inputEl) { $(id).hidden = true; if (inputEl) inputEl.removeAttribute('aria-invalid') }
+
+  // ---------- actions
+  const personInput = $('new-person'), nameInput = $('new-item-name'), priceInput = $('new-item-price'), customInput = $('tip-custom')
+
+  $('person-form').addEventListener('submit', (e) => {
+    e.preventDefault()
+    const name = personInput.value.trim()
+    if (!name) return showError('person-error', personInput, 'Type a name first.')
+    if (name.length > 24) return showError('person-error', personInput, 'Names can be up to 24 characters.')
+    if (S.people.some((p) => p.name.toLowerCase() === name.toLowerCase())) return showError('person-error', personInput, name + ' is already at the table.')
+    S.people.push({ id: S.seq++, name })
+    personInput.value = ''; clearError('person-error', personInput)
+    changed(); personInput.focus()
+  })
+  personInput.addEventListener('input', () => clearError('person-error', personInput))
+
+  $('item-form').addEventListener('submit', (e) => {
+    e.preventDefault()
+    const name = nameInput.value.trim(), cents = parseMoney(priceInput.value)
+    if (!name) return showError('item-error', nameInput, 'What was it? Give the item a name.')
+    if (name.length > 40) return showError('item-error', nameInput, 'Item names can be up to 40 characters.')
+    if (cents === null) return showError('item-error', priceInput, 'Enter a price like 12.50 or 12,50 (0.01 to 999999.99).')
+    S.items.push({ id: S.seq++, name, cents, sharers: S.people.map((p) => p.id) })
+    nameInput.value = ''; priceInput.value = ''; clearError('item-error', nameInput); clearError('item-error', priceInput)
+    changed(); nameInput.focus()
+  })
+  ;[nameInput, priceInput].forEach((el) => el.addEventListener('input', () => { clearError('item-error', nameInput); clearError('item-error', priceInput) }))
+  // Enter in the name field moves to the price instead of submitting a half-empty item
+  nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !priceInput.value.trim()) { e.preventDefault(); priceInput.focus() } })
+
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-act]')
+    if (!t) return
+    const id = Number(t.dataset.id)
+    if (t.dataset.act === 'rm-person') {
+      S.people = S.people.filter((p) => p.id !== id)
+      S.items.forEach((it) => { it.sharers = it.sharers.filter((x) => x !== id) })
+      changed()
+    } else if (t.dataset.act === 'rm-item') {
+      S.items = S.items.filter((it) => it.id !== id); changed()
+    }
+  })
+  document.addEventListener('change', (e) => {
+    const t = e.target
+    if (!t.dataset || t.dataset.act !== 'toggle') return
+    const it = S.items.find((x) => x.id === Number(t.dataset.item)), id = Number(t.dataset.id)
+    if (!it) return
+    it.sharers = t.checked ? [...it.sharers, id] : it.sharers.filter((x) => x !== id)
+    // keep sharers in table order
+    it.sharers.sort((a, b) => S.people.findIndex((p) => p.id === a) - S.people.findIndex((p) => p.id === b))
+    changed()
+  })
+
+  document.querySelectorAll('.seg').forEach((b) => b.addEventListener('click', () => {
+    S.bp = Number(b.dataset.p) * 100; S.custom = ''
+    customInput.value = ''; clearError('tip-error', customInput)
+    changed()
+  }))
+  customInput.addEventListener('input', () => {
+    const v = customInput.value
+    if (v.trim() === '') { clearError('tip-error', customInput); S.custom = ''; save(); return }
+    const bp = parsePct(v)
+    if (bp === null) return showError('tip-error', customInput, 'Use a percent from 0 to 100, like 12.5 or 12,5.')
+    clearError('tip-error', customInput)
+    S.bp = bp; S.custom = v.trim()
+    changed()
+  })
+
+  $('new-bill').addEventListener('click', () => {
+    S = { seq: 1, people: [], items: [], bp: 0, custom: '' }
+    ;[personInput, nameInput, priceInput, customInput].forEach((el) => { el.value = ''; el.removeAttribute('aria-invalid') })
+    ;['person-error', 'item-error', 'tip-error'].forEach((id) => { $(id).hidden = true })
+    changed(); personInput.focus()
+  })
+
+  let toastTimer
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('on')
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1800)
+  }
+  $('copy').addEventListener('click', async () => {
+    const c = compute()
+    const lines = ['Split the bill'].concat(S.people.map((p, i) => p.name + ': ' + fmt(c.shares[i])), ['Total: ' + fmt(c.total) + ' (tip ' + fmt(c.tip) + ')'])
+    const text = lines.join('\n')
+    try { await navigator.clipboard.writeText(text); toast('Copied. Paste it in the group chat!') }
+    catch (e) {
+      try {
+        const ta = h('textarea', { 'aria-hidden': 'true', style: 'position:fixed;opacity:0' }); ta.value = text; document.body.append(ta); ta.select()
+        const ok = document.execCommand('copy'); ta.remove(); toast(ok ? 'Copied. Paste it in the group chat!' : 'Could not copy on this device')
+      } catch (e2) { toast('Could not copy on this device') }
+    }
+  })
+
+  // ---------- test hook
+  window.bill = {
+    state() {
+      const c = compute()
+      return {
+        people: S.people.map((p, i) => ({ name: p.name, share: c.shares[i] })),
+        items: S.items.map((it) => ({ name: it.name, cents: it.cents, sharers: S.people.filter((p) => it.sharers.includes(p.id)).map((p) => p.name) })),
+        tipPercent: S.bp / 100, subtotal: c.subtotal, tip: c.tip, total: c.total,
+      }
+    },
+  }
+
+  // ---------- boot
+  const saved = load()
+  if (saved) S = saved
+  else if (!TEST) S = sample()
+  customInput.value = S.custom
+  render()
+})()
+</script>
+</body>
+</html>

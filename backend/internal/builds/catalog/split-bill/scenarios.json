@@ -1,0 +1,6571 @@
+[
+ {
+  "name": "a new bill is empty: nobody, no items, every amount $0.00, tip 0%",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=person]",
+    "count": 0
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "true",
+     "false",
+     "false",
+     "false"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [],
+     "items": [],
+     "tipPercent": 0.0,
+     "subtotal": 0,
+     "tip": 0,
+     "total": 0
+    }
+   }
+  ]
+ },
+ {
+  "name": "people are added trimmed and in order, by button or Enter, and the field is cleared",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "  Ann  "
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "press",
+    "key": "Enter",
+    "selector": "[data-testid=new-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "mIA"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "mIA"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$0.00",
+     "$0.00",
+     "$0.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=new-person]').value",
+    "value": ""
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=person]",
+    "count": 3
+   }
+  ]
+ },
+ {
+  "name": "empty, blank and 25-character names are rejected with an error; 24 characters is fine",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=person-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=person]",
+    "count": 0
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "   "
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=person-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=person]",
+    "count": 0
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "xxxxxxxxxxxxxxxxxxxxxxxxx"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=person-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=person]",
+    "count": 0
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "yyyyyyyyyyyyyyyyyyyyyyyy"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=person-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=person]",
+    "count": 1
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "yyyyyyyyyyyyyyyyyyyyyyyy"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a name that is already at the table is rejected, ignoring case and surrounding spaces",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=person-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=person]",
+    "count": 1
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": " ANN "
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=person-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=person]",
+    "count": 1
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Anna"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=person-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Anna"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "removing a person or an item removes the row and recalculates everything",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Cy"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Pizza"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "30.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Wine"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "21.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=person] >> nth=1 >> [data-testid=remove-person]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$25.50",
+     "$25.50"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$51.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$51.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Pizza",
+     "Wine"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$30.00",
+     "$21.00"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=remove-item]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$10.50",
+     "$10.50"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$21.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$21.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Wine"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$21.00"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=person] >> nth=0 >> [data-testid=remove-person]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=person] >> nth=0 >> [data-testid=remove-person]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Wine"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$21.00"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "prices accept a dot or a comma as the decimal separator, with one or two decimals",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Item 1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "12.50"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Item 2"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "12,50"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Item 3"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "7"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Item 4"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "0.5"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Item 5"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "1,5"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Item 6"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "  8.25 "
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Item 7"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "0,05"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Item 8"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "0.01"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Item 9"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "007.10"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Item 10"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "999999.99"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$12.50",
+     "$12.50",
+     "$7.00",
+     "$0.50",
+     "$1.50",
+     "$8.25",
+     "$0.05",
+     "$0.01",
+     "$7.10",
+     "$999,999.99"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Item 1",
+     "Item 2",
+     "Item 3",
+     "Item 4",
+     "Item 5",
+     "Item 6",
+     "Item 7",
+     "Item 8",
+     "Item 9",
+     "Item 10"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "invalid prices and item names are rejected with an error and no item is added",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": ""
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "abc"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "1.234"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "1,2,3"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "-5"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "0"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "0,00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "$5"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "1 000"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": ".5"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "5."
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "1e3"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "1000000"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "12.5.0"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "1,000.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "+3"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().items.length",
+    "value": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "   "
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "5.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "5.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   }
+  ]
+ },
+ {
+  "name": "a valid item clears the error and the fields (Enter works too); the same name can be added twice",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "nope"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Beer"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "6,50"
+   },
+   {
+    "op": "press",
+    "key": "Enter",
+    "selector": "[data-testid=new-item-price]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Beer"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "6.50"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=item-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=new-item-name]').value",
+    "value": ""
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=new-item-price]').value",
+    "value": ""
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 2
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Beer",
+     "Beer"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$6.50",
+     "$6.50"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "$10.00 split three ways: $3.34, $3.33, $3.33",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Cy"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Dinner"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "10.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$3.34",
+     "$3.33",
+     "$3.33"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$10.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$10.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Dinner"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$10.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 334
+      },
+      {
+       "name": "Ben",
+       "share": 333
+      },
+      {
+       "name": "Cy",
+       "share": 333
+      }
+     ],
+     "items": [
+      {
+       "name": "Dinner",
+       "cents": 1000,
+       "sharers": [
+        "Ann",
+        "Ben",
+        "Cy"
+       ]
+      }
+     ],
+     "tipPercent": 0.0,
+     "subtotal": 1000,
+     "tip": 0,
+     "total": 1000
+    }
+   }
+  ]
+ },
+ {
+  "name": "one cent between two people goes to the first",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Mint"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "0.01"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$0.01",
+     "$0.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.01"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.01"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Mint"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$0.01"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 1
+      },
+      {
+       "name": "Ben",
+       "share": 0
+      }
+     ],
+     "items": [
+      {
+       "name": "Mint",
+       "cents": 1,
+       "sharers": [
+        "Ann",
+        "Ben"
+       ]
+      }
+     ],
+     "tipPercent": 0.0,
+     "subtotal": 1,
+     "tip": 0,
+     "total": 1
+    }
+   }
+  ]
+ },
+ {
+  "name": "everyone shares a new item by default, and each item's sharers toggle independently",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Cy"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Pizza"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "30.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Cake"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "9.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=sharer]')].every(e => e.checked !== undefined ? e.checked : e.getAttribute('aria-checked') === 'true')",
+    "value": true
+   },
+   {
+    "op": "expect_checked",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=2",
+    "checked": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "expect_checked",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=1",
+    "checked": false
+   },
+   {
+    "op": "expect_checked",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=1",
+    "checked": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$14.50",
+     "$10.00",
+     "$14.50"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$39.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$39.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Pizza",
+     "Cake"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$30.00",
+     "$9.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 1450
+      },
+      {
+       "name": "Ben",
+       "share": 1000
+      },
+      {
+       "name": "Cy",
+       "share": 1450
+      }
+     ],
+     "items": [
+      {
+       "name": "Pizza",
+       "cents": 3000,
+       "sharers": [
+        "Ann",
+        "Ben",
+        "Cy"
+       ]
+      },
+      {
+       "name": "Cake",
+       "cents": 900,
+       "sharers": [
+        "Ann",
+        "Cy"
+       ]
+      }
+     ],
+     "tipPercent": 0.0,
+     "subtotal": 3900,
+     "tip": 0,
+     "total": 3900
+    }
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=0"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$4.50",
+     "$15.00",
+     "$19.50"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$39.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$39.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Pizza",
+     "Cake"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$30.00",
+     "$9.00"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a person added later is not on the items that already exist, but is on the next new item",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "8.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Cy"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer]",
+    "count": 3
+   },
+   {
+    "op": "expect_checked",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=2",
+    "checked": false
+   },
+   {
+    "op": "expect_checked",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=0",
+    "checked": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$4.00",
+     "$4.00",
+     "$0.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$8.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$8.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Soup"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$8.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 400
+      },
+      {
+       "name": "Ben",
+       "share": 400
+      },
+      {
+       "name": "Cy",
+       "share": 0
+      }
+     ],
+     "items": [
+      {
+       "name": "Soup",
+       "cents": 800,
+       "sharers": [
+        "Ann",
+        "Ben"
+       ]
+      }
+     ],
+     "tipPercent": 0.0,
+     "subtotal": 800,
+     "tip": 0,
+     "total": 800
+    }
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Tea"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "3.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$5.00",
+     "$5.00",
+     "$1.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$11.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$11.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Soup",
+     "Tea"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$8.00",
+     "$3.00"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "tip presets 0 / 10 / 15 / 20 set the tip and exactly one is pressed",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Feast"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "85.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "true",
+     "false",
+     "false",
+     "false"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "false",
+     "true",
+     "false",
+     "false"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$46.75",
+     "$46.75"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$85.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$8.50"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$93.50"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$85.00"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-15]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "false",
+     "false",
+     "true",
+     "false"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$48.88",
+     "$48.87"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$85.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$12.75"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$97.75"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$85.00"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-20]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "false",
+     "false",
+     "false",
+     "true"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$51.00",
+     "$51.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$85.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$17.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$102.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$85.00"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-0]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "true",
+     "false",
+     "false",
+     "false"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$42.50",
+     "$42.50"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$85.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$85.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$85.00"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "the tip is rounded half up to the cent",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=new-bill]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Meal"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "10.10"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-15]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$11.62"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$10.10"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$1.52"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$11.62"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$10.10"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=new-bill]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Meal"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "12.30"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-15]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$14.15"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$12.30"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$1.85"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$14.15"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$12.30"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=new-bill]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Meal"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "0.05"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$0.06"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.05"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.01"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.06"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$0.05"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=new-bill]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Meal"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "10.05"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$11.06"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$10.05"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$1.01"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$11.06"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$10.05"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=new-bill]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Meal"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "3.30"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-15]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$3.80"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$3.30"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.50"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$3.80"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$3.30"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=new-bill]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Meal"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "0.04"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$0.04"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.04"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.04"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$0.04"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state().tip",
+    "value": 0
+   }
+  ]
+ },
+ {
+  "name": "a custom tip percent takes a dot or a comma; choosing a preset empties the custom field",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Feast"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "80.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "12.5"
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "false",
+     "false",
+     "false",
+     "false"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$45.00",
+     "$45.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$80.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$10.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$90.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$80.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 4500
+      },
+      {
+       "name": "Ben",
+       "share": 4500
+      }
+     ],
+     "items": [
+      {
+       "name": "Feast",
+       "cents": 8000,
+       "sharers": [
+        "Ann",
+        "Ben"
+       ]
+      }
+     ],
+     "tipPercent": 12.5,
+     "subtotal": 8000,
+     "tip": 1000,
+     "total": 9000
+    }
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "7,5"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$43.00",
+     "$43.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$80.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$6.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$86.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$80.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "0"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$40.00",
+     "$40.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$80.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$80.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$80.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "100"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$80.00",
+     "$80.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$80.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$80.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$160.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$80.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "33,33"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$53.33",
+     "$53.33"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$80.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$26.66"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$106.66"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$80.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "15"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$46.00",
+     "$46.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$80.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$12.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$92.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$80.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "false",
+     "false",
+     "true",
+     "false"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "12.5"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-20]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tip-custom]').value",
+    "value": ""
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "false",
+     "false",
+     "false",
+     "true"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$48.00",
+     "$48.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$80.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$16.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$96.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Feast"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$80.00"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "an invalid custom tip shows an error and keeps the tip; a valid one hides it",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Meal"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "50.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-10]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "abc"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=tip-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$55.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$50.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$5.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$55.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$50.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "101"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=tip-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$55.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$50.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$5.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$55.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$50.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "-5"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=tip-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$55.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$50.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$5.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$55.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$50.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "1.234"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=tip-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$55.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$50.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$5.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$55.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$50.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "12%"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=tip-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$55.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$50.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$5.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$55.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$50.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "100.01"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=tip-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$55.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$50.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$5.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$55.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$50.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": ""
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=tip-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$55.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$50.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$5.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$55.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$50.00"
+    ]
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "20"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=tip-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$60.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$50.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$10.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$60.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Meal"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$50.00"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "the tip is split in proportion to what each person ordered",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Steak"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "20.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Salad"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "10.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=0"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$22.00",
+     "$11.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$30.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$3.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$33.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Steak",
+     "Salad"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$20.00",
+     "$10.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 2200
+      },
+      {
+       "name": "Ben",
+       "share": 1100
+      }
+     ],
+     "items": [
+      {
+       "name": "Steak",
+       "cents": 2000,
+       "sharers": [
+        "Ann"
+       ]
+      },
+      {
+       "name": "Salad",
+       "cents": 1000,
+       "sharers": [
+        "Ben"
+       ]
+      }
+     ],
+     "tipPercent": 10.0,
+     "subtotal": 3000,
+     "tip": 300,
+     "total": 3300
+    }
+   }
+  ]
+ },
+ {
+  "name": "leftover cents go to the largest remainders, ties to the earlier person (shares add up exactly)",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Cy"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Dee"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Nachos"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "4.99"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Mints"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "0.03"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=2"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Gum"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "0.05"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=2 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=2 >> [data-testid=sharer] >> nth=3"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy",
+     "Dee"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$1.41",
+     "$1.39",
+     "$1.40",
+     "$1.38"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$5.07"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.51"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$5.58"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Nachos",
+     "Mints",
+     "Gum"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$4.99",
+     "$0.03",
+     "$0.05"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 141
+      },
+      {
+       "name": "Ben",
+       "share": 139
+      },
+      {
+       "name": "Cy",
+       "share": 140
+      },
+      {
+       "name": "Dee",
+       "share": 138
+      }
+     ],
+     "items": [
+      {
+       "name": "Nachos",
+       "cents": 499,
+       "sharers": [
+        "Ann",
+        "Ben",
+        "Cy",
+        "Dee"
+       ]
+      },
+      {
+       "name": "Mints",
+       "cents": 3,
+       "sharers": [
+        "Ann",
+        "Ben",
+        "Dee"
+       ]
+      },
+      {
+       "name": "Gum",
+       "cents": 5,
+       "sharers": [
+        "Ann",
+        "Cy"
+       ]
+      }
+     ],
+     "tipPercent": 10.0,
+     "subtotal": 507,
+     "tip": 51,
+     "total": 558
+    }
+   }
+  ]
+ },
+ {
+  "name": "a messy dinner of six: every share exact and the shares add up to the grand total",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Cy"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Dee"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Eli"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Flo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Ribs"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "47.30"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=3"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=4"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=5"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Pasta"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "18.45"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=0"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=2"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=5"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Wine"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "62.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Fries"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "9.99"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=3 >> [data-testid=sharer] >> nth=5"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Tiramisu"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "13,33"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=4 >> [data-testid=sharer] >> nth=0"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=4 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=4 >> [data-testid=sharer] >> nth=3"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=4 >> [data-testid=sharer] >> nth=4"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Water"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "2.75"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Beer"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "5.10"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=6 >> [data-testid=sharer] >> nth=0"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=6 >> [data-testid=sharer] >> nth=2"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=6 >> [data-testid=sharer] >> nth=3"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=6 >> [data-testid=sharer] >> nth=5"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "18,5"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy",
+     "Dee",
+     "Eli",
+     "Flo"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$33.84",
+     "$36.86",
+     "$41.74",
+     "$26.09",
+     "$29.11",
+     "$20.68"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$158.92"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$29.40"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$188.32"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ribs",
+     "Pasta",
+     "Wine",
+     "Fries",
+     "Tiramisu",
+     "Water",
+     "Beer"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$47.30",
+     "$18.45",
+     "$62.00",
+     "$9.99",
+     "$13.33",
+     "$2.75",
+     "$5.10"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 3384
+      },
+      {
+       "name": "Ben",
+       "share": 3686
+      },
+      {
+       "name": "Cy",
+       "share": 4174
+      },
+      {
+       "name": "Dee",
+       "share": 2609
+      },
+      {
+       "name": "Eli",
+       "share": 2911
+      },
+      {
+       "name": "Flo",
+       "share": 2068
+      }
+     ],
+     "items": [
+      {
+       "name": "Ribs",
+       "cents": 4730,
+       "sharers": [
+        "Ann",
+        "Ben",
+        "Cy"
+       ]
+      },
+      {
+       "name": "Pasta",
+       "cents": 1845,
+       "sharers": [
+        "Dee",
+        "Eli"
+       ]
+      },
+      {
+       "name": "Wine",
+       "cents": 6200,
+       "sharers": [
+        "Ann",
+        "Ben",
+        "Cy",
+        "Dee",
+        "Eli",
+        "Flo"
+       ]
+      },
+      {
+       "name": "Fries",
+       "cents": 999,
+       "sharers": [
+        "Ann",
+        "Ben",
+        "Cy",
+        "Dee",
+        "Eli"
+       ]
+      },
+      {
+       "name": "Tiramisu",
+       "cents": 1333,
+       "sharers": [
+        "Cy",
+        "Flo"
+       ]
+      },
+      {
+       "name": "Water",
+       "cents": 275,
+       "sharers": [
+        "Ann",
+        "Ben",
+        "Cy",
+        "Dee",
+        "Eli",
+        "Flo"
+       ]
+      },
+      {
+       "name": "Beer",
+       "cents": 510,
+       "sharers": [
+        "Ben",
+        "Eli"
+       ]
+      }
+     ],
+     "tipPercent": 18.5,
+     "subtotal": 15892,
+     "tip": 2940,
+     "total": 18832
+    }
+   }
+  ]
+ },
+ {
+  "name": "amounts are formatted like $1,234.56 with thousands separators",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Tasting menu"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "1234.56"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Cellar wine"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "999999.99"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=0"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Bread"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "1000"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=2 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-10]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$2,458.02",
+     "$1,099,999.99"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$1,002,234.55"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$100,223.46"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$1,102,458.01"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Tasting menu",
+     "Cellar wine",
+     "Bread"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$1,234.56",
+     "$999,999.99",
+     "$1,000.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 245802
+      },
+      {
+       "name": "Ben",
+       "share": 109999999
+      }
+     ],
+     "items": [
+      {
+       "name": "Tasting menu",
+       "cents": 123456,
+       "sharers": [
+        "Ann"
+       ]
+      },
+      {
+       "name": "Cellar wine",
+       "cents": 99999999,
+       "sharers": [
+        "Ben"
+       ]
+      },
+      {
+       "name": "Bread",
+       "cents": 100000,
+       "sharers": [
+        "Ann"
+       ]
+      }
+     ],
+     "tipPercent": 10.0,
+     "subtotal": 100223455,
+     "tip": 10022346,
+     "total": 110245801
+    }
+   }
+  ]
+ },
+ {
+  "name": "an item nobody shares is flagged and left out of every total until someone shares it",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "20.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Cake"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "10.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=0"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=item-flag]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=item-flag]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$10.00",
+     "$10.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$20.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$20.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Soup",
+     "Cake"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$20.00",
+     "$10.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 1000
+      },
+      {
+       "name": "Ben",
+       "share": 1000
+      }
+     ],
+     "items": [
+      {
+       "name": "Soup",
+       "cents": 2000,
+       "sharers": [
+        "Ann",
+        "Ben"
+       ]
+      },
+      {
+       "name": "Cake",
+       "cents": 1000,
+       "sharers": []
+      }
+     ],
+     "tipPercent": 0.0,
+     "subtotal": 2000,
+     "tip": 0,
+     "total": 2000
+    }
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=item-flag]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$10.00",
+     "$20.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$30.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$30.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Soup",
+     "Cake"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$20.00",
+     "$10.00"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "an item added before anyone is at the table is flagged, and fixed by choosing its sharers",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "9.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-20]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=item-flag]"
+   },
+   {
+    "op": "expect_checked",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=0",
+    "checked": false
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$0.00",
+     "$0.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Soup"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$9.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 0
+      },
+      {
+       "name": "Ben",
+       "share": 0
+      }
+     ],
+     "items": [
+      {
+       "name": "Soup",
+       "cents": 900,
+       "sharers": []
+      }
+     ],
+     "tipPercent": 20.0,
+     "subtotal": 0,
+     "tip": 0,
+     "total": 0
+    }
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=0"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=item-flag]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$5.40",
+     "$5.40"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$9.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$1.80"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$10.80"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Soup"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$9.00"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "removing a person takes them off every item; an item left with nobody is flagged and left out",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Cy"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Pizza"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "30.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "6.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=0"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=2"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-10]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=person] >> nth=1 >> [data-testid=remove-person]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer]",
+    "count": 2
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer]",
+    "count": 2
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=item-flag]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=item-flag]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$16.50",
+     "$16.50"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$30.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$3.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$33.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Pizza",
+     "Soup"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$30.00",
+     "$6.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 1650
+      },
+      {
+       "name": "Cy",
+       "share": 1650
+      }
+     ],
+     "items": [
+      {
+       "name": "Pizza",
+       "cents": 3000,
+       "sharers": [
+        "Ann",
+        "Cy"
+       ]
+      },
+      {
+       "name": "Soup",
+       "cents": 600,
+       "sharers": []
+      }
+     ],
+     "tipPercent": 10.0,
+     "subtotal": 3000,
+     "tip": 300,
+     "total": 3300
+    }
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$16.50",
+     "$23.10"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$36.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$3.60"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$39.60"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Pizza",
+     "Soup"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$30.00",
+     "$6.00"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "the whole bill survives a reload: people, items, sharers and tip",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Cy"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Pizza"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "29.99"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Soup"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "6.50"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=tip-custom]",
+    "value": "12,5"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=2"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$20.52",
+     "$16.87",
+     "$3.66"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$36.49"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$4.56"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$41.05"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Pizza",
+     "Soup"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$29.99",
+     "$6.50"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 2052
+      },
+      {
+       "name": "Ben",
+       "share": 1687
+      },
+      {
+       "name": "Cy",
+       "share": 366
+      }
+     ],
+     "items": [
+      {
+       "name": "Pizza",
+       "cents": 2999,
+       "sharers": [
+        "Ann",
+        "Ben"
+       ]
+      },
+      {
+       "name": "Soup",
+       "cents": 650,
+       "sharers": [
+        "Ann",
+        "Cy"
+       ]
+      }
+     ],
+     "tipPercent": 12.5,
+     "subtotal": 3649,
+     "tip": 456,
+     "total": 4105
+    }
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$20.52",
+     "$16.87",
+     "$3.66"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$36.49"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$4.56"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$41.05"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Pizza",
+     "Soup"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$29.99",
+     "$6.50"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 2052
+      },
+      {
+       "name": "Ben",
+       "share": 1687
+      },
+      {
+       "name": "Cy",
+       "share": 366
+      }
+     ],
+     "items": [
+      {
+       "name": "Pizza",
+       "cents": 2999,
+       "sharers": [
+        "Ann",
+        "Ben"
+       ]
+      },
+      {
+       "name": "Soup",
+       "cents": 650,
+       "sharers": [
+        "Ann",
+        "Cy"
+       ]
+      }
+     ],
+     "tipPercent": 12.5,
+     "subtotal": 3649,
+     "tip": 456,
+     "total": 4105
+    }
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "false",
+     "false",
+     "false",
+     "false"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=tip-custom]').value.replace(',', '.')",
+    "value": "12.5"
+   },
+   {
+    "op": "expect_checked",
+    "selector": "[data-testid=item] >> nth=0 >> [data-testid=sharer] >> nth=2",
+    "checked": false
+   },
+   {
+    "op": "expect_checked",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=2",
+    "checked": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-10]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Dee"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy",
+     "Dee"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$20.07",
+     "$16.49",
+     "$3.58",
+     "$0.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$36.49"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$3.65"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$40.14"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Pizza",
+     "Soup"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$29.99",
+     "$6.50"
+    ]
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben",
+     "Cy",
+     "Dee"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$20.07",
+     "$16.49",
+     "$3.58",
+     "$0.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$36.49"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$3.65"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$40.14"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Pizza",
+     "Soup"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$29.99",
+     "$6.50"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [
+      {
+       "name": "Ann",
+       "share": 2007
+      },
+      {
+       "name": "Ben",
+       "share": 1649
+      },
+      {
+       "name": "Cy",
+       "share": 358
+      },
+      {
+       "name": "Dee",
+       "share": 0
+      }
+     ],
+     "items": [
+      {
+       "name": "Pizza",
+       "cents": 2999,
+       "sharers": [
+        "Ann",
+        "Ben"
+       ]
+      },
+      {
+       "name": "Soup",
+       "cents": 650,
+       "sharers": [
+        "Ann",
+        "Cy"
+       ]
+      }
+     ],
+     "tipPercent": 10.0,
+     "subtotal": 3649,
+     "tip": 365,
+     "total": 4014
+    }
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "false",
+     "true",
+     "false",
+     "false"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "New bill clears everything, stays cleared after a reload, and starts a fresh bill",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ann"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ben"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Pizza"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "30.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-20]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Ann",
+     "Ben"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$18.00",
+     "$18.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$30.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$6.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$36.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Pizza"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$30.00"
+    ]
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=new-bill]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=person]",
+    "count": 0
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "true",
+     "false",
+     "false",
+     "false"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [],
+     "items": [],
+     "tipPercent": 0.0,
+     "subtotal": 0,
+     "tip": 0,
+     "total": 0
+    }
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=person]",
+    "count": 0
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=item]",
+    "count": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "['0','10','15','20'].map(p => document.querySelector('[data-testid=tip-' + p + ']').getAttribute('aria-pressed'))",
+    "value": [
+     "true",
+     "false",
+     "false",
+     "false"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": []
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.bill.state()",
+    "value": {
+     "people": [],
+     "items": [],
+     "tipPercent": 0.0,
+     "subtotal": 0,
+     "tip": 0,
+     "total": 0
+    }
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Zed"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Tea"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "2.00"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Zed"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$2.00"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$2.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$0.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$2.00"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Tea"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$2.00"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a crowded bill fits a 375px phone: no sideways scrolling, every control at least 44px",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/?test=1"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Alexandra-Maria"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Bartholomew"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Christopher J."
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Dmitriy Petrov-Sidorov"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Eleonora"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Ferdinand"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Gwendolyn"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-person]",
+    "value": "Hubert"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-person]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Seafood platter with all the extras"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "2345.67"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-name]",
+    "value": "Sparkling mineral water, large bottle"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-item-price]",
+    "value": "4,50"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-item]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=4"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=5"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=6"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=item] >> nth=1 >> [data-testid=sharer] >> nth=7"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=tip-20]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-name]')].map(e => e.textContent.trim())",
+    "value": [
+     "Alexandra-Maria",
+     "Bartholomew",
+     "Christopher J.",
+     "Dmitriy Petrov-Sidorov",
+     "Eleonora",
+     "Ferdinand",
+     "Gwendolyn",
+     "Hubert"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=person-total]')].map(e => e.textContent.trim())",
+    "value": [
+     "$353.20",
+     "$353.20",
+     "$353.20",
+     "$353.20",
+     "$351.85",
+     "$351.85",
+     "$351.85",
+     "$351.85"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=subtotal]') || {textContent: null}).textContent?.trim()",
+    "value": "$2,350.17"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=tip-amount]') || {textContent: null}).textContent?.trim()",
+    "value": "$470.03"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.querySelector('[data-testid=grand-total]') || {textContent: null}).textContent?.trim()",
+    "value": "$2,820.20"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => {\n  const c = t => Math.round(parseFloat(t.replace(/[$,]/g, '')) * 100)\n  const parts = [...document.querySelectorAll('[data-testid=person-total]')].map(e => c(e.textContent.trim()))\n  return parts.reduce((a, b) => a + b, 0) === c(document.querySelector('[data-testid=grand-total]').textContent.trim())\n})()",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-title]')].map(e => e.textContent.trim())",
+    "value": [
+     "Seafood platter with all the extras",
+     "Sparkling mineral water, large bottle"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=item-price]')].map(e => e.textContent.trim())",
+    "value": [
+     "$2,345.67",
+     "$4.50"
+    ]
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('button, input, select, textarea, a[href]')].filter(e => {\n  const r = e.getBoundingClientRect(), s = getComputedStyle(e)\n  return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && (Math.round(r.width) < 44 || Math.round(r.height) < 44)\n}).length",
+    "value": 0
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('button, input, select, textarea, a[href]')].filter(e => {\n  const r = e.getBoundingClientRect(), s = getComputedStyle(e)\n  return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && (Math.round(r.width) < 44 || Math.round(r.height) < 44)\n}).length",
+    "value": 0
+   }
+  ],
+  "viewport": 375
+ },
+ {
+  "name": "outside test mode the app loads on a phone without sideways scrolling and has the test hook",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "wait",
+    "ms": 300
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('button, input, select, textarea, a[href]')].filter(e => {\n  const r = e.getBoundingClientRect(), s = getComputedStyle(e)\n  return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && (Math.round(r.width) < 44 || Math.round(r.height) < 44)\n}).length",
+    "value": 0
+   },
+   {
+    "op": "expect_js",
+    "expr": "typeof window.bill.state",
+    "value": "function"
+   },
+   {
+    "op": "expect_js",
+    "expr": "typeof window.bill.state().total",
+    "value": "number"
+   }
+  ]
+ }
+]

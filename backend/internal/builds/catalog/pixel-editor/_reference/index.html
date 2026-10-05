@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Pad</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #14132b; --panel: #1f1e42; --panel-2: #2a2961; --edge: #0c0b1d; --text: #efecff; --muted: #b3b0e0;
+    --accent: #ffec27; --pink: #ff77a8; --cur: #000000;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(circle at 15% -10%, #3b2f8f55, transparent 45%),
+      radial-gradient(circle at 100% 110%, #ff77a833, transparent 40%),
+      var(--bg);
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 20px 16px 28px; }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  h1 { margin: 0; font: 800 30px/1 var(--mono); letter-spacing: -0.04em; }
+  h1 span { color: var(--pink); }
+  .sub { margin: 0; color: var(--muted); font-size: 14px; }
+
+  .stage { display: grid; gap: 18px; grid-template-columns: 1fr; grid-template-areas: "board" "palette" "tools" "preview"; }
+  .board { grid-area: board; }
+  .palette-card { grid-area: palette; }
+  .tools { grid-area: tools; }
+  .preview-card { grid-area: preview; }
+  @media (min-width: 860px) {
+    .stage { grid-template-columns: 188px minmax(0, 1fr) 224px; grid-template-areas: "tools board palette" "tools board preview"; align-items: start; gap: 22px; grid-template-rows: auto 1fr; }
+  }
+
+  .card { background: var(--panel); border: 2px solid var(--edge); border-radius: 16px; padding: 14px; box-shadow: 0 6px 0 var(--edge); }
+  .card h2 { margin: 0 0 10px; font: 700 12px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+  .board { background: var(--panel); border: 2px solid var(--edge); border-radius: 18px; padding: 12px; box-shadow: 0 8px 0 var(--edge), 0 0 60px #ff77a822; }
+  #grid {
+    position: relative; display: grid; grid-template-columns: repeat(16, 1fr); grid-template-rows: repeat(16, 1fr);
+    width: 100%; max-width: min(100%, 72vh); margin: 0 auto; aspect-ratio: 1; border-radius: 8px; overflow: hidden;
+    touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair;
+    background: repeating-conic-gradient(#d6d3ea 0% 25%, #f6f4ff 0% 50%) 0 0 / 12.5% 12.5%;
+    box-shadow: 0 0 0 3px #0c0b1d;
+  }
+  .cell { position: relative; box-shadow: inset 0 0 0 0.5px #2a1f5a1f; }
+  @media (hover: hover) {
+    .cell:hover::after { content: ""; position: absolute; inset: 0; background: var(--cur); opacity: 0.4; }
+    #grid[data-tool="eraser"] .cell:hover::after { background: #fff; opacity: 0.55; }
+  }
+  #grid.mirror::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 2px dashed #ff77a8; pointer-events: none; z-index: 2; }
+
+  button { font: inherit; color: var(--text); cursor: pointer; }
+  .btn {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 0 14px;
+    background: var(--panel-2); border: 2px solid var(--edge); border-radius: 12px; box-shadow: 0 4px 0 var(--edge);
+    font-weight: 700; transition: transform 0.08s, background 0.12s;
+  }
+  .btn:hover:not(:disabled) { background: #36358a; }
+  .btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--edge); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn[aria-pressed="true"] { background: var(--accent); color: #1d2b53; }
+  .btn svg { width: 20px; height: 20px; flex: none; }
+  .btn kbd { margin-left: auto; font: 700 12px var(--mono); padding: 2px 7px; border-radius: 6px; background: #0c0b1d55; border: 1px solid #ffffff2a; }
+  .btn[aria-pressed="true"] kbd { background: #1d2b5322; border-color: #1d2b5355; }
+  .btn.danger:hover:not(:disabled) { background: #7e2553; }
+  :focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+  .tools { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); }
+  .tools .group { display: contents; }
+  .tools .btn { padding: 0 10px; }
+  .tools .sep { display: none; }
+  @media (min-width: 860px) { .tools { grid-template-columns: 1fr; } .tools .sep { display: block; height: 2px; background: var(--edge); border-radius: 2px; margin: 4px 0; } }
+
+  .swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  @media (min-width: 860px) { .swatches { grid-template-columns: repeat(4, 1fr); } }
+  .sw { aspect-ratio: 1; min-height: 32px; border-radius: 10px; border: 2px solid #ffffff40; background: var(--c); box-shadow: 0 3px 0 var(--edge); transition: transform 0.1s; padding: 0; }
+  .sw:hover { transform: translateY(-2px); }
+  .sw[aria-pressed="true"] { border-color: #fff; outline: 3px solid var(--pink); outline-offset: 2px; transform: translateY(-2px) scale(1.05); }
+
+  .preview-card .row { display: flex; align-items: center; gap: 14px; }
+  @media (min-width: 860px) { .preview-card .row { flex-direction: column; align-items: stretch; } #preview { align-self: center; } .stack { flex: none; } }
+  #preview { width: 128px; height: 128px; flex: none; image-rendering: pixelated; border-radius: 8px; border: 2px solid var(--edge);
+    background: repeating-conic-gradient(#d6d3ea 0% 25%, #f6f4ff 0% 50%) 0 0 / 12.5% 12.5%; }
+  .preview-card .btn { justify-content: center; }
+  .stack { display: grid; gap: 10px; flex: 1; min-width: 0; }
+  .hint { margin: 18px 0 0; text-align: center; color: var(--muted); font-size: 14px; }
+  .hint kbd { font: 700 12px var(--mono); padding: 1px 6px; border-radius: 5px; background: var(--panel); border: 1px solid #ffffff2a; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>pixel<span>pad</span></h1>
+    <p class="sub">16 × 16 pixels · 16 colors · draw something small and lovely</p>
+  </header>
+
+  <div class="stage">
+    <div class="board">
+      <div id="grid" role="group" aria-label="Canvas, 16 by 16 pixels"></div>
+    </div>
+
+    <section class="card palette-card" aria-label="Palette">
+      <h2>Palette</h2>
+      <div class="swatches" id="swatches"></div>
+    </section>
+
+    <section class="tools" aria-label="Tools">
+      <button class="btn" data-testid="tool-pencil" aria-pressed="true" data-tool="pencil">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17l1-4 9-9 3 3-9 9z" fill="currentColor"/><path d="M14 3l1-1 3 3-1 1z" fill="currentColor" opacity=".6"/></svg>
+        Pencil <kbd>B</kbd></button>
+      <button class="btn" data-testid="tool-eraser" aria-pressed="false" data-tool="eraser">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 12l7-8 7 6-5 6H7z" fill="currentColor"/><path d="M7 16h10" stroke="currentColor" stroke-width="2"/></svg>
+        Eraser <kbd>E</kbd></button>
+      <button class="btn" data-testid="tool-fill" aria-pressed="false" data-tool="fill">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 9l6-6 7 7-6 6z" fill="currentColor"/><path d="M17 13c1 1.5 1.5 2.4 1.5 3a1.5 1.5 0 01-3 0c0-.6.5-1.5 1.5-3z" fill="currentColor"/></svg>
+        Fill <kbd>F</kbd></button>
+      <button class="btn" data-testid="mirror" id="mirror" aria-pressed="false">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v16" stroke="currentColor" stroke-width="2" stroke-dasharray="2 2"/><path d="M8 5L2 10l6 5zM12 5l6 5-6 5z" fill="currentColor"/></svg>
+        Mirror</button>
+      <div class="sep" style="grid-column: 1 / -1" aria-hidden="true"></div>
+      <button class="btn" data-testid="undo" id="undo" disabled>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4L2 9l5 5V10c4 0 7 1 9 6 0-6-3-9-9-9z" fill="currentColor"/></svg>
+        Undo</button>
+      <button class="btn" data-testid="redo" id="redo" disabled>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13 4l5 5-5 5v-4c-4 0-7 1-9 6 0-6 3-9 9-9z" fill="currentColor"/></svg>
+        Redo</button>
+      <button class="btn danger" data-testid="clear" id="clear" style="grid-column: 1 / -1">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 6h10l-1 11H6zM4 3h12v2H4z" fill="currentColor"/></svg>
+        Clear canvas</button>
+    </section>
+
+    <section class="card preview-card" aria-label="Preview">
+      <h2>Preview</h2>
+      <div class="row">
+        <canvas id="preview" width="16" height="16" role="img" aria-label="Preview of your picture"></canvas>
+        <div class="stack"><button class="btn" data-testid="download" id="download" style="justify-content:center">Save PNG</button></div>
+      </div>
+    </section>
+  </div>
+
+  <p class="hint"><kbd>B</kbd> pencil · <kbd>E</kbd> eraser · <kbd>F</kbd> fill · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> redo</p>
+</main>
+
+<script>
+(() => {
+  const N = 16
+  const PAL = ['#000000', '#1d2b53', '#7e2553', '#008751', '#ab5236', '#5f574f', '#c2c3c7', '#fff1e8',
+    '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#83769c', '#ff77a8', '#ffccaa']
+  const NAMES = ['black', 'dark blue', 'dark purple', 'dark green', 'brown', 'dark gray', 'light gray', 'white',
+    'red', 'orange', 'yellow', 'green', 'blue', 'lavender', 'pink', 'peach']
+  const TEST = new URLSearchParams(location.search).has('test')
+  const KEY = 'pixelpad.v1'
+  const MAX_UNDO = 300
+  const $ = (id) => document.getElementById(id)
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  // The starter picture (only outside test mode, on a first visit); 0-f = palette index, . = empty.
+  const SAMPLE = [
+    '1111111111111111', '1711111111aaaa11', '111171111aaaaaa1', '111111111aaaaaa1',
+    '1117111111aaaa11', '1111188888811111', '1118778888778111', '1188888778888811',
+    '1122222222222211', '11111ffffff11111', '11111f0ff0f11111', '11111ffffff11111',
+    '1b1111b111b111b1', 'bbbbbbbbbbbbbbbb', '3333333333333333', '3333333333333333',
+  ].join('')
+
+  const parse = (s) => Array.from(s, (ch) => (ch === '.' ? -1 : parseInt(ch, 16)))
+  const same = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true }
+
+  let grid = new Array(N * N).fill(-1) // palette index, -1 = empty
+  let color = 0, tool = 'pencil', mirror = false
+  let undoStack = [], redoStack = []
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null')
+    if (saved && typeof saved.g === 'string' && /^[.0-9a-f]{256}$/.test(saved.g)) {
+      grid = parse(saved.g)
+      if (Number.isInteger(saved.c) && saved.c >= 0 && saved.c < 16) color = saved.c
+    } else if (!TEST) grid = parse(SAMPLE)
+  } catch { if (!TEST) grid = parse(SAMPLE) }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify({ g: grid.map((v) => (v < 0 ? '.' : v.toString(16))).join(''), c: color })) } catch {}
+  }
+
+  // ---- DOM
+  const gridEl = $('grid')
+  const cells = []
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const el = document.createElement('div')
+    el.className = 'cell'
+    el.dataset.testid = `cell-${x}-${y}`
+    gridEl.appendChild(el)
+    cells.push(el)
+  }
+  const swatchEl = $('swatches')
+  PAL.forEach((hex, i) => {
+    const b = document.createElement('button')
+    b.className = 'sw'
+    b.dataset.testid = `color-${i}`
+    b.style.setProperty('--c', hex)
+    b.setAttribute('aria-label', `Color ${i}, ${NAMES[i]} ${hex}`)
+    b.setAttribute('aria-pressed', 'false')
+    b.addEventListener('click', () => pickColor(i))
+    swatchEl.appendChild(b)
+  })
+  const toolBtns = [...document.querySelectorAll('[data-tool]')]
+  const pCtx = $('preview').getContext('2d')
+  let shown = new Array(N * N).fill(-2)
+
+  function render(animate) {
+    for (let i = 0; i < grid.length; i++) {
+      if (grid[i] === shown[i]) continue
+      const el = cells[i]
+      if (grid[i] < 0) { el.removeAttribute('data-color'); el.style.backgroundColor = '' }
+      else { el.setAttribute('data-color', PAL[grid[i]]); el.style.backgroundColor = PAL[grid[i]] }
+      if (animate && !reduced && grid[i] >= 0 && el.animate)
+        el.animate([{ transform: 'scale(0.55)' }, { transform: 'scale(1.12)', offset: 0.6 }, { transform: 'scale(1)' }], { duration: 160, easing: 'ease-out' })
+      shown[i] = grid[i]
+    }
+    pCtx.clearRect(0, 0, N, N)
+    grid.forEach((v, i) => { if (v >= 0) { pCtx.fillStyle = PAL[v]; pCtx.fillRect(i % N, Math.floor(i / N), 1, 1) } })
+    $('undo').disabled = !undoStack.length
+    $('redo').disabled = !redoStack.length
+    document.querySelectorAll('.sw').forEach((b, i) => b.setAttribute('aria-pressed', String(i === color)))
+    toolBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === tool)))
+    $('mirror').setAttribute('aria-pressed', String(mirror))
+    gridEl.classList.toggle('mirror', mirror)
+    gridEl.dataset.tool = tool
+    document.documentElement.style.setProperty('--cur', PAL[color])
+  }
+
+  // ---- history: every user action is compared with the grid before it; no change, no step
+  function commit(before) {
+    if (same(before, grid)) return
+    undoStack.push(before)
+    if (undoStack.length > MAX_UNDO) undoStack.shift()
+    redoStack = []
+    save()
+  }
+  function undo() {
+    if (!undoStack.length) return
+    redoStack.push(grid)
+    grid = undoStack.pop()
+    save(); render(false)
+  }
+  function redo() {
+    if (!redoStack.length) return
+    undoStack.push(grid)
+    grid = redoStack.pop()
+    save(); render(false)
+  }
+
+  function pickColor(i) {
+    color = i
+    if (tool === 'eraser') tool = 'pencil'
+    save(); render(false)
+  }
+  function pickTool(t) { tool = t; render(false) }
+
+  // ---- drawing
+  function floodFill(start) {
+    const target = grid[start]
+    if (target === color) return
+    const stack = [start]
+    while (stack.length) {
+      const i = stack.pop()
+      if (grid[i] !== target) continue
+      grid[i] = color
+      const x = i % N, y = (i - x) / N
+      if (x > 0) stack.push(i - 1)
+      if (x < N - 1) stack.push(i + 1)
+      if (y > 0) stack.push(i - N)
+      if (y < N - 1) stack.push(i + N)
+    }
+  }
+  function paint(x, y) {
+    const v = tool === 'eraser' ? -1 : color
+    grid[y * N + x] = v
+    if (mirror) grid[y * N + (N - 1 - x)] = v
+  }
+  function line(x0, y0, x1, y1, fn) { // Bresenham
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1
+    let err = dx + dy
+    for (;;) {
+      fn(x0, y0)
+      if (x0 === x1 && y0 === y1) break
+      const e2 = 2 * err
+      if (e2 >= dy) { err += dy; x0 += sx }
+      if (e2 <= dx) { err += dx; y0 += sy }
+    }
+  }
+  function cellAt(e) {
+    const r = gridEl.getBoundingClientRect()
+    const x = Math.floor(((e.clientX - r.left) / r.width) * N), y = Math.floor(((e.clientY - r.top) / r.height) * N)
+    return x >= 0 && x < N && y >= 0 && y < N ? { x, y } : null
+  }
+
+  let stroke = null
+  gridEl.addEventListener('pointerdown', (e) => {
+    if (stroke || (e.pointerType === 'mouse' && e.button !== 0)) return
+    const c = cellAt(e)
+    if (!c) return
+    e.preventDefault()
+    const before = grid.slice()
+    if (tool === 'fill') {
+      floodFill(c.y * N + c.x)
+      commit(before); render(true)
+      return
+    }
+    try { gridEl.setPointerCapture(e.pointerId) } catch {}
+    stroke = { id: e.pointerId, before, last: c }
+    paint(c.x, c.y)
+    render(true)
+  })
+  gridEl.addEventListener('pointermove', (e) => {
+    if (!stroke || e.pointerId !== stroke.id) return
+    const c = cellAt(e)
+    if (!c || (c.x === stroke.last.x && c.y === stroke.last.y)) return
+    line(stroke.last.x, stroke.last.y, c.x, c.y, paint)
+    stroke.last = c
+    render(true)
+  })
+  const end = (e) => {
+    if (!stroke || e.pointerId !== stroke.id) return
+    const before = stroke.before
+    stroke = null
+    commit(before); render(false)
+  }
+  gridEl.addEventListener('pointerup', end)
+  gridEl.addEventListener('pointercancel', end)
+  gridEl.addEventListener('lostpointercapture', end)
+
+  // ---- buttons and keys
+  toolBtns.forEach((b) => b.addEventListener('click', () => pickTool(b.dataset.tool)))
+  $('mirror').addEventListener('click', () => { mirror = !mirror; render(false) })
+  $('undo').addEventListener('click', undo)
+  $('redo').addEventListener('click', redo)
+  $('clear').addEventListener('click', () => {
+    const before = grid.slice()
+    grid.fill(-1)
+    commit(before); render(false)
+  })
+
+  function toCanvas(scale) {
+    const c = document.createElement('canvas')
+    c.width = c.height = N * scale
+    const x = c.getContext('2d')
+    grid.forEach((v, i) => { if (v >= 0) { x.fillStyle = PAL[v]; x.fillRect((i % N) * scale, Math.floor(i / N) * scale, scale, scale) } })
+    return c
+  }
+  $('download').addEventListener('click', () => {
+    const a = document.createElement('a')
+    a.href = toCanvas(16).toDataURL('image/png')
+    a.download = 'pixel-pad.png'
+    a.click()
+  })
+
+  addEventListener('keydown', (e) => {
+    if (e.target instanceof Element && e.target.closest('input, textarea, select')) return
+    const k = e.key.toLowerCase()
+    if (e.ctrlKey || e.metaKey) {
+      if (e.altKey) return
+      if (k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo() }
+      else if (k === 'y') { e.preventDefault(); redo() }
+      return
+    }
+    if (e.altKey) return
+    if (k === 'b') pickTool('pencil')
+    else if (k === 'e') pickTool('eraser')
+    else if (k === 'f') pickTool('fill')
+  })
+
+  window.pixel = {
+    state() {
+      const rows = []
+      for (let y = 0; y < N; y++) rows.push(Array.from({ length: N }, (_, x) => (grid[y * N + x] < 0 ? null : PAL[grid[y * N + x]])))
+      return { grid: rows, color, tool, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 }
+    },
+    exportPNG() { return toCanvas(1).toDataURL('image/png') },
+  }
+
+  render(false)
+})()
+</script>
+</body>
+</html>

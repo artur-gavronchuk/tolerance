@@ -1,0 +1,1861 @@
+[
+ {
+  "name": "desktop: the nav links are visible and there is no burger",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nav-rooms]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nav-booking]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nav-faq]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=menu-toggle]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=mobile-menu]"
+   }
+  ]
+ },
+ {
+  "name": "desktop: the nav links scroll to their sections",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=nav-booking]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "location.hash",
+    "value": "#booking"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const r = document.getElementById('booking').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 })()",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=nav-faq]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "location.hash",
+    "value": "#faq"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const r = document.getElementById('faq').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 })()",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=nav-rooms]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "location.hash",
+    "value": "#rooms"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const r = document.getElementById('rooms').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 })()",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "phone: the links collapse behind a closed burger",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=menu-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=menu-toggle]').getAttribute('aria-expanded')",
+    "value": "false"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=mobile-menu]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nav-rooms]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nav-booking]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nav-faq]"
+   }
+  ],
+  "viewport": 375
+ },
+ {
+  "name": "phone: the burger opens and closes the menu, Escape closes it too",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=menu-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=menu-toggle]').getAttribute('aria-expanded')",
+    "value": "true"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=mobile-menu]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=menu-rooms]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=menu-booking]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=menu-faq]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=menu-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=menu-toggle]').getAttribute('aria-expanded')",
+    "value": "false"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=mobile-menu]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=menu-toggle]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=mobile-menu]"
+   },
+   {
+    "op": "press",
+    "key": "Escape"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=menu-toggle]').getAttribute('aria-expanded')",
+    "value": "false"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=mobile-menu]"
+   }
+  ],
+  "viewport": 375
+ },
+ {
+  "name": "phone: choosing a menu link closes the menu and scrolls to the section",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=menu-toggle]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=menu-booking]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=mobile-menu]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=menu-toggle]').getAttribute('aria-expanded')",
+    "value": "false"
+   },
+   {
+    "op": "expect_js",
+    "expr": "location.hash",
+    "value": "#booking"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const r = document.getElementById('booking').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 })()",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=menu-toggle]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=mobile-menu]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=menu-faq]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=mobile-menu]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=menu-toggle]').getAttribute('aria-expanded')",
+    "value": "false"
+   },
+   {
+    "op": "expect_js",
+    "expr": "location.hash",
+    "value": "#faq"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(() => { const r = document.getElementById('faq').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 })()",
+    "value": true
+   }
+  ],
+  "viewport": 375
+ },
+ {
+  "name": "phone: nothing scrolls sideways, even with the menu, a FAQ answer and the biggest total open",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=menu-toggle]"
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=menu-toggle]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "30"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$158,380"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=faq-question] >> nth=0"
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "a-rather-long-address-for-a-narrow-screen@subdomain.example-company.com"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "expect_no_hscroll"
+   }
+  ],
+  "viewport": 375
+ },
+ {
+  "name": "the rooms section has three cards with the nightly prices, and the sections exist",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_js",
+    "expr": "!!document.getElementById('rooms')",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "!!document.getElementById('booking')",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "!!document.getElementById('faq')",
+    "value": true
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=room-card]",
+    "count": 3
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=room-card] >> nth=0",
+    "text": "$895"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=room-card] >> nth=1",
+    "text": "$1,999"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=room-card] >> nth=2",
+    "text": "$6,495"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=room] option')].map(o => o.value)",
+    "value": [
+     "pod",
+     "suite",
+     "dome"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "the calculator starts on the first room and 3 nights, and the total follows the chosen room",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=room]').value",
+    "value": "pod"
+   },
+   {
+    "op": "expect_value",
+    "selector": "[data-testid=nights]",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$5,185"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "suite"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$8,497"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$21,985"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$5,185"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   }
+  ]
+ },
+ {
+  "name": "6 nights are full price, 7 nights get 10% off",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "suite"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "6"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$14,494"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "suite"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "7"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$15,094"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "6"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$7,870"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "7"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$8,139"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   }
+  ]
+ },
+ {
+  "name": "13 nights get 10% off, 14 nights get 20% off",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "suite"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "13"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$25,888"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "suite"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "14"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$24,889"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "13"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$78,492"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "14"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$75,244"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   }
+  ]
+ },
+ {
+  "name": "half dollars round up, other fractions to the nearest dollar",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "7"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$8,139"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "9"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$9,750"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "11"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$11,361"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "13"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$12,972"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "suite"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "7"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$15,094"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "suite"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "11"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$22,290"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "suite"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "14"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$24,889"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   }
+  ]
+ },
+ {
+  "name": "the launch fee is added once and never discounted; 1 and 30 nights are valid",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$3,395"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$8,995"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "30"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$23,980"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "30"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$158,380"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "29"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$153,184"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "15"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$80,440"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   }
+  ]
+ },
+ {
+  "name": "totals are formatted like $3,395, $21,985 and $158,380",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "1"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$3,395"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$3,395"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "3"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$21,985"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$21,985"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "30"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$158,380"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$158,380"
+   }
+  ]
+ },
+ {
+  "name": "empty nights show the error and a dash",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": ""
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=nights-error]').textContent.trim().length > 0",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "0 and 31 nights are out of range",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "0"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "31"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "100"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "300"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   }
+  ]
+ },
+ {
+  "name": "fractions, negatives and typed letters are not valid nights",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "2.5"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "-3"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "1.0001"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": ""
+   },
+   {
+    "op": "type",
+    "selector": "[data-testid=nights]",
+    "value": "abc",
+    "delay": 20
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   }
+  ]
+ },
+ {
+  "name": "fixing the nights clears the error and brings the total back",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "0"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "pod"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "5"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$6,975"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "31"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=nights-error]"
+   },
+   {
+    "op": "select",
+    "selector": "[data-testid=room]",
+    "value": "dome"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": "8"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$49,264"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=nights-error]"
+   }
+  ]
+ },
+ {
+  "name": "the total updates while typing, with no blur or button",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=nights]",
+    "value": ""
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "—"
+   },
+   {
+    "op": "type",
+    "selector": "[data-testid=nights]",
+    "value": "1",
+    "delay": 30
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$3,395"
+   },
+   {
+    "op": "type",
+    "selector": "[data-testid=nights]",
+    "value": "4",
+    "delay": 30
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$12,524"
+   },
+   {
+    "op": "press",
+    "key": "Backspace",
+    "selector": "[data-testid=nights]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=total]').textContent.trim()",
+    "value": "$3,395"
+   }
+  ]
+ },
+ {
+  "name": "newsletter: invalid emails show the error and no success; nothing is shown before submitting",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "hello"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "a@b"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "a b@c.de"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "@x.io"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "a@b."
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "a@@b.co"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "two words@x.io"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=subscribe-success]"
+   }
+  ]
+ },
+ {
+  "name": "newsletter: a valid email shows the success with the address and does not leave the page",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "js",
+    "expr": "window.__alive = 41"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "pilot+1@mail.example.com"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=subscribe-success]').textContent.includes('pilot+1@mail.example.com')",
+    "value": true
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.__alive",
+    "value": 41
+   },
+   {
+    "op": "expect_js",
+    "expr": "location.pathname + location.search",
+    "value": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "a@b.c"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelector('[data-testid=subscribe-success]').textContent.includes('a@b.c')",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.__alive",
+    "value": 41
+   }
+  ]
+ },
+ {
+  "name": "newsletter: Enter submits, and the newest result replaces the old one",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "nova@orbit.io"
+   },
+   {
+    "op": "press",
+    "key": "Enter",
+    "selector": "[data-testid=email]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "nova@orbit"
+   },
+   {
+    "op": "press",
+    "key": "Enter",
+    "selector": "[data-testid=email]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=email]",
+    "value": "nova@orbit.io"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=subscribe]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=subscribe-success]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=email-error]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "location.search",
+    "value": ""
+   }
+  ]
+ },
+ {
+  "name": "FAQ: at least five questions, all closed at first",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid=faq-item]').length >= 5",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid=faq-question]').length === document.querySelectorAll('[data-testid=faq-item]').length",
+    "value": true
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=faq-question]')].every(b => b.tagName === 'BUTTON' && b.getAttribute('aria-expanded') === 'false')",
+    "value": true
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=faq-item] >> nth=0 >> [data-testid=faq-answer]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=faq-item] >> nth=4 >> [data-testid=faq-answer]"
+   }
+  ]
+ },
+ {
+  "name": "FAQ: opening a question shows its answer, opening another closes the first",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=faq-item] >> nth=1 >> [data-testid=faq-question]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid=faq-question]')[1].getAttribute('aria-expanded')",
+    "value": "true"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=faq-item] >> nth=1 >> [data-testid=faq-answer]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=faq-question]')].map(b => b.getAttribute('aria-expanded')).join().split(',').filter(s => s === 'true').length",
+    "value": 1
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=faq-item] >> nth=3 >> [data-testid=faq-question]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid=faq-question]')[3].getAttribute('aria-expanded')",
+    "value": "true"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=faq-item] >> nth=3 >> [data-testid=faq-answer]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid=faq-question]')[1].getAttribute('aria-expanded')",
+    "value": "false"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=faq-item] >> nth=1 >> [data-testid=faq-answer]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=faq-question]')].map(b => b.getAttribute('aria-expanded')).join().split(',').filter(s => s === 'true').length",
+    "value": 1
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=faq-item] >> nth=3 >> [data-testid=faq-question]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid=faq-question]')[3].getAttribute('aria-expanded')",
+    "value": "false"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=faq-item] >> nth=3 >> [data-testid=faq-answer]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=faq-question]')].map(b => b.getAttribute('aria-expanded')).join().split(',').filter(s => s === 'true').length",
+    "value": 0
+   }
+  ]
+ },
+ {
+  "name": "FAQ: Enter and Space work from the keyboard",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "press",
+    "key": "Enter",
+    "selector": "[data-testid=faq-item] >> nth=0 >> [data-testid=faq-question]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=faq-item] >> nth=0 >> [data-testid=faq-answer]"
+   },
+   {
+    "op": "press",
+    "key": " ",
+    "selector": "[data-testid=faq-item] >> nth=2 >> [data-testid=faq-question]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=faq-item] >> nth=2 >> [data-testid=faq-answer]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=faq-item] >> nth=0 >> [data-testid=faq-answer]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.querySelectorAll('[data-testid=faq-question]')[0].getAttribute('aria-expanded')",
+    "value": "false"
+   },
+   {
+    "op": "press",
+    "key": " ",
+    "selector": "[data-testid=faq-item] >> nth=2 >> [data-testid=faq-question]"
+   },
+   {
+    "op": "expect_hidden",
+    "selector": "[data-testid=faq-item] >> nth=2 >> [data-testid=faq-answer]"
+   }
+  ]
+ },
+ {
+  "name": "theme: the page follows the system colour scheme at first",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "light"
+   },
+   {
+    "op": "expect_js",
+    "expr": "matchMedia('(prefers-color-scheme: dark)').matches",
+    "value": false
+   }
+  ]
+ },
+ {
+  "name": "theme: the toggle flips data-theme and saves the choice",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=theme-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "dark"
+   },
+   {
+    "op": "expect_js",
+    "expr": "localStorage.getItem('theme')",
+    "value": "dark"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=theme-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "light"
+   },
+   {
+    "op": "expect_js",
+    "expr": "localStorage.getItem('theme')",
+    "value": "light"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=theme-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "dark"
+   }
+  ]
+ },
+ {
+  "name": "theme: the choice survives a reload, a saved choice wins over the system",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=theme-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "dark"
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "dark"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=theme-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "light"
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "light"
+   },
+   {
+    "op": "js",
+    "expr": "localStorage.setItem('theme', 'dark')"
+   },
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "dark"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=theme-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "light"
+   }
+  ]
+ },
+ {
+  "name": "theme: dark and light really look different",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "js",
+    "expr": "window.__light = (() => { for (const el of [document.body, document.documentElement]) { const c = getComputedStyle(el).backgroundColor; if (c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') return c } return 'none' })()"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=theme-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "dark"
+   },
+   {
+    "op": "expect_js",
+    "expr": "((() => { for (const el of [document.body, document.documentElement]) { const c = getComputedStyle(el).backgroundColor; if (c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') return c } return 'none' })()) !== window.__light && ((() => { for (const el of [document.body, document.documentElement]) { const c = getComputedStyle(el).backgroundColor; if (c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') return c } return 'none' })()) !== 'none'",
+    "value": true
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=theme-toggle]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "document.documentElement.getAttribute('data-theme')",
+    "value": "light"
+   },
+   {
+    "op": "expect_js",
+    "expr": "((() => { for (const el of [document.body, document.documentElement]) { const c = getComputedStyle(el).backgroundColor; if (c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') return c } return 'none' })()) === window.__light",
+    "value": true
+   }
+  ]
+ }
+]

@@ -4,3 +4,5 @@
 frontend/.DS_Store
 *.zip
 backend/.connector/
+backend/internal/builds/.try-shot-*.jpg
+.try-*/
