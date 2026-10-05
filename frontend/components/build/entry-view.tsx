@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ArrowRight, Bot, CheckCircle2, ExternalLink, Loader2, Monitor, Smartphone, Trash2, XCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BadgeCheck, Bot, CheckCircle2, EyeOff, ExternalLink, Loader2, Monitor, Smartphone, Trash2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScoreBadge, ScoreBreakdown, VoteButton, entryHref, siteUrl } from '@/components/build/build-gallery'
 import { api } from '@/lib/api'
-import { KINDS } from '@/lib/build-kinds'
+import { FORMATS, tx } from '@/lib/build-kinds'
 import { errorText } from '@/lib/format'
 import { formatDateTime } from '@/lib/i18n/core'
 import { useT } from '@/lib/i18n/client'
@@ -48,10 +48,11 @@ export function EntryView({ slug, id }: { slug: string; id: string }) {
   if (!p) return <div className="space-y-4"><Skeleton className="h-24" /><Skeleton className="h-[70vh]" /></div>
 
   const { entry: e, challenge: c } = p
-  const k = KINDS[c.kind]
-  const ru = t.locale === 'ru'
-  const mode = view ?? (c.mobile ? 'phone' : 'desktop')
-  const failed = e.checks.failed ?? []
+  const k = FORMATS[c.format]
+  const mobile = c.format === 'mobile'
+  const mode = view ?? (mobile ? 'phone' : 'desktop')
+  const failed = e.checks.failed
+  const shown = e.reference ? e.test_score : e.score
 
   async function remove() {
     if (!armed) { setArmed(true); return }
@@ -67,7 +68,7 @@ export function EntryView({ slug, id }: { slug: string; id: string }) {
         <Link href="/" className="hover:text-foreground">{t('allChallenges')}</Link>
         <span aria-hidden>/</span>
         <Link href={`/c/${encodeURIComponent(c.slug)}`} className={cn('inline-flex items-center gap-1 hover:opacity-80', k.text)}>
-          <k.icon className="size-4" />{(ru && c.title_ru) || c.title}
+          <k.icon className="size-4" />{tx(c.title, t.locale)}
         </Link>
         <span aria-hidden>/</span>
         <span className="text-foreground">{t('solution')}</span>
@@ -78,23 +79,29 @@ export function EntryView({ slug, id }: { slug: string; id: string }) {
         <div className="relative flex flex-wrap items-center gap-x-6 gap-y-4">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-terminal-foreground/60">
-              {p.place ? t('place', { place: p.place, of: p.of }) : t('notRanked')}
+              {e.place ? t('place', { place: e.place, of: p.of }) : t('notRanked')}
             </p>
-            <h1 className="display mt-1 truncate text-[2.2rem] sm:text-[3rem]">{e.handle}</h1>
-            <p className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-bold">
-              <Bot className="size-4 shrink-0 text-terminal-accent" />
-              <span className="text-terminal-foreground/60">{t('agent')}:</span>
-              <span className="truncate">{e.made_with || t('agentUnknown')}</span>
-            </p>
+            <h1 className="display mt-1 flex items-center gap-3 truncate text-[2.2rem] sm:text-[3rem]">
+              {e.reference && <BadgeCheck className="size-9 shrink-0 text-terminal-accent" />}{e.reference ? t('reference') : e.handle}
+            </h1>
+            {e.reference ? (
+              <p className="mt-2 max-w-xl text-sm text-terminal-foreground/70">{t('referenceHint')}</p>
+            ) : (
+              <p className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-bold">
+                <Bot className="size-4 shrink-0 text-terminal-accent" />
+                <span className="text-terminal-foreground/60">{t('agent')}:</span>
+                <span className="truncate">{e.made_with || t('agentUnknown')}</span>
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3">
-            {e.score !== null && (
+            {shown !== null && (
               <div className="text-center">
-                <div className={cn('rounded-[18px] bg-gradient-to-br px-5 py-3 font-mono text-[2.6rem] font-bold leading-none text-white tabular-nums', k.gradient)}>{e.score}</div>
-                <p className="mt-1.5 text-xs font-bold text-terminal-foreground/60">{t('yourScore')}</p>
+                <div className={cn('rounded-[18px] bg-gradient-to-br px-5 py-3 font-mono text-[2.6rem] font-bold leading-none text-white tabular-nums', k.gradient)}>{shown}</div>
+                <p className="mt-1.5 text-xs font-bold text-terminal-foreground/60">{e.reference ? t('testsLabel') : t('score')}</p>
               </div>
             )}
-            {e.status === 'done' && <VoteButton e={e} onChange={(x) => setP({ ...p, entry: x })} big />}
+            {e.status === 'done' && !e.reference && <VoteButton e={e} canVote={c.status === 'open'} onChange={() => void load()} big />}
           </div>
         </div>
       </header>
@@ -102,7 +109,7 @@ export function EntryView({ slug, id }: { slug: string; id: string }) {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            {!c.mobile && (
+            {!mobile && (
               <div className="flex rounded-full border border-border bg-card p-1 text-sm font-semibold">
                 {(['desktop', 'phone'] as const).map((m) => (
                   <button key={m} onClick={() => setView(m)} aria-pressed={mode === m}
@@ -147,16 +154,18 @@ export function EntryView({ slug, id }: { slug: string; id: string }) {
           {e.status === 'done' && (
             <div className="rounded-[14px] border border-border bg-card p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="heading text-lg">{t('checksTitle')}</h2>
-                <ScoreBadge score={e.score} />
+                <h2 className="heading text-lg">{t('score')}</h2>
+                <ScoreBadge score={shown} />
               </div>
               <ScoreBreakdown e={e} />
               <div className="mt-4 border-t border-border pt-4 text-sm">
-                {failed.length === 0 ? (
+                {failed === undefined ? (
+                  <p className="flex items-start gap-2 text-muted-foreground"><EyeOff className="mt-0.5 size-4 shrink-0" />{t('failedHidden')}</p>
+                ) : failed.length === 0 ? (
                   <p className="flex items-center gap-2 font-semibold text-success"><CheckCircle2 className="size-4" />{t('allPassed')}</p>
                 ) : (
                   <>
-                    <p className="mb-2 font-bold">{t('failedScenarios')}</p>
+                    <p className="mb-2 font-bold">{t('failedTests')}</p>
                     <ul className="space-y-1.5">
                       {failed.map((n) => (
                         <li key={n} className="flex items-start gap-2 text-muted-foreground"><XCircle className="mt-0.5 size-4 shrink-0 text-destructive" />{n}</li>

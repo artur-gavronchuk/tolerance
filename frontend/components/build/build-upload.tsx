@@ -147,7 +147,7 @@ function MyEntry({ slug, e }: { slug: string; e: BuildEntry }) {
       </Link>
       <div className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-bold text-muted-foreground">{t('yourScore')}</span>
+          <span className="text-sm font-bold text-muted-foreground">{t('score')}</span>
           <ScoreBadge score={e.score} large />
         </div>
         {e.failure_reason === 'timeout' && <p className="text-sm text-warning">{t('timeout')}</p>}
@@ -155,7 +155,7 @@ function MyEntry({ slug, e }: { slug: string; e: BuildEntry }) {
         <ScoreBreakdown e={e} />
         {(e.checks.failed?.length ?? 0) > 0 && (
           <details className="text-sm">
-            <summary className="cursor-pointer font-semibold">{t('failedScenarios')} ({e.checks.failed!.length})</summary>
+            <summary className="cursor-pointer font-semibold">{t('failedTests')} ({e.checks.failed!.length})</summary>
             <ul className="mt-2 list-disc space-y-0.5 pl-5 text-muted-foreground">
               {e.checks.failed!.map((n) => <li key={n}>{n}</li>)}
             </ul>

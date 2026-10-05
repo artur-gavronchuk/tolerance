@@ -275,30 +275,27 @@ export interface FairReport {
 export interface FairCluster { kind: 'ip' | 'device'; hash: string; users: { id: string; handle: string; banned: boolean }[] }
 export interface FairOverview { flags: FairItem[]; reports: FairReport[]; clusters: FairCluster[] }
 
-// Build challenges: several open side by side (GET /builds), each with its page (GET /builds/{slug}) and
-// solution pages (GET /build-entries/{id}).
-export type BuildKind = 'game' | 'site' | 'app' | 'tool'
+// Build challenges: a season of challenges opening one after another (GET /builds), each with its page
+// (GET /builds/{slug}) and solution pages (GET /build-entries/{id}). Final score = 60 hidden tests + 40 votes.
+export type BuildFormat = 'game' | 'site' | 'mobile' | 'tool'
+export type BuildStatus = 'upcoming' | 'open' | 'closed'
+export type BuildText = { en: string; ru: string }
 
-export type BuildChallengeBase = {
+export type BuildChallenge = {
   slug: string
-  title: string
-  title_ru: string
-  summary: string
-  summary_ru: string
-  starts: string
-  kind: BuildKind
-  mobile: boolean
-}
-
-export type BuildChallenge = BuildChallengeBase & {
-  task_md: string
-  scenario_count: number
-  entries: number
-}
-
-export type BuildCard = BuildChallengeBase & {
+  format: BuildFormat
+  title: BuildText
+  one_liner: BuildText
+  opens_at: string
+  closes_at: string
+  status: BuildStatus
+  tests: number
   entries: number
   votes: number
+  contract?: BuildText // only on the challenge page, once it has opened
+}
+
+export type BuildCard = BuildChallenge & {
   top: BuildEntry[]
   mine: BuildEntry | null
 }
@@ -306,8 +303,8 @@ export type BuildCard = BuildChallengeBase & {
 export type BuildChecks = {
   passed?: number
   total?: number
-  failed?: string[]
-  points?: { scenarios?: number; a11y?: number; mobile?: number; perf?: number }
+  failed?: string[] // the owner's, or everyone's once the challenge is closed
+  points?: { a11y?: number; mobile?: number; perf?: number } // quality hints, not part of the score
 }
 
 export type BuildEntry = {
@@ -316,7 +313,10 @@ export type BuildEntry = {
   handle: string
   made_with: string
   status: 'queued' | 'running' | 'done' | 'infra_error'
+  test_score: number | null
+  vote_score: number
   score: number | null
+  place: number
   checks: BuildChecks
   failure_reason: string | null
   log_tail?: string
@@ -325,6 +325,7 @@ export type BuildEntry = {
   votes: number
   voted: boolean
   mine: boolean
+  reference: boolean
   created_at: string
   updated_at: string
 }
@@ -332,13 +333,13 @@ export type BuildEntry = {
 export type BuildPage = {
   challenge: BuildChallenge
   entries: BuildEntry[]
+  reference: BuildEntry | null
   mine: BuildEntry | null
 }
 
 export type BuildEntryPage = {
   entry: BuildEntry
-  challenge: BuildChallengeBase
-  place: number
+  challenge: BuildChallenge
   of: number
   prev: string | null
   next: string | null
