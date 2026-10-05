@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Runs a site through a challenge's scenarios in the arena-site sandbox image, the way the worker does, and
-prints what passed. For authoring challenges; needs Docker and `make images`.
+"""Runs a site through a challenge's hidden tests in the arena-site sandbox image, the way the worker does,
+and prints what passed. For authoring challenges; needs Docker and `make images`.
 
-    python3 backend/internal/builds/try.py backend/internal/builds/catalog/snake backend/internal/builds/catalog/snake/_reference
-    python3 backend/internal/builds/try.py <challenge-dir> <site-dir | page.html> [scenario-name-substring]
+    python3 backend/internal/builds/try.py <slug> <site-dir | page.html> [scenario-name-substring]
+
+The tests come from $ARENA_BUILDS_TESTS_DIR/<slug>/tests.json (the private catalog, by default
+../arena-tasks/builds next to this repository), or catalog/<slug>/scenarios.json for retired challenges.
+Exits 0 only when every selected scenario passed.
 """
 import json
 import os
@@ -13,16 +16,22 @@ import sys
 import tempfile
 
 here = os.path.dirname(os.path.abspath(__file__))
-challenge, site = sys.argv[1], sys.argv[2]
+slug, site = sys.argv[1], sys.argv[2]
 only = sys.argv[3] if len(sys.argv) > 3 else ""
 
-scenarios = json.load(open(os.path.join(challenge, "scenarios.json")))
+repo = os.path.dirname(os.path.dirname(os.path.dirname(here)))
+challenge = os.path.join(here, "catalog", slug)
+tests_dir = os.environ.get("ARENA_BUILDS_TESTS_DIR") or os.path.join(os.path.dirname(repo), "arena-tasks", "builds")
+tests = os.path.join(tests_dir, slug, "tests.json")
+if not os.path.exists(tests):
+    tests = os.path.join(challenge, "scenarios.json")
+scenarios = json.load(open(tests))
 if only:
     scenarios = [s for s in scenarios if only in s["name"]]
 manifest = json.load(open(os.path.join(challenge, "manifest.json")))
 
 # Under the repo, so Docker Desktop / Colima can mount it.
-work = tempfile.mkdtemp(prefix=".try-", dir=os.path.dirname(os.path.dirname(os.path.dirname(here))))
+work = tempfile.mkdtemp(prefix=".try-", dir=repo)
 try:
     sol = os.path.join(work, "solution")
     if os.path.isdir(site):
@@ -33,7 +42,7 @@ try:
     os.makedirs(os.path.join(work, "_run"))
     marker = "@@TRY@@"
     spec = {"scenarios": scenarios, "marker": marker}
-    if manifest.get("mobile"):  # mirrors worker.go
+    if manifest.get("format") == "mobile":  # mirrors worker.go
         spec["viewport"] = 390
         spec["shot"] = {"width": 390, "height": 844, "scale": 2, "touch": True}
     json.dump(spec, open(os.path.join(work, "_run", "spec.json"), "w"))
@@ -54,10 +63,12 @@ try:
     for r in report["results"]:
         if not r["passed"]:
             print("  FAIL", r["name"])
+    failed = passed != len(report["results"])
     print("quality", json.dumps(report["quality"]))
     if os.path.exists(os.path.join(work, "_out", "shot.jpg")):
-        dst = os.path.join(challenge, "..", "..", ".try-shot-%s.jpg" % os.path.basename(os.path.normpath(challenge)))
+        dst = os.path.join(here, ".try-shot-%s.jpg" % slug)
         shutil.copy(os.path.join(work, "_out", "shot.jpg"), dst)
         print("screenshot", os.path.normpath(dst))
 finally:
     shutil.rmtree(work, ignore_errors=True)
+sys.exit(1 if failed else 0)

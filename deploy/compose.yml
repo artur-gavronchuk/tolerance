@@ -94,11 +94,14 @@ services:
       ARENA_FAIRPLAY_SECRET: ${ARENA_FAIRPLAY_SECRET}
       ARENA_MATCH_INTERVAL: ${ARENA_MATCH_INTERVAL:-20s}
       ARENA_MATCH_CONCURRENCY: ${ARENA_MATCH_CONCURRENCY:-1}
+      # Build challenges' hidden tests and references (arena-tasks/builds, synced by deploy.yml).
+      ARENA_BUILDS_TESTS_DIR: /opt/arena/builds
     # Group that owns docker.sock on the host: sandbox and bot containers.
     group_add: ["${DOCKER_GID:?}"]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - arena-work:/var/lib/arena/work
+      - ${ARENA_BUILDS_SOURCE:-./builds}:/opt/arena/builds:ro
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:

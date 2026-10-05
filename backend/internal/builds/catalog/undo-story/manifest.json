@@ -1,0 +1,12 @@
+{
+  "format": "mobile",
+  "title": {
+    "en": "The world remembers undo",
+    "ru": "Мир помнит отмену"
+  },
+  "one_liner": {
+    "en": "A story where any choice can be undone — but the world remembers how many times you did it.",
+    "ru": "История, где решение можно отменить, но мир помнит, сколько раз ты это сделал."
+  },
+  "timeout_s": 120
+}

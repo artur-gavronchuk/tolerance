@@ -77,6 +77,12 @@ def step(page, s):
         page.evaluate(s["expr"])
     elif op == "wait":
         page.wait_for_timeout(s["ms"])
+    elif op == "expect_no_errors":
+        # Uncaught exceptions and console.error since the scenario started (favicon misses aside).
+        page.wait_for_timeout(s.get("ms", 300))
+        errs = [e for e in page.arena_errors if "favicon" not in e]
+        if errs:
+            raise AssertionError("page errors: " + " | ".join(errs[:3])[:300])
     elif op == "expect_js":
         # Trusted platform expression evaluated in the page; its JSON result must equal "value".
         got = None
@@ -228,7 +234,9 @@ with sync_playwright() as p:
         ctx = browser.new_context(**opts)
         try:
             page = ctx.new_page()
-            page.on("pageerror", lambda e: print("  pageerror:", str(e)[:200]))
+            page.arena_errors = []
+            page.on("pageerror", lambda e, p=page: (p.arena_errors.append(str(e)[:200]), print("  pageerror:", str(e)[:200])))
+            page.on("console", lambda m, p=page: p.arena_errors.append(m.text[:200]) if m.type == "error" else None)
             for s in sc.get("steps", []):
                 step(page, s)
             ok = True

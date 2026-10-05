@@ -1,0 +1,12 @@
+{
+  "format": "site",
+  "title": {
+    "en": "Creature lab",
+    "ru": "Лаборатория существ"
+  },
+  "one_liner": {
+    "en": "Create a creature that mutates at the press of a button and lives entirely in its link.",
+    "ru": "Создай существо, которое мутирует по кнопке и целиком живёт в ссылке."
+  },
+  "timeout_s": 120
+}

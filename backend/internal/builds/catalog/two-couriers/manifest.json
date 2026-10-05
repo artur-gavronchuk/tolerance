@@ -1,0 +1,12 @@
+{
+  "format": "game",
+  "title": {
+    "en": "Two couriers",
+    "ru": "Два курьера"
+  },
+  "one_liner": {
+    "en": "Guide two couriers to their goals with simultaneous moves — and don't let them collide.",
+    "ru": "Проведи двух курьеров к целям одновременными ходами — и не столкни их."
+  },
+  "timeout_s": 150
+}

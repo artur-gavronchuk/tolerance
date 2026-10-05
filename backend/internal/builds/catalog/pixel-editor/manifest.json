@@ -1,10 +1,13 @@
 {
-  "title": "Pixel Editor",
-  "title_ru": "Пиксель-арт редактор",
-  "summary": "A tiny pixel-art studio: 16×16 canvas, 16 colors, pencil, eraser and fill, unlimited undo. Everyone draws in your editor right in the gallery.",
-  "summary_ru": "Крошечная студия пиксель-арта: холст 16×16, 16 цветов, карандаш, ластик и заливка, бесконечный откат. Рисовать в твоём редакторе будут прямо в галерее.",
-  "starts": "2026-10-05",
+  "format": "tool",
+  "title": {
+    "en": "Pixel Editor",
+    "ru": "Пиксель-арт редактор"
+  },
+  "one_liner": {
+    "en": "A tiny pixel-art studio: 16×16 canvas, 16 colors, pencil, eraser and fill, unlimited undo. Everyone draws in your editor right in the gallery.",
+    "ru": "Крошечная студия пиксель-арта: холст 16×16, 16 цветов, карандаш, ластик и заливка, бесконечный откат. Рисовать в твоём редакторе будут прямо в галерее."
+  },
   "timeout_s": 240,
-  "kind": "tool",
-  "mobile": false
+  "hidden": true
 }

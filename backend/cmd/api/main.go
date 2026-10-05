@@ -104,6 +104,17 @@ func main() {
 
 	d.discussion = discussion.NewService(pool)
 	d.builds = builds.NewService(pool)
+	if n, err := builds.LoadTests(cfg.buildsTestsDir); err != nil {
+		log.Error("build challenge tests", "err", err)
+		os.Exit(1)
+	} else {
+		log.Info("build challenge tests loaded", "challenges", n)
+	}
+	if n, err := d.builds.SeedReferences(ctx); err != nil {
+		log.Error("build challenge references", "err", err)
+	} else if n > 0 {
+		log.Info("build challenge references queued", "count", n)
+	}
 	d.fairplay = fairplay.NewService(pool, os.Getenv("ARENA_FAIRPLAY_SECRET"))
 	d.submissions.OnUpload = d.fairplay.Observe
 

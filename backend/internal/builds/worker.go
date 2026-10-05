@@ -111,14 +111,12 @@ func (w *Worker) runOne(ctx context.Context) (bool, error) {
 
 // score runs the entry in the sandbox and writes its verdict. An error is the platform's (infra_error).
 func (w *Worker) score(ctx context.Context, c claimed) error {
-	var ch *Challenge
-	for i := range catalog {
-		if catalog[i].Slug == c.challenge {
-			ch = &catalog[i]
-		}
-	}
+	ch := bySlug(c.challenge)
 	if ch == nil {
 		return errors.New("challenge left the catalog")
+	}
+	if ch.Scenarios == nil && w.runner != nil {
+		return errors.New("no hidden tests configured (ARENA_BUILDS_TESTS_DIR)")
 	}
 	files, err := submissions.ReadZip(c.zip)
 	if err != nil {
@@ -151,7 +149,7 @@ func (w *Worker) score(ctx context.Context, c claimed) error {
 	}
 	marker := "@@" + idgen.New("verdict") + "@@"
 	specDoc := map[string]any{"scenarios": ch.Scenarios, "marker": marker}
-	if ch.Mobile { // try.py mirrors this
+	if ch.Mobile() { // try.py mirrors this
 		specDoc["viewport"] = 390
 		specDoc["shot"] = map[string]any{"width": 390, "height": 844, "scale": 2, "touch": true}
 	}

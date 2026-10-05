@@ -34,6 +34,7 @@ type config struct {
 	matchConcurrency int
 	botImage         string
 	houseAgents      string // ARENA_HOUSE_AGENTS: path to the house agents JSON; "" = feature off
+	buildsTestsDir   string // ARENA_BUILDS_TESTS_DIR: the private build challenge catalog (hidden tests, references)
 }
 
 func loadConfig() (config, error) {
@@ -57,6 +58,7 @@ func loadConfig() (config, error) {
 		matchConcurrency: 1,
 		botImage:         env("ARENA_BOT_IMAGE", "arena-bot-runtime:1"),
 		houseAgents:      os.Getenv("ARENA_HOUSE_AGENTS"),
+		buildsTestsDir:   os.Getenv("ARENA_BUILDS_TESTS_DIR"),
 	}
 	if v := os.Getenv("ARENA_MATCH_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)

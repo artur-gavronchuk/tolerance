@@ -150,6 +150,10 @@ jobs:
           # a new inode would leave containers on the old content.
           rsync -c --inplace deploy/compose.yml deploy/Caddyfile deploy/server.sh prod:/opt/tolerance/
           rsync -ac --delete --chmod=a+rX "$skills/" prod:/opt/tolerance/skills/
+          # Build challenges' hidden tests and references: only from the private catalog, never this repository.
+          if [ "${{ steps.tasks.outputs.present }}" = "true" ] && [ -d arena-tasks/builds ]; then
+            rsync -ac --delete --chmod=a+rX --exclude '_*' arena-tasks/builds/ prod:/opt/tolerance/builds/
+          fi
 
       - name: deploy on the server
         run: ssh prod "bash /opt/tolerance/server.sh deploy ${{ steps.sha.outputs.sha }}"

@@ -1,0 +1,12 @@
+{
+  "format": "tool",
+  "title": {
+    "en": "Mirror studio",
+    "ru": "Зеркальная мастерская"
+  },
+  "one_liner": {
+    "en": "A drawing tool where every stroke turns into a symmetric creature, emblem or pattern.",
+    "ru": "Рисовалка, где каждый штрих превращается в симметричное существо, эмблему или узор."
+  },
+  "timeout_s": 150
+}

@@ -36,30 +36,31 @@ type quality struct {
 	} `json:"perf,omitempty"`
 }
 
-// Checks is the score breakdown stored with an entry and shown on its card.
+// Checks is what the run found, stored with an entry. Points holds the quality hints (a11y, mobile, perf, of
+// 10 each): shown on the entry, not part of the score.
 type Checks struct {
 	Passed  int             `json:"passed"`
 	Total   int             `json:"total"`
-	Failed  []string        `json:"failed"`
-	Points  map[string]int  `json:"points"` // scenarios (of 70), a11y, mobile, perf (of 10 each)
+	Failed  []string        `json:"failed"` // hidden from everyone but the owner while the challenge is open
+	Points  map[string]int  `json:"points"`
 	Quality json.RawMessage `json:"quality,omitempty"`
 }
 
-// score turns a run into 0..100: 70 for the share of scenarios passed, 10 each for accessibility, mobile fit
-// and a clean, light first load. A signal the run could not measure scores 0.
-func score(scenarios int, r runReport, rawQuality json.RawMessage) (int, Checks) {
-	c := Checks{Total: scenarios, Failed: []string{}, Points: map[string]int{}, Quality: rawQuality}
+// score turns a run into the test points: TestPoints for the share of hidden tests passed (rounded down).
+func score(tests int, r runReport, rawQuality json.RawMessage) (int, Checks) {
+	c := Checks{Total: tests, Failed: []string{}, Points: map[string]int{}, Quality: rawQuality}
 	for _, res := range r.Results {
 		if res.Passed {
 			c.Passed++
-		} else if len(c.Failed) < 30 {
+		} else if len(c.Failed) < 50 {
 			c.Failed = append(c.Failed, res.Name)
 		}
 	}
-	if scenarios > 0 {
-		c.Points["scenarios"] = 70 * min(c.Passed, scenarios) / scenarios
+	pts := 0
+	if tests > 0 {
+		pts = TestPoints * min(c.Passed, tests) / tests
 	} else {
-		c.Points["scenarios"] = 70
+		pts = TestPoints // nothing to fail (the fake sandbox without tests)
 	}
 	q := r.Quality
 	if q.A11y != nil {
@@ -69,8 +70,6 @@ func score(scenarios int, r runReport, rawQuality json.RawMessage) (int, Checks)
 	}
 	if q.Mobile != nil && !q.Mobile.Overflow {
 		c.Points["mobile"] = clamp(10 - min(q.Mobile.SmallTargets, 5))
-	} else {
-		c.Points["mobile"] = 0
 	}
 	if q.Perf != nil {
 		p := 10
@@ -91,16 +90,7 @@ func score(scenarios int, r runReport, rawQuality json.RawMessage) (int, Checks)
 		}
 		c.Points["perf"] = clamp(p)
 	}
-	for _, k := range []string{"a11y", "perf"} {
-		if _, ok := c.Points[k]; !ok {
-			c.Points[k] = 0
-		}
-	}
-	total := 0
-	for _, v := range c.Points {
-		total += v
-	}
-	return min(total, 100), c
+	return pts, c
 }
 
 func clamp(n int) int { return max(0, min(10, n)) }
