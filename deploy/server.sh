@@ -48,6 +48,9 @@ cmd_deploy() {
   done
   runtime_images "$tag"
 
+  # compose.yml needs TAG set for any command, postgres-only ones included.
+  setenv TAG "$tag"
+
   echo "--- backup"
   mkdir -p backups
   dc up -d --wait postgres
@@ -55,7 +58,6 @@ cmd_deploy() {
   ls -1t backups/pre-*.dump | tail -n +11 | xargs -r rm --
 
   echo "--- migrate"
-  setenv TAG "$tag"
   if ! dc run --rm migrate; then
     [ -n "$prev" ] && setenv TAG "$prev"
     echo "migrate failed; api and web untouched" >&2
