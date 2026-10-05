@@ -104,6 +104,17 @@ jobs:
           cache-from: type=gha,scope=skill-python
           cache-to: type=gha,mode=max,scope=skill-python
 
+      - name: site sandbox image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend/internal/builds/site
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/tolerance-site:${{ steps.sha.outputs.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=site
+          cache-to: type=gha,mode=max,scope=site
+
       # The real daily tasks live in the private repo arena-tasks; with its
       # deploy key set they replace the practice tasks from backend/fixtures.
       - name: private task catalog

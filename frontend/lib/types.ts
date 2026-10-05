@@ -274,3 +274,50 @@ export interface FairReport {
 }
 export interface FairCluster { kind: 'ip' | 'device'; hash: string; users: { id: string; handle: string; banned: boolean }[] }
 export interface FairOverview { flags: FairItem[]; reports: FairReport[]; clusters: FairCluster[] }
+
+// Build challenges (GET /builds): a site to build, uploads scored by the platform and voted on.
+export type BuildChallenge = {
+  slug: string
+  title: string
+  title_ru: string
+  summary: string
+  summary_ru: string
+  starts: string
+  ends: string | null
+  task_md: string
+  scenario_count: number
+  current: boolean
+  entries: number
+}
+
+export type BuildChecks = {
+  passed?: number
+  total?: number
+  failed?: string[]
+  points?: { scenarios?: number; a11y?: number; mobile?: number; perf?: number }
+}
+
+export type BuildEntry = {
+  id: string
+  handle: string
+  made_with: string
+  status: 'queued' | 'running' | 'done' | 'infra_error'
+  score: number | null
+  checks: BuildChecks
+  failure_reason: string | null
+  log_tail?: string
+  has_shot: boolean
+  version: number
+  votes: number
+  voted: boolean
+  mine: boolean
+  updated_at: string
+}
+
+export type BuildPage = {
+  challenge: BuildChallenge
+  all: { slug: string; title: string; title_ru: string; starts: string; current: boolean }[]
+  entries: BuildEntry[]
+  mine: BuildEntry | null
+  now: string
+}

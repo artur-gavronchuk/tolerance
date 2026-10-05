@@ -234,3 +234,6 @@ func normalizeDiffPaths(diff string) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// ReadZip is readZip for other upload kinds (build challenge sites): the same path, size and junk rules.
+func ReadZip(data []byte) (map[string][]byte, error) { return readZip(data) }

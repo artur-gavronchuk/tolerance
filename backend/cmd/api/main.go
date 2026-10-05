@@ -17,6 +17,7 @@ import (
 	"tolerance/internal/account"
 	adminpkg "tolerance/internal/admin"
 	"tolerance/internal/analytics"
+	"tolerance/internal/builds"
 	"tolerance/internal/daily"
 	"tolerance/internal/discussion"
 	"tolerance/internal/fairplay"
@@ -102,6 +103,7 @@ func main() {
 	}
 
 	d.discussion = discussion.NewService(pool)
+	d.builds = builds.NewService(pool)
 	d.fairplay = fairplay.NewService(pool, os.Getenv("ARENA_FAIRPLAY_SECRET"))
 	d.submissions.OnUpload = d.fairplay.Observe
 
@@ -133,6 +135,16 @@ func main() {
 		go func() {
 			defer wg.Done()
 			w.Run(ctx, 1)
+		}()
+
+		var siteRunner sandbox.Runner = sandbox.NewDocker()
+		if cfg.sandbox == "fake" {
+			siteRunner = nil // builds' fake mode: every scenario passes, no screenshot
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			builds.NewWorker(pool, siteRunner, cfg.workDir, log).Run(ctx)
 		}()
 
 		wg.Add(1)

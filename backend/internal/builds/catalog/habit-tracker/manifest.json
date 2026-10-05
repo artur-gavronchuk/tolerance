@@ -1,0 +1,8 @@
+{
+  "title": "Habit tracker",
+  "title_ru": "Трекер привычек",
+  "summary": "A habit tracker with a 14-day grid, current and best streaks and a completion rate that stay right across months, leap years and time zones.",
+  "summary_ru": "Трекер привычек: сетка на 14 дней, текущая и лучшая серия, процент выполнения — и всё верно через месяцы, високосные годы и часовые пояса.",
+  "starts": "2026-10-12",
+  "timeout_s": 300
+}

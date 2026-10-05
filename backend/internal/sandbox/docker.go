@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -67,6 +69,9 @@ func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
 	start := exec.CommandContext(runCtx, "docker", "start", "-a", id)
 	start.Stdout, start.Stderr = buf, buf
 	err = start.Run()
+	if req.CopyOut != "" {
+		copyOut(ctx, id, req.WorkDir, req.CopyOut)
+	}
 	res := Result{Output: tail(buf.buf.String(), maxOutput)}
 	res.Tests = ParseOutput(req.Language, []byte(res.Output))
 	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
@@ -88,6 +93,15 @@ func (d *Docker) Run(ctx context.Context, req Request) (Result, error) {
 		return Result{}, fmt.Errorf("sandbox: container failed to start: %s", tail(res.Output, 2000))
 	}
 	return res, nil
+}
+
+// copyOut copies /work/<dir> of the stopped container into <workDir>/<dir>, best effort.
+func copyOut(ctx context.Context, id, workDir, dir string) {
+	dst := filepath.Join(workDir, filepath.FromSlash(dir))
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return
+	}
+	_ = exec.CommandContext(ctx, "docker", "cp", id+":/work/"+dir+"/.", dst).Run()
 }
 
 // createArgs is the `docker create` command line shared by every sandbox container: no network, resource

@@ -24,6 +24,7 @@ runtime_images() {
   docker tag "$REGISTRY/tolerance-bot-runtime:$1" arena-bot-runtime:1
   docker tag "$REGISTRY/tolerance-skill-go:$1" arena-skill-go:1
   docker tag "$REGISTRY/tolerance-skill-python:$1" arena-skill-python:1
+  docker tag "$REGISTRY/tolerance-site:$1" arena-site:1
 }
 
 healthy() {
@@ -43,7 +44,7 @@ cmd_deploy() {
   grep -q '^ARENA_FAIRPLAY_SECRET=.' .env || setenv ARENA_FAIRPLAY_SECRET "$(openssl rand -hex 32)"
 
   echo "--- pull $tag"
-  for img in backend web bot-runtime skill-go skill-python; do
+  for img in backend web bot-runtime skill-go skill-python site; do
     docker pull -q "$REGISTRY/tolerance-$img:$tag"
   done
   runtime_images "$tag"

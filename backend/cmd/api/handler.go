@@ -13,6 +13,7 @@ import (
 	adminpkg "tolerance/internal/admin"
 	"tolerance/internal/analytics"
 	"tolerance/internal/badges"
+	"tolerance/internal/builds"
 	"tolerance/internal/daily"
 	"tolerance/internal/discussion"
 	"tolerance/internal/fairplay"
@@ -40,6 +41,7 @@ type deps struct {
 	daily       *daily.Service
 	submissions *submissions.Service
 	games       *games.Service
+	builds      *builds.Service
 	admin       *adminpkg.Service
 	moderation  *moderation.Service
 	fairplay    *fairplay.Service
@@ -68,6 +70,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	notify.RegisterOwnerRoutes(owner, d.notify)
 	uploadlink.RegisterOwnerRoutes(owner, d.uploadLinks)
 	account.RegisterOwnerRoutes(owner, d.account, cfg.secureCookies)
+	builds.RegisterOwnerRoutes(owner, d.builds, d.limiter, cfg.devLogin)
 
 	pulse := http.NewServeMux()
 	admin := http.NewServeMux()
@@ -85,6 +88,7 @@ func newHandler(cfg config, d deps) http.Handler {
 	profiles.RegisterPublicRoutes(public, d.profiles)
 	badges.RegisterPublicRoutes(public, badges.Deps{Daily: d.daily, Games: d.games})
 	games.RegisterPublicRoutes(public, d.games, identity.OptionalUserID(d.users))
+	builds.RegisterPublicRoutes(public, d.builds, identity.OptionalUserID(d.users), cfg.publicURL)
 
 	// The personal upload link: the token in the URL is the credential (no session).
 	uploadlink.RegisterPublicRoutes(public, uploadlink.Deps{Links: d.uploadLinks, Pool: d.pool, Daily: d.daily, Submissions: d.submissions,
@@ -122,6 +126,12 @@ func newHandler(cfg config, d deps) http.Handler {
 	api.Handle("GET /api/v1/tasks/{slug}/repo.zip", d.fairplay.RecordDownload("task", identity.OptionalUserID(d.users))(public))
 	api.Handle("/api/v1/tasks/", public)
 	api.Handle("/api/v1/tanks/", public)
+	api.Handle("/api/v1/builds", public)
+	api.Handle("/api/v1/builds/", public)
+	api.Handle("/api/v1/build-entries/", public)
+	api.Handle("POST /api/v1/builds/{slug}/entries", session(owner))
+	api.Handle("/api/v1/build-entries/{id}/vote", session(owner))
+	api.Handle("DELETE /api/v1/build-entries/{id}", session(owner))
 	// Starting a tournament now: admins, or anyone signed in when the dev login is on (local runs).
 	api.Handle("POST /api/v1/tanks/tournaments", session(adminOrDev(cfg.devLogin)(admin)))
 	api.Handle("POST /api/v1/tanks/tournaments/{id}/pairings/{pairing}/resume", session(adminOrDev(cfg.devLogin)(admin)))

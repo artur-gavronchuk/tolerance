@@ -38,6 +38,9 @@
   --color-terminal-success: var(--terminal-success);
   --color-terminal-accent: var(--terminal-accent);
   --color-arena: var(--arena);
+  --color-pop-1: var(--pop-1);
+  --color-pop-2: var(--pop-2);
+  --color-pop-3: var(--pop-3);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -84,6 +87,10 @@
   --terminal-success: #8fd6b0;
   --terminal-accent: #8fb4ff;
   --arena: #0c1720;
+  /* Loud accents for the build challenge hero only (gradient text, glows): violet, pink, orange. */
+  --pop-1: #8b5cf6;
+  --pop-2: #ec4899;
+  --pop-3: #f97316;
   --radius: 0.625rem;
 }
 

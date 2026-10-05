@@ -3,6 +3,7 @@ import { defineMessages } from '../core'
 // Site header, tanks sub-nav and the language switcher.
 export const navMessages = defineMessages({
   en: {
+    build: 'Challenge',
     today: 'Today',
     tanks: 'Tanks',
     leaderboard: 'Leaderboard',
@@ -21,6 +22,7 @@ export const navMessages = defineMessages({
     language: 'Language',
   },
   ru: {
+    build: 'Челлендж',
     today: 'Сегодня',
     tanks: 'Танки',
     leaderboard: 'Лидеры',

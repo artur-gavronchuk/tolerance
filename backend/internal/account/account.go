@@ -104,6 +104,8 @@ func (s *Service) Delete(ctx context.Context, userID, confirmHandle string) erro
 				payload->>'submission_id' IN (SELECT id FROM submissions WHERE user_id = $1) OR
 				payload->>'version_id' IN (SELECT v.id FROM bot_versions v JOIN game_bots b ON b.id = v.bot_id WHERE b.owner_user_id = $1))`,
 			`DELETE FROM submissions WHERE user_id = $1`,
+			`DELETE FROM build_votes WHERE user_id = $1`,
+			`DELETE FROM build_entries WHERE user_id = $1`,
 			`DELETE FROM events WHERE user_id = $1`, // the tombstone row stays, so ON DELETE CASCADE does not fire
 			`DELETE FROM fairplay_downloads WHERE user_id = $1`,
 			`DELETE FROM fairplay_seen WHERE user_id = $1`,

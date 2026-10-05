@@ -1,0 +1,1325 @@
+[
+ {
+  "name": "the three columns exist",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=column-todo]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=column-doing]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=column-done]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=new-card-input]"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-todo]",
+    "text": "0"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-doing]",
+    "text": "0"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-done]",
+    "text": "0"
+   }
+  ]
+ },
+ {
+  "name": "added cards land in To do, in order, with counts",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha",
+     "Bravo",
+     "Charlie"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": []
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-todo]",
+    "text": "3"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-doing]",
+    "text": "0"
+   }
+  ]
+ },
+ {
+  "name": "the input is cleared after adding",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "expect_value",
+    "selector": "[data-testid=new-card-input]",
+    "value": ""
+   }
+  ]
+ },
+ {
+  "name": "Enter in the input adds a card",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Via enter"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=new-card-input]",
+    "key": "Enter"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Via enter"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "blank titles are not added",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": ""
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "    "
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Real"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=card]",
+    "count": 1
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-todo]",
+    "text": "1"
+   }
+  ]
+ },
+ {
+  "name": "titles are trimmed",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "   Write tests   "
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Write tests"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "titles are shown as text, never as HTML",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "<b>bold</b> & <img src=x onerror=window.__pwned=1>"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "<b>bold</b> & <img src=x onerror=window.__pwned=1>"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "window.__pwned === undefined && document.querySelectorAll('[data-testid=card] b, [data-testid=card] img').length === 0",
+    "value": true
+   }
+  ]
+ },
+ {
+  "name": "duplicate titles are separate cards",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Same"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Same"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-todo]",
+    "text": "1"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-doing]",
+    "text": "1"
+   }
+  ]
+ },
+ {
+  "name": "Shift+Right moves a card to the next column, appended at the end",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Charlie\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Alpha\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Bravo"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Charlie",
+     "Alpha"
+    ]
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-todo]",
+    "text": "1"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-doing]",
+    "text": "2"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Charlie\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-done] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Charlie"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "the moved card keeps keyboard focus, so moves can be repeated",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Alpha\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "expect_js",
+    "expr": "(document.activeElement.textContent || '').includes('Alpha') && !!document.activeElement.closest('[data-testid=column-doing]')",
+    "value": true
+   },
+   {
+    "op": "press",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-done] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha"
+    ]
+   },
+   {
+    "op": "press",
+    "key": "Shift+ArrowLeft"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-done] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": []
+   }
+  ]
+ },
+ {
+  "name": "Shift+Left and Shift+Right stop at the first and last column",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Alpha\")",
+    "key": "Shift+ArrowLeft"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha"
+    ]
+   },
+   {
+    "op": "press",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "press",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "press",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-done] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha"
+    ]
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-done]",
+    "text": "1"
+   }
+  ]
+ },
+ {
+  "name": "Shift+Up and Shift+Down reorder inside a column",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Charlie\")",
+    "key": "Shift+ArrowUp"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha",
+     "Charlie",
+     "Bravo"
+    ]
+   },
+   {
+    "op": "press",
+    "key": "Shift+ArrowUp"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Charlie",
+     "Alpha",
+     "Bravo"
+    ]
+   },
+   {
+    "op": "press",
+    "key": "Shift+ArrowUp"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Charlie",
+     "Alpha",
+     "Bravo"
+    ]
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Alpha\")",
+    "key": "Shift+ArrowDown"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Charlie",
+     "Bravo",
+     "Alpha"
+    ]
+   },
+   {
+    "op": "press",
+    "key": "Shift+ArrowDown"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Charlie",
+     "Bravo",
+     "Alpha"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "reordering works in the other columns too",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Alpha\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Bravo\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Bravo\")",
+    "key": "Shift+ArrowUp"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Bravo",
+     "Alpha"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Charlie"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "dragging a card onto a column moves it there",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=card]:has-text(\"Alpha\")",
+    "target": "[data-testid=column-done]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-done] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Bravo",
+     "Charlie"
+    ]
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-done]",
+    "text": "1"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-todo]",
+    "text": "2"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=card]:has-text(\"Bravo\")",
+    "target": "[data-testid=column-doing]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Bravo"
+    ]
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-todo]",
+    "text": "1"
+   }
+  ]
+ },
+ {
+  "name": "dropping a card on top of another card puts it in that card's column",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=card]:has-text(\"Alpha\")",
+    "target": "[data-testid=column-done]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=card]:has-text(\"Bravo\")",
+    "target": "[data-testid=column-done] [data-testid=card]"
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=column-done] [data-testid=card]",
+    "count": 2
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Charlie"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "deleting a card",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=card]:has-text(\"Bravo\") [data-testid=delete-card]"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha",
+     "Charlie"
+    ]
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-todo]",
+    "text": "2"
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha",
+     "Charlie"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "double-click renames a card, Enter saves",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "dblclick",
+    "selector": "[data-testid=card-title]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=edit-input]"
+   },
+   {
+    "op": "expect_value",
+    "selector": "[data-testid=edit-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=edit-input]",
+    "value": "  Renamed  "
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=edit-input]",
+    "key": "Enter"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Renamed"
+    ]
+   },
+   {
+    "op": "expect_count",
+    "selector": "[data-testid=edit-input]",
+    "count": 0
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Renamed"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Escape cancels a rename and an empty title is refused",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "dblclick",
+    "selector": "[data-testid=card-title]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=edit-input]",
+    "value": "Nope"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=edit-input]",
+    "key": "Escape"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha"
+    ]
+   },
+   {
+    "op": "dblclick",
+    "selector": "[data-testid=card-title]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=edit-input]",
+    "value": "   "
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=edit-input]",
+    "key": "Enter"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a renamed card keeps its column and position",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Bravo\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "dblclick",
+    "selector": "[data-testid=card]:has-text(\"Alpha\") [data-testid=card-title]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=edit-input]",
+    "value": "First"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=edit-input]",
+    "key": "Enter"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "First",
+     "Charlie"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Bravo"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "columns, order and titles survive a reload",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Alpha\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Charlie\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "press",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Bravo\")",
+    "key": "Shift+ArrowDown"
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Bravo"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-done] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Charlie"
+    ]
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-todo]",
+    "text": "1"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-doing]",
+    "text": "1"
+   },
+   {
+    "op": "expect_text",
+    "selector": "[data-testid=count-done]",
+    "text": "1"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Bravo\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha",
+     "Bravo"
+    ]
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha",
+     "Bravo"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "a drag survives a reload",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "drag",
+    "selector": "[data-testid=card]:has-text(\"Charlie\")",
+    "target": "[data-testid=column-doing]"
+   },
+   {
+    "op": "reload"
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-doing] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Charlie"
+    ]
+   },
+   {
+    "op": "expect_js",
+    "expr": "[...document.querySelectorAll('[data-testid=column-todo] [data-testid=card-title]')].map(e => e.textContent)",
+    "value": [
+     "Alpha",
+     "Bravo"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "works on a phone: no horizontal scroll with cards in every column",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Alpha"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Bravo"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "Charlie"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Bravo\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "press",
+    "selector": "[data-testid=card]:has-text(\"Charlie\")",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "press",
+    "key": "Shift+ArrowRight"
+   },
+   {
+    "op": "expect_no_hscroll"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=column-done]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=new-card-input]"
+   }
+  ],
+  "viewport": 375
+ },
+ {
+  "name": "a very long title does not break the phone layout",
+  "steps": [
+   {
+    "op": "goto",
+    "path": "/"
+   },
+   {
+    "op": "fill",
+    "selector": "[data-testid=new-card-input]",
+    "value": "SupercalifragilisticexpialidociousSupercalifragilisticexpialidociousSupercalifragilisticexpialidociousSupercalifragilisticexpialidocious"
+   },
+   {
+    "op": "click",
+    "selector": "[data-testid=add-card]"
+   },
+   {
+    "op": "expect_visible",
+    "selector": "[data-testid=card]"
+   },
+   {
+    "op": "expect_no_hscroll"
+   }
+  ],
+  "viewport": 375
+ }
+]

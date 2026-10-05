@@ -16,6 +16,9 @@ type Request struct {
 	// Language picks the test-output parser: "python" for pytest, anything else is go test -json.
 	Language string
 	Timeout  time.Duration
+	// CopyOut is a directory under the container's /work that is copied back to the same path under WorkDir
+	// after the run (a screenshot, say); "" copies nothing. A run that leaves no such directory is not an error.
+	CopyOut string
 }
 
 type TestResult struct {

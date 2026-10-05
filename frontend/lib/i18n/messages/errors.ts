@@ -172,14 +172,15 @@ export function errorText(err: unknown, locale: Locale = 'en'): string {
     return err.retryAfterSec ? t('rateLimitedIn', { n: err.retryAfterSec }) : code === 'rate_limited' ? t('rate_limited') : t('rateLimited')
   }
   if (status === 413 || code === 'payload_too_large') return code === 'body_too_large' ? t('body_too_large') : t('tooLarge')
-  if (err.fields?.length) {
-    const key = `${code}.${err.fields[0].path}`
-    if (has(key)) return t(key)
-  }
+  // The reason text first: every invalid_upload carries the same field ("file").
   if (code === 'invalid_upload') {
     for (const [re, key] of UPLOAD_REASONS) {
       if (re.test(message)) return t(key, { name: message.slice(message.indexOf(': ') + 2) })
     }
+  }
+  if (err.fields?.length) {
+    const key = `${code}.${err.fields[0].path}`
+    if (has(key)) return t(key)
   }
   if (code === 'invalid_package') return t('invalid_package', { detail: message })
   const v = variant(code, message)
