@@ -77,6 +77,16 @@ def step(page, s):
         page.evaluate(s["expr"])
     elif op == "wait":
         page.wait_for_timeout(s["ms"])
+    elif op == "pointer_drag":
+        # A real mouse stroke inside one element: from/to are fractions of its box (0..1), moved in `steps`.
+        box = loc.first.bounding_box(timeout=STEP_MS)
+        if box is None:
+            raise AssertionError("pointer_drag: %s is not visible" % s["selector"])
+        at = lambda f: (box["x"] + box["width"] * f[0], box["y"] + box["height"] * f[1])
+        page.mouse.move(*at(s["from"]))
+        page.mouse.down()
+        page.mouse.move(*at(s["to"]), steps=s.get("steps", 12))
+        page.mouse.up()
     elif op == "expect_no_errors":
         # Uncaught exceptions and console.error since the scenario started (favicon misses aside).
         page.wait_for_timeout(s.get("ms", 300))
