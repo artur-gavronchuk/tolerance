@@ -4,8 +4,7 @@
 # the submissions and tanks workers, so it needs docker.sock for the
 # sandbox and bot containers.
 #
-# The production stack (Caddy, canary, monitoring, backups, deploy scripts)
-# was cut for prototype mode; it lives at git tag ops-snapshot-2026-10-03.
+# Production uses deploy/compose.yml (see .github/workflows/deploy.yml).
 
 services:
   postgres:

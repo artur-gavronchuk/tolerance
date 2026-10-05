@@ -1,0 +1,102 @@
+# Production Caddy for tolerance.cc. This file is the source of truth:
+# deploy.yml ships it to /opt/tolerance/Caddyfile and reloads Caddy, so edits
+# made by hand on the server are overwritten on the next deploy.
+{
+	# Cloudflare's edge ranges (https://www.cloudflare.com/ips-v4, ips-v6) as
+	# of 2026-09-25: CF-Connecting-IP is trusted only from them.
+	servers {
+		trusted_proxies static \
+ 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 \
+ 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 \
+ 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 \
+ 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 \
+ 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 \
+ 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+
+		timeouts {
+			read_header 10s
+			read_body 30s
+			write 60s
+			idle 2m
+		}
+		max_header_size 64KB
+	}
+}
+
+# Authenticated Origin Pulls: only Cloudflare's proxy for our zone can
+# complete a TLS handshake (zone setting tls_client_auth=on). CA:
+# origin-pull.cloudflare.net, valid until 2029-11-01. Direct HTTPS to the
+# origin fails by design; ACME HTTP-01 on :80 is unaffected.
+(cloudflare_origin_pull) {
+	tls {
+		client_auth {
+			mode require_and_verify
+			trust_pool inline {
+				trust_der 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
+			}
+		}
+	}
+}
+
+{$ARENA_DOMAIN} {
+	import cloudflare_origin_pull
+
+	encode zstd gzip
+
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>headers>Cookie delete
+				request>headers>Authorization delete
+				resp_headers>Set-Cookie delete
+			}
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+		-Server
+	}
+
+	handle /api/v1/healthz {
+		rewrite * /healthz
+		reverse_proxy api:8080
+	}
+
+	handle /api/* {
+		# The backend enforces per-route caps (5 MiB submission zips, 2 MiB
+		# bot archives); this only keeps Caddy from being the stricter one.
+		request_body {
+			max_size 8MB
+		}
+		reverse_proxy api:8080 {
+			header_up X-Real-IP {client_ip}
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+www.{$ARENA_DOMAIN} {
+	import cloudflare_origin_pull
+	redir https://{$ARENA_DOMAIN}{uri} permanent
+}
+
+# mentor.nualimov.dev (repo artur-gavronchuk/nualimov.dev): its own stack runs
+# from /root/nualimov.dev with no public ports; its Caddy joins
+# tolerance_default as mentor-web.
+mentor.nualimov.dev {
+	import cloudflare_origin_pull
+	reverse_proxy mentor-web:80 {
+		header_up X-Forwarded-For {client_ip}
+	}
+}

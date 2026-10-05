@@ -25,10 +25,14 @@ overrides the superpowers skills and any default habits:
   CI (`ci.yml`) is manual-only (`workflow_dispatch`); nothing runs on push.
 - **Throwing code away is fine.** When the concept changes, delete the old
   feature (code, routes, pages, tests) rather than keeping it compatible.
-- **No ops work** unless asked. The whole production stack (Caddy, canary
-  releases, monitoring, backups, `deploy/`, `deploy.yml`) was cut from `main`;
-  it lives at git tag `ops-snapshot-2026-10-03` — restore from there when the
-  product is ready to ship. tolerance.cc keeps running the last deployed build.
+- **No ops work** unless asked. Deploy is one button: Actions → deploy → Run
+  workflow (`gh workflow run deploy`; `ref` = older sha to roll back). It
+  builds the images into GHCR and runs `deploy/server.sh` on the host over SSH
+  (secrets in the `production` environment). `deploy/compose.yml` and
+  `deploy/Caddyfile` are the server's source of truth — the Caddyfile also
+  serves `mentor.nualimov.dev`, keep that block. Migrations run on every
+  deploy, so once a migration has shipped to tolerance.cc, don't edit it.
+  The old canary/monitoring stack is at git tag `ops-snapshot-2026-10-03`.
 - **Docs**: don't update `README.md` or `docs/` specs. Update this file only
   with what would trip up the next session.
 - **Git**: commit to `main` directly (`git pull --rebase` first — other
@@ -133,10 +137,10 @@ an attempt.
   against the user. A diff touching test files or the test harness fails.
 - **Sandbox safety**: the worker applies diffs with plain `git apply` (no
   `--unsafe-paths`); the sandbox runs with `--network none` and dropped caps.
-- **Migrations**: local data is disposable and the frozen production database
-  will be recreated when the product ships, so editing an existing migration
-  is fine — run `make reset` afterwards (goose won't re-run an applied file).
-  Other sessions' databases need the same reset; say so in the commit message.
+- **Migrations**: tolerance.cc runs them on every deploy, so a migration that
+  has been deployed is append-only — add a new file. One that hasn't shipped
+  yet may still be edited; run `make reset` afterwards (goose won't re-run an
+  applied file) and say in the commit message that other sessions need it too.
 - Agent-written logs are sanitized server-side (`internal/platform/sanitize`).
 - Errors go through `httpx.WriteError` (`{code, message, request_id}`);
   timestamps are UTC (`.UTC()` after scanning — pgx returns local time).
