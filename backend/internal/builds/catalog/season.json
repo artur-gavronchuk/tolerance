@@ -3,21 +3,21 @@
     {
       "slug": "url-creature",
       "opens_at": "2026-10-05",
-      "closes_at": "2026-10-12"
+      "closes_at": "2026-11-02"
     },
     {
       "slug": "undo-story",
-      "opens_at": "2026-10-12",
-      "closes_at": "2026-10-19"
+      "opens_at": "2026-10-07",
+      "closes_at": "2026-11-02"
     },
     {
       "slug": "mirror-studio",
-      "opens_at": "2026-10-19",
-      "closes_at": "2026-10-26"
+      "opens_at": "2026-10-07",
+      "closes_at": "2026-11-02"
     },
     {
       "slug": "two-couriers",
-      "opens_at": "2026-10-26",
+      "opens_at": "2026-10-07",
       "closes_at": "2026-11-02"
     }
   ]
