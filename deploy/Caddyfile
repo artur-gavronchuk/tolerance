@@ -125,3 +125,18 @@ pijamas.fit, www.pijamas.fit {
 		header_up X-Forwarded-For {client_ip}
 	}
 }
+
+# oncue.work (repo artur-gavronchuk/oncue.work): its stack runs from
+# /opt/proofwork with no public ports; its edge Caddy joins tolerance_default as
+# proofwork-edge. flush_interval -1 keeps SSE streams unbuffered. No origin-pull
+# client auth here: Authenticated Origin Pulls is not enabled for the oncue.work
+# zone (with it Cloudflare answers 520).
+oncue.work {
+	reverse_proxy proofwork-edge:80 {
+		flush_interval -1
+	}
+}
+
+www.oncue.work {
+	redir https://oncue.work{uri} permanent
+}
