@@ -7,6 +7,7 @@
 @theme inline {
   --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --font-poster: var(--font-dela), var(--font-manrope), ui-sans-serif, sans-serif;
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
@@ -169,6 +170,16 @@
   .heading {
     font-weight: 750;
     letter-spacing: -0.025em;
+  }
+  /* Challenge titles: Dela Gothic One is a single heavy weight, set tight like a poster. */
+  .poster {
+    font-family: var(--font-poster);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 0.98;
+    /* A wide face: long Russian words must break rather than push the page sideways. */
+    hyphens: auto;
+    overflow-wrap: break-word;
   }
 }
 

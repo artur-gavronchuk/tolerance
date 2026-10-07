@@ -1,29 +1,30 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Bot, CalendarClock, Check, Copy, Download, FileText, Scale, Trophy } from 'lucide-react'
+import { ArrowLeft, Check, Copy, Download, Heart, Lock, Trophy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Markdown } from '@/components/daily/markdown'
 import { BuildUpload } from '@/components/build/build-upload'
-import { BuildGallery } from '@/components/build/build-gallery'
+import { BuildGallery, Thumb } from '@/components/build/build-gallery'
 import { api } from '@/lib/api'
 import { FORMATS, daysLeft, tx } from '@/lib/build-kinds'
 import { errorText } from '@/lib/format'
 import { formatDate } from '@/lib/i18n/core'
 import { useT } from '@/lib/i18n/client'
 import { buildMessages } from '@/lib/i18n/messages/build'
-import type { BuildChallenge, BuildPage } from '@/lib/types'
+import type { BuildChallenge, BuildEntry, BuildPage } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-type Tab = 'task' | 'agent'
+type Tab = 'gallery' | 'contract'
 
 export function BuildView({ slug }: { slug: string }) {
   const t = useT(buildMessages)
   const [page, setPage] = useState<BuildPage | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('task')
+  const [tab, setTab] = useState<Tab>('gallery')
+  const tabsRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
     try {
@@ -45,78 +46,125 @@ export function BuildView({ slug }: { slug: string }) {
   }, [pending, load])
 
   if (error && !page) return <p role="alert" className="text-destructive">{error}</p>
-  if (!page) return <div className="space-y-6"><Skeleton className="h-80 w-full rounded-[20px]" /><Skeleton className="h-64" /></div>
+  if (!page) return <div className="space-y-6"><Skeleton className="h-96 w-full rounded-[28px]" /><Skeleton className="h-64 rounded-[20px]" /></div>
 
   const c = page.challenge
-  const f = FORMATS[c.format]
+  const showcase = page.entries[0] ?? page.reference
+
+  function openContract() {
+    setTab('contract')
+    tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
     <div className="space-y-8">
-      <Link href="/" className="-mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
+      <Link href="/" className="-mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" />{t('allChallenges')}
       </Link>
-      <section className="relative overflow-hidden rounded-[20px] bg-terminal px-5 py-7 text-terminal-foreground sm:px-9 sm:py-10">
-        <div aria-hidden className={cn('pointer-events-none absolute -right-24 -top-24 size-80 rounded-full blur-3xl', f.glow)} />
-        <div aria-hidden className="pointer-events-none absolute -bottom-32 left-1/3 size-80 rounded-full bg-pop-1/25 blur-3xl" />
-        <f.icon aria-hidden className="pointer-events-none absolute -right-8 top-6 size-56 rotate-12 text-white opacity-[0.06]" />
-        <div className="relative">
-          <div className="flex flex-wrap items-center gap-2 text-[13px] font-bold">
-            <span className={cn('inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r px-3 py-1 text-white', f.gradient)}>
-              <f.icon className="size-3.5" />{t(`format_${c.format}`)}
-            </span>
-            <StatusLine c={c} />
-          </div>
-          <h1 className="display mt-4 max-w-3xl text-[2.6rem] sm:text-[4rem]">
-            <span className={cn('bg-gradient-to-r bg-clip-text text-transparent', f.gradient)}>{tx(c.title, t.locale)}</span>
-          </h1>
-          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-terminal-foreground/85 sm:text-xl">{tx(c.one_liner, t.locale)}</p>
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-1.5 text-sm font-bold">
-              <Scale className="size-4 text-terminal-accent" />{t('formula')}
-            </span>
-            {c.status !== 'upcoming' && (
-              <span className="inline-flex items-center gap-2 text-sm text-terminal-foreground/70">
-                <Trophy className="size-4" />{t.plural('solutions', c.entries)} · {t.plural('votes', c.votes)}
-              </span>
-            )}
-          </div>
-          <p className="mt-3 max-w-2xl text-sm text-terminal-foreground/60">{t('formulaHint')}</p>
-        </div>
-      </section>
+      <Hero c={c} showcase={c.status === 'upcoming' ? null : showcase} />
 
       {c.status === 'upcoming' ? (
-        <p className="rounded-[14px] border-2 border-dashed border-strong px-6 py-12 text-center text-lg font-semibold text-muted-foreground">
-          {t('opensOn', { date: formatDate(t.locale, c.opens_at, { day: 'numeric', month: 'long' }) })}. {t('upcomingText')}
+        <p className="flex items-center justify-center gap-2 rounded-[20px] border-2 border-dashed border-strong px-6 py-12 text-center text-lg font-semibold text-muted-foreground">
+          <Lock className="size-5" />{t('upcomingText')}
         </p>
       ) : (
         <>
-          <div role="tablist" className="flex gap-1 border-b border-border">
-            {(['task', 'agent'] as const).map((k) => (
-              <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-                className={cn('-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 text-[15px] font-bold transition-colors',
-                  tab === k ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-                {k === 'task' ? <Trophy className="size-4" /> : <Bot className="size-4" />}
-                {k === 'task' ? t('tabTask') : t('tabAgent')}
-              </button>
-            ))}
-          </div>
-          {tab === 'task' ? (
-            <div className="space-y-10">
-              {c.status === 'closed' ? (
-                <p className="rounded-[14px] bg-muted px-5 py-4 font-semibold text-muted-foreground">{t('closedText')}</p>
-              ) : (
-                <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                  <BuildUpload slug={c.slug} mine={page.mine} onUploaded={() => void load()} />
-                  <AgentTeaser onOpen={() => setTab('agent')} />
-                </section>
-              )}
-              <BuildGallery challenge={c} entries={page.entries} reference={page.reference} onChange={() => void load()} />
-            </div>
+          {c.status === 'closed' ? (
+            <p className="rounded-[20px] bg-muted px-6 py-5 font-semibold text-muted-foreground">{t('closedText')}</p>
           ) : (
-            <ForAgent c={c} />
+            <section className="grid gap-5 lg:grid-cols-2">
+              <GiveContract c={c} onRead={openContract} />
+              <Step n={2} title={page.mine ? t('uploadTitle') : t('step2Title')}>
+                <BuildUpload slug={c.slug} mine={page.mine} onUploaded={() => void load()} />
+              </Step>
+            </section>
           )}
+
+          <div ref={tabsRef} className="scroll-mt-6 space-y-6">
+            <div role="tablist" className="flex gap-1 rounded-full bg-muted p-1 sm:w-fit">
+              {(['gallery', 'contract'] as const).map((k) => (
+                <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+                  className={cn('flex-1 rounded-full px-5 py-2 text-[15px] font-bold transition-colors sm:flex-none',
+                    tab === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+                  {k === 'gallery' ? `${t('gallery')} ${page.entries.length}` : t('contractTitle')}
+                </button>
+              ))}
+            </div>
+            {tab === 'gallery'
+              ? <BuildGallery challenge={c} entries={page.entries} reference={page.reference} onChange={() => void load()} />
+              : <Contract c={c} />}
+          </div>
         </>
       )}
+    </div>
+  )
+}
+
+// Hero is the challenge's poster: its format colour, the title, the clock and, on wide screens, the best work so far.
+function Hero({ c, showcase }: { c: BuildChallenge; showcase: BuildEntry | null }) {
+  const t = useT(buildMessages)
+  const f = FORMATS[c.format]
+  const upcoming = c.status === 'upcoming'
+  const mobile = c.format === 'mobile'
+  return (
+    <section className={cn('relative grid grid-cols-[minmax(0,1fr)] overflow-hidden rounded-[28px] lg:grid-cols-[minmax(0,1fr)_26rem]',
+      upcoming ? 'bg-muted text-foreground' : cn('text-terminal', f.bg))}>
+      <div className="relative z-10 p-6 sm:p-10">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-bold">
+          <span className="flex items-center gap-1.5"><f.icon className="size-4" />{t(`format_${c.format}`)}</span>
+          <StatusLine c={c} />
+        </div>
+        <h1 className="poster mt-6 max-w-3xl text-[2.3rem] sm:text-[4.4rem]">{tx(c.title, t.locale)}</h1>
+        <p className="mt-4 max-w-xl text-[17px] font-medium leading-snug opacity-80 sm:text-xl">{tx(c.one_liner, t.locale)}</p>
+        {!upcoming && (
+          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-bold">
+            <span className="flex items-center gap-1.5"><Trophy className="size-4" />{t.plural('solutions', c.entries)}</span>
+            <span className="flex items-center gap-1.5"><Heart className="size-4" />{t.plural('votes', c.votes)}</span>
+            <span className="opacity-70">{t('formula')}</span>
+          </div>
+        )}
+      </div>
+      {showcase && (
+        <div aria-hidden className="relative hidden items-end justify-center pt-10 lg:flex">
+          <div className={cn('translate-y-6 overflow-hidden border-terminal bg-terminal shadow-2xl',
+            mobile ? 'aspect-[390/720] w-56 rounded-t-[32px] border-[7px] border-b-0' : 'aspect-[16/10] w-[115%] -mr-[15%] rounded-tl-[18px] border-[6px] border-b-0 border-r-0')}>
+            <Thumb e={showcase} />
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// GiveContract is step one: the prompt to copy (rules plus contract) or the same as a zip.
+function GiveContract({ c, onRead }: { c: BuildChallenge; onRead: () => void }) {
+  const t = useT(buildMessages)
+  const { prompt } = usePrompt(c)
+  return (
+    <Step n={1} title={t('step1Title')}>
+      <p className="text-muted-foreground">{t('step1Text')}</p>
+      <div className="mt-5 flex flex-wrap gap-2">
+        <CopyButton text={prompt} />
+        <Button size="lg" variant="outline" nativeButton={false}
+          render={<a href={`/api/v1/builds/${encodeURIComponent(c.slug)}/task.zip`} download />}>
+          <Download />{t('download')}
+        </Button>
+      </div>
+      <button onClick={onRead} className="mt-4 text-sm font-semibold text-primary underline-offset-4 hover:underline">
+        {t('readContract')}
+      </button>
+    </Step>
+  )
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[20px] border border-border bg-card p-5 sm:p-7">
+      <h2 className="heading flex items-center gap-3 text-xl">
+        <span className="poster flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-base text-ink-foreground">{n}</span>
+        {title}
+      </h2>
+      <div className="mt-4">{children}</div>
     </div>
   )
 }
@@ -124,53 +172,37 @@ export function BuildView({ slug }: { slug: string }) {
 function StatusLine({ c }: { c: BuildChallenge }) {
   const t = useT(buildMessages)
   const d = (iso: string) => formatDate(t.locale, iso, { day: 'numeric', month: 'long' })
-  if (c.status === 'upcoming') return <span className="text-terminal-foreground/70">{t('opensOn', { date: d(c.opens_at) })}</span>
-  if (c.status === 'closed') return <span className="text-terminal-foreground/70">{t('closedOn', { date: d(c.closes_at) })}</span>
+  if (c.status === 'upcoming') return <span>{t('opensOn', { date: d(c.opens_at) })}</span>
+  if (c.status === 'closed') return <span>{t('closedOn', { date: d(c.closes_at) })}</span>
   const left = daysLeft(c.closes_at)
-  return (
-    <span className="inline-flex items-center gap-1.5 text-terminal-foreground/80">
-      <CalendarClock className="size-4" />{t('openUntil', { date: d(c.closes_at) })} · {left > 1 ? t.plural('daysLeft', left) : t('lastDay')}
-    </span>
-  )
+  return <span>{t('openUntil', { date: d(c.closes_at) })}, {left > 1 ? t.plural('daysLeft', left) : t('lastDay')}</span>
 }
 
-function AgentTeaser({ onOpen }: { onOpen: () => void }) {
+// usePrompt is what the viewer pastes into their agent: the intro, the common rules and the contract.
+function usePrompt(c: BuildChallenge) {
   const t = useT(buildMessages)
-  return (
-    <div className="flex flex-col justify-between gap-4 rounded-[14px] border border-border bg-card p-5">
-      <div>
-        <h2 className="heading flex items-center gap-2 text-lg"><Bot className="size-5 text-primary" />{t('tabAgent')}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">{t('promptHint')}</p>
-        <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm">
-          <li>{t('rule1')}</li>
-          <li>{t('rule2')}</li>
-          <li>{t('rule3')}</li>
-        </ul>
-      </div>
-      <Button size="lg" onClick={onOpen} className="w-full sm:w-auto"><FileText />{t('toAgent')}</Button>
-    </div>
-  )
-}
-
-// ForAgent is the contract tab: the common rules, the contract and a prompt that carries both.
-function ForAgent({ c }: { c: BuildChallenge }) {
-  const t = useT(buildMessages)
-  const contract = tx(c.contract, t.locale)
   const rules = `## ${t('rulesTitle')}\n\n- ${t('rule1')}\n- ${t('rule2')}\n- ${t('rule3')}\n`
-  const prompt = `${t('promptIntro', { title: tx(c.title, t.locale), oneLiner: tx(c.one_liner, t.locale) })}\n\n${rules}\n${contract}`
+  const prompt = `${t('promptIntro', { title: tx(c.title, t.locale), oneLiner: tx(c.one_liner, t.locale) })}\n\n${rules}\n${tx(c.contract, t.locale)}`
+  return { rules, prompt }
+}
+
+// Contract is the full text the hidden tests check, with the prompt that carries it on the side.
+function Contract({ c }: { c: BuildChallenge }) {
+  const t = useT(buildMessages)
+  const { rules, prompt } = usePrompt(c)
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <article className="min-w-0 rounded-[14px] border border-border bg-card p-5 sm:p-7">
+      <article className="min-w-0 rounded-[20px] border border-border bg-card p-5 sm:p-8">
         <Markdown>{rules}</Markdown>
         <hr className="my-6 border-border" />
-        <Markdown>{contract}</Markdown>
+        <Markdown>{tx(c.contract, t.locale)}</Markdown>
       </article>
       <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-        <div className="rounded-[14px] border border-border bg-card p-5">
+        <div className="rounded-[20px] border border-border bg-card p-5">
           <h2 className="heading text-lg">{t('promptTitle')}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{t('promptHint')}</p>
-          <pre className="mt-3 max-h-56 overflow-auto rounded-[10px] bg-terminal p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-terminal-foreground">{prompt}</pre>
-          <CopyButton text={prompt} />
+          <pre className="mt-3 max-h-56 overflow-auto rounded-[12px] bg-terminal p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-terminal-foreground">{prompt}</pre>
+          <div className="mt-3"><CopyButton text={prompt} /></div>
         </div>
         <Button variant="outline" className="w-full" nativeButton={false}
           render={<a href={`/api/v1/builds/${encodeURIComponent(c.slug)}/task.zip`} download />}>
@@ -192,7 +224,7 @@ function CopyButton({ text }: { text: string }) {
     } catch {}
   }
   return (
-    <Button size="lg" className="mt-3 w-full" onClick={() => void copy()}>
+    <Button size="lg" onClick={() => void copy()}>
       {copied ? <Check /> : <Copy />}{copied ? t('copied') : t('copy')}
     </Button>
   )

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { BadgeCheck, Bot, Heart, Maximize2, Sparkles } from 'lucide-react'
+import { BadgeCheck, Bot, Heart } from 'lucide-react'
 import { useLoginHref } from '@/components/public/return-path'
 import { api } from '@/lib/api'
 import { errorText } from '@/lib/format'
@@ -19,6 +19,7 @@ export const entryHref = (slug: string, e: { id: string }) => `/c/${encodeURICom
 type Sort = 'score' | 'votes'
 
 // The ranked entries of a challenge (final score order from the server), the platform's reference first.
+// The page's tab names the list, so there is no heading here.
 export function BuildGallery({ challenge, entries, reference, onChange }: {
   challenge: BuildChallenge
   entries: BuildEntry[]
@@ -33,12 +34,8 @@ export function BuildGallery({ challenge, entries, reference, onChange }: {
 
   return (
     <section>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <h2 className="heading flex items-center gap-2 text-2xl">
-          <Sparkles className="size-6 text-pop-2" />{t('gallery')}
-          <span className="font-mono text-lg text-muted-foreground">{entries.length}</span>
-        </h2>
-        {entries.length > 1 && (
+      {entries.length > 1 && (
+        <div className="mb-4 flex justify-end">
           <div className="flex rounded-full border border-border bg-card p-1 text-sm font-semibold">
             {(['score', 'votes'] as const).map((s) => (
               <button key={s} onClick={() => setSort(s)} aria-pressed={sort === s}
@@ -47,8 +44,8 @@ export function BuildGallery({ challenge, entries, reference, onChange }: {
               </button>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
       <ul className={cn('grid gap-5', mobile ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'sm:grid-cols-2 lg:grid-cols-3')}>
         {reference && (
           <li><EntryCard e={reference} href={entryHref(challenge.slug, reference)} mobile={mobile} canVote={false} onChange={onChange} /></li>
@@ -67,38 +64,38 @@ export function BuildGallery({ challenge, entries, reference, onChange }: {
 function EntryCard({ e, href, mobile, canVote, onChange }: { e: BuildEntry; href: string; mobile: boolean; canVote: boolean; onChange: (e: BuildEntry) => void }) {
   const t = useT(buildMessages)
   return (
-    <article className={cn('group overflow-hidden rounded-[16px] border bg-card transition-shadow hover:shadow-lg',
-      e.mine ? 'border-primary' : e.reference ? 'border-dashed border-strong' : 'border-border')}>
+    <article className={cn('group overflow-hidden rounded-[20px] border-2 bg-card',
+      e.mine ? 'border-primary' : e.reference ? 'border-dashed border-strong' : 'border-transparent')}>
       <Link href={href} className={cn('relative block w-full overflow-hidden bg-muted', mobile ? 'aspect-[390/640]' : 'aspect-[16/10]')}
         aria-label={`${t('open')}: ${e.reference ? t('reference') : e.handle}`}>
         <Thumb e={e} />
         {e.reference ? (
-          <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-xs font-bold text-ink-foreground shadow">
+          <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-terminal px-2.5 py-1 text-xs font-bold text-terminal-foreground">
             <BadgeCheck className="size-3.5" />{t('reference')}
           </span>
         ) : e.place > 0 && (
-          <span className={cn('absolute left-3 top-3 flex size-8 items-center justify-center rounded-full font-mono text-sm font-bold shadow',
-            e.place <= 3 ? 'bg-gradient-to-br from-pop-1 via-pop-2 to-pop-3 text-white' : 'bg-card text-foreground')}>{e.place}</span>
+          <span className={cn('poster absolute left-3 top-3 flex h-9 min-w-9 items-center justify-center rounded-full px-2 text-base text-terminal',
+            e.place === 1 ? 'bg-pop-6' : 'bg-card')}>{e.place}</span>
         )}
-        <span className="absolute inset-0 flex items-center justify-center bg-terminal/0 opacity-0 transition-all group-hover:bg-terminal/40 group-hover:opacity-100">
-          <span className="flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-sm font-bold text-foreground"><Maximize2 className="size-4" />{t('open')}</span>
-        </span>
       </Link>
-      <div className="flex items-center gap-2 p-3 sm:gap-3 sm:p-4">
-        <Link href={href} className="min-w-0 flex-1 hover:text-primary">
-          <p className="truncate font-bold">{e.reference ? t('reference') : e.handle}</p>
-          <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-            <Bot className="size-3 shrink-0" />{e.reference ? 'tolerance' : e.made_with || t('agentUnknown')}
-          </p>
-        </Link>
-        <ScoreBadge score={e.reference ? e.test_score : e.score} />
-        {!e.reference && <VoteButton e={e} canVote={canVote} onChange={onChange} />}
+      <div className="space-y-3 p-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link href={href} className="min-w-0 flex-1 hover:text-primary">
+            <p className="truncate font-bold">{e.reference ? t('reference') : e.handle}</p>
+            <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+              <Bot className="size-3 shrink-0" />{e.reference ? 'tolerance' : e.made_with || t('agentUnknown')}
+            </p>
+          </Link>
+          <ScoreBadge score={e.reference ? e.test_score : e.score} max={e.reference ? 60 : 100} />
+          {!e.reference && <VoteButton e={e} canVote={canVote} onChange={onChange} />}
+        </div>
+        {e.status === 'done' && <ScoreSplit tests={e.test_score ?? 0} votes={e.reference ? null : e.vote_score} />}
       </div>
     </article>
   )
 }
 
-function Thumb({ e }: { e: BuildEntry }) {
+export function Thumb({ e }: { e: BuildEntry }) {
   if (e.has_shot) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={shotUrl(e)} alt="" loading="lazy" className="size-full object-cover object-top transition-transform duration-300 group-hover:scale-[1.03]" />
@@ -111,9 +108,9 @@ function Thumb({ e }: { e: BuildEntry }) {
 }
 
 // ScoreBadge is the final score out of 100 (or the test points of the reference).
-export function ScoreBadge({ score, large }: { score: number | null; large?: boolean }) {
+export function ScoreBadge({ score, max = 100, large }: { score: number | null; max?: number; large?: boolean }) {
   if (score === null) return null
-  const tone = score >= 80 ? 'bg-success text-success-foreground' : score >= 50 ? 'bg-warning text-warning-foreground' : 'bg-destructive/15 text-destructive'
+  const tone = score >= 0.8 * max ? 'bg-success text-success-foreground' : score >= 50 ? 'bg-warning text-warning-foreground' : 'bg-destructive/15 text-destructive'
   return (
     <span title="/100" className={cn('shrink-0 rounded-full font-mono font-bold tabular-nums', tone, large ? 'px-3.5 py-1 text-2xl' : 'px-2.5 py-0.5 text-sm')}>
       {score}
@@ -124,30 +121,17 @@ export function ScoreBadge({ score, large }: { score: number | null; large?: boo
 // ScoreBreakdown shows the two parts of the score and, apart, the quality hints that are not scored.
 export function ScoreBreakdown({ e }: { e: BuildEntry }) {
   const t = useT(buildMessages)
-  const rows = [
-    { k: 'tests', label: t('testsLabel'), v: e.test_score ?? 0, max: 60,
-      extra: e.checks.total ? t('testsDetail', { passed: e.checks.passed ?? 0, total: e.checks.total }) : '' },
-    ...(e.reference ? [] : [{ k: 'votes', label: t('votesPts'), v: e.vote_score, max: 40, extra: t.plural('votes', e.votes) }]),
-  ]
   const hints = e.checks.points ?? {}
   return (
     <div className="space-y-4">
-      <ul className="space-y-3 text-sm">
-        {rows.map((r) => (
-          <li key={r.k}>
-            <div className="flex justify-between gap-2">
-              <span className="font-semibold">{r.label} <span className="font-normal text-muted-foreground">{r.extra}</span></span>
-              <span className="font-mono tabular-nums">{r.v}/{r.max}</span>
-            </div>
-            <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-gradient-to-r from-pop-1 via-pop-2 to-pop-3" style={{ width: `${(100 * r.v) / r.max}%` }} />
-            </div>
-          </li>
-        ))}
-      </ul>
+      <ScoreSplit tests={e.test_score ?? 0} votes={e.reference ? null : e.vote_score} labels />
+      <p className="text-sm text-muted-foreground">
+        {e.checks.total ? t('testsDetail', { passed: e.checks.passed ?? 0, total: e.checks.total }) : null}
+        {!e.reference && <>{e.checks.total ? ', ' : ''}{t.plural('votes', e.votes)}</>}
+      </p>
       {Object.keys(hints).length > 0 && (
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t('qualityTitle')}</p>
+          <p className="text-sm font-semibold text-muted-foreground">{t('qualityTitle')}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
             {(['a11y', 'mobile', 'perf'] as const).filter((k) => hints[k] !== undefined).map((k) => (
               <span key={k} className="rounded-full bg-muted px-2.5 py-1 font-semibold">
@@ -157,6 +141,40 @@ export function ScoreBreakdown({ e }: { e: BuildEntry }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ScoreSplit is the score's shape, everywhere the same: 60 points of hidden tests next to 40 points of votes.
+// legend draws the empty rule (the home page), otherwise each part fills up to what the entry earned;
+// votes = null leaves the votes part out of the picture (the reference takes no votes).
+export function ScoreSplit({ tests, votes, legend, labels }: { tests?: number; votes?: number | null; legend?: boolean; labels?: boolean }) {
+  const t = useT(buildMessages)
+  const parts = [
+    { key: 'tests', max: 60, v: legend ? 60 : tests ?? 0, fill: 'bg-ink', label: t('splitTests') },
+    { key: 'votes', max: 40, v: legend ? 40 : votes ?? 0, fill: 'bg-pop-2', label: t('splitVotes'), off: votes === null && !legend },
+  ]
+  return (
+    <div className="flex gap-1.5">
+      {parts.map((p) => (
+        <div key={p.key} style={{ flexGrow: p.max }} className={cn('basis-0', p.off && 'opacity-40')}>
+          {legend && (
+            <p className="mb-1.5 flex items-baseline gap-1.5">
+              <span className="poster text-[2rem]">{p.max}</span>
+              <span className="text-sm font-semibold text-muted-foreground">{p.label}</span>
+            </p>
+          )}
+          {labels && (
+            <p className="mb-1.5">
+              <span className="poster block text-xl tabular-nums">{p.off ? '—' : p.v}<span className="text-sm text-muted-foreground">/{p.max}</span></span>
+              <span className="text-sm font-semibold text-muted-foreground">{p.label}</span>
+            </p>
+          )}
+          <div className={cn('overflow-hidden rounded-full bg-muted', legend ? 'h-3' : 'h-1.5')}>
+            <div className={cn('h-full rounded-full', p.fill)} style={{ width: `${(100 * Math.min(p.v, p.max)) / p.max}%` }} />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

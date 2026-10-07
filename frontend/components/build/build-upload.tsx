@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useLoginHref } from '@/components/public/return-path'
-import { ScoreBreakdown, ScoreBadge, entryHref, shotUrl, siteUrl } from '@/components/build/build-gallery'
+import { ScoreBreakdown, Thumb, entryHref } from '@/components/build/build-gallery'
 import { upload } from '@/lib/api'
 import { errorText } from '@/lib/format'
 import { formatNumber } from '@/lib/i18n/core'
@@ -58,16 +58,15 @@ export function BuildUpload({ slug, mine, onUploaded }: { slug: string; mine: Bu
     : `${formatNumber(t.locale, n / (1 << 20), { maximumFractionDigits: 2 })} ${t.locale === 'ru' ? 'МБ' : 'MB'}`
 
   return (
-    <div className="rounded-[14px] border border-border bg-card p-5">
-      <h2 className="heading text-lg">{t('uploadTitle')}</h2>
+    <div>
       {mine && <MyEntry slug={slug} e={mine} />}
       {loading ? null : !me ? (
-        <div className="mt-4 rounded-[12px] border-2 border-dashed border-strong px-4 py-8 text-center">
+        <div className={cn('rounded-[14px] border-2 border-dashed border-strong px-4 py-8 text-center', mine && 'mt-4')}>
           <p className="text-sm text-muted-foreground">{t('signInToUpload')}</p>
           <Button className="mt-3" nativeButton={false} render={<Link href={loginHref} />}>{t('signIn')}</Button>
         </div>
       ) : (
-        <form onSubmit={(e) => void submit(e)} className="mt-4 space-y-4">
+        <form onSubmit={(e) => void submit(e)} className={cn('space-y-4', mine && 'mt-4')}>
           <button type="button" disabled={busy} onClick={() => fileRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
             onDragLeave={() => setDragging(false)}
@@ -116,7 +115,7 @@ function MyEntry({ slug, e }: { slug: string; e: BuildEntry }) {
   const t = useT(buildMessages)
   if (e.status === 'queued' || e.status === 'running') {
     return (
-      <div className="mt-4 flex items-start gap-3 rounded-[12px] bg-accent p-4 text-accent-foreground">
+      <div className="flex items-start gap-3 rounded-[14px] bg-accent p-4 text-accent-foreground">
         <Loader2 className="mt-0.5 size-5 shrink-0 animate-spin" />
         <div>
           <p className="font-bold">{e.status === 'queued' ? t('queued') : t('running')}</p>
@@ -127,20 +126,16 @@ function MyEntry({ slug, e }: { slug: string; e: BuildEntry }) {
   }
   if (e.status === 'infra_error') {
     return (
-      <div className="mt-4 flex items-start gap-3 rounded-[12px] bg-destructive/10 p-4 text-destructive">
+      <div className="flex items-start gap-3 rounded-[14px] bg-destructive/10 p-4 text-destructive">
         <AlertTriangle className="mt-0.5 size-5 shrink-0" />
         <p className="text-sm font-semibold">{t('infraError')}</p>
       </div>
     )
   }
   return (
-    <div className="mt-4 overflow-hidden rounded-[12px] border border-border">
+    <div className="overflow-hidden rounded-[14px] border border-border">
       <Link href={entryHref(slug, e)} className="group relative block aspect-[16/10] bg-muted">
-        {e.has_shot
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={shotUrl(e)} alt="" className="size-full object-cover object-top" />
-          : <iframe src={siteUrl(e)} title={e.handle} sandbox="allow-scripts" loading="lazy" tabIndex={-1}
-              className="pointer-events-none h-[250%] w-[250%] origin-top-left scale-[0.4] border-0 bg-white" />}
+        <Thumb e={e} />
         <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-terminal/80 px-2.5 py-1 text-xs font-bold text-terminal-foreground opacity-0 transition-opacity group-hover:opacity-100">
           <ExternalLink className="size-3" />{t('open')}
         </span>
@@ -148,7 +143,7 @@ function MyEntry({ slug, e }: { slug: string; e: BuildEntry }) {
       <div className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm font-bold text-muted-foreground">{t('score')}</span>
-          <ScoreBadge score={e.score} large />
+          <span className="poster text-[2.2rem] leading-none tabular-nums">{e.score ?? '—'}<span className="text-base text-muted-foreground">/100</span></span>
         </div>
         {e.failure_reason === 'timeout' && <p className="text-sm text-warning">{t('timeout')}</p>}
         {e.failure_reason === 'no_results' && <p className="text-sm text-warning">{t('noResults')}</p>}

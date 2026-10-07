@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, ArrowRight, BadgeCheck, Bot, CheckCircle2, EyeOff, ExternalLink, Loader2, Monitor, Smartphone, Trash2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ScoreBadge, ScoreBreakdown, VoteButton, entryHref, siteUrl } from '@/components/build/build-gallery'
+import { ScoreBreakdown, ScoreSplit, VoteButton, entryHref, siteUrl } from '@/components/build/build-gallery'
 import { api } from '@/lib/api'
 import { FORMATS, tx } from '@/lib/build-kinds'
 import { errorText } from '@/lib/format'
@@ -67,43 +67,43 @@ export function EntryView({ slug, id }: { slug: string; id: string }) {
       <nav className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-muted-foreground">
         <Link href="/" className="hover:text-foreground">{t('allChallenges')}</Link>
         <span aria-hidden>/</span>
-        <Link href={`/c/${encodeURIComponent(c.slug)}`} className={cn('inline-flex items-center gap-1 hover:opacity-80', k.text)}>
-          <k.icon className="size-4" />{tx(c.title, t.locale)}
+        <Link href={`/c/${encodeURIComponent(c.slug)}`} className="inline-flex items-center gap-1.5 hover:text-foreground">
+          <span className={cn('flex size-5 items-center justify-center rounded-full text-terminal', k.bg)}><k.icon className="size-3" /></span>
+          {tx(c.title, t.locale)}
         </Link>
         <span aria-hidden>/</span>
         <span className="text-foreground">{t('solution')}</span>
       </nav>
 
-      <header className="relative overflow-hidden rounded-[20px] bg-terminal p-5 text-terminal-foreground sm:p-7">
-        <div aria-hidden className={cn('pointer-events-none absolute -right-20 -top-24 size-72 rounded-full blur-3xl', k.glow)} />
-        <div className="relative flex flex-wrap items-center gap-x-6 gap-y-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-terminal-foreground/60">
-              {e.place ? t('place', { place: e.place, of: p.of }) : t('notRanked')}
+      <header className="flex flex-wrap items-end gap-x-10 gap-y-6">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-muted-foreground">
+            {e.place ? t('place', { place: e.place, of: p.of }) : t('notRanked')}
+          </p>
+          <h1 className="poster mt-2 flex items-center gap-3 truncate text-[2.2rem] sm:text-[3.6rem]">
+            {e.reference && <BadgeCheck className="size-10 shrink-0" />}{e.reference ? t('reference') : e.handle}
+          </h1>
+          {e.reference ? (
+            <p className="mt-3 max-w-xl text-muted-foreground">{t('referenceHint')}</p>
+          ) : (
+            <p className="mt-3 inline-flex max-w-full items-center gap-2 font-semibold">
+              <Bot className="size-4 shrink-0 text-muted-foreground" />
+              <span className="text-muted-foreground">{t('agent')}:</span>
+              <span className="truncate">{e.made_with || t('agentUnknown')}</span>
             </p>
-            <h1 className="display mt-1 flex items-center gap-3 truncate text-[2.2rem] sm:text-[3rem]">
-              {e.reference && <BadgeCheck className="size-9 shrink-0 text-terminal-accent" />}{e.reference ? t('reference') : e.handle}
-            </h1>
-            {e.reference ? (
-              <p className="mt-2 max-w-xl text-sm text-terminal-foreground/70">{t('referenceHint')}</p>
-            ) : (
-              <p className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-bold">
-                <Bot className="size-4 shrink-0 text-terminal-accent" />
-                <span className="text-terminal-foreground/60">{t('agent')}:</span>
-                <span className="truncate">{e.made_with || t('agentUnknown')}</span>
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
+          )}
+        </div>
+        {e.status === 'done' && (
+          <div className="flex w-full flex-wrap items-end gap-5 sm:w-auto">
             {shown !== null && (
-              <div className="text-center">
-                <div className={cn('rounded-[18px] bg-gradient-to-br px-5 py-3 font-mono text-[2.6rem] font-bold leading-none text-white tabular-nums', k.gradient)}>{shown}</div>
-                <p className="mt-1.5 text-xs font-bold text-terminal-foreground/60">{e.reference ? t('testsLabel') : t('score')}</p>
+              <div className="min-w-56 flex-1 space-y-2.5">
+                <p className="poster text-[3.4rem] leading-none tabular-nums">{shown}<span className="text-xl text-muted-foreground">/{e.reference ? 60 : 100}</span></p>
+                <ScoreSplit tests={e.test_score ?? 0} votes={e.reference ? null : e.vote_score} />
               </div>
             )}
-            {e.status === 'done' && !e.reference && <VoteButton e={e} canVote={c.status === 'open'} onChange={() => void load()} big />}
+            {!e.reference && <VoteButton e={e} canVote={c.status === 'open'} onChange={() => void load()} big />}
           </div>
-        </div>
+        )}
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -125,16 +125,16 @@ export function EntryView({ slug, id }: { slug: string; id: string }) {
             </Button>
           </div>
           {mode === 'phone' ? (
-            <div className="flex justify-center rounded-[20px] bg-muted py-8">
-              <div className="overflow-hidden rounded-[44px] border-[12px] border-ink bg-ink shadow-2xl">
+            <div className={cn('flex justify-center rounded-[28px] py-10', k.bg)}>
+              <div className="overflow-hidden rounded-[44px] border-[12px] border-terminal bg-terminal shadow-2xl">
                 <iframe key={e.version} src={siteUrl(e)} title={e.handle} sandbox="allow-scripts allow-forms allow-modals allow-popups"
                   className="block h-[720px] w-[360px] max-w-[calc(100vw-5rem)] border-0 bg-white" />
               </div>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-[16px] border border-border bg-card shadow-sm">
+            <div className="overflow-hidden rounded-[20px] border border-border bg-card shadow-sm">
               <div className="flex items-center gap-1.5 border-b border-border bg-muted px-4 py-2.5">
-                <span className="size-3 rounded-full bg-pop-2/70" /><span className="size-3 rounded-full bg-pop-6/80" /><span className="size-3 rounded-full bg-pop-5/70" />
+                <span className="size-3 rounded-full bg-border-strong" /><span className="size-3 rounded-full bg-border-strong" /><span className="size-3 rounded-full bg-border-strong" />
               </div>
               <iframe key={e.version} src={siteUrl(e)} title={e.handle} sandbox="allow-scripts allow-forms allow-modals allow-popups"
                 className="block h-[72vh] min-h-[520px] w-full border-0 bg-white" />
@@ -152,11 +152,8 @@ export function EntryView({ slug, id }: { slug: string; id: string }) {
           )}
           {e.status === 'infra_error' && <p className="rounded-[14px] bg-destructive/10 p-4 text-sm font-semibold text-destructive">{t('infraError')}</p>}
           {e.status === 'done' && (
-            <div className="rounded-[14px] border border-border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="heading text-lg">{t('score')}</h2>
-                <ScoreBadge score={shown} />
-              </div>
+            <div className="rounded-[20px] border border-border bg-card p-5">
+              <h2 className="heading mb-4 text-lg">{t('score')}</h2>
               <ScoreBreakdown e={e} />
               <div className="mt-4 border-t border-border pt-4 text-sm">
                 {failed === undefined ? (
