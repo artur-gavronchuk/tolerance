@@ -8,7 +8,7 @@ import { type Language, languages, setLanguage } from './i18n';
 import { useStudioEvents } from './lib/events';
 import { queryClient, TRPCProvider, trpcClient, useTRPC } from './lib/trpc';
 import { ProjectView } from './project/ProjectView';
-import { applyTheme, storedTheme, type Theme, themes } from './theme';
+import { applyTheme, storedTheme, swatches, type Theme, themes } from './theme';
 
 const steps = ['map', 'plan', 'run', 'verify', 'review'] as const;
 
@@ -143,7 +143,7 @@ function Sidebar(props: {
 }) {
   const { t } = useTranslation();
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-panel">
+    <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-bg">
       {/* Leaves room for the macOS window buttons. */}
       <div className="drag flex h-10 shrink-0 items-center pl-20">
         <span className="text-[13px] font-semibold tracking-tight">Studio</span>
@@ -156,7 +156,7 @@ function Sidebar(props: {
           disabled={props.adding}
           title={t('sidebar.addProject')}
           aria-label={t('sidebar.addProject')}
-          className="grid h-5 w-5 place-items-center rounded text-muted hover:bg-line hover:text-ink disabled:opacity-40"
+          className="grid h-5 w-5 place-items-center rounded text-muted hover:bg-sel hover:text-ink disabled:opacity-40"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
             <path d="M6 1.5v9M1.5 6h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -174,7 +174,7 @@ function Sidebar(props: {
                 onClick={() => props.onSelect(p.id)}
                 aria-current={p.id === props.selectedId ? 'page' : undefined}
                 title={p.repoPath}
-                className="w-full truncate rounded-md px-1.5 py-1 text-left text-[13px] text-muted hover:bg-line/60 hover:text-ink aria-[current=page]:bg-line aria-[current=page]:text-ink"
+                className="w-full truncate rounded-md px-1.5 py-1 text-left text-[13px] text-muted hover:bg-panel hover:text-ink aria-[current=page]:bg-sel aria-[current=page]:text-ink"
               >
                 {p.name}
               </button>
@@ -192,11 +192,6 @@ function Sidebar(props: {
 function Preferences() {
   const { t, i18n } = useTranslation();
   const [theme, setThemeState] = useState<Theme>(storedTheme);
-  const themeLabel: Record<Theme, string> = {
-    system: t('settings.themeSystem'),
-    light: t('settings.themeLight'),
-    dark: t('settings.themeDark'),
-  };
   return (
     <>
       <Segmented
@@ -205,16 +200,72 @@ function Preferences() {
         options={languages.map((l) => ({ value: l, label: l.toUpperCase() }))}
         onChange={setLanguage}
       />
-      <Segmented
-        label={t('settings.theme')}
+      <ThemePicker
         value={theme}
-        options={themes.map((v) => ({ value: v, label: themeLabel[v] }))}
         onChange={(v) => {
           applyTheme(v);
           setThemeState(v);
         }}
       />
     </>
+  );
+}
+
+function ThemePicker(props: { value: Theme; onChange: (theme: Theme) => void }) {
+  const { t } = useTranslation();
+  const label = (theme: Theme) => t(`settings.themes.${theme}`);
+  return (
+    <fieldset className="space-y-1">
+      <legend className="text-[11px] text-faint">
+        {t('settings.theme')} <span className="text-muted">{label(props.value)}</span>
+      </legend>
+      <div className="flex justify-between">
+        {themes.map((theme) => (
+          <label
+            key={theme}
+            title={label(theme)}
+            className="grid h-6 w-6 cursor-default place-items-center rounded-full ring-1 ring-line has-checked:ring-2 has-checked:ring-accent has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent"
+          >
+            <input
+              type="radio"
+              name="theme"
+              value={theme}
+              checked={theme === props.value}
+              onChange={() => props.onChange(theme)}
+              aria-label={label(theme)}
+              className="sr-only"
+            />
+            <Swatch theme={theme} />
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+// A theme's background with its accent as a dot; "system" is split between Light and Dark.
+function Swatch({ theme }: { theme: Theme }) {
+  if (theme === 'system') {
+    return (
+      <span
+        aria-hidden="true"
+        className="h-5 w-5 rounded-full"
+        style={{
+          background: `linear-gradient(135deg, ${swatches.light.bg} 50%, ${swatches.dark.bg} 50%)`,
+          boxShadow: 'inset 0 0 0 1px rgb(128 128 128 / 0.35)',
+        }}
+      />
+    );
+  }
+  const { bg, accent } = swatches[theme];
+  return (
+    <span
+      aria-hidden="true"
+      className="grid h-5 w-5 place-items-center rounded-full"
+      style={{ background: bg, boxShadow: 'inset 0 0 0 1px rgb(128 128 128 / 0.35)' }}
+    >
+      <span className="h-2 w-2 rounded-full" style={{ background: accent }} />
+    </span>
   );
 }
 
@@ -227,11 +278,11 @@ function Segmented<T extends string>(props: {
   return (
     <fieldset className="space-y-1">
       <legend className="text-[11px] text-faint">{props.label}</legend>
-      <div className="flex rounded-md border border-line bg-bg p-0.5">
+      <div className="flex rounded-md border border-line bg-panel p-0.5">
         {props.options.map((o) => (
           <label
             key={o.value}
-            className="flex-1 cursor-default rounded px-1.5 py-0.5 text-center text-[12px] text-muted has-checked:bg-raised has-checked:text-ink has-checked:shadow-[0_0_0_1px_var(--line)] has-focus-visible:outline-2 has-focus-visible:outline-accent"
+            className="flex-1 cursor-default rounded px-1.5 py-0.5 text-center text-[12px] text-muted has-checked:bg-sel has-checked:text-ink has-focus-visible:outline-2 has-focus-visible:outline-accent"
           >
             <input
               type="radio"
@@ -271,7 +322,7 @@ function Welcome({ onAdd }: { onAdd: () => void }) {
           <button
             type="button"
             onClick={onAdd}
-            className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-ink hover:brightness-110"
+            className="shrink-0 rounded-md border border-accent px-3 py-1.5 text-[13px] font-medium text-accent-fg hover:bg-accent/10"
           >
             {t('welcome.addProject')}
           </button>

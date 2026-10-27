@@ -16,3 +16,4 @@
 - 2026-10-27: git через `node:child_process` `execFile`, без `execa` — одной зависимостью меньше, нужного хватает.
 - 2026-10-27: PATH берётся из login-shell при старте main: приложение из Dock/Finder иначе не видит `claude` и Homebrew.
 - 2026-10-27: `STUDIO_USER_DATA` переопределяет папку данных — e2e-тесты не трогают базу пользователя.
+- 2026-10-27: темы по образцу Gerry Themes (JetBrains): Light, Dark, Darcula, Oceanic, Storm, Violet + «Система» (Light/Dark). Палитры из архива gerry-themes v2022.1 (Apache-2.0, атрибуция в `THIRD_PARTY_NOTICES.md`); плоский общий фон сайдбара и контента, кнопки с обводкой акцентом. Цвет окна до загрузки — по системной теме.

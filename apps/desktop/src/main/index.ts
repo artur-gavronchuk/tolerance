@@ -20,7 +20,7 @@ function createWindow(): void {
     show: false,
     title: 'Studio',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#131417' : '#fbfbfc',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1f22' : '#ffffff',
     webPreferences: {
       preload: join(here, '../preload/index.cjs'),
       contextIsolation: true,

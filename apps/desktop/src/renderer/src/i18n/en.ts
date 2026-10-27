@@ -131,9 +131,15 @@ export const en: Messages = {
   settings: {
     language: 'Language',
     theme: 'Theme',
-    themeSystem: 'System',
-    themeLight: 'Light',
-    themeDark: 'Dark',
+    themes: {
+      system: 'System',
+      light: 'Light',
+      dark: 'Dark',
+      darcula: 'Darcula',
+      oceanic: 'Oceanic',
+      storm: 'Storm',
+      violet: 'Violet',
+    },
   },
   status: {
     runtime: 'Electron {{electron}}, Node {{node}}',
