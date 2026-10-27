@@ -1,5 +1,12 @@
 import type { StudioEvent } from '@studio/schema';
 
+/** A batch of terminal output from main; `seq` grows by one per batch of that terminal. */
+export interface PtyData {
+  terminalId: string;
+  seq: number;
+  data: string;
+}
+
 export interface IpcRequest {
   url: string;
   method: string;
@@ -21,6 +28,15 @@ export interface StudioBridge {
   trpc(request: IpcRequest): Promise<IpcResponse>;
   /** Subscribes to change notifications from main; returns an unsubscribe function. */
   onEvent(listener: (event: StudioEvent) => void): () => void;
+  /**
+   * Terminal I/O. It bypasses tRPC: keystrokes and output are many small messages, and output is
+   * pushed from main. Starting, listing and snapshots go through tRPC.
+   */
+  pty: {
+    onData(listener: (data: PtyData) => void): () => void;
+    write(terminalId: string, data: string): void;
+    resize(terminalId: string, cols: number, rows: number): void;
+  };
 }
 
 declare global {

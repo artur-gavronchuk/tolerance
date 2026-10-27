@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { fakeClaude } from './fake-claude';
 import { launchStudio, mutate } from './helpers';
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -32,7 +33,12 @@ test('a workspace is a fresh branch + worktree with setup output, deleted with a
   const freshMain = git(other, 'rev-parse', 'HEAD');
 
   const worktrees = realpathSync(mkdtempSync(join(tmpdir(), 'studio-e2e-worktrees-')));
-  const { app, win } = await launchStudio({ SHELL: '/nonexistent', STUDIO_WORKTREES_ROOT: worktrees });
+  // The workspace opens its agent tab: a fake claude, never the real one.
+  const { app, win } = await launchStudio({
+    PATH: `${fakeClaude()}:${process.env.PATH}`,
+    SHELL: '/nonexistent',
+    STUDIO_WORKTREES_ROOT: worktrees,
+  });
   const shots = process.env.STUDIO_SCREENSHOT_DIR;
 
   await mutate(win, 'projects.add', { path: repo });
@@ -54,6 +60,7 @@ test('a workspace is a fresh branch + worktree with setup output, deleted with a
   await expect(win.getByRole('heading', { name: 'Починить логин' })).toBeVisible();
   await expect(win.getByText('studio/ws/pochinit-login').first()).toBeVisible();
   await expect(win.getByText(`от origin/main · ${freshMain.slice(0, 7)}`)).toBeVisible();
+  await win.getByRole('tab', { name: 'Setup' }).click();
   await expect(win.getByTestId('setup-log')).toContainText('setup ok on studio/ws/pochinit-login');
   await expect(win.getByText('готово')).toBeVisible();
   if (shots) await win.screenshot({ path: `${shots}/workspace.png` });

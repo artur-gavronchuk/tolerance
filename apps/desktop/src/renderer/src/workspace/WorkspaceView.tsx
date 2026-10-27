@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTRPC } from '../lib/trpc';
 import { Notice, Section } from '../project/shared';
+import { WorkspaceTabs } from '../terminal/WorkspaceTabs';
+import { disposeXterm } from '../terminal/xterm-registry';
 import { relativeTime, useNow, userError } from './shared';
 
 export function WorkspaceView(props: {
@@ -21,6 +23,7 @@ export function WorkspaceView(props: {
   const defaults = useQuery(trpc.projects.openDefaults.queryOptions());
   const open = useMutation(trpc.workspaces.open.mutationOptions());
   const [confirming, setConfirming] = useState(false);
+  const terminals = useQuery(trpc.terminals.list.queryOptions({ workspaceId: workspace.id }));
 
   const openButton = (target: 'terminal' | 'editor' | 'folder', label: string, hint: string) => (
     <button
@@ -34,17 +37,25 @@ export function WorkspaceView(props: {
     </button>
   );
 
+  const removed = async () => {
+    // The tabs' xterms are kept for quick switching; a deleted workspace does not need them.
+    for (const { terminal } of terminals.data ?? []) disposeXterm(terminal.id);
+    props.onRemoved();
+  };
+
   return (
-    <div className="mx-auto w-full max-w-5xl px-8 pt-6 pb-16">
-      <header className="flex items-start justify-between gap-6">
-        <div className="min-w-0">
-          <p className="text-[12px] text-faint">{project.name}</p>
-          <h1 className="truncate text-[20px] font-semibold tracking-tight">{workspace.name}</h1>
-          <p className="mt-0.5 truncate font-mono text-[12px] select-text">{workspace.branch}</p>
-          <p className="mt-0.5 truncate font-mono text-[12px] text-muted select-text">{workspace.path}</p>
-          <p className="mt-1 text-[12px] text-faint">
+    <div className="flex h-full flex-col">
+      <header className="flex shrink-0 items-center justify-between gap-6 px-6 pt-3 pb-2.5">
+        <div className="min-w-0" title={workspace.path}>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="shrink-0 text-[12px] text-faint">{project.name} /</span>
+            <h1 className="truncate text-[16px] font-semibold tracking-tight">{workspace.name}</h1>
+            <span className="truncate font-mono text-[12px] text-muted select-text">{workspace.branch}</span>
+          </div>
+          <p className="mt-0.5 truncate text-[11.5px] text-faint">
             {t('workspace.base', { ref: workspace.baseRef, sha: workspace.baseSha.slice(0, 7) })},{' '}
-            {t('workspace.created', { time: relativeTime(workspace.createdAt, now, i18n.language) })}
+            {t('workspace.created', { time: relativeTime(workspace.createdAt, now, i18n.language) })} ·{' '}
+            <span className="font-mono select-text">{workspace.path}</span>
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -70,29 +81,35 @@ export function WorkspaceView(props: {
         </div>
       </header>
 
-      <div className="mt-4">
-        {open.error && <Notice tone="error">{userError(t, open.error)}</Notice>}
-        {props.missing && <Notice tone="warn">{t('workspace.missing')}</Notice>}
-        {props.fetchError && (
-          <Notice tone="warn">
-            {t('workspace.fetchFailed', {
-              branch: project.defaultBranch,
-              ref: workspace.baseRef,
-              error: props.fetchError,
-            })}
-          </Notice>
-        )}
-        {confirming && (
-          <RemoveConfirm
-            workspace={workspace}
-            onCancel={() => setConfirming(false)}
-            onRemoved={props.onRemoved}
-          />
-        )}
-      </div>
-      <p className="mt-2 text-[12.5px] text-muted">{t('workspace.lead')}</p>
+      {(open.error || props.missing || props.fetchError || confirming) && (
+        <div className="shrink-0 px-6">
+          {open.error && <Notice tone="error">{userError(t, open.error)}</Notice>}
+          {props.missing && <Notice tone="warn">{t('workspace.missing')}</Notice>}
+          {props.fetchError && (
+            <Notice tone="warn">
+              {t('workspace.fetchFailed', {
+                branch: project.defaultBranch,
+                ref: workspace.baseRef,
+                error: props.fetchError,
+              })}
+            </Notice>
+          )}
+          {confirming && (
+            <RemoveConfirm
+              workspace={workspace}
+              onCancel={() => setConfirming(false)}
+              onRemoved={() => void removed()}
+            />
+          )}
+        </div>
+      )}
 
-      <SetupSection project={project} workspace={workspace} />
+      <WorkspaceTabs
+        project={project}
+        workspace={workspace}
+        missing={props.missing}
+        setup={<SetupSection project={project} workspace={workspace} />}
+      />
     </div>
   );
 }

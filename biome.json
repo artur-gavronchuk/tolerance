@@ -8,7 +8,8 @@
       "!**/node_modules",
       "!**/test-results",
       "!**/playwright-report",
-      "!docs/SPEC.md"
+      "!docs/SPEC.md",
+      "!pnpm-lock.yaml"
     ]
   },
   "formatter": {

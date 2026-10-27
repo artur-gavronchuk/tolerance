@@ -20,6 +20,8 @@ import {
   RunStatus,
   SetupStatus,
   type Task,
+  type Terminal,
+  TerminalKind,
   type Workspace,
 } from '@studio/schema';
 import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
@@ -35,6 +37,7 @@ import {
   repoMaps,
   runs,
   tasks,
+  terminals,
   workspaces,
 } from './tables';
 
@@ -112,6 +115,7 @@ export class Db {
       allowedCommands: [],
       editorCommand: null,
       terminalApp: null,
+      agentCommand: null,
       createdAt: Date.now(),
     };
     await this.orm.insert(projects).values(project);
@@ -383,6 +387,52 @@ export class Db {
       .where(eq(workspaces.setupStatus, 'running'));
   }
 
+  // ── workspace terminals ──
+
+  async listTerminals(workspaceId: string): Promise<Terminal[]> {
+    const rows = await this.orm
+      .select()
+      .from(terminals)
+      .where(eq(terminals.workspaceId, workspaceId))
+      .orderBy(asc(terminals.position));
+    return rows.map(toTerminal);
+  }
+
+  async getTerminal(id: string): Promise<Terminal | undefined> {
+    const [row] = await this.orm.select().from(terminals).where(eq(terminals.id, id));
+    return row && toTerminal(row);
+  }
+
+  /** Adds a tab after the last one. */
+  async addTerminal(input: {
+    workspaceId: string;
+    kind: TerminalKind;
+    sessionId?: string | null;
+  }): Promise<Terminal> {
+    const [last] = await this.orm
+      .select({ position: sql<number>`coalesce(max(${terminals.position}), -1)` })
+      .from(terminals)
+      .where(eq(terminals.workspaceId, input.workspaceId));
+    const terminal: Terminal = {
+      id: randomUUID(),
+      workspaceId: input.workspaceId,
+      kind: input.kind,
+      position: (last?.position ?? -1) + 1,
+      sessionId: input.sessionId ?? null,
+      createdAt: Date.now(),
+    };
+    await this.orm.insert(terminals).values(terminal);
+    return terminal;
+  }
+
+  async setTerminalSession(id: string, sessionId: string | null): Promise<void> {
+    await this.orm.update(terminals).set({ sessionId }).where(eq(terminals.id, id));
+  }
+
+  async removeTerminal(id: string): Promise<void> {
+    await this.orm.delete(terminals).where(eq(terminals.id, id));
+  }
+
   // ── runs ──
 
   async startRun(input: {
@@ -474,6 +524,10 @@ export class Db {
       event: NormalizedEvent.parse(JSON.parse(r.payload)),
     }));
   }
+}
+
+function toTerminal(row: typeof terminals.$inferSelect): Terminal {
+  return { ...row, kind: TerminalKind.parse(row.kind) };
 }
 
 function toWorkspace(row: typeof workspaces.$inferSelect): Workspace {

@@ -26,6 +26,7 @@ import {
   openInEditor,
   openInTerminal,
 } from './open-in';
+import { DEFAULT_AGENT, TerminalStateError, type Terminals } from './terminals/terminals';
 
 export interface Context {
   db: Db;
@@ -34,6 +35,7 @@ export interface Context {
   planner: Planner;
   implementer: Implementer;
   workspaces: Workspaces;
+  terminals: Terminals;
 }
 
 const t = initTRPC.context<Context>().create({ isServer: true });
@@ -72,6 +74,12 @@ async function requireWorkspace(db: Db, id: string) {
   return workspace;
 }
 
+async function requireTerminal(db: Db, id: string) {
+  const terminal = await db.getTerminal(id);
+  if (!terminal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Terminal not found' });
+  return terminal;
+}
+
 /** Errors the user can act on keep their code as the message; the UI translates it. */
 async function asUserError<T>(work: () => Promise<T>): Promise<T> {
   try {
@@ -80,6 +88,9 @@ async function asUserError<T>(work: () => Promise<T>): Promise<T> {
     if (error instanceof WorkspaceError) {
       const code = error.code === 'setup_running' ? 'CONFLICT' : 'BAD_REQUEST';
       throw new TRPCError({ code, message: `workspace.${error.code}`, cause: error });
+    }
+    if (error instanceof TerminalStateError) {
+      throw new TRPCError({ code: 'CONFLICT', message: error.message, cause: error });
     }
     if (error instanceof OpenInError) {
       throw new TRPCError({
@@ -155,6 +166,9 @@ export const router = t.router({
         const plan = await ctx.db.latestPlan(request.id);
         if (plan) ctx.implementer.cancel(plan.id);
       }
+      for (const workspace of await ctx.db.listWorkspaces(input.projectId)) {
+        await ctx.terminals.stopWorkspace(workspace.id);
+      }
       // Like task worktrees, workspace folders and branches stay on disk; only Studio forgets them.
       await ctx.db.removeProject(input.projectId);
     }),
@@ -172,13 +186,18 @@ export const router = t.router({
         const clean = (v: string | null) => (v?.trim() ? v.trim() : null);
         await ctx.db.updateProjectSettings(input.projectId, {
           setupCommand: clean(input.settings.setupCommand),
+          agentCommand: clean(input.settings.agentCommand),
           editorCommand: clean(input.settings.editorCommand),
           terminalApp: clean(input.settings.terminalApp),
         });
       }),
 
     /** What "open in editor / terminal" uses when the project sets nothing. */
-    openDefaults: t.procedure.query(() => ({ editor: DEFAULT_EDITOR, terminal: DEFAULT_TERMINAL })),
+    openDefaults: t.procedure.query(() => ({
+      editor: DEFAULT_EDITOR,
+      terminal: DEFAULT_TERMINAL,
+      agent: DEFAULT_AGENT,
+    })),
   }),
 
   /** Daily mode: a branch + worktree the developer works in by hand. */
@@ -216,6 +235,7 @@ export const router = t.router({
     remove: t.procedure.input(z.object({ workspaceId: z.string() })).mutation(async ({ ctx, input }) => {
       const workspace = await requireWorkspace(ctx.db, input.workspaceId);
       const project = await requireProject(ctx.db, workspace.projectId);
+      await ctx.terminals.stopWorkspace(workspace.id);
       await ctx.workspaces.remove(project, workspace);
     }),
 
@@ -384,6 +404,47 @@ export const router = t.router({
       const project = await requireProject(ctx.db, plan.projectId);
       await asConflict(() => ctx.implementer.removeWorktree(project, task));
       notifyRequest(plan);
+    }),
+  }),
+
+  /** Terminal tabs of a workspace (daily mode, D2). Their I/O goes over `studio:pty:*` IPC. */
+  terminals: t.router({
+    list: t.procedure
+      .input(z.object({ workspaceId: z.string() }))
+      .query(({ ctx, input }) => ctx.terminals.list(input.workspaceId)),
+
+    /** The agent and shell tabs, the first time a workspace is opened. */
+    ensureDefaults: t.procedure
+      .input(z.object({ workspaceId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        await requireWorkspace(ctx.db, input.workspaceId);
+        await ctx.terminals.ensureDefaults(input.workspaceId);
+      }),
+
+    addShell: t.procedure.input(z.object({ workspaceId: z.string() })).mutation(async ({ ctx, input }) => {
+      await requireWorkspace(ctx.db, input.workspaceId);
+      return ctx.terminals.addShell(input.workspaceId);
+    }),
+
+    start: t.procedure
+      .input(z.object({ terminalId: z.string(), cols: z.number().int(), rows: z.number().int() }))
+      .mutation(async ({ ctx, input }) => {
+        const terminal = await requireTerminal(ctx.db, input.terminalId);
+        const workspace = await requireWorkspace(ctx.db, terminal.workspaceId);
+        const project = await requireProject(ctx.db, workspace.projectId);
+        await asUserError(() =>
+          ctx.terminals.start({ project, workspace, terminal }, { cols: input.cols, rows: input.rows }),
+        );
+      }),
+
+    /** Buffered output to draw a tab again, with the batch number it ends at. */
+    snapshot: t.procedure
+      .input(z.object({ terminalId: z.string() }))
+      .query(({ ctx, input }) => ctx.terminals.snapshot(input.terminalId)),
+
+    close: t.procedure.input(z.object({ terminalId: z.string() })).mutation(async ({ ctx, input }) => {
+      const terminal = await requireTerminal(ctx.db, input.terminalId);
+      await ctx.terminals.close(terminal);
     }),
   }),
 
