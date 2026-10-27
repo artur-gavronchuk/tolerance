@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { NormalizedEvent } from '@studio/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AgentFailedError, runClaudeStructured } from '../src';
+import { AgentFailedError, bashRules, runClaudeImplement, runClaudeStructured } from '../src';
 
 const fake = fileURLToPath(new URL('./fake-claude.mjs', import.meta.url));
 
@@ -90,5 +90,65 @@ describe('runClaudeStructured', () => {
         onEvent: () => {},
       }),
     ).rejects.toThrow(AgentFailedError);
+  });
+
+  it('implements in the worktree: edits inside it, no shell by default, never bypassing permissions', async () => {
+    const events: NormalizedEvent[] = [];
+    const result = await runClaudeImplement({
+      cwd: dir,
+      prompt: 'do T1',
+      allowedCommands: [],
+      command: fake,
+      env: env([
+        {
+          type: 'assistant',
+          message: { content: [{ type: 'tool_use', name: 'Edit', input: { file_path: '$CWD/README.md' } }] },
+        },
+        {
+          type: 'result',
+          subtype: 'success',
+          session_id: 's2',
+          total_cost_usd: 0.5,
+          result: 'Added the section.',
+          permission_denials: [{ tool_name: 'Bash', tool_input: { command: 'npm test' } }],
+        },
+      ]),
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(result).toEqual({ sessionId: 's2', costUsd: 0.5, finalMessage: 'Added the section.' });
+    expect(events).toEqual([
+      { type: 'tool_call', name: 'Edit', kind: 'edit', target: 'README.md' },
+      { type: 'permission_denied', name: 'Bash', target: 'npm test' },
+      { type: 'usage', costUsd: 0.5 },
+      { type: 'turn_end' },
+    ]);
+
+    const args: string[] = JSON.parse(readFileSync(join(dir, 'args.jsonl'), 'utf8'));
+    const allowed = args.slice(args.indexOf('--allowedTools') + 1, args.indexOf('--disallowedTools'));
+    expect(allowed).toEqual(['Read', 'Glob', 'Grep', 'LS', 'Edit(./**)', 'Write(./**)']);
+    expect(args.slice(args.indexOf('--disallowedTools') + 1, args.indexOf('--setting-sources'))).toContain(
+      'Bash',
+    );
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('dontAsk');
+    expect(args[args.indexOf('--permission-prompts') + 1]).toBe('none');
+    expect(args.join(' ')).not.toMatch(/dangerously|bypassPermissions/);
+    expect(args).not.toContain('--json-schema');
+    expect(args[args.indexOf('--setting-sources') + 1]).toBe('project,local');
+  });
+
+  it('allows only the project allowlist in the shell', async () => {
+    await runClaudeImplement({
+      cwd: dir,
+      prompt: 'p',
+      allowedCommands: ['pnpm test', ' go test ./... '],
+      command: fake,
+      env: env([{ type: 'result', subtype: 'success', result: '' }]),
+      onEvent: () => {},
+    });
+    const args: string[] = JSON.parse(readFileSync(join(dir, 'args.jsonl'), 'utf8'));
+    expect(args).toEqual(expect.arrayContaining(['Bash(pnpm test:*)', 'Bash(go test ./...:*)']));
+    expect(args.slice(args.indexOf('--disallowedTools') + 1)).not.toContain('Bash');
+    expect(bashRules(['', 'rm -rf (x)', 'a\nb', 'make'])).toEqual(['Bash(make:*)']);
   });
 });

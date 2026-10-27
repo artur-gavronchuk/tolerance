@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from '@studio/db';
-import { Assessor, Mapper, Planner } from '@studio/engine';
+import { Assessor, Implementer, Mapper, Planner } from '@studio/engine';
 import { app, BrowserWindow, nativeTheme, shell } from 'electron';
 import { broadcast, serveTrpc } from './ipc';
 import { adoptLoginShellPath } from './shell-path';
@@ -56,7 +56,8 @@ app.whenReady().then(async () => {
   const mapper = new Mapper({ db, notify: broadcast });
   const assessor = new Assessor({ db, notify: broadcast });
   const planner = new Planner({ db, notify: broadcast });
-  serveTrpc(() => ({ db, mapper, assessor, planner }));
+  const implementer = new Implementer({ db, notify: broadcast });
+  serveTrpc(() => ({ db, mapper, assessor, planner, implementer }));
 
   createWindow();
   app.on('activate', () => {

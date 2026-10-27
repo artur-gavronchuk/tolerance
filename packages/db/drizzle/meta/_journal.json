@@ -22,6 +22,13 @@
       "when": 1793111550287,
       "tag": "0002_wet_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793113137607,
+      "tag": "0003_safe_iron_fist",
+      "breakpoints": true
     }
   ]
 }

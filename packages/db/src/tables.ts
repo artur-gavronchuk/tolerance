@@ -1,4 +1,13 @@
-import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import {
+  type AnySQLiteColumn,
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 export const projects = sqliteTable('projects', {
   id: text('id').primaryKey(),
@@ -7,6 +16,7 @@ export const projects = sqliteTable('projects', {
   defaultBranch: text('default_branch').notNull(),
   testCommand: text('test_command'),
   setupCommand: text('setup_command'),
+  allowedCommands: text('allowed_commands', { mode: 'json' }).$type<string[]>().notNull().default([]),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -45,17 +55,22 @@ export const runs = sqliteTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     requestId: text('request_id').references(() => changeRequests.id, { onDelete: 'cascade' }),
+    // Typed by hand: tasks → plans → runs reference each other.
+    taskId: text('task_id').references((): AnySQLiteColumn => tasks.id, { onDelete: 'cascade' }),
     kind: text('kind').notNull(),
     agentId: text('agent_id').notNull(),
     status: text('status').notNull(),
     error: text('error'),
     costUsd: real('cost_usd'),
+    beforeSha: text('before_sha'),
+    afterSha: text('after_sha'),
     startedAt: integer('started_at').notNull(),
     endedAt: integer('ended_at'),
   },
   (t) => [
     index('runs_project_idx').on(t.projectId, t.kind, t.startedAt),
     index('runs_request_idx').on(t.requestId, t.startedAt),
+    index('runs_task_idx').on(t.taskId, t.startedAt),
   ],
 );
 
@@ -123,4 +138,20 @@ export const planVariants = sqliteTable(
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('plan_variants_plan_idx').on(t.planId, t.position)],
+);
+
+export const tasks = sqliteTable(
+  'tasks',
+  {
+    id: text('id').primaryKey(),
+    planId: text('plan_id')
+      .notNull()
+      .references(() => plans.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    branch: text('branch').notNull(),
+    worktreePath: text('worktree_path'),
+    baseRef: text('base_ref').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [uniqueIndex('tasks_plan_key_idx').on(t.planId, t.key)],
 );

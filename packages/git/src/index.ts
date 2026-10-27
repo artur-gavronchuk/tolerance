@@ -1,18 +1,9 @@
-import { execFile } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
-import { promisify } from 'node:util';
+import { git } from './exec';
 
-const run = promisify(execFile);
-
-/** Runs system git in `cwd` and returns trimmed stdout. Output is in English and stable for parsing. */
-export async function git(cwd: string, args: string[]): Promise<string> {
-  const { stdout } = await run('git', args, {
-    cwd,
-    maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0' },
-  });
-  return stdout.trimEnd();
-}
+export * from './diff';
+export { git } from './exec';
+export * from './worktree';
 
 export class NotAGitRepoError extends Error {
   constructor(readonly path: string) {

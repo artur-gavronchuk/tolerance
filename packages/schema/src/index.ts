@@ -9,6 +9,8 @@ export const Project = z.object({
   defaultBranch: z.string(),
   testCommand: z.string().nullable(),
   setupCommand: z.string().nullable(),
+  /** Command prefixes an implementing agent may run, e.g. "pnpm test" (SPEC §3.3). Empty: no shell. */
+  allowedCommands: z.array(z.string()),
   createdAt: z.number(),
 });
 export type Project = z.infer<typeof Project>;
@@ -357,6 +359,23 @@ export type Plan = z.infer<typeof Plan>;
 export const PlanWithVariants = Plan.extend({ variants: z.array(PlanVariant) });
 export type PlanWithVariants = z.infer<typeof PlanWithVariants>;
 
+/**
+ * A task of the approved variant once it has been started: where it is worked on (SPEC §3.1, §3.4).
+ * What to do stays in the variant's TaskSpecJson; how it went is in its implement runs.
+ */
+export const Task = z.object({
+  id: z.string(),
+  planId: z.string(),
+  key: z.string(),
+  branch: z.string(),
+  /** Null once the worktree is removed; the branch stays. */
+  worktreePath: z.string().nullable(),
+  /** The user's branch the task was branched from; diffs are taken from the merge-base with it. */
+  baseRef: z.string(),
+  createdAt: z.number(),
+});
+export type Task = z.infer<typeof Task>;
+
 // ── Runs and agent events ───────────────────────────────────────────────────
 
 export const RunKind = z.enum([
@@ -378,11 +397,16 @@ export const Run = z.object({
   projectId: z.string(),
   /** The change request this run works on; null for project-wide runs such as the map. */
   requestId: z.string().nullable(),
+  /** The plan task an implement run works on. */
+  taskId: z.string().nullable(),
   kind: RunKind,
   agentId: z.string(),
   status: RunStatus,
   error: z.string().nullable(),
   costUsd: z.number().nullable(),
+  /** Worktree head before and after an implement run (SPEC §3.1). */
+  beforeSha: z.string().nullable(),
+  afterSha: z.string().nullable(),
   startedAt: z.number(),
   endedAt: z.number().nullable(),
 });
@@ -402,6 +426,8 @@ export const NormalizedEvent = z.discriminatedUnion('type', [
     /** Short human-readable target: a path, a pattern or a command. */
     target: z.string(),
   }),
+  /** A tool call the run's permissions refused (SPEC §3.3): shown so the user sees what the agent could not do. */
+  z.object({ type: z.literal('permission_denied'), name: z.string(), target: z.string() }),
   z.object({ type: z.literal('usage'), costUsd: z.number() }),
   z.object({ type: z.literal('error'), message: z.string() }),
   z.object({ type: z.literal('turn_end') }),

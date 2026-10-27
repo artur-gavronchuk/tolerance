@@ -90,4 +90,58 @@ describe('Db', () => {
     await db.markInterruptedRuns();
     expect((await db.latestRun(project.id, 'map'))?.status).toBe('interrupted');
   });
+
+  it('stores started plan tasks and implement runs with their heads, and deletes them with the request', async () => {
+    const project = await db.addProject({ name: 'p', repoPath: '/tmp/p', defaultBranch: 'main' });
+    expect(project.allowedCommands).toEqual([]);
+    expect((await db.getProject(project.id))?.allowedCommands).toEqual([]);
+    const request = await db.addRequest({ projectId: project.id, text: 'README' });
+    const planRun = await db.startRun({
+      projectId: project.id,
+      requestId: request.id,
+      kind: 'plan',
+      agentId: 'claude',
+    });
+    const plan = await db.addPlan({
+      projectId: project.id,
+      requestId: request.id,
+      runId: planRun.id,
+      variants: [],
+    });
+    await db.setPlanStatus(plan.id, 'executing');
+    expect((await db.getPlan(plan.id))?.status).toBe('executing');
+
+    const task = await db.addTask({
+      planId: plan.id,
+      key: 'T1',
+      branch: 'studio/abc/T1-readme',
+      worktreePath: '/wt/T1',
+      baseRef: 'main',
+    });
+    expect(await db.findTask(plan.id, 'T1')).toEqual(task);
+    await expect(db.addTask({ ...task })).rejects.toThrow();
+
+    const run = await db.startRun({
+      projectId: project.id,
+      requestId: request.id,
+      taskId: task.id,
+      kind: 'implement',
+      agentId: 'claude',
+    });
+    await db.setRunShas(run.id, { beforeSha: 'a1' });
+    await db.setRunShas(run.id, { afterSha: 'b2' });
+    expect(await db.latestTaskRun(task.id)).toMatchObject({
+      taskId: task.id,
+      beforeSha: 'a1',
+      afterSha: 'b2',
+    });
+
+    await db.setTaskWorktree(task.id, null);
+    expect((await db.getTask(task.id))?.worktreePath).toBeNull();
+    expect(await db.listTasks(plan.id)).toHaveLength(1);
+
+    await db.removeRequest(request.id);
+    expect(await db.getTask(task.id)).toBeUndefined();
+    expect(await db.latestTaskRun(task.id)).toBeUndefined();
+  });
 });

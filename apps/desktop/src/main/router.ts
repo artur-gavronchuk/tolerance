@@ -1,7 +1,14 @@
 import { basename } from 'node:path';
 import { detectClaude } from '@studio/agents';
 import type { Db } from '@studio/db';
-import { type Assessor, type Mapper, type Planner, scanRepo } from '@studio/engine';
+import {
+  type Assessor,
+  type Implementer,
+  type Mapper,
+  type Planner,
+  scanRepo,
+  TaskStateError,
+} from '@studio/engine';
 import { defaultBranch, NotAGitRepoError, repoRoot } from '@studio/git';
 import { type Plan, planVariantProblems } from '@studio/schema';
 import { initTRPC, TRPCError } from '@trpc/server';
@@ -14,6 +21,7 @@ export interface Context {
   mapper: Mapper;
   assessor: Assessor;
   planner: Planner;
+  implementer: Implementer;
 }
 
 const t = initTRPC.context<Context>().create({ isServer: true });
@@ -32,6 +40,30 @@ async function requireProject(db: Db, id: string) {
   const project = await db.getProject(id);
   if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
   return project;
+}
+
+async function requireTask(db: Db, id: string) {
+  const task = await db.getTask(id);
+  if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+  return task;
+}
+
+async function requirePlan(db: Db, id: string) {
+  const plan = await db.getPlan(id);
+  if (!plan) throw new TRPCError({ code: 'NOT_FOUND', message: 'Plan not found' });
+  return plan;
+}
+
+/** A task that cannot be started or cleaned up right now is a conflict, not a server error. */
+async function asConflict<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof TaskStateError) {
+      throw new TRPCError({ code: 'CONFLICT', message: error.message, cause: error });
+    }
+    throw error;
+  }
 }
 
 function notifyRequest(plan: Pick<Plan, 'projectId' | 'requestId'>) {
@@ -82,6 +114,8 @@ export const router = t.router({
       for (const request of await ctx.db.listRequests(input.projectId)) {
         ctx.assessor.cancel(request.id);
         ctx.planner.cancel(request.id);
+        const plan = await ctx.db.latestPlan(request.id);
+        if (plan) ctx.implementer.cancel(plan.id);
       }
       await ctx.db.removeProject(input.projectId);
     }),
@@ -111,13 +145,21 @@ export const router = t.router({
     list: t.procedure.input(projectInput).query(async ({ ctx, input }) => {
       const requests = await ctx.db.listRequests(input.projectId);
       return Promise.all(
-        requests.map(async (request) => ({
-          request,
-          assessment: (await ctx.db.latestAssessment(request.id)) ?? null,
-          run: (await ctx.db.latestRequestRun(request.id, 'assess')) ?? null,
-          plan: (await ctx.db.latestPlan(request.id)) ?? null,
-          planRun: (await ctx.db.latestRequestRun(request.id, 'plan')) ?? null,
-        })),
+        requests.map(async (request) => {
+          const plan = (await ctx.db.latestPlan(request.id)) ?? null;
+          const tasks = plan ? await ctx.db.listTasks(plan.id) : [];
+          return {
+            request,
+            assessment: (await ctx.db.latestAssessment(request.id)) ?? null,
+            run: (await ctx.db.latestRequestRun(request.id, 'assess')) ?? null,
+            plan,
+            planRun: (await ctx.db.latestRequestRun(request.id, 'plan')) ?? null,
+            /** Started tasks of the approved variant, each with its latest implement run. */
+            tasks: await Promise.all(
+              tasks.map(async (task) => ({ task, run: (await ctx.db.latestTaskRun(task.id)) ?? null })),
+            ),
+          };
+        }),
       );
     }),
 
@@ -146,6 +188,8 @@ export const router = t.router({
     remove: t.procedure.input(z.object({ requestId: z.string() })).mutation(async ({ ctx, input }) => {
       ctx.assessor.cancel(input.requestId);
       ctx.planner.cancel(input.requestId);
+      const plan = await ctx.db.latestPlan(input.requestId);
+      if (plan) ctx.implementer.cancel(plan.id);
       await ctx.db.removeRequest(input.requestId);
     }),
   }),
@@ -198,6 +242,39 @@ export const router = t.router({
         throw new TRPCError({ code: 'CONFLICT', message: 'Only an approved plan can be reopened' });
       }
       await ctx.db.reopenPlan(plan.id);
+      notifyRequest(plan);
+    }),
+  }),
+
+  /** Tasks of an approved plan, run by hand one at a time, each in its own worktree (SPEC §3.4). */
+  tasks: t.router({
+    run: t.procedure
+      .input(z.object({ planId: z.string(), taskKey: z.string(), language }))
+      .mutation(async ({ ctx, input }) => {
+        const plan = await requirePlan(ctx.db, input.planId);
+        const project = await requireProject(ctx.db, plan.projectId);
+        return asConflict(() =>
+          ctx.implementer.start(project, plan, input.taskKey, { language: input.language }),
+        );
+      }),
+
+    cancel: t.procedure
+      .input(z.object({ planId: z.string() }))
+      .mutation(({ ctx, input }) => ctx.implementer.cancel(input.planId)),
+
+    /** Changed files and the unified diff from the merge-base with the user's branch. */
+    diff: t.procedure.input(z.object({ taskId: z.string() })).query(async ({ ctx, input }) => {
+      const task = await requireTask(ctx.db, input.taskId);
+      const plan = await requirePlan(ctx.db, task.planId);
+      const project = await requireProject(ctx.db, plan.projectId);
+      return ctx.implementer.diff(project, task);
+    }),
+
+    removeWorktree: t.procedure.input(z.object({ taskId: z.string() })).mutation(async ({ ctx, input }) => {
+      const task = await requireTask(ctx.db, input.taskId);
+      const plan = await requirePlan(ctx.db, task.planId);
+      const project = await requireProject(ctx.db, plan.projectId);
+      await asConflict(() => ctx.implementer.removeWorktree(project, task));
       notifyRequest(plan);
     }),
   }),

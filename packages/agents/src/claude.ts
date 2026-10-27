@@ -67,7 +67,23 @@ function withoutMetaSchema(schema: object): object {
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 
 export async function runClaudeStructured(opts: StructuredRunOptions): Promise<StructuredRunResult> {
-  const child = spawn(opts.command ?? 'claude', claudeReadOnlyArgs(opts), {
+  const result = await runClaudeProcess(opts, claudeReadOnlyArgs(opts));
+  return {
+    output: result.structured_output ?? null,
+    sessionId: result.session_id ?? null,
+    costUsd: result.total_cost_usd ?? 0,
+  };
+}
+
+/**
+ * Spawns `claude` with `args`, streams its normalised events and returns the successful `result`
+ * message. Throws AgentCancelledError when `signal` aborts it, AgentFailedError otherwise.
+ */
+async function runClaudeProcess(
+  opts: Pick<StructuredRunOptions, 'cwd' | 'onEvent' | 'signal' | 'command' | 'env'>,
+  args: string[],
+): Promise<ClaudeStreamMessage> {
+  const child = spawn(opts.command ?? 'claude', args, {
     cwd: opts.cwd,
     env: opts.env ?? process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -81,7 +97,7 @@ export async function runClaudeStructured(opts: StructuredRunOptions): Promise<S
   });
 
   const normalizer = new ClaudeStreamNormalizer(opts.cwd);
-  let result: StructuredRunResult | null = null;
+  let result: ClaudeStreamMessage | null = null;
   let failure: string | null = null;
 
   for await (const line of createInterface({ input: child.stdout })) {
@@ -97,11 +113,7 @@ export async function runClaudeStructured(opts: StructuredRunOptions): Promise<S
       if (message.is_error || message.subtype !== 'success') {
         failure = message.result || message.subtype || 'agent reported an error';
       } else {
-        result = {
-          output: message.structured_output ?? null,
-          sessionId: message.session_id ?? null,
-          costUsd: message.total_cost_usd ?? 0,
-        };
+        result = message;
       }
     }
   }
@@ -117,6 +129,82 @@ export async function runClaudeStructured(opts: StructuredRunOptions): Promise<S
   throw new AgentFailedError(
     failure ?? `claude exited with code ${exitCode}: ${stderr.trim() || 'no output'}`,
   );
+}
+
+// ── implement: edits inside the worktree, commands only from the project allowlist ──
+
+export interface ImplementRunOptions {
+  /** The task worktree; file edits are confined to it. */
+  cwd: string;
+  prompt: string;
+  model?: string;
+  /**
+   * Command prefixes the project allows, e.g. "pnpm test" (SPEC §3.3). Empty means no shell at all.
+   * Anything else the agent tries is denied, not asked: headless runs have no one to ask yet.
+   */
+  allowedCommands: string[];
+  onEvent: (event: NormalizedEvent) => void;
+  signal?: AbortSignal;
+  command?: string;
+  env?: NodeJS.ProcessEnv;
+}
+
+export interface ImplementRunResult {
+  sessionId: string | null;
+  costUsd: number;
+  /** The agent's last message: what it did, and why it touched files outside the scope, if it did. */
+  finalMessage: string;
+}
+
+/** Read and edit anywhere inside the working directory; nothing else without an explicit rule. */
+const IMPLEMENT_TOOLS = ['Read', 'Glob', 'Grep', 'LS', 'Edit(./**)', 'Write(./**)'];
+const IMPLEMENT_DENIED = ['WebFetch', 'WebSearch', 'Task', 'NotebookEdit'];
+
+/** "pnpm test" → `Bash(pnpm test:*)`. Entries that would break the rule syntax are dropped. */
+export function bashRules(commands: string[]): string[] {
+  return commands
+    .map((c) => c.trim())
+    .filter((c) => c && !/[()\n\r]/.test(c))
+    .map((c) => `Bash(${c}:*)`);
+}
+
+export function claudeImplementArgs(
+  opts: Pick<ImplementRunOptions, 'prompt' | 'model' | 'allowedCommands'>,
+): string[] {
+  const bash = bashRules(opts.allowedCommands);
+  return [
+    '-p',
+    opts.prompt,
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--model',
+    opts.model ?? 'sonnet',
+    // Pre-approved rules only; whatever would need a person's answer is refused (never bypassed).
+    '--permission-mode',
+    'dontAsk',
+    '--permission-prompts',
+    'none',
+    '--allowedTools',
+    ...IMPLEMENT_TOOLS,
+    ...bash,
+    '--disallowedTools',
+    ...IMPLEMENT_DENIED,
+    ...(bash.length === 0 ? ['Bash'] : []),
+    '--setting-sources',
+    'project,local',
+    '--strict-mcp-config',
+  ];
+}
+
+/** Claude Code works on a task in its worktree (SPEC §3.3, implement). */
+export async function runClaudeImplement(opts: ImplementRunOptions): Promise<ImplementRunResult> {
+  const result = await runClaudeProcess(opts, claudeImplementArgs(opts));
+  return {
+    sessionId: result.session_id ?? null,
+    costUsd: result.total_cost_usd ?? 0,
+    finalMessage: result.result ?? '',
+  };
 }
 
 export class AgentCancelledError extends Error {
@@ -144,6 +232,7 @@ export interface ClaudeStreamMessage {
   structured_output?: unknown;
   session_id?: string;
   total_cost_usd?: number;
+  permission_denials?: { tool_name: string; tool_input?: Record<string, unknown> }[];
 }
 
 const TOOL_KINDS: Record<string, ToolKind> = {
@@ -169,7 +258,11 @@ export class ClaudeStreamNormalizer {
       return message.message.content.flatMap((block) => this.block(block));
     }
     if (message.type === 'result') {
-      const events: NormalizedEvent[] = [];
+      const events: NormalizedEvent[] = (message.permission_denials ?? []).map((d) => ({
+        type: 'permission_denied' as const,
+        name: d.tool_name,
+        target: this.target(d.tool_input ?? {}),
+      }));
       if (typeof message.total_cost_usd === 'number')
         events.push({ type: 'usage', costUsd: message.total_cost_usd });
       if (message.is_error || message.subtype !== 'success') {

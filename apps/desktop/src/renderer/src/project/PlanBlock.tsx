@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTRPC } from '../lib/trpc';
+import { ExecutionBlock, type TaskState } from './ExecutionBlock';
 import { Notice, RunProgress } from './shared';
 
 const changeColor: Record<ComponentChange, string> = {
@@ -16,6 +17,7 @@ export function PlanBlock(props: {
   requestId: string;
   plan: PlanWithVariants | null;
   run: Run | null;
+  tasks: TaskState[];
   language: 'ru' | 'en';
   claudeInstalled: boolean;
 }) {
@@ -26,7 +28,9 @@ export function PlanBlock(props: {
   const reopen = useMutation(trpc.plans.reopen.mutationOptions());
   const { plan, run } = props;
   const running = run?.status === 'running';
-  const approved = plan?.status === 'approved';
+  // Executing keeps the approval; it can no longer be withdrawn, since tasks already have branches.
+  const approved = plan?.status === 'approved' || plan?.status === 'executing';
+  const chosen = plan?.variants.find((v) => v.id === plan.chosenVariantId);
   const error = start.error ?? reopen.error;
   const cost =
     plan && run?.status === 'done' && run.id === plan.runId && run.costUsd !== null
@@ -50,7 +54,7 @@ export function PlanBlock(props: {
             {plan ? t('plan.remake') : t('plan.make')}
           </button>
         )}
-        {approved && plan && (
+        {plan?.status === 'approved' && (
           <button
             type="button"
             disabled={reopen.isPending}
@@ -92,7 +96,15 @@ export function PlanBlock(props: {
                 />
               ))}
             </div>
-            {approved && <p className="mt-2 text-[11.5px] text-faint">{t('plan.approvedHint')}</p>}
+            {approved && chosen && (
+              <ExecutionBlock
+                planId={plan.id}
+                tasks={chosen.json.tasks}
+                states={props.tasks}
+                language={props.language}
+                claudeInstalled={props.claudeInstalled}
+              />
+            )}
             {cost && <p className="mt-2 text-[11px] text-faint">{t('plan.cost', { cost })}</p>}
           </>
         )}
