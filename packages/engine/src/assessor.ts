@@ -58,7 +58,7 @@ export class Assessor {
 }
 
 /** The project map when there is one (it is what the agent already learned), else the quick scan and layout. */
-async function projectContext(db: Db, project: Project): Promise<string> {
+export async function projectContext(db: Db, project: Project): Promise<string> {
   const map = await db.latestRepoMap(project.id);
   if (map) return formatMap(map);
   const [scan, files] = await Promise.all([scanRepo(project.repoPath), listFiles(project.repoPath)]);

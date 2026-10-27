@@ -1,16 +1,19 @@
 import { basename } from 'node:path';
 import { detectClaude } from '@studio/agents';
 import type { Db } from '@studio/db';
-import { type Assessor, type Mapper, scanRepo } from '@studio/engine';
+import { type Assessor, type Mapper, type Planner, scanRepo } from '@studio/engine';
 import { defaultBranch, NotAGitRepoError, repoRoot } from '@studio/git';
+import { type Plan, planVariantProblems } from '@studio/schema';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { app, BrowserWindow, dialog } from 'electron';
 import { z } from 'zod';
+import { broadcast } from './ipc';
 
 export interface Context {
   db: Db;
   mapper: Mapper;
   assessor: Assessor;
+  planner: Planner;
 }
 
 const t = initTRPC.context<Context>().create({ isServer: true });
@@ -29,6 +32,10 @@ async function requireProject(db: Db, id: string) {
   const project = await db.getProject(id);
   if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
   return project;
+}
+
+function notifyRequest(plan: Pick<Plan, 'projectId' | 'requestId'>) {
+  broadcast({ type: 'request', projectId: plan.projectId, requestId: plan.requestId });
 }
 
 export const router = t.router({
@@ -72,7 +79,10 @@ export const router = t.router({
 
     remove: t.procedure.input(projectInput).mutation(async ({ ctx, input }) => {
       ctx.mapper.cancel(input.projectId);
-      for (const request of await ctx.db.listRequests(input.projectId)) ctx.assessor.cancel(request.id);
+      for (const request of await ctx.db.listRequests(input.projectId)) {
+        ctx.assessor.cancel(request.id);
+        ctx.planner.cancel(request.id);
+      }
       await ctx.db.removeProject(input.projectId);
     }),
 
@@ -105,6 +115,8 @@ export const router = t.router({
           request,
           assessment: (await ctx.db.latestAssessment(request.id)) ?? null,
           run: (await ctx.db.latestRequestRun(request.id, 'assess')) ?? null,
+          plan: (await ctx.db.latestPlan(request.id)) ?? null,
+          planRun: (await ctx.db.latestRequestRun(request.id, 'plan')) ?? null,
         })),
       );
     }),
@@ -133,7 +145,60 @@ export const router = t.router({
 
     remove: t.procedure.input(z.object({ requestId: z.string() })).mutation(async ({ ctx, input }) => {
       ctx.assessor.cancel(input.requestId);
+      ctx.planner.cancel(input.requestId);
       await ctx.db.removeRequest(input.requestId);
+    }),
+  }),
+
+  /** Two plan variants for a task, then the one the developer approves (SPEC §3.5). */
+  plans: t.router({
+    start: t.procedure
+      .input(z.object({ requestId: z.string(), language }))
+      .mutation(async ({ ctx, input }) => {
+        const request = await requireRequest(ctx.db, input.requestId);
+        const project = await requireProject(ctx.db, request.projectId);
+        const current = await ctx.db.latestPlan(request.id);
+        if (current && current.status !== 'awaiting_choice' && current.status !== 'approved') {
+          throw new TRPCError({ code: 'CONFLICT', message: 'The plan is already being executed' });
+        }
+        return ctx.planner.start(project, request, { language: input.language });
+      }),
+
+    cancel: t.procedure
+      .input(z.object({ requestId: z.string() }))
+      .mutation(({ ctx, input }) => ctx.planner.cancel(input.requestId)),
+
+    approve: t.procedure
+      .input(z.object({ planId: z.string(), variantId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const plan = await ctx.db.getPlan(input.planId);
+        if (!plan) throw new TRPCError({ code: 'NOT_FOUND', message: 'Plan not found' });
+        const variant = plan.variants.find((v) => v.id === input.variantId);
+        if (!variant) throw new TRPCError({ code: 'NOT_FOUND', message: 'Variant not found' });
+        if (plan.status !== 'awaiting_choice' && plan.status !== 'approved') {
+          throw new TRPCError({ code: 'CONFLICT', message: 'The plan is already being executed' });
+        }
+        // The same checks as for the agent's answer, so a plan that slipped past them cannot be approved.
+        const map = await ctx.db.latestRepoMap(plan.projectId);
+        const problems = planVariantProblems(
+          variant.json,
+          map ? new Set(map.json.components.map((c) => c.id)) : undefined,
+        );
+        if (problems.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: problems.join('; ') });
+        }
+        await ctx.db.approvePlan(plan.id, variant.id);
+        notifyRequest(plan);
+      }),
+
+    reopen: t.procedure.input(z.object({ planId: z.string() })).mutation(async ({ ctx, input }) => {
+      const plan = await ctx.db.getPlan(input.planId);
+      if (!plan) throw new TRPCError({ code: 'NOT_FOUND', message: 'Plan not found' });
+      if (plan.status !== 'approved') {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Only an approved plan can be reopened' });
+      }
+      await ctx.db.reopenPlan(plan.id);
+      notifyRequest(plan);
     }),
   }),
 

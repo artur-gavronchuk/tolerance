@@ -6,6 +6,11 @@ import {
   AssessmentJson,
   type ChangeRequest,
   NormalizedEvent,
+  type Plan,
+  PlanStatus,
+  type PlanVariant,
+  PlanVariantJson,
+  type PlanWithVariants,
   type Project,
   type RepoMap,
   RepoMapJson,
@@ -16,7 +21,16 @@ import {
 import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
 import { drizzle, type SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy';
 import { migrate } from 'drizzle-orm/sqlite-proxy/migrator';
-import { agentEvents, assessments, changeRequests, projects, repoMaps, runs } from './tables';
+import {
+  agentEvents,
+  assessments,
+  changeRequests,
+  plans,
+  planVariants,
+  projects,
+  repoMaps,
+  runs,
+} from './tables';
 
 export * as tables from './tables';
 
@@ -175,6 +189,85 @@ export class Db {
       .orderBy(desc(runs.startedAt))
       .limit(1);
     return row && toRun(row);
+  }
+
+  // ── plans ──
+
+  /** Saves a planner answer: a plan awaiting the user's choice and its variants, in the agent's order. */
+  async addPlan(input: {
+    projectId: string;
+    requestId: string;
+    runId: string;
+    variants: PlanVariantJson[];
+  }): Promise<PlanWithVariants> {
+    const createdAt = Date.now();
+    const plan: Plan = {
+      id: randomUUID(),
+      projectId: input.projectId,
+      requestId: input.requestId,
+      runId: input.runId,
+      status: 'awaiting_choice',
+      chosenVariantId: null,
+      baseSha: null,
+      integrationBranch: null,
+      createdAt,
+      approvedAt: null,
+    };
+    const variants: PlanVariant[] = input.variants.map((json, position) => ({
+      id: randomUUID(),
+      planId: plan.id,
+      position,
+      json,
+      createdAt,
+    }));
+    await this.orm.insert(plans).values(plan);
+    for (const v of variants) {
+      await this.orm.insert(planVariants).values({ ...v, json: JSON.stringify(v.json) });
+    }
+    return { ...plan, variants };
+  }
+
+  async getPlan(id: string): Promise<PlanWithVariants | undefined> {
+    const [row] = await this.orm.select().from(plans).where(eq(plans.id, id));
+    return row && this.withVariants(row);
+  }
+
+  async latestPlan(requestId: string): Promise<PlanWithVariants | undefined> {
+    const [row] = await this.orm
+      .select()
+      .from(plans)
+      .where(eq(plans.requestId, requestId))
+      .orderBy(desc(plans.createdAt))
+      .limit(1);
+    return row && this.withVariants(row);
+  }
+
+  async approvePlan(planId: string, variantId: string): Promise<void> {
+    await this.orm
+      .update(plans)
+      .set({ status: 'approved', chosenVariantId: variantId, approvedAt: Date.now() })
+      .where(eq(plans.id, planId));
+  }
+
+  /** Back to choosing: the approval is withdrawn, the variants stay. */
+  async reopenPlan(planId: string): Promise<void> {
+    await this.orm
+      .update(plans)
+      .set({ status: 'awaiting_choice', chosenVariantId: null, approvedAt: null })
+      .where(eq(plans.id, planId));
+  }
+
+  private async withVariants(row: typeof plans.$inferSelect): Promise<PlanWithVariants> {
+    const variants = await this.orm
+      .select()
+      .from(planVariants)
+      .where(eq(planVariants.planId, row.id))
+      .orderBy(asc(planVariants.position));
+    return {
+      ...row,
+      status: PlanStatus.parse(row.status),
+      variants: variants.map((v) => ({ ...v, json: PlanVariantJson.parse(JSON.parse(v.json)) })),
+    };
   }
 
   // ── runs ──

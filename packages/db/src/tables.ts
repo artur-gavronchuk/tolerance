@@ -87,3 +87,40 @@ export const agentEvents = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.runId, t.seq] })],
 );
+
+export const plans = sqliteTable(
+  'plans',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    requestId: text('request_id')
+      .notNull()
+      .references(() => changeRequests.id, { onDelete: 'cascade' }),
+    runId: text('run_id')
+      .notNull()
+      .references(() => runs.id, { onDelete: 'cascade' }),
+    status: text('status').notNull(),
+    chosenVariantId: text('chosen_variant_id'),
+    baseSha: text('base_sha'),
+    integrationBranch: text('integration_branch'),
+    createdAt: integer('created_at').notNull(),
+    approvedAt: integer('approved_at'),
+  },
+  (t) => [index('plans_request_idx').on(t.requestId, t.createdAt)],
+);
+
+export const planVariants = sqliteTable(
+  'plan_variants',
+  {
+    id: text('id').primaryKey(),
+    planId: text('plan_id')
+      .notNull()
+      .references(() => plans.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    json: text('json').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('plan_variants_plan_idx').on(t.planId, t.position)],
+);
