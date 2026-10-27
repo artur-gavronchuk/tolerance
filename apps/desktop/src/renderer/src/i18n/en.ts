@@ -302,6 +302,17 @@ export const en: Messages = {
       empty: 'No output yet.',
     },
   },
+  terminal: {
+    newShell: 'New shell',
+    close: 'Close {{name}}',
+    search: 'Find',
+    truncated: '… the start of the output was not kept',
+    exited: 'The process ended with exit code {{code}}.',
+    stopped: 'The shell is not running.',
+    agentStopped: '{{agent}} is not running: Studio was restarted.',
+    start: 'Start',
+    startAgent: 'Start {{agent}}',
+  },
   projectSettings: {
     title: 'Workspaces',
     lead: 'How a new workspace is prepared and what opens it.',
@@ -309,6 +320,9 @@ export const en: Messages = {
     setupHint:
       'Runs in the new workspace folder through $SHELL -lc. $STUDIO_ROOT_PATH (project root), $STUDIO_WORKSPACE_PATH and $STUDIO_BRANCH are set.',
     setupPlaceholder: 'pnpm install && cp "$STUDIO_ROOT_PATH/.env" .env',
+    agent: 'Agent command',
+    agentHint:
+      'Starts in the first terminal tab of every workspace. Claude gets its own --session-id so the session can be resumed.',
     editor: 'Editor',
     editorHint: 'The command that opens the folder: code, cursor, idea or your own.',
     terminal: 'Terminal',

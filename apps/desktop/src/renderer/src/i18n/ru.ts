@@ -300,6 +300,17 @@ export const ru = {
       empty: 'Вывода пока нет.',
     },
   },
+  terminal: {
+    newShell: 'Новый shell',
+    close: 'Закрыть {{name}}',
+    search: 'Найти',
+    truncated: '… начало вывода не сохранилось',
+    exited: 'Процесс завершился, код {{code}}.',
+    stopped: 'Shell не запущен.',
+    agentStopped: '{{agent}} не запущен: Studio перезапускалась.',
+    start: 'Запустить',
+    startAgent: 'Запустить {{agent}}',
+  },
   projectSettings: {
     title: 'Воркспейсы',
     lead: 'Как готовить новый воркспейс и чем его открывать.',
@@ -307,6 +318,9 @@ export const ru = {
     setupHint:
       'Выполняется в папке нового воркспейса через $SHELL -lc. Есть переменные $STUDIO_ROOT_PATH (корень проекта), $STUDIO_WORKSPACE_PATH, $STUDIO_BRANCH.',
     setupPlaceholder: 'pnpm install && cp "$STUDIO_ROOT_PATH/.env" .env',
+    agent: 'Команда агента',
+    agentHint:
+      'Запускается в первой вкладке терминала каждого воркспейса. Claude получает свой --session-id, чтобы сессию можно было продолжить.',
     editor: 'Редактор',
     editorHint: 'Команда, которой открыть папку: code, cursor, idea или своя.',
     terminal: 'Терминал',

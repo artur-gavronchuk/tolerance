@@ -16,6 +16,7 @@ export function WorkspaceSettings({ project }: { project: Project }) {
   const queryClient = useQueryClient();
   const defaults = useQuery(trpc.projects.openDefaults.queryOptions());
   const [setup, setSetup] = useState(project.setupCommand ?? '');
+  const [agent, setAgent] = useState(project.agentCommand ?? '');
   const [editor, setEditor] = useState(project.editorCommand ?? '');
   const [terminal, setTerminal] = useState(project.terminalApp ?? '');
   const save = useMutation(
@@ -25,6 +26,7 @@ export function WorkspaceSettings({ project }: { project: Project }) {
   );
   const dirty =
     setup !== (project.setupCommand ?? '') ||
+    agent !== (project.agentCommand ?? '') ||
     editor !== (project.editorCommand ?? '') ||
     terminal !== (project.terminalApp ?? '');
   const mac = window.studio.platform === 'darwin';
@@ -33,7 +35,7 @@ export function WorkspaceSettings({ project }: { project: Project }) {
     e.preventDefault();
     save.mutate({
       projectId: project.id,
-      settings: { setupCommand: setup, editorCommand: editor, terminalApp: terminal },
+      settings: { setupCommand: setup, agentCommand: agent, editorCommand: editor, terminalApp: terminal },
     });
   }
 
@@ -57,6 +59,20 @@ export function WorkspaceSettings({ project }: { project: Project }) {
             style={{ outline: 'none' }}
           />
           <p className="mt-1 text-[11.5px] text-faint">{t('projectSettings.setupHint')}</p>
+        </div>
+        <div>
+          <label htmlFor="agent-command" className="text-[12px] font-medium">
+            {t('projectSettings.agent')}
+          </label>
+          <input
+            id="agent-command"
+            value={agent}
+            onChange={(e) => setAgent(e.target.value)}
+            placeholder={t('projectSettings.byDefault', { value: defaults.data?.agent ?? '' })}
+            className={`mt-1 ${field}`}
+            style={{ outline: 'none' }}
+          />
+          <p className="mt-1 text-[11.5px] text-faint">{t('projectSettings.agentHint')}</p>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>

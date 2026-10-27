@@ -32,3 +32,21 @@ export async function mutate(win: Page, path: string, input: unknown): Promise<u
     { path, input },
   );
 }
+
+/** Calls a tRPC query through the IPC bridge, for checks the UI does not show. */
+export async function query(win: Page, path: string, input: unknown): Promise<unknown> {
+  return win.evaluate(
+    async ({ path, input }) => {
+      const res = await window.studio.trpc({
+        url: `http://studio.local/trpc/${path}?batch=1&input=${encodeURIComponent(JSON.stringify({ 0: input }))}`,
+        method: 'GET',
+        headers: [],
+        body: null,
+      });
+      const [first] = JSON.parse(res.body);
+      if (first.error) throw new Error(JSON.stringify(first.error));
+      return first.result.data;
+    },
+    { path, input },
+  );
+}

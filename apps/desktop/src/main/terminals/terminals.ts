@@ -1,0 +1,142 @@
+import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { basename } from 'node:path';
+import type { Db } from '@studio/db';
+import type { Project, StudioEvent, Terminal, TerminalProcess, Workspace } from '@studio/schema';
+import type { PtyHost, PtySnapshot } from './pty-host';
+
+export const DEFAULT_AGENT = 'claude';
+
+/** The user's shell; `/bin/sh` when `$SHELL` is unset or missing. */
+export function userShell(env: NodeJS.ProcessEnv = process.env): string {
+  return env.SHELL && existsSync(env.SHELL) ? env.SHELL : '/bin/sh';
+}
+
+/** Interactive login shell flags; plain sh and dash only take `-i` (as in emdash `shell-ids.ts`). */
+function shellFlags(shell: string): string[] {
+  return ['sh', 'dash'].includes(basename(shell)) ? ['-i'] : ['-i', '-l'];
+}
+
+/** Whether the agent command starts Claude Code, which takes `--session-id`. */
+export function isClaude(command: string): boolean {
+  const first = command.trim().split(/\s+/)[0] ?? '';
+  return basename(first) === 'claude';
+}
+
+/**
+ * What a terminal tab runs. The agent goes through the login shell, so PATH, nvm and aliases are
+ * the user's own; `exec` leaves no shell behind it, and the tab ends when the agent does.
+ */
+export function terminalCommand(input: {
+  kind: Terminal['kind'];
+  agentCommand: string | null;
+  sessionId: string | null;
+  shell: string;
+}): { file: string; args: string[] } {
+  const flags = shellFlags(input.shell);
+  if (input.kind === 'shell') return { file: input.shell, args: flags };
+  const agent = input.agentCommand?.trim() || DEFAULT_AGENT;
+  const line =
+    isClaude(agent) && input.sessionId ? `exec ${agent} --session-id ${input.sessionId}` : `exec ${agent}`;
+  return { file: input.shell, args: [...flags, '-c', line] };
+}
+
+/** Variables that belong to Studio's own process or to a Claude Code session Studio was started from. */
+const DROPPED = /^(ELECTRON_|CLAUDECODE$|CLAUDE_CODE_ENTRYPOINT$|STUDIO_USER_DATA$|STUDIO_WORKTREES_ROOT$)/;
+
+/** The environment of a workspace terminal (one place for it, as emdash `terminal-env.ts` advises). */
+export function terminalEnv(
+  base: NodeJS.ProcessEnv,
+  ctx: { project: Project; workspace: Workspace },
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(base)) {
+    if (value !== undefined && !DROPPED.test(key)) env[key] = value;
+  }
+  return {
+    ...env,
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    TERM_PROGRAM: 'Studio',
+    LANG: env.LANG || 'en_US.UTF-8',
+    STUDIO_ROOT_PATH: ctx.project.repoPath,
+    STUDIO_WORKSPACE_PATH: ctx.workspace.path,
+    STUDIO_WORKSPACE_NAME: ctx.workspace.name,
+    STUDIO_BRANCH: ctx.workspace.branch,
+  };
+}
+
+export class TerminalStateError extends Error {}
+
+/**
+ * Terminal tabs of workspaces: rows in SQLite, processes in {@link PtyHost}. A new workspace gets
+ * the agent tab and a shell tab.
+ */
+export class Terminals {
+  constructor(private readonly deps: { db: Db; host: PtyHost; notify: (event: StudioEvent) => void }) {}
+
+  async list(workspaceId: string): Promise<{ terminal: Terminal; process: TerminalProcess }[]> {
+    const rows = await this.deps.db.listTerminals(workspaceId);
+    return rows.map((terminal) => ({ terminal, process: this.deps.host.process(terminal.id) }));
+  }
+
+  /** The default tabs, the first time a workspace is opened. */
+  async ensureDefaults(workspaceId: string): Promise<void> {
+    if ((await this.deps.db.listTerminals(workspaceId)).length > 0) return;
+    await this.deps.db.addTerminal({ workspaceId, kind: 'agent' });
+    await this.deps.db.addTerminal({ workspaceId, kind: 'shell' });
+  }
+
+  async addShell(workspaceId: string): Promise<Terminal> {
+    return this.deps.db.addTerminal({ workspaceId, kind: 'shell' });
+  }
+
+  /**
+   * Starts the tab's program at the size the UI measured. Every agent start gets a new Claude
+   * session id, stored before the process starts: an id cannot be reused ("already in use").
+   */
+  async start(
+    ctx: { project: Project; workspace: Workspace; terminal: Terminal },
+    size: { cols: number; rows: number },
+  ): Promise<void> {
+    const { db, host } = this.deps;
+    const { project, workspace, terminal } = ctx;
+    if (host.process(terminal.id).state === 'running') return;
+    if (!existsSync(workspace.path)) throw new TerminalStateError('Workspace folder is missing');
+
+    let sessionId: string | null = null;
+    if (terminal.kind === 'agent' && isClaude(project.agentCommand ?? DEFAULT_AGENT)) {
+      sessionId = randomUUID();
+      await db.setTerminalSession(terminal.id, sessionId);
+    }
+    const shell = userShell();
+    const command = terminalCommand({
+      kind: terminal.kind,
+      agentCommand: project.agentCommand,
+      sessionId,
+      shell,
+    });
+    host.start(terminal.id, {
+      ...command,
+      cwd: workspace.path,
+      env: terminalEnv(process.env, { project, workspace }),
+      ...size,
+    });
+    this.deps.notify({ type: 'terminal', workspaceId: workspace.id, terminalId: terminal.id });
+  }
+
+  snapshot(terminalId: string): PtySnapshot {
+    return this.deps.host.snapshot(terminalId);
+  }
+
+  /** Closes a tab: stops its program and removes it. */
+  async close(terminal: Terminal): Promise<void> {
+    this.deps.host.dispose(terminal.id);
+    await this.deps.db.removeTerminal(terminal.id);
+  }
+
+  /** Stops every program of a workspace, e.g. before its folder is removed. */
+  async stopWorkspace(workspaceId: string): Promise<void> {
+    for (const terminal of await this.deps.db.listTerminals(workspaceId)) this.deps.host.dispose(terminal.id);
+  }
+}

@@ -28,7 +28,12 @@ describe('Workspaces', () => {
   let workspaces: Workspaces;
 
   const withSetup = async (setupCommand: string | null) => {
-    await db.updateProjectSettings(project.id, { setupCommand, editorCommand: null, terminalApp: null });
+    await db.updateProjectSettings(project.id, {
+      setupCommand,
+      agentCommand: null,
+      editorCommand: null,
+      terminalApp: null,
+    });
     project = (await db.getProject(project.id)) as Project;
   };
 

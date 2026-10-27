@@ -19,6 +19,7 @@ export const projects = sqliteTable('projects', {
   allowedCommands: text('allowed_commands', { mode: 'json' }).$type<string[]>().notNull().default([]),
   editorCommand: text('editor_command'),
   terminalApp: text('terminal_app'),
+  agentCommand: text('agent_command'),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -41,6 +42,21 @@ export const workspaces = sqliteTable(
     createdAt: integer('created_at').notNull(),
   },
   (t) => [uniqueIndex('workspaces_project_slug_idx').on(t.projectId, t.slug)],
+);
+
+export const terminals = sqliteTable(
+  'terminals',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    position: integer('position').notNull(),
+    sessionId: text('session_id'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('terminals_workspace_idx').on(t.workspaceId, t.position)],
 );
 
 export const repoMaps = sqliteTable(

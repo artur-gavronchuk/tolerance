@@ -3,8 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { openDb } from '@studio/db';
 import { Assessor, Implementer, Mapper, Planner, Workspaces } from '@studio/engine';
 import { app, BrowserWindow, nativeTheme, shell } from 'electron';
-import { broadcast, serveTrpc } from './ipc';
+import { broadcast, sendPtyData, servePty, serveTrpc } from './ipc';
 import { adoptLoginShellPath } from './shell-path';
+import { PtyHost } from './terminals/pty-host';
+import { Terminals } from './terminals/terminals';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 
@@ -59,8 +61,21 @@ app.whenReady().then(async () => {
   const planner = new Planner({ db, notify: broadcast });
   const implementer = new Implementer({ db, notify: broadcast });
   const workspaces = new Workspaces({ db, notify: broadcast });
-  app.on('will-quit', () => workspaces.killAll());
-  serveTrpc(() => ({ db, mapper, assessor, planner, implementer, workspaces }));
+  const host = new PtyHost({
+    data: sendPtyData,
+    exit: (terminalId) => {
+      void db.getTerminal(terminalId).then((terminal) => {
+        if (terminal) broadcast({ type: 'terminal', workspaceId: terminal.workspaceId, terminalId });
+      });
+    },
+  });
+  const terminals = new Terminals({ db, host, notify: broadcast });
+  app.on('will-quit', () => {
+    workspaces.killAll();
+    host.killAll();
+  });
+  servePty(host);
+  serveTrpc(() => ({ db, mapper, assessor, planner, implementer, workspaces, terminals }));
 
   createWindow();
   app.on('activate', () => {

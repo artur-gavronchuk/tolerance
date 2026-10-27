@@ -2,13 +2,19 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useTRPC } from './trpc';
 
-/** Refetches what changed when main reports a run, map, task or workspace update. */
+/** Refetches what changed when main reports a run, map, task, workspace or terminal update. */
 export function useStudioEvents(): void {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   useEffect(
     () =>
       window.studio.onEvent((event) => {
+        if (event.type === 'terminal') {
+          void queryClient.invalidateQueries({
+            queryKey: trpc.terminals.list.queryKey({ workspaceId: event.workspaceId }),
+          });
+          return;
+        }
         void queryClient.invalidateQueries({
           queryKey: trpc.map.get.queryKey({ projectId: event.projectId }),
         });

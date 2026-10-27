@@ -149,11 +149,13 @@ describe('Db', () => {
     const project = await db.addProject({ name: 'arena', repoPath: '/tmp/arena', defaultBranch: 'main' });
     await db.updateProjectSettings(project.id, {
       setupCommand: 'pnpm install',
+      agentCommand: null,
       editorCommand: 'cursor',
       terminalApp: null,
     });
     expect(await db.getProject(project.id)).toMatchObject({
       setupCommand: 'pnpm install',
+      agentCommand: null,
       editorCommand: 'cursor',
     });
 
@@ -192,5 +194,31 @@ describe('Db', () => {
     expect(await db.getWorkspace(second.id)).toBeUndefined();
     await db.removeProject(project.id);
     expect(await db.listWorkspaces(project.id)).toEqual([]);
+  });
+
+  it('keeps workspace terminals in tab order and deletes them with the workspace', async () => {
+    const project = await db.addProject({ name: 'arena', repoPath: '/tmp/arena', defaultBranch: 'main' });
+    const ws = await db.addWorkspace({
+      projectId: project.id,
+      name: 'w',
+      slug: 'w',
+      branch: 'studio/ws/w',
+      path: '/w/w',
+      baseRef: 'main',
+      baseSha: 'abc',
+      setupStatus: 'none',
+    });
+    const agent = await db.addTerminal({ workspaceId: ws.id, kind: 'agent', sessionId: 's-1' });
+    const shell = await db.addTerminal({ workspaceId: ws.id, kind: 'shell' });
+    expect((await db.listTerminals(ws.id)).map((t) => [t.kind, t.position, t.sessionId])).toEqual([
+      ['agent', 0, 's-1'],
+      ['shell', 1, null],
+    ]);
+    await db.setTerminalSession(agent.id, 's-2');
+    expect((await db.getTerminal(agent.id))?.sessionId).toBe('s-2');
+    await db.removeTerminal(shell.id);
+    expect((await db.addTerminal({ workspaceId: ws.id, kind: 'shell' })).position).toBe(1);
+    await db.removeWorkspace(ws.id);
+    expect(await db.listTerminals(ws.id)).toEqual([]);
   });
 });
