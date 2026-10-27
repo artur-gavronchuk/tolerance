@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { useTRPC } from '../lib/trpc';
 import { Notice, RunProgress, Section } from './shared';
 import { TasksSection } from './TasksSection';
+import { WorkspaceSettings } from './WorkspaceSettings';
 
 export function ProjectView(props: { project: Project; claudeInstalled: boolean; onRemove: () => void }) {
   const trpc = useTRPC();
@@ -50,6 +51,8 @@ export function ProjectView(props: { project: Project; claudeInstalled: boolean;
       </header>
 
       <TasksSection project={props.project} claudeInstalled={props.claudeInstalled} />
+
+      <WorkspaceSettings project={props.project} />
 
       {scan.data && <ScanSection scan={scan.data} />}
       {scan.error && (

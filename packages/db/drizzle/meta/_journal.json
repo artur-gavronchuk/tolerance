@@ -29,6 +29,13 @@
       "when": 1793113137607,
       "tag": "0003_safe_iron_fist",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793117042879,
+      "tag": "0004_watery_talos",
+      "breakpoints": true
     }
   ]
 }

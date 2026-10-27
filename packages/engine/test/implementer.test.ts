@@ -249,9 +249,10 @@ describe('Implementer', () => {
         }),
     });
     await implementer.start(project, plan, 'T1', { language: 'ru' });
-    await vi.waitFor(async () => expect((await db.findTask(plan.id, 'T1'))?.worktreePath).toBeTruthy());
+    // Generous timeouts: git is slow when the whole suite runs in parallel.
+    await vi.waitFor(async () => expect((await db.findTask(plan.id, 'T1'))?.worktreePath).toBeTruthy(), 5000);
     implementer.cancel(plan.id);
-    await vi.waitFor(() => expect(implementer.activeRun(plan.id)).toBeUndefined());
+    await vi.waitFor(() => expect(implementer.activeRun(plan.id)).toBeUndefined(), 5000);
     const t1 = await db.findTask(plan.id, 'T1');
     expect((await db.latestTaskRun(t1?.id ?? ''))?.status).toBe('cancelled');
   });

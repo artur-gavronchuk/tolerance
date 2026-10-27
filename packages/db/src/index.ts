@@ -12,12 +12,15 @@ import {
   PlanVariantJson,
   type PlanWithVariants,
   type Project,
+  type ProjectSettings,
   type RepoMap,
   RepoMapJson,
   type Run,
   RunKind,
   RunStatus,
+  SetupStatus,
   type Task,
+  type Workspace,
 } from '@studio/schema';
 import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
 import { drizzle, type SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy';
@@ -32,6 +35,7 @@ import {
   repoMaps,
   runs,
   tasks,
+  workspaces,
 } from './tables';
 
 export * as tables from './tables';
@@ -106,10 +110,16 @@ export class Db {
       testCommand: null,
       setupCommand: null,
       allowedCommands: [],
+      editorCommand: null,
+      terminalApp: null,
       createdAt: Date.now(),
     };
     await this.orm.insert(projects).values(project);
     return project;
+  }
+
+  async updateProjectSettings(id: string, settings: ProjectSettings): Promise<void> {
+    await this.orm.update(projects).set(settings).where(eq(projects.id, id));
   }
 
   async removeProject(id: string): Promise<void> {
@@ -316,6 +326,63 @@ export class Db {
     };
   }
 
+  // ── workspaces ──
+
+  async addWorkspace(
+    input: Omit<Workspace, 'id' | 'createdAt' | 'setupExitCode' | 'setupLog'>,
+  ): Promise<Workspace> {
+    const workspace: Workspace = {
+      id: randomUUID(),
+      ...input,
+      setupExitCode: null,
+      setupLog: '',
+      createdAt: Date.now(),
+    };
+    await this.orm.insert(workspaces).values(workspace);
+    return workspace;
+  }
+
+  async getWorkspace(id: string): Promise<Workspace | undefined> {
+    const [row] = await this.orm.select().from(workspaces).where(eq(workspaces.id, id));
+    return row && toWorkspace(row);
+  }
+
+  /** Newest first: the one just created is on top. */
+  async listWorkspaces(projectId: string): Promise<Workspace[]> {
+    const rows = await this.orm
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.projectId, projectId))
+      .orderBy(desc(workspaces.createdAt));
+    return rows.map(toWorkspace);
+  }
+
+  async setWorkspaceSetup(
+    id: string,
+    setup: { status: SetupStatus; exitCode?: number | null; log?: string },
+  ): Promise<void> {
+    await this.orm
+      .update(workspaces)
+      .set({
+        setupStatus: setup.status,
+        ...(setup.exitCode !== undefined && { setupExitCode: setup.exitCode }),
+        ...(setup.log !== undefined && { setupLog: setup.log }),
+      })
+      .where(eq(workspaces.id, id));
+  }
+
+  async removeWorkspace(id: string): Promise<void> {
+    await this.orm.delete(workspaces).where(eq(workspaces.id, id));
+  }
+
+  /** Setup commands left `running` by a previous app session died with it. */
+  async markInterruptedSetups(): Promise<void> {
+    await this.orm
+      .update(workspaces)
+      .set({ setupStatus: 'interrupted' })
+      .where(eq(workspaces.setupStatus, 'running'));
+  }
+
   // ── runs ──
 
   async startRun(input: {
@@ -407,6 +474,10 @@ export class Db {
       event: NormalizedEvent.parse(JSON.parse(r.payload)),
     }));
   }
+}
+
+function toWorkspace(row: typeof workspaces.$inferSelect): Workspace {
+  return { ...row, setupStatus: SetupStatus.parse(row.setupStatus) };
 }
 
 function toRun(row: typeof runs.$inferSelect): Run {

@@ -144,4 +144,53 @@ describe('Db', () => {
     expect(await db.getTask(task.id)).toBeUndefined();
     expect(await db.latestTaskRun(task.id)).toBeUndefined();
   });
+
+  it('stores workspaces newest first, marks interrupted setups and deletes them with the project', async () => {
+    const project = await db.addProject({ name: 'arena', repoPath: '/tmp/arena', defaultBranch: 'main' });
+    await db.updateProjectSettings(project.id, {
+      setupCommand: 'pnpm install',
+      editorCommand: 'cursor',
+      terminalApp: null,
+    });
+    expect(await db.getProject(project.id)).toMatchObject({
+      setupCommand: 'pnpm install',
+      editorCommand: 'cursor',
+    });
+
+    const base = { projectId: project.id, baseRef: 'origin/main', baseSha: 'abc' };
+    const first = await db.addWorkspace({
+      ...base,
+      name: 'Первый',
+      slug: 'pervyy',
+      branch: 'studio/ws/pervyy',
+      path: '/w/pervyy',
+      setupStatus: 'running',
+    });
+    await new Promise((r) => setTimeout(r, 2));
+    const second = await db.addWorkspace({
+      ...base,
+      name: 'second',
+      slug: 'second',
+      branch: 'studio/ws/second',
+      path: '/w/second',
+      setupStatus: 'none',
+    });
+    expect((await db.listWorkspaces(project.id)).map((w) => w.id)).toEqual([second.id, first.id]);
+
+    await db.markInterruptedSetups();
+    expect((await db.getWorkspace(first.id))?.setupStatus).toBe('interrupted');
+    expect((await db.getWorkspace(second.id))?.setupStatus).toBe('none');
+
+    await db.setWorkspaceSetup(second.id, { status: 'failed', exitCode: 1, log: 'boom' });
+    expect(await db.getWorkspace(second.id)).toMatchObject({
+      setupStatus: 'failed',
+      setupExitCode: 1,
+      setupLog: 'boom',
+    });
+
+    await db.removeWorkspace(second.id);
+    expect(await db.getWorkspace(second.id)).toBeUndefined();
+    await db.removeProject(project.id);
+    expect(await db.listWorkspaces(project.id)).toEqual([]);
+  });
 });

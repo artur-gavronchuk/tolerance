@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from '@studio/db';
-import { Assessor, Implementer, Mapper, Planner } from '@studio/engine';
+import { Assessor, Implementer, Mapper, Planner, Workspaces } from '@studio/engine';
 import { app, BrowserWindow, nativeTheme, shell } from 'electron';
 import { broadcast, serveTrpc } from './ipc';
 import { adoptLoginShellPath } from './shell-path';
@@ -53,11 +53,14 @@ app.whenReady().then(async () => {
   await adoptLoginShellPath();
   const db = await openDb(join(app.getPath('userData'), 'studio.db'), migrationsFolder());
   await db.markInterruptedRuns();
+  await db.markInterruptedSetups();
   const mapper = new Mapper({ db, notify: broadcast });
   const assessor = new Assessor({ db, notify: broadcast });
   const planner = new Planner({ db, notify: broadcast });
   const implementer = new Implementer({ db, notify: broadcast });
-  serveTrpc(() => ({ db, mapper, assessor, planner, implementer }));
+  const workspaces = new Workspaces({ db, notify: broadcast });
+  app.on('will-quit', () => workspaces.killAll());
+  serveTrpc(() => ({ db, mapper, assessor, planner, implementer, workspaces }));
 
   createWindow();
   app.on('activate', () => {
