@@ -10,7 +10,7 @@ import { queryClient, TRPCProvider, trpcClient, useTRPC } from './lib/trpc';
 import { ProjectView } from './project/ProjectView';
 import { applyTheme, storedTheme, swatches, type Theme, themes } from './theme';
 
-const steps = ['map', 'plan', 'run', 'verify', 'review'] as const;
+const steps = ['task', 'plan', 'run', 'verify', 'review'] as const;
 
 export function App() {
   return (
@@ -47,7 +47,7 @@ function useSelectedProject(): [string | null, (id: string | null) => void] {
 function Shell() {
   useStudioEvents();
   const trpc = useTRPC();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedId, select] = useSelectedProject();
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +56,6 @@ function Shell() {
   const info = useQuery(trpc.system.info.queryOptions());
   const pickFolder = useMutation(trpc.projects.pickFolder.mutationOptions());
   const add = useMutation(trpc.projects.add.mutationOptions());
-  const startMap = useMutation(trpc.map.start.mutationOptions());
   const remove = useMutation(trpc.projects.remove.mutationOptions());
 
   const claudeInstalled = info.data?.claude.installed ?? true;
@@ -67,13 +66,10 @@ function Shell() {
     try {
       const path = await pickFolder.mutateAsync();
       if (!path) return;
-      const { project, created } = await add.mutateAsync({ path });
+      // The project opens on its task box: writing a task is the first step, the map is built on demand.
+      const { project } = await add.mutateAsync({ path });
       await queryClient.invalidateQueries({ queryKey: trpc.projects.list.queryKey() });
       select(project.id);
-      // A new project gets explored right away: that is what the user added it for.
-      if (created && claudeInstalled) {
-        await startMap.mutateAsync({ projectId: project.id, language: i18n.language === 'en' ? 'en' : 'ru' });
-      }
     } catch (e) {
       setError(
         e instanceof TRPCClientError && e.message === 'not_a_git_repo'

@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import {
   type AgentEvent,
+  type Assessment,
+  AssessmentJson,
+  type ChangeRequest,
   NormalizedEvent,
   type Project,
   type RepoMap,
@@ -13,7 +16,7 @@ import {
 import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
 import { drizzle, type SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy';
 import { migrate } from 'drizzle-orm/sqlite-proxy/migrator';
-import { agentEvents, projects, repoMaps, runs } from './tables';
+import { agentEvents, assessments, changeRequests, projects, repoMaps, runs } from './tables';
 
 export * as tables from './tables';
 
@@ -118,12 +121,74 @@ export class Db {
     return map;
   }
 
+  // ── change requests and their assessments ──
+
+  async addRequest(input: { projectId: string; text: string }): Promise<ChangeRequest> {
+    const request: ChangeRequest = { id: randomUUID(), ...input, createdAt: Date.now() };
+    await this.orm.insert(changeRequests).values(request);
+    return request;
+  }
+
+  async getRequest(id: string): Promise<ChangeRequest | undefined> {
+    const [row] = await this.orm.select().from(changeRequests).where(eq(changeRequests.id, id));
+    return row;
+  }
+
+  /** Newest first. */
+  async listRequests(projectId: string): Promise<ChangeRequest[]> {
+    return this.orm
+      .select()
+      .from(changeRequests)
+      .where(eq(changeRequests.projectId, projectId))
+      .orderBy(desc(changeRequests.createdAt));
+  }
+
+  async removeRequest(id: string): Promise<void> {
+    await this.orm.delete(changeRequests).where(eq(changeRequests.id, id));
+  }
+
+  async addAssessment(input: {
+    requestId: string;
+    runId: string;
+    json: AssessmentJson;
+  }): Promise<Assessment> {
+    const assessment: Assessment = { id: randomUUID(), createdAt: Date.now(), ...input };
+    await this.orm.insert(assessments).values({ ...assessment, json: JSON.stringify(assessment.json) });
+    return assessment;
+  }
+
+  async latestAssessment(requestId: string): Promise<Assessment | undefined> {
+    const [row] = await this.orm
+      .select()
+      .from(assessments)
+      .where(eq(assessments.requestId, requestId))
+      .orderBy(desc(assessments.createdAt))
+      .limit(1);
+    return row && { ...row, json: AssessmentJson.parse(JSON.parse(row.json)) };
+  }
+
+  async latestRequestRun(requestId: string, kind: RunKind): Promise<Run | undefined> {
+    const [row] = await this.orm
+      .select()
+      .from(runs)
+      .where(and(eq(runs.requestId, requestId), eq(runs.kind, kind)))
+      .orderBy(desc(runs.startedAt))
+      .limit(1);
+    return row && toRun(row);
+  }
+
   // ── runs ──
 
-  async startRun(input: { projectId: string; kind: RunKind; agentId: string }): Promise<Run> {
+  async startRun(input: {
+    projectId: string;
+    requestId?: string;
+    kind: RunKind;
+    agentId: string;
+  }): Promise<Run> {
     const run: Run = {
       id: randomUUID(),
       ...input,
+      requestId: input.requestId ?? null,
       status: 'running',
       error: null,
       costUsd: null,

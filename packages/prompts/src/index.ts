@@ -1,4 +1,5 @@
 /// <reference path="./raw.d.ts" />
+import assessTemplate from './assess.md?raw';
 import mapTemplate from './map.md?raw';
 import validationTemplate from './validation.md?raw';
 
@@ -13,6 +14,10 @@ export function render(template: string, vars: Record<string, string>): string {
 
 export function mapPrompt(vars: { scan: string; tree: string; language: string }): string {
   return render(mapTemplate, vars);
+}
+
+export function assessPrompt(vars: { task: string; context: string; language: string }): string {
+  return render(assessTemplate, vars);
 }
 
 /** Follow-up when the agent's answer does not pass validation (SPEC §3.2). */
