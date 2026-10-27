@@ -1,67 +1,158 @@
 @import "tailwindcss";
 
-/* Light is the base; dark applies to the system preference unless the user picked light,
-   and always when the user picked dark. */
+/* Themes follow Gerry Themes for JetBrains IDEs (palette from github.com/gerry-themes/gerry-themes,
+   Apache-2.0): one flat background for sidebar and content, accent-outlined buttons, pastel highlights.
+   Light is the base. Without data-theme the system preference picks Light or Dark;
+   data-theme picks a theme explicitly. Keep the swatches in theme.ts in sync. */
 :root {
-  --bg: #fbfbfc;
-  --panel: #f3f4f6;
+  --bg: #ffffff;
+  --panel: #f5f6fa;
   --raised: #ffffff;
-  --line: #e2e4e8;
-  --ink: #16181d;
-  --muted: #6a6f78;
-  --faint: #9aa0a9;
-  --accent: #3b55d9;
-  --accent-ink: #ffffff;
-  --add: #2c9a58;
-  --modify: #c2931a;
-  --remove: #d24646;
+  --sel: #cfdefc;
+  --line: #e2e2e8;
+  --ink: #302a24;
+  --muted: #706e6c;
+  --faint: #929292;
+  --accent: #78a0ff;
+  --accent-fg: #5271bf;
+  --scroll: #d6d6dc;
+  --add: #486830;
+  --modify: #9c7028;
+  --remove: #9c4848;
+  /* Highlight colors for charts and component kinds. */
+  --hl-blue: #4a72c8;
+  --hl-purple: #704080;
+  --hl-teal: #2f7f72;
+  --hl-amber: #9c7028;
+  --hl-pink: #b04a68;
+  --hl-slate: #6870a8;
+  --hl-green: #486830;
+  --hl-orange: #b0603a;
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #131417;
-    --panel: #18191d;
-    --raised: #1e2025;
-    --line: #2a2c32;
-    --ink: #e6e7ea;
-    --muted: #8b909a;
-    --faint: #5d626b;
-    --accent: #7d8cff;
-    --accent-ink: #0f1014;
-    --add: #4cc27f;
-    --modify: #e0b43c;
-    --remove: #f06a6a;
-    color-scheme: dark;
-  }
+/* Shared by every dark theme: Gerry's pastel palette and the dark editor scheme's diff colors. */
+:root[data-theme="dark"],
+:root[data-theme="darcula"],
+:root[data-theme="oceanic"],
+:root[data-theme="storm"],
+:root[data-theme="violet"] {
+  --ink: #d0d0d9;
+  --muted: #96969d;
+  --add: #96be78;
+  --modify: #ffc86e;
+  --remove: #ff9696;
+  --hl-blue: #70b0ff;
+  --hl-purple: #baacff;
+  --hl-teal: #7af8ca;
+  --hl-amber: #ffbd76;
+  --hl-pink: #ff757f;
+  --hl-slate: #7e8eda;
+  --hl-green: #96be78;
+  --hl-orange: #ff9668;
+  color-scheme: dark;
 }
 
 :root[data-theme="dark"] {
-  --bg: #131417;
-  --panel: #18191d;
-  --raised: #1e2025;
-  --line: #2a2c32;
-  --ink: #e6e7ea;
-  --muted: #8b909a;
-  --faint: #5d626b;
-  --accent: #7d8cff;
-  --accent-ink: #0f1014;
-  --add: #4cc27f;
-  --modify: #e0b43c;
-  --remove: #f06a6a;
-  color-scheme: dark;
+  --bg: #1e1f22;
+  --panel: #26272a;
+  --raised: #212225;
+  --sel: #464b50;
+  --line: #323437;
+  --faint: #6a6a6f;
+  --accent: #5378c8;
+  --accent-fg: #6888cf;
+  --scroll: #37393c;
+}
+
+:root[data-theme="darcula"] {
+  --bg: #2b2b2b;
+  --panel: #343536;
+  --raised: #2f2f2f;
+  --sel: #50555a;
+  --line: #444648;
+  --faint: #757579;
+  --accent: #217de1;
+  --accent-fg: #4d97e7;
+  --scroll: #4a4d4f;
+}
+
+:root[data-theme="oceanic"] {
+  --bg: #1a2426;
+  --panel: #212d31;
+  --raised: #1d282a;
+  --sel: #3c505a;
+  --line: #2d3c43;
+  --faint: #6b6f73;
+  --accent: #009688;
+  --accent-fg: #0f9c8f;
+  --scroll: #32424a;
+}
+
+:root[data-theme="storm"] {
+  --bg: #17233d;
+  --panel: #1e2a44;
+  --raised: #1a2640;
+  --sel: #3c5078;
+  --line: #293750;
+  --faint: #6a6f7d;
+  --accent: #0082a0;
+  --accent-fg: #2e98b1;
+  --scroll: #2d3c55;
+}
+
+:root[data-theme="violet"] {
+  --bg: #1a1f30;
+  --panel: #202539;
+  --raised: #1d2133;
+  --sel: #464664;
+  --line: #2b2f47;
+  --faint: #686a75;
+  --accent: #a062cb;
+  --accent-fg: #aa72d0;
+  --scroll: #2f334d;
+}
+
+/* System preference without an explicit choice: Gerry Dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #1e1f22;
+    --panel: #26272a;
+    --raised: #212225;
+    --sel: #464b50;
+    --line: #323437;
+    --ink: #d0d0d9;
+    --muted: #96969d;
+    --faint: #6a6a6f;
+    --accent: #5378c8;
+    --accent-fg: #6888cf;
+    --scroll: #37393c;
+    --add: #96be78;
+    --modify: #ffc86e;
+    --remove: #ff9696;
+    --hl-blue: #70b0ff;
+    --hl-purple: #baacff;
+    --hl-teal: #7af8ca;
+    --hl-amber: #ffbd76;
+    --hl-pink: #ff757f;
+    --hl-slate: #7e8eda;
+    --hl-green: #96be78;
+    --hl-orange: #ff9668;
+    color-scheme: dark;
+  }
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-panel: var(--panel);
   --color-raised: var(--raised);
+  --color-sel: var(--sel);
   --color-line: var(--line);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
   --color-accent: var(--accent);
-  --color-accent-ink: var(--accent-ink);
+  --color-accent-fg: var(--accent-fg);
   --color-add: var(--add);
   --color-modify: var(--modify);
   --color-remove: var(--remove);
@@ -87,9 +178,32 @@ body {
   user-select: none;
 }
 
+::selection {
+  background: var(--sel);
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Thin IDE-style scrollbars. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scroll);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--faint);
 }
 
 /* Areas of the window that drag it, like a title bar. */

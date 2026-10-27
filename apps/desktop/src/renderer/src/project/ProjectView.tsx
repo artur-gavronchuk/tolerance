@@ -63,7 +63,15 @@ export function ProjectView(props: { project: Project; claudeInstalled: boolean;
 
 const categories: ScanCategory[] = ['frontend', 'backend', 'database', 'infra', 'testing', 'docs'];
 
-const languagePalette = ['#3b82f6', '#8b5cf6', '#14b8a6', '#f59e0b', '#ec4899', '#64748b'];
+// Theme highlight colors (see styles.css), so charts follow the chosen theme.
+const languagePalette = [
+  'var(--hl-blue)',
+  'var(--hl-purple)',
+  'var(--hl-teal)',
+  'var(--hl-amber)',
+  'var(--hl-pink)',
+  'var(--hl-slate)',
+];
 
 function ScanSection({ scan }: { scan: RepoScan }) {
   const { t } = useTranslation();
@@ -152,8 +160,8 @@ function MapSection({ project, claudeInstalled }: { project: Project; claudeInst
       onClick={() => start.mutate({ projectId: project.id, language })}
       className={
         map
-          ? 'rounded-md border border-line px-2.5 py-1 text-[12px] hover:bg-panel disabled:opacity-50'
-          : 'rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-ink disabled:opacity-50'
+          ? 'rounded-md border border-line px-2.5 py-1 text-[12px] hover:border-accent hover:text-accent-fg disabled:opacity-50'
+          : 'rounded-md border border-accent px-3 py-1.5 text-[13px] font-medium text-accent-fg hover:bg-accent/10 disabled:opacity-50'
       }
     >
       {map ? t('map.refresh') : t('map.start')}
@@ -200,7 +208,7 @@ function RunProgress({ run, onCancel }: { run: Run; onCancel: () => void }) {
         <button
           type="button"
           onClick={onCancel}
-          className="ml-auto rounded-md px-2 py-0.5 text-[12px] text-muted hover:bg-line hover:text-ink"
+          className="ml-auto rounded-md px-2 py-0.5 text-[12px] text-muted hover:bg-sel hover:text-ink"
         >
           {t('map.cancel')}
         </button>
@@ -252,14 +260,14 @@ const kindOrder: ComponentKind[] = [
 ];
 
 const kindColor: Record<ComponentKind, string> = {
-  frontend: '#3b82f6',
-  backend: '#8b5cf6',
-  service: '#14b8a6',
-  db: '#f59e0b',
-  library: '#64748b',
-  infra: '#ec4899',
-  test: '#22c55e',
-  other: '#94a3b8',
+  frontend: 'var(--hl-blue)',
+  backend: 'var(--hl-purple)',
+  service: 'var(--hl-teal)',
+  db: 'var(--hl-amber)',
+  library: 'var(--hl-slate)',
+  infra: 'var(--hl-pink)',
+  test: 'var(--hl-green)',
+  other: 'var(--faint)',
 };
 
 function MapView({ map, costUsd }: { map: RepoMap; costUsd: number | null }) {

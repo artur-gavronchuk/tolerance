@@ -130,9 +130,15 @@ export const ru = {
   settings: {
     language: 'Язык',
     theme: 'Тема',
-    themeSystem: 'Система',
-    themeLight: 'Светлая',
-    themeDark: 'Тёмная',
+    themes: {
+      system: 'Система',
+      light: 'Светлая',
+      dark: 'Тёмная',
+      darcula: 'Darcula',
+      oceanic: 'Oceanic',
+      storm: 'Storm',
+      violet: 'Violet',
+    },
   },
   status: {
     runtime: 'Electron {{electron}}, Node {{node}}',
