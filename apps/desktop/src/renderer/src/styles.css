@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+/* Light is the base; dark applies to the system preference unless the user picked light,
+   and always when the user picked dark. */
+:root {
+  --bg: #fbfbfc;
+  --panel: #f3f4f6;
+  --raised: #ffffff;
+  --line: #e2e4e8;
+  --ink: #16181d;
+  --muted: #6a6f78;
+  --faint: #9aa0a9;
+  --accent: #3b55d9;
+  --accent-ink: #ffffff;
+  --add: #2c9a58;
+  --modify: #c2931a;
+  --remove: #d24646;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131417;
+    --panel: #18191d;
+    --raised: #1e2025;
+    --line: #2a2c32;
+    --ink: #e6e7ea;
+    --muted: #8b909a;
+    --faint: #5d626b;
+    --accent: #7d8cff;
+    --accent-ink: #0f1014;
+    --add: #4cc27f;
+    --modify: #e0b43c;
+    --remove: #f06a6a;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #131417;
+  --panel: #18191d;
+  --raised: #1e2025;
+  --line: #2a2c32;
+  --ink: #e6e7ea;
+  --muted: #8b909a;
+  --faint: #5d626b;
+  --accent: #7d8cff;
+  --accent-ink: #0f1014;
+  --add: #4cc27f;
+  --modify: #e0b43c;
+  --remove: #f06a6a;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-add: var(--add);
+  --color-modify: var(--modify);
+  --color-remove: var(--remove);
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Areas of the window that drag it, like a title bar. */
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
