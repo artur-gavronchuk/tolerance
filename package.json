@@ -1,0 +1,25 @@
+{
+  "name": "studio",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @studio/desktop dev",
+    "build": "pnpm --filter @studio/desktop build",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "vitest run --passWithNoTests",
+    "test:e2e": "pnpm --filter @studio/desktop test:e2e",
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "db:generate": "pnpm --filter @studio/db generate"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
