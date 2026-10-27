@@ -1,0 +1,20 @@
+{
+  "name": "@studio/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@studio/agents": "workspace:*",
+    "@studio/db": "workspace:*",
+    "@studio/git": "workspace:*",
+    "@studio/prompts": "workspace:*",
+    "@studio/schema": "workspace:*",
+    "zod": "^4.6.7"
+  }
+}
