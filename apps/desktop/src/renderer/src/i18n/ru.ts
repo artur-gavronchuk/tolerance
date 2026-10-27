@@ -108,7 +108,15 @@ export const ru = {
       publishes: 'публикует в',
       other: 'связан с',
     },
-    incoming: '{{from}} {{verb}} его',
+    incoming: '← {{from}} ({{verb}})',
+    incomingVerbs: {
+      calls: 'вызывает',
+      imports: 'импортирует',
+      reads: 'читает',
+      writes: 'пишет',
+      publishes: 'публикует',
+      other: 'связан',
+    },
   },
   log: {
     read: 'Читает',

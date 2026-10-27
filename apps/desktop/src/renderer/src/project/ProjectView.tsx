@@ -113,10 +113,16 @@ function ScanCategoryBlock({ category, findings }: { category: ScanCategory; fin
       ) : (
         <ul className="mt-1.5 space-y-1">
           {findings.map((f) => (
-            <li key={f.label} className="text-[13px]" title={f.evidence.join('\n')}>
-              <span>{f.generic ? t(`scan.generic.${f.label}` as 'scan.generic.readme') : f.label}</span>
-              {f.count > 1 && <span className="ml-1 text-faint">{f.count}</span>}
-              <span className="ml-2 truncate font-mono text-[11px] text-faint">{f.evidence[0]}</span>
+            <li
+              key={f.label}
+              className="flex min-w-0 items-baseline gap-2 text-[13px]"
+              title={f.evidence.join('\n')}
+            >
+              <span className="shrink-0">
+                {f.generic ? t(`scan.generic.${f.label}` as 'scan.generic.readme') : f.label}
+                {f.count > 1 && <span className="ml-1 text-faint">{f.count}</span>}
+              </span>
+              <span className="min-w-0 truncate font-mono text-[11px] text-faint">{f.evidence[0]}</span>
             </li>
           ))}
         </ul>
@@ -372,7 +378,7 @@ function ComponentBlock(props: {
             ))}
             {incoming.map((e) => (
               <li key={`i-${e.from}-${e.kind}`} className="text-muted">
-                {t('map.incoming', { from: name(e.from), verb: t(`map.edgeKinds.${e.kind}`) })}
+                {t('map.incoming', { from: name(e.from), verb: t(`map.incomingVerbs.${e.kind}`) })}
               </li>
             ))}
           </ul>

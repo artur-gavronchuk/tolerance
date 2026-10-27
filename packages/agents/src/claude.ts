@@ -43,7 +43,7 @@ export function claudeReadOnlyArgs(
     'stream-json',
     '--verbose',
     '--json-schema',
-    JSON.stringify(opts.jsonSchema),
+    JSON.stringify(withoutMetaSchema(opts.jsonSchema)),
     '--model',
     opts.model ?? 'sonnet',
     '--allowedTools',
@@ -58,6 +58,14 @@ export function claudeReadOnlyArgs(
   ];
 }
 
+/** Claude Code rejects a `$schema` pointing at a draft it doesn't bundle (zod emits 2020-12); the shape is all it needs. */
+function withoutMetaSchema(schema: object): object {
+  const { $schema: _ignored, ...rest } = schema as { $schema?: unknown };
+  return rest;
+}
+
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+
 export async function runClaudeStructured(opts: StructuredRunOptions): Promise<StructuredRunResult> {
   const child = spawn(opts.command ?? 'claude', claudeReadOnlyArgs(opts), {
     cwd: opts.cwd,
@@ -69,7 +77,7 @@ export async function runClaudeStructured(opts: StructuredRunOptions): Promise<S
 
   let stderr = '';
   child.stderr.on('data', (chunk) => {
-    stderr = (stderr + chunk).slice(-4000);
+    stderr = (stderr + chunk).replace(ANSI, '').slice(-4000);
   });
 
   const normalizer = new ClaudeStreamNormalizer(opts.cwd);

@@ -66,7 +66,7 @@ describe('runClaudeStructured', () => {
     await runClaudeStructured({
       cwd: dir,
       prompt: 'p',
-      jsonSchema: {},
+      jsonSchema: { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object' },
       command: fake,
       env: env([{ type: 'result', subtype: 'success', structured_output: {} }]),
       onEvent: () => {},
@@ -76,6 +76,7 @@ describe('runClaudeStructured', () => {
     expect(denied).toEqual(expect.arrayContaining(['Edit', 'Write', 'Bash']));
     expect(args).not.toContain('--dangerously-skip-permissions');
     expect(args[args.indexOf('--setting-sources') + 1]).toBe('project,local');
+    expect(JSON.parse(args[args.indexOf('--json-schema') + 1] ?? '')).toEqual({ type: 'object' });
   });
 
   it('fails with the agent error', async () => {

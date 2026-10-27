@@ -109,7 +109,15 @@ export const en: Messages = {
       publishes: 'publishes to',
       other: 'is linked to',
     },
-    incoming: '{{from}} {{verb}} it',
+    incoming: '← {{from}} ({{verb}})',
+    incomingVerbs: {
+      calls: 'calls',
+      imports: 'imports',
+      reads: 'reads',
+      writes: 'writes',
+      publishes: 'publishes',
+      other: 'linked',
+    },
   },
   log: {
     read: 'Reads',
