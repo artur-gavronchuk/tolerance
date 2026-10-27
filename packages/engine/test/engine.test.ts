@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import type { StructuredRunOptions } from '@studio/agents';
 import { type Db, openDb } from '@studio/db';
 import { git } from '@studio/git';
-import type { Project, RepoMapJson } from '@studio/schema';
+import type { AssessmentJson, Project, RepoMapJson } from '@studio/schema';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { formatTree, Mapper, scanRepo } from '../src';
+import { Assessor, formatTree, Mapper, scanRepo } from '../src';
 
 const migrations = fileURLToPath(new URL('../../db/drizzle', import.meta.url));
 
@@ -146,5 +146,90 @@ describe('Mapper', () => {
     await mapper.start(project, { language: 'en' });
     expect(await finished(mapper)).toMatchObject({ status: 'failed', error: 'claude: command not found' });
     expect(await db.latestRepoMap(project.id)).toBeUndefined();
+  });
+});
+
+describe('Assessor', () => {
+  let dir: string;
+  let db: Db;
+  let project: Project;
+
+  const assessment: AssessmentJson = {
+    understanding: 'Нужно голосование за решения',
+    verdict: 'clarify',
+    opinion: 'Разумно, но неясно, кто голосует',
+    complexity: 'M',
+    complexityReason: 'Новая таблица и два экрана',
+    affected: [{ path: 'api/votes.go', note: 'новые маршруты' }],
+    approach: ['Таблица votes', 'API', 'UI'],
+    risks: ['Накрутка'],
+    questions: ['Голосуют только участники?'],
+  };
+
+  beforeEach(async () => {
+    dir = realpathSync(mkdtempSync(join(tmpdir(), 'studio-assessor-')));
+    await git(dir, ['init', '-q', '-b', 'main']);
+    write(dir, 'api/main.go', 'package main\n');
+    db = await openDb(join(dir, 'studio.db'), migrations);
+    project = await db.addProject({ name: 'p', repoPath: dir, defaultBranch: 'main' });
+  });
+  afterEach(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('gives the task and the project map to the agent and saves its assessment', async () => {
+    await db.addRepoMap({
+      projectId: project.id,
+      commitSha: null,
+      json: { summary: 'Арена задач', components: [], edges: [], entrypoints: [], testCommandGuess: '' },
+    });
+    const request = await db.addRequest({ projectId: project.id, text: 'Добавить голосование' });
+    const prompts: StructuredRunOptions[] = [];
+    const notify = vi.fn();
+    const assessor = new Assessor({
+      db,
+      notify,
+      runAgent: async (opts) => {
+        prompts.push(opts);
+        // The first answer misses a field, so the agent is asked to fix it.
+        const output = prompts.length === 1 ? { ...assessment, verdict: 'maybe' } : assessment;
+        return { output, sessionId: 's1', costUsd: 0.2 };
+      },
+    });
+
+    await assessor.start(project, request, { language: 'ru' });
+    await vi.waitFor(() => expect(assessor.activeRun(request.id)).toBeUndefined());
+
+    expect(prompts[0]?.prompt).toContain('Добавить голосование');
+    expect(prompts[0]?.prompt).toContain('Арена задач');
+    expect(prompts[1]?.resumeSessionId).toBe('s1');
+    expect(prompts[1]?.prompt).toContain('verdict');
+    expect(await db.latestRequestRun(request.id, 'assess')).toMatchObject({ status: 'done', costUsd: 0.4 });
+    expect((await db.latestAssessment(request.id))?.json).toEqual(assessment);
+    expect(notify).toHaveBeenCalledWith({ type: 'request', projectId: project.id, requestId: request.id });
+  });
+
+  it('falls back to the quick scan without a map and records failures', async () => {
+    const request = await db.addRequest({ projectId: project.id, text: 'x' });
+    let prompt = '';
+    const assessor = new Assessor({
+      db,
+      notify: () => {},
+      runAgent: async (opts) => {
+        prompt = opts.prompt;
+        throw new Error('rate limited');
+      },
+    });
+    await assessor.start(project, request, { language: 'en' });
+    await vi.waitFor(() => expect(assessor.activeRun(request.id)).toBeUndefined());
+
+    expect(prompt).toContain('Quick scan');
+    expect(prompt).toContain('api/');
+    expect(await db.latestRequestRun(request.id, 'assess')).toMatchObject({
+      status: 'failed',
+      error: 'rate limited',
+    });
+    expect(await db.latestAssessment(request.id)).toBeUndefined();
   });
 });

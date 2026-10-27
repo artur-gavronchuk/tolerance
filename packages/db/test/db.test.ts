@@ -48,6 +48,42 @@ describe('Db', () => {
     expect(await db.latestRepoMap(project.id)).toBeUndefined();
   });
 
+  it('stores tasks with their assessments and deletes them with their runs', async () => {
+    const project = await db.addProject({ name: 'p', repoPath: '/tmp/p', defaultBranch: 'main' });
+    const first = await db.addRequest({ projectId: project.id, text: 'добавить голосование' });
+    const second = await db.addRequest({ projectId: project.id, text: 'рейтинг' });
+    expect((await db.listRequests(project.id)).map((r) => r.id).sort()).toEqual([first.id, second.id].sort());
+
+    const run = await db.startRun({
+      projectId: project.id,
+      requestId: first.id,
+      kind: 'assess',
+      agentId: 'claude',
+    });
+    await db.appendEvent(run.id, { type: 'tool_call', name: 'Read', kind: 'read', target: 'go.mod' });
+    const json = {
+      understanding: 'u',
+      verdict: 'go' as const,
+      opinion: 'o',
+      complexity: 'M' as const,
+      complexityReason: 'r',
+      affected: [{ path: 'api/', note: 'routes' }],
+      approach: ['a'],
+      risks: [],
+      questions: ['q'],
+    };
+    await db.addAssessment({ requestId: first.id, runId: run.id, json });
+    expect((await db.latestAssessment(first.id))?.json).toEqual(json);
+    expect((await db.latestRequestRun(first.id, 'assess'))?.id).toBe(run.id);
+    expect(await db.latestRequestRun(second.id, 'assess')).toBeUndefined();
+
+    await db.removeRequest(first.id);
+    expect(await db.getRequest(first.id)).toBeUndefined();
+    expect(await db.latestAssessment(first.id)).toBeUndefined();
+    expect(await db.listEvents(run.id)).toEqual([]);
+    expect(await db.listRequests(project.id)).toHaveLength(1);
+  });
+
   it('marks runs left running as interrupted', async () => {
     const project = await db.addProject({ name: 'p', repoPath: '/tmp/p', defaultBranch: 'main' });
     await db.startRun({ projectId: project.id, kind: 'map', agentId: 'claude' });

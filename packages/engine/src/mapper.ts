@@ -1,127 +1,59 @@
-import { AgentCancelledError, runClaudeStructured } from '@studio/agents';
-import type { Db } from '@studio/db';
 import { listFiles } from '@studio/git';
-import { mapPrompt, validationFollowUp } from '@studio/prompts';
-import {
-  type Project,
-  RepoMapJson,
-  type RepoScan,
-  type Run,
-  repoMapProblems,
-  type StudioEvent,
-} from '@studio/schema';
-import { z } from 'zod';
+import { mapPrompt } from '@studio/prompts';
+import { type Project, RepoMapJson, type RepoScan, type Run, repoMapProblems } from '@studio/schema';
 import { scanRepo } from './scan';
+import { type AgentDeps, executeStructuredRun, RunSlots } from './structured-run';
 
-export interface MapperDeps {
-  db: Db;
-  notify: (event: StudioEvent) => void;
-  /** The agent call; tests replace it with a fake. */
-  runAgent?: typeof runClaudeStructured;
-}
-
-/** Validation retries after the first answer (SPEC §3.2). */
-const MAX_RETRIES = 2;
-
-const repoMapJsonSchema = z.toJSONSchema(RepoMapJson);
+export type MapperDeps = AgentDeps;
 
 /** Builds the repo map with an agent (SPEC §3.5, Mapper). One run per project at a time. */
 export class Mapper {
-  private readonly running = new Map<string, { run: Run; abort: AbortController }>();
+  private readonly slots: RunSlots;
 
-  constructor(private readonly deps: MapperDeps) {}
+  constructor(private readonly deps: MapperDeps) {
+    this.slots = new RunSlots(deps.notify);
+  }
 
   activeRun(projectId: string): Run | undefined {
-    return this.running.get(projectId)?.run;
+    return this.slots.active(projectId);
   }
 
   async start(project: Project, opts: { language: 'ru' | 'en'; model?: string }): Promise<Run> {
-    const active = this.running.get(project.id);
-    if (active) return active.run;
-
-    const run = await this.deps.db.startRun({ projectId: project.id, kind: 'map', agentId: 'claude' });
-    const abort = new AbortController();
-    this.running.set(project.id, { run, abort });
-    this.deps.notify({ type: 'run', projectId: project.id, runId: run.id });
-
-    void this.execute(project, run, opts, abort.signal).finally(() => {
-      this.running.delete(project.id);
-      this.deps.notify({ type: 'run', projectId: project.id, runId: run.id });
-    });
-    return run;
+    return this.slots.start(
+      project.id,
+      () => this.deps.db.startRun({ projectId: project.id, kind: 'map', agentId: 'claude' }),
+      async (run, signal) => {
+        let commitSha: string | null = null;
+        await executeStructuredRun(this.deps, {
+          run,
+          cwd: project.repoPath,
+          prompt: async () => {
+            const [scan, files] = await Promise.all([
+              scanRepo(project.repoPath),
+              listFiles(project.repoPath),
+            ]);
+            commitSha = scan.commitSha;
+            return mapPrompt({
+              scan: formatScan(scan),
+              tree: formatTree(files),
+              language: opts.language === 'ru' ? 'Russian' : 'English',
+            });
+          },
+          schema: RepoMapJson,
+          problems: repoMapProblems,
+          model: opts.model,
+          signal,
+          save: async (json) => {
+            await this.deps.db.addRepoMap({ projectId: project.id, commitSha, json });
+            this.deps.notify({ type: 'map', projectId: project.id });
+          },
+        });
+      },
+    );
   }
 
   cancel(projectId: string): void {
-    this.running.get(projectId)?.abort.abort();
-  }
-
-  private async execute(
-    project: Project,
-    run: Run,
-    opts: { language: 'ru' | 'en'; model?: string },
-    signal: AbortSignal,
-  ): Promise<void> {
-    const { db, notify } = this.deps;
-    const runAgent = this.deps.runAgent ?? runClaudeStructured;
-
-    // Events are appended in order; the UI is told after each one lands.
-    let pending = Promise.resolve();
-    const record = (event: Parameters<Db['appendEvent']>[1]) => {
-      pending = pending
-        .then(() => db.appendEvent(run.id, event))
-        .then(() => notify({ type: 'run', projectId: project.id, runId: run.id }));
-    };
-
-    let costUsd = 0;
-    try {
-      const [scan, files] = await Promise.all([scanRepo(project.repoPath), listFiles(project.repoPath)]);
-      let prompt = mapPrompt({
-        scan: formatScan(scan),
-        tree: formatTree(files),
-        language: opts.language === 'ru' ? 'Russian' : 'English',
-      });
-      let sessionId: string | undefined;
-
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        const result = await runAgent({
-          cwd: project.repoPath,
-          prompt,
-          jsonSchema: repoMapJsonSchema,
-          model: opts.model,
-          resumeSessionId: sessionId,
-          onEvent: record,
-          signal,
-        });
-        costUsd += result.costUsd;
-
-        const parsed = RepoMapJson.safeParse(result.output);
-        const problems = parsed.success
-          ? repoMapProblems(parsed.data)
-          : parsed.error.issues.map((i) => `${i.path.join('.') || 'answer'}: ${i.message}`);
-        if (parsed.success && problems.length === 0) {
-          await pending;
-          await db.addRepoMap({ projectId: project.id, commitSha: scan.commitSha, json: parsed.data });
-          await db.finishRun(run.id, { status: 'done', costUsd });
-          notify({ type: 'map', projectId: project.id });
-          return;
-        }
-        if (attempt === MAX_RETRIES || !result.sessionId) {
-          throw new Error(`The agent's map did not pass validation: ${problems.join('; ')}`);
-        }
-        record({ type: 'error', message: problems.join('; ') });
-        prompt = validationFollowUp(problems);
-        sessionId = result.sessionId;
-      }
-    } catch (error) {
-      await pending;
-      if (error instanceof AgentCancelledError || signal.aborted) {
-        await db.finishRun(run.id, { status: 'cancelled', costUsd });
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        await db.appendEvent(run.id, { type: 'error', message });
-        await db.finishRun(run.id, { status: 'failed', error: message, costUsd });
-      }
-    }
+    this.slots.cancel(projectId);
   }
 }
 

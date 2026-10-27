@@ -24,6 +24,19 @@ export const repoMaps = sqliteTable(
   (t) => [index('repo_maps_project_idx').on(t.projectId, t.createdAt)],
 );
 
+export const changeRequests = sqliteTable(
+  'change_requests',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('change_requests_project_idx').on(t.projectId, t.createdAt)],
+);
+
 export const runs = sqliteTable(
   'runs',
   {
@@ -31,6 +44,7 @@ export const runs = sqliteTable(
     projectId: text('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').references(() => changeRequests.id, { onDelete: 'cascade' }),
     kind: text('kind').notNull(),
     agentId: text('agent_id').notNull(),
     status: text('status').notNull(),
@@ -39,7 +53,26 @@ export const runs = sqliteTable(
     startedAt: integer('started_at').notNull(),
     endedAt: integer('ended_at'),
   },
-  (t) => [index('runs_project_idx').on(t.projectId, t.kind, t.startedAt)],
+  (t) => [
+    index('runs_project_idx').on(t.projectId, t.kind, t.startedAt),
+    index('runs_request_idx').on(t.requestId, t.startedAt),
+  ],
+);
+
+export const assessments = sqliteTable(
+  'assessments',
+  {
+    id: text('id').primaryKey(),
+    requestId: text('request_id')
+      .notNull()
+      .references(() => changeRequests.id, { onDelete: 'cascade' }),
+    runId: text('run_id')
+      .notNull()
+      .references(() => runs.id, { onDelete: 'cascade' }),
+    json: text('json').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('assessments_request_idx').on(t.requestId, t.createdAt)],
 );
 
 export const agentEvents = sqliteTable(

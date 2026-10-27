@@ -122,9 +122,70 @@ export const RepoMap = z.object({
 });
 export type RepoMap = z.infer<typeof RepoMap>;
 
+// ── Change requests: the task a developer brings, and the agent's opinion of it ──
+
+/**
+ * What the developer wants changed, in their own words. Shown as "задача" in the UI; named
+ * ChangeRequest in code so it is not confused with a plan's Task (T1, T2…). Plans grow out of it later.
+ */
+export const ChangeRequest = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  text: z.string(),
+  createdAt: z.number(),
+});
+export type ChangeRequest = z.infer<typeof ChangeRequest>;
+
+export const AssessmentVerdict = z.enum(['go', 'clarify', 'reconsider']);
+export type AssessmentVerdict = z.infer<typeof AssessmentVerdict>;
+
+export const Complexity = z.enum(['S', 'M', 'L']);
+export type Complexity = z.infer<typeof Complexity>;
+
+/** An agent's read of a task before any planning: does it make sense here, how big, what it touches. */
+export const AssessmentJson = z.object({
+  understanding: z.string().describe('How you understood the task, in your own words, 1-3 sentences'),
+  verdict: AssessmentVerdict.describe(
+    'go: clear and sensible, can be planned; clarify: open questions block a good plan; reconsider: the task conflicts with the code or has a better alternative',
+  ),
+  opinion: z
+    .string()
+    .describe(
+      'Your honest opinion as a senior engineer on this codebase: is it worth doing, how, what to watch, 3-6 sentences',
+    ),
+  complexity: Complexity.describe(
+    'S: hours, one area; M: a day or two, several areas; L: many days or a redesign',
+  ),
+  complexityReason: z.string().describe('Why this size, one sentence'),
+  affected: z
+    .array(z.object({ path: z.string(), note: z.string().describe('What changes there, a few words') }))
+    .describe('Files or directories the change will most likely touch, relative to the repo root'),
+  approach: z.array(z.string()).describe('Rough steps to get it done, 2-6 short items'),
+  risks: z.array(z.string()).describe('What can break or go wrong; empty if nothing notable'),
+  questions: z.array(z.string()).describe('What to ask the author before planning; empty if all is clear'),
+});
+export type AssessmentJson = z.infer<typeof AssessmentJson>;
+
+export const Assessment = z.object({
+  id: z.string(),
+  requestId: z.string(),
+  runId: z.string(),
+  json: AssessmentJson,
+  createdAt: z.number(),
+});
+export type Assessment = z.infer<typeof Assessment>;
+
 // ── Runs and agent events ───────────────────────────────────────────────────
 
-export const RunKind = z.enum(['map', 'plan', 'implement', 'follow_up', 'resolve_conflict', 'verify']);
+export const RunKind = z.enum([
+  'map',
+  'assess',
+  'plan',
+  'implement',
+  'follow_up',
+  'resolve_conflict',
+  'verify',
+]);
 export type RunKind = z.infer<typeof RunKind>;
 
 export const RunStatus = z.enum(['running', 'done', 'failed', 'cancelled', 'interrupted']);
@@ -133,6 +194,8 @@ export type RunStatus = z.infer<typeof RunStatus>;
 export const Run = z.object({
   id: z.string(),
   projectId: z.string(),
+  /** The change request this run works on; null for project-wide runs such as the map. */
+  requestId: z.string().nullable(),
   kind: RunKind,
   agentId: z.string(),
   status: RunStatus,
@@ -176,4 +239,5 @@ export type AgentEvent = z.infer<typeof AgentEvent>;
 /** Something changed that the UI shows; it refetches what it needs. */
 export type StudioEvent =
   | { type: 'run'; projectId: string; runId: string }
-  | { type: 'map'; projectId: string };
+  | { type: 'map'; projectId: string }
+  | { type: 'request'; projectId: string; requestId: string };
