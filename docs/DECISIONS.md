@@ -34,3 +34,4 @@
 - 2026-10-27: diff с untracked-файлами считается через временный индекс (`GIT_INDEX_FILE`, `read-tree HEAD`, `add -A`), чтобы не трогать индекс worktree.
 - 2026-10-27: первый запуск задачи переводит план в `executing`; с этого момента утверждение не снимается и план не составляется заново (у задач уже есть ветки).
 - 2026-10-27: `STUDIO_WORKTREES_ROOT` переопределяет `~/.studio/worktrees` — e2e не пишет в папку пользователя.
+- 2026-10-27: Biome не проверяет `test-results/` и `playwright-report/` — Biome не читает `.gitignore`, и после `pnpm test:e2e` `pnpm check` падал на файлах Playwright.
