@@ -1,25 +1,146 @@
+import type { Project } from '@studio/schema';
+import { QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { TRPCClientError } from '@trpc/client';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type Language, languages, setLanguage } from './i18n';
+import { useStudioEvents } from './lib/events';
+import { queryClient, TRPCProvider, trpcClient, useTRPC } from './lib/trpc';
+import { ProjectView } from './project/ProjectView';
 import { applyTheme, storedTheme, type Theme, themes } from './theme';
 
 const steps = ['map', 'plan', 'run', 'verify', 'review'] as const;
 
 export function App() {
   return (
+    <QueryClientProvider client={queryClient}>
+      <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+        <Shell />
+      </TRPCProvider>
+    </QueryClientProvider>
+  );
+}
+
+const SELECTED_KEY = 'studio.selectedProject';
+
+function useSelectedProject(): [string | null, (id: string | null) => void] {
+  const [id, setId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(SELECTED_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const select = (next: string | null) => {
+    setId(next);
+    try {
+      if (next) localStorage.setItem(SELECTED_KEY, next);
+      else localStorage.removeItem(SELECTED_KEY);
+    } catch {
+      // Not persisted; the selection still applies for this session.
+    }
+  };
+  return [id, select];
+}
+
+function Shell() {
+  useStudioEvents();
+  const trpc = useTRPC();
+  const { t, i18n } = useTranslation();
+  const queryClient = useQueryClient();
+  const [selectedId, select] = useSelectedProject();
+  const [error, setError] = useState<string | null>(null);
+
+  const projects = useQuery(trpc.projects.list.queryOptions());
+  const info = useQuery(trpc.system.info.queryOptions());
+  const pickFolder = useMutation(trpc.projects.pickFolder.mutationOptions());
+  const add = useMutation(trpc.projects.add.mutationOptions());
+  const startMap = useMutation(trpc.map.start.mutationOptions());
+  const remove = useMutation(trpc.projects.remove.mutationOptions());
+
+  const claudeInstalled = info.data?.claude.installed ?? true;
+  const selected = projects.data?.find((p) => p.id === selectedId) ?? null;
+
+  async function addProject() {
+    setError(null);
+    try {
+      const path = await pickFolder.mutateAsync();
+      if (!path) return;
+      const { project, created } = await add.mutateAsync({ path });
+      await queryClient.invalidateQueries({ queryKey: trpc.projects.list.queryKey() });
+      select(project.id);
+      // A new project gets explored right away: that is what the user added it for.
+      if (created && claudeInstalled) {
+        await startMap.mutateAsync({ projectId: project.id, language: i18n.language === 'en' ? 'en' : 'ru' });
+      }
+    } catch (e) {
+      setError(
+        e instanceof TRPCClientError && e.message === 'not_a_git_repo'
+          ? t('errors.notAGitRepo')
+          : t('errors.generic', { message: e instanceof Error ? e.message : String(e) }),
+      );
+    }
+  }
+
+  async function removeProject(project: Project) {
+    await remove.mutateAsync({ projectId: project.id });
+    if (selectedId === project.id) select(null);
+    await queryClient.invalidateQueries({ queryKey: trpc.projects.list.queryKey() });
+  }
+
+  return (
     <div className="flex h-full">
-      <Sidebar />
+      <Sidebar
+        projects={projects.data ?? []}
+        selectedId={selected?.id ?? null}
+        onSelect={select}
+        onAdd={addProject}
+        adding={pickFolder.isPending || add.isPending}
+      />
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="drag h-10 shrink-0 border-b border-line" />
-        <Welcome />
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 border-b border-remove/30 bg-panel px-4 py-2 text-[12.5px]"
+          >
+            <span className="flex-1 select-text">{error}</span>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="text-muted hover:text-ink"
+              aria-label="✕"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        <div className="min-h-0 flex-1 overflow-auto">
+          {selected ? (
+            <ProjectView
+              key={selected.id}
+              project={selected}
+              claudeInstalled={claudeInstalled}
+              onRemove={() => void removeProject(selected)}
+            />
+          ) : (
+            <Welcome onAdd={addProject} />
+          )}
+        </div>
         <StatusBar />
       </main>
     </div>
   );
 }
 
-function Sidebar() {
+function Sidebar(props: {
+  projects: Project[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onAdd: () => void;
+  adding: boolean;
+}) {
   const { t } = useTranslation();
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-panel">
@@ -31,17 +152,36 @@ function Sidebar() {
         <span className="text-[12px] font-medium text-muted">{t('sidebar.projects')}</span>
         <button
           type="button"
-          disabled
-          title={t('welcome.addProjectSoon')}
+          onClick={props.onAdd}
+          disabled={props.adding}
+          title={t('sidebar.addProject')}
           aria-label={t('sidebar.addProject')}
-          className="no-drag grid h-5 w-5 place-items-center rounded text-muted enabled:hover:bg-line disabled:opacity-40"
+          className="grid h-5 w-5 place-items-center rounded text-muted hover:bg-line hover:text-ink disabled:opacity-40"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
             <path d="M6 1.5v9M1.5 6h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>
       </div>
-      <p className="px-3 py-1 text-[12px] text-faint">{t('sidebar.noProjects')}</p>
+      {props.projects.length === 0 ? (
+        <p className="px-3 py-1 text-[12px] text-faint">{t('sidebar.noProjects')}</p>
+      ) : (
+        <ul className="min-h-0 flex-1 overflow-auto px-1.5">
+          {props.projects.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => props.onSelect(p.id)}
+                aria-current={p.id === props.selectedId ? 'page' : undefined}
+                title={p.repoPath}
+                className="w-full truncate rounded-md px-1.5 py-1 text-left text-[13px] text-muted hover:bg-line/60 hover:text-ink aria-[current=page]:bg-line aria-[current=page]:text-ink"
+              >
+                {p.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="mt-auto space-y-3 border-t border-line p-3">
         <Preferences />
       </div>
@@ -109,10 +249,10 @@ function Segmented<T extends string>(props: {
   );
 }
 
-function Welcome() {
+function Welcome({ onAdd }: { onAdd: () => void }) {
   const { t } = useTranslation();
   return (
-    <section className="flex flex-1 items-center overflow-auto px-10 py-12">
+    <section className="flex min-h-full items-center px-10 py-12">
       <div className="mx-auto w-full max-w-3xl">
         <h1 className="max-w-xl text-[22px] font-semibold leading-tight tracking-tight">
           {t('welcome.title')}
@@ -127,15 +267,15 @@ function Welcome() {
           ))}
         </ol>
 
-        <div className="mt-8 flex items-center gap-3">
+        <div className="mt-8 flex max-w-xl items-start gap-4">
           <button
             type="button"
-            disabled
-            className="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-ink disabled:opacity-50"
+            onClick={onAdd}
+            className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-ink hover:brightness-110"
           >
             {t('welcome.addProject')}
           </button>
-          <span className="text-[12px] text-faint">{t('welcome.addProjectSoon')}</span>
+          <span className="text-[12px] leading-snug text-muted">{t('welcome.hint')}</span>
         </div>
       </div>
     </section>
