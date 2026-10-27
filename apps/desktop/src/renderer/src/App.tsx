@@ -1,4 +1,4 @@
-import type { Project } from '@studio/schema';
+import type { Project, Workspace } from '@studio/schema';
 import { QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { TRPCClientError } from '@trpc/client';
 import type { ReactNode } from 'react';
@@ -9,6 +9,8 @@ import { useStudioEvents } from './lib/events';
 import { queryClient, TRPCProvider, trpcClient, useTRPC } from './lib/trpc';
 import { ProjectView } from './project/ProjectView';
 import { applyTheme, storedTheme, swatches, type Theme, themes } from './theme';
+import { WorkspaceList } from './workspace/WorkspaceList';
+import { WorkspaceView } from './workspace/WorkspaceView';
 
 const steps = ['task', 'plan', 'run', 'verify', 'review'] as const;
 
@@ -22,12 +24,11 @@ export function App() {
   );
 }
 
-const SELECTED_KEY = 'studio.selectedProject';
-
-function useSelectedProject(): [string | null, (id: string | null) => void] {
+/** A selection that survives restarts: the open project, then the open workspace in it. */
+function useStoredId(key: string): [string | null, (id: string | null) => void] {
   const [id, setId] = useState<string | null>(() => {
     try {
-      return localStorage.getItem(SELECTED_KEY);
+      return localStorage.getItem(key);
     } catch {
       return null;
     }
@@ -35,8 +36,8 @@ function useSelectedProject(): [string | null, (id: string | null) => void] {
   const select = (next: string | null) => {
     setId(next);
     try {
-      if (next) localStorage.setItem(SELECTED_KEY, next);
-      else localStorage.removeItem(SELECTED_KEY);
+      if (next) localStorage.setItem(key, next);
+      else localStorage.removeItem(key);
     } catch {
       // Not persisted; the selection still applies for this session.
     }
@@ -49,8 +50,15 @@ function Shell() {
   const trpc = useTRPC();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [selectedId, select] = useSelectedProject();
+  const [selectedId, setSelectedId] = useStoredId('studio.selectedProject');
+  const [workspaceId, selectWorkspace] = useStoredId('studio.selectedWorkspace');
+  // Shown once on the workspace that was just created without a fresh origin/<main>.
+  const [fetchError, setFetchError] = useState<{ workspaceId: string; error: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const select = (id: string | null) => {
+    setSelectedId(id);
+    selectWorkspace(null);
+  };
 
   const projects = useQuery(trpc.projects.list.queryOptions());
   const info = useQuery(trpc.system.info.queryOptions());
@@ -60,6 +68,11 @@ function Shell() {
 
   const claudeInstalled = info.data?.claude.installed ?? true;
   const selected = projects.data?.find((p) => p.id === selectedId) ?? null;
+  const workspaces = useQuery({
+    ...trpc.workspaces.list.queryOptions({ projectId: selected?.id ?? '' }),
+    enabled: Boolean(selected),
+  });
+  const openWorkspace = selected ? workspaces.data?.find((w) => w.workspace.id === workspaceId) : undefined;
 
   async function addProject() {
     setError(null);
@@ -93,6 +106,12 @@ function Shell() {
         onSelect={select}
         onAdd={addProject}
         adding={pickFolder.isPending || add.isPending}
+        workspaceId={openWorkspace?.workspace.id ?? null}
+        onSelectWorkspace={selectWorkspace}
+        onWorkspaceCreated={(workspace, error) => {
+          setFetchError(error ? { workspaceId: workspace.id, error } : null);
+          selectWorkspace(workspace.id);
+        }}
       />
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="drag h-10 shrink-0 border-b border-line" />
@@ -113,7 +132,16 @@ function Shell() {
           </div>
         )}
         <div className="min-h-0 flex-1 overflow-auto">
-          {selected ? (
+          {selected && openWorkspace ? (
+            <WorkspaceView
+              key={openWorkspace.workspace.id}
+              project={selected}
+              workspace={openWorkspace.workspace}
+              missing={openWorkspace.missing}
+              fetchError={fetchError?.workspaceId === openWorkspace.workspace.id ? fetchError.error : null}
+              onRemoved={() => selectWorkspace(null)}
+            />
+          ) : selected ? (
             <ProjectView
               key={selected.id}
               project={selected}
@@ -136,6 +164,9 @@ function Sidebar(props: {
   onSelect: (id: string) => void;
   onAdd: () => void;
   adding: boolean;
+  workspaceId: string | null;
+  onSelectWorkspace: (id: string) => void;
+  onWorkspaceCreated: (workspace: Workspace, fetchError: string | null) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -168,12 +199,20 @@ function Sidebar(props: {
               <button
                 type="button"
                 onClick={() => props.onSelect(p.id)}
-                aria-current={p.id === props.selectedId ? 'page' : undefined}
+                aria-current={p.id === props.selectedId && !props.workspaceId ? 'page' : undefined}
                 title={p.repoPath}
                 className="w-full truncate rounded-md px-1.5 py-1 text-left text-[13px] text-muted hover:bg-panel hover:text-ink aria-[current=page]:bg-sel aria-[current=page]:text-ink"
               >
                 {p.name}
               </button>
+              {p.id === props.selectedId && (
+                <WorkspaceList
+                  projectId={p.id}
+                  selectedId={props.workspaceId}
+                  onSelect={props.onSelectWorkspace}
+                  onCreated={props.onWorkspaceCreated}
+                />
+              )}
             </li>
           ))}
         </ul>

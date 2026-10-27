@@ -3,6 +3,7 @@ import { git } from './exec';
 
 export * from './diff';
 export { git } from './exec';
+export * from './workspace';
 export * from './worktree';
 
 export class NotAGitRepoError extends Error {

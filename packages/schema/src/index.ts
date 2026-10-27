@@ -11,9 +11,21 @@ export const Project = z.object({
   setupCommand: z.string().nullable(),
   /** Command prefixes an implementing agent may run, e.g. "pnpm test" (SPEC §3.3). Empty: no shell. */
   allowedCommands: z.array(z.string()),
+  /** "Open in editor" for workspaces: a CLI such as `code`, `cursor`, `idea`. Null: `code`. */
+  editorCommand: z.string().nullable(),
+  /** "Open in terminal": a macOS app name (`Terminal`, `iTerm`, `Ghostty`) or, on Linux, a command. */
+  terminalApp: z.string().nullable(),
   createdAt: z.number(),
 });
 export type Project = z.infer<typeof Project>;
+
+/** What the developer can change on the project screen. */
+export const ProjectSettings = z.object({
+  setupCommand: z.string().nullable(),
+  editorCommand: z.string().nullable(),
+  terminalApp: z.string().nullable(),
+});
+export type ProjectSettings = z.infer<typeof ProjectSettings>;
 
 // ── Quick scan: what the repository is made of, found without an LLM ───────
 
@@ -376,6 +388,33 @@ export const Task = z.object({
 });
 export type Task = z.infer<typeof Task>;
 
+// ── Workspaces: daily mode, a branch + worktree the developer works in by hand ──
+
+/** `setupCommand` in a fresh workspace: none, running, finished, or cut off by an app restart. */
+export const SetupStatus = z.enum(['none', 'running', 'done', 'failed', 'interrupted']);
+export type SetupStatus = z.infer<typeof SetupStatus>;
+
+export const Workspace = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  /** What the developer typed. */
+  name: z.string(),
+  slug: z.string(),
+  /** `studio/ws/<slug>`; stays when the workspace is deleted. */
+  branch: z.string(),
+  path: z.string(),
+  /** What the branch started from, e.g. `origin/main`, and that commit. */
+  baseRef: z.string(),
+  baseSha: z.string(),
+  setupStatus: SetupStatus,
+  /** Exit code of the setup command once it finished. */
+  setupExitCode: z.number().nullable(),
+  /** The tail of the setup output, kept after the command finished. */
+  setupLog: z.string(),
+  createdAt: z.number(),
+});
+export type Workspace = z.infer<typeof Workspace>;
+
 // ── Runs and agent events ───────────────────────────────────────────────────
 
 export const RunKind = z.enum([
@@ -448,4 +487,5 @@ export type AgentEvent = z.infer<typeof AgentEvent>;
 export type StudioEvent =
   | { type: 'run'; projectId: string; runId: string }
   | { type: 'map'; projectId: string }
-  | { type: 'request'; projectId: string; requestId: string };
+  | { type: 'request'; projectId: string; requestId: string }
+  | { type: 'workspace'; projectId: string; workspaceId: string };

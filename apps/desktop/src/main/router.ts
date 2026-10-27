@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { basename } from 'node:path';
 import { detectClaude } from '@studio/agents';
 import type { Db } from '@studio/db';
@@ -8,13 +9,23 @@ import {
   type Planner,
   scanRepo,
   TaskStateError,
+  WorkspaceError,
+  type Workspaces,
 } from '@studio/engine';
 import { defaultBranch, NotAGitRepoError, repoRoot } from '@studio/git';
-import { type Plan, planVariantProblems } from '@studio/schema';
+import { type Plan, ProjectSettings, planVariantProblems } from '@studio/schema';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { app, BrowserWindow, dialog } from 'electron';
 import { z } from 'zod';
 import { broadcast } from './ipc';
+import {
+  DEFAULT_EDITOR,
+  DEFAULT_TERMINAL,
+  OpenInError,
+  openFolder,
+  openInEditor,
+  openInTerminal,
+} from './open-in';
 
 export interface Context {
   db: Db;
@@ -22,6 +33,7 @@ export interface Context {
   assessor: Assessor;
   planner: Planner;
   implementer: Implementer;
+  workspaces: Workspaces;
 }
 
 const t = initTRPC.context<Context>().create({ isServer: true });
@@ -52,6 +64,32 @@ async function requirePlan(db: Db, id: string) {
   const plan = await db.getPlan(id);
   if (!plan) throw new TRPCError({ code: 'NOT_FOUND', message: 'Plan not found' });
   return plan;
+}
+
+async function requireWorkspace(db: Db, id: string) {
+  const workspace = await db.getWorkspace(id);
+  if (!workspace) throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace not found' });
+  return workspace;
+}
+
+/** Errors the user can act on keep their code as the message; the UI translates it. */
+async function asUserError<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof WorkspaceError) {
+      const code = error.code === 'setup_running' ? 'CONFLICT' : 'BAD_REQUEST';
+      throw new TRPCError({ code, message: `workspace.${error.code}`, cause: error });
+    }
+    if (error instanceof OpenInError) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `open.${error.code}:${error.detail}`,
+        cause: error,
+      });
+    }
+    throw error;
+  }
 }
 
 /** A task that cannot be started or cleaned up right now is a conflict, not a server error. */
@@ -117,6 +155,7 @@ export const router = t.router({
         const plan = await ctx.db.latestPlan(request.id);
         if (plan) ctx.implementer.cancel(plan.id);
       }
+      // Like task worktrees, workspace folders and branches stay on disk; only Studio forgets them.
       await ctx.db.removeProject(input.projectId);
     }),
 
@@ -124,6 +163,75 @@ export const router = t.router({
       const project = await requireProject(ctx.db, input.projectId);
       return scanRepo(project.repoPath);
     }),
+
+    /** Setup command, editor and terminal for the project's workspaces. Empty strings mean "not set". */
+    updateSettings: t.procedure
+      .input(projectInput.extend({ settings: ProjectSettings }))
+      .mutation(async ({ ctx, input }) => {
+        await requireProject(ctx.db, input.projectId);
+        const clean = (v: string | null) => (v?.trim() ? v.trim() : null);
+        await ctx.db.updateProjectSettings(input.projectId, {
+          setupCommand: clean(input.settings.setupCommand),
+          editorCommand: clean(input.settings.editorCommand),
+          terminalApp: clean(input.settings.terminalApp),
+        });
+      }),
+
+    /** What "open in editor / terminal" uses when the project sets nothing. */
+    openDefaults: t.procedure.query(() => ({ editor: DEFAULT_EDITOR, terminal: DEFAULT_TERMINAL })),
+  }),
+
+  /** Daily mode: a branch + worktree the developer works in by hand. */
+  workspaces: t.router({
+    list: t.procedure.input(projectInput).query(async ({ ctx, input }) => {
+      const list = await ctx.db.listWorkspaces(input.projectId);
+      // A folder deleted by hand shows up as missing; the workspace can still be removed.
+      return list.map((workspace) => ({ workspace, missing: !existsSync(workspace.path) }));
+    }),
+
+    create: t.procedure
+      .input(projectInput.extend({ name: z.string().trim().min(1).max(200) }))
+      .mutation(async ({ ctx, input }) => {
+        const project = await requireProject(ctx.db, input.projectId);
+        return asUserError(() => ctx.workspaces.create(project, input.name));
+      }),
+
+    setupLog: t.procedure.input(z.object({ workspaceId: z.string() })).query(async ({ ctx, input }) => {
+      const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+      return ctx.workspaces.setupLog(workspace);
+    }),
+
+    retrySetup: t.procedure.input(z.object({ workspaceId: z.string() })).mutation(async ({ ctx, input }) => {
+      const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+      const project = await requireProject(ctx.db, workspace.projectId);
+      await asUserError(() => ctx.workspaces.retrySetup(project, workspace));
+    }),
+
+    /** Asked right before deleting: uncommitted files are lost, commits stay on the branch. */
+    changes: t.procedure.input(z.object({ workspaceId: z.string() })).query(async ({ ctx, input }) => {
+      const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+      return ctx.workspaces.changes(workspace);
+    }),
+
+    remove: t.procedure.input(z.object({ workspaceId: z.string() })).mutation(async ({ ctx, input }) => {
+      const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+      const project = await requireProject(ctx.db, workspace.projectId);
+      await ctx.workspaces.remove(project, workspace);
+    }),
+
+    open: t.procedure
+      .input(z.object({ workspaceId: z.string(), target: z.enum(['editor', 'terminal', 'folder']) }))
+      .mutation(async ({ ctx, input }) => {
+        const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+        const project = await requireProject(ctx.db, workspace.projectId);
+        await asUserError(() =>
+          input.target === 'editor'
+            ? openInEditor(project.editorCommand, workspace.path)
+            : input.target === 'terminal'
+              ? openInTerminal(project.terminalApp, workspace.path)
+              : openFolder(workspace.path),
+        );
+      }),
   }),
 
   map: t.router({

@@ -79,7 +79,7 @@ export function taskWorktreeLayout(input: {
   };
 }
 
-async function branchExists(repo: string, branch: string): Promise<boolean> {
+export async function branchExists(repo: string, branch: string): Promise<boolean> {
   return git(repo, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`]).then(
     () => true,
     () => false,
