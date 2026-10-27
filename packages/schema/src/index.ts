@@ -175,6 +175,188 @@ export const Assessment = z.object({
 });
 export type Assessment = z.infer<typeof Assessment>;
 
+// ── Plans: variants of how to do a task, then the approved one (SPEC §3.2) ──
+
+export const AgentId = z.enum(['claude', 'codex', 'opencode']);
+export type AgentId = z.infer<typeof AgentId>;
+
+export const AcceptanceCheck = z.enum(['test', 'inspect', 'command']);
+export type AcceptanceCheck = z.infer<typeof AcceptanceCheck>;
+
+export const AcceptanceCriterion = z.object({
+  id: z.string().describe('Task key plus A and a number, e.g. "T1.A1"'),
+  text: z.string().describe('What must be true when the task is done, checkable by someone else'),
+  check: AcceptanceCheck.describe(
+    'test: a test proves it; inspect: a reviewer reads the code or UI; command: a shell command proves it',
+  ),
+  command: z.string().describe('For check=command: the command from the repo root; else empty'),
+});
+export type AcceptanceCriterion = z.infer<typeof AcceptanceCriterion>;
+
+export const TaskSpecJson = z.object({
+  key: z.string().describe('"T1", "T2", … unique within the variant'),
+  title: z.string(),
+  description: z
+    .string()
+    .describe('What to do, enough for an agent that has not seen this conversation, 2-6 sentences'),
+  dependsOn: z.array(z.string()).describe('Keys of tasks that must be done first; empty if none'),
+  scope: z.object({
+    allow: z.array(z.string()).describe('Globs of files the task may change, relative to the repo root'),
+    deny: z.array(z.string()).describe('Globs it must not touch; empty if none'),
+  }),
+  acceptance: z.array(AcceptanceCriterion).describe('At least one criterion'),
+  agentHint: AgentId.describe('Which agent fits the task best; claude when unsure'),
+});
+export type TaskSpecJson = z.infer<typeof TaskSpecJson>;
+
+export const ComponentChange = z.enum(['add', 'modify', 'remove']);
+export type ComponentChange = z.infer<typeof ComponentChange>;
+
+export const PlanVariantJson = z.object({
+  title: z.string().describe('The approach in a few words'),
+  approach: z.string().describe('The essence of the approach, 3-6 sentences'),
+  tradeoffs: z.object({
+    pros: z.array(z.string()),
+    cons: z.array(z.string()),
+    risks: z.array(z.string()),
+  }),
+  complexity: Complexity,
+  affectedComponents: z
+    .array(
+      z.object({
+        componentId: z.string().describe('Component id from the project map'),
+        change: ComponentChange,
+        note: z.string(),
+      }),
+    )
+    .describe('Components of the project map the variant touches; empty when there is no map'),
+  tasks: z.array(TaskSpecJson).describe('1-8 tasks; independent ones can run in parallel'),
+});
+export type PlanVariantJson = z.infer<typeof PlanVariantJson>;
+
+/** What the planner agent answers: exactly two variants that differ in approach (SPEC §1, goal 3). */
+export const PlanDraftJson = z.object({
+  variants: z.array(PlanVariantJson).length(2),
+});
+export type PlanDraftJson = z.infer<typeof PlanDraftJson>;
+
+/**
+ * Checks a variant beyond its shape (SPEC §3.5): unique task keys, known and acyclic dependencies,
+ * at least one criterion per task, components that exist on the map. Returns human-readable problems.
+ */
+export function planVariantProblems(variant: PlanVariantJson, componentIds?: ReadonlySet<string>): string[] {
+  const problems: string[] = [];
+  const keys = new Set<string>();
+  const criteria = new Set<string>();
+  if (variant.tasks.length === 0) problems.push('The variant has no tasks');
+  for (const task of variant.tasks) {
+    if (keys.has(task.key)) problems.push(`Duplicate task key "${task.key}"`);
+    keys.add(task.key);
+    if (task.acceptance.length === 0) problems.push(`Task ${task.key} has no acceptance criteria`);
+    for (const c of task.acceptance) {
+      if (criteria.has(c.id)) problems.push(`Duplicate criterion id "${c.id}"`);
+      criteria.add(c.id);
+      if (c.check === 'command' && c.command.trim() === '') {
+        problems.push(`Criterion ${c.id} is check=command but has no command`);
+      }
+    }
+    if (task.scope.allow.length === 0) problems.push(`Task ${task.key} has an empty scope.allow`);
+  }
+  for (const task of variant.tasks) {
+    for (const dep of task.dependsOn) {
+      if (dep === task.key) problems.push(`Task ${task.key} depends on itself`);
+      else if (!keys.has(dep)) problems.push(`Task ${task.key} depends on unknown task "${dep}"`);
+    }
+  }
+  const cycle = findCycle(variant.tasks);
+  if (cycle) problems.push(`Dependency cycle: ${cycle.join(' → ')}`);
+  if (componentIds) {
+    for (const a of variant.affectedComponents) {
+      if (!componentIds.has(a.componentId)) {
+        problems.push(`Unknown component "${a.componentId}" (not on the project map)`);
+      }
+    }
+  }
+  return problems;
+}
+
+/** Problems of both variants, prefixed with the variant number so the agent knows where to look. */
+export function planDraftProblems(draft: PlanDraftJson, componentIds?: ReadonlySet<string>): string[] {
+  return draft.variants.flatMap((variant, i) =>
+    planVariantProblems(variant, componentIds).map((p) => `Variant ${i + 1}: ${p}`),
+  );
+}
+
+/** A dependency cycle as a list of keys (first repeated at the end), or null. Unknown keys are ignored. */
+export function findCycle(tasks: Pick<TaskSpecJson, 'key' | 'dependsOn'>[]): string[] | null {
+  const deps = new Map(tasks.map((t) => [t.key, t.dependsOn]));
+  const state = new Map<string, 'visiting' | 'done'>();
+  const path: string[] = [];
+  const visit = (key: string): string[] | null => {
+    if (state.get(key) === 'done') return null;
+    if (state.get(key) === 'visiting') return [...path.slice(path.indexOf(key)), key];
+    state.set(key, 'visiting');
+    path.push(key);
+    for (const dep of deps.get(key) ?? []) {
+      if (!deps.has(dep)) continue;
+      const cycle = visit(dep);
+      if (cycle) return cycle;
+    }
+    path.pop();
+    state.set(key, 'done');
+    return null;
+  };
+  for (const t of tasks) {
+    const cycle = visit(t.key);
+    if (cycle) return cycle;
+  }
+  return null;
+}
+
+export const PlanStatus = z.enum([
+  'awaiting_choice',
+  'approved',
+  'executing',
+  'integrating',
+  'verifying',
+  'ready_for_review',
+  'done',
+  'failed',
+  'cancelled',
+]);
+export type PlanStatus = z.infer<typeof PlanStatus>;
+
+export const PlanVariant = z.object({
+  id: z.string(),
+  planId: z.string(),
+  /** Position the agent gave it, 0 or 1. */
+  position: z.number(),
+  json: PlanVariantJson,
+  createdAt: z.number(),
+});
+export type PlanVariant = z.infer<typeof PlanVariant>;
+
+/**
+ * A plan for a change request. Created when the planner answers, so "drafting" is the plan run
+ * itself (see docs/DECISIONS.md). Base commit and integration branch are set when execution starts.
+ */
+export const Plan = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  requestId: z.string(),
+  runId: z.string(),
+  status: PlanStatus,
+  chosenVariantId: z.string().nullable(),
+  baseSha: z.string().nullable(),
+  integrationBranch: z.string().nullable(),
+  createdAt: z.number(),
+  approvedAt: z.number().nullable(),
+});
+export type Plan = z.infer<typeof Plan>;
+
+export const PlanWithVariants = Plan.extend({ variants: z.array(PlanVariant) });
+export type PlanWithVariants = z.infer<typeof PlanWithVariants>;
+
 // ── Runs and agent events ───────────────────────────────────────────────────
 
 export const RunKind = z.enum([

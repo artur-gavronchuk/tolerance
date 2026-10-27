@@ -1,8 +1,16 @@
-import type { Assessment, AssessmentVerdict, ChangeRequest, Project, Run } from '@studio/schema';
+import type {
+  Assessment,
+  AssessmentVerdict,
+  ChangeRequest,
+  PlanWithVariants,
+  Project,
+  Run,
+} from '@studio/schema';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTRPC } from '../lib/trpc';
+import { PlanBlock } from './PlanBlock';
 import { Notice, RunProgress, Section } from './shared';
 
 /** The first thing to do in a project: write a task and get the agent's opinion of it. */
@@ -103,6 +111,8 @@ function TaskCard(props: {
   request: ChangeRequest;
   assessment: Assessment | null;
   run: Run | null;
+  plan: PlanWithVariants | null;
+  planRun: Run | null;
   claudeInstalled: boolean;
 }) {
   const trpc = useTRPC();
@@ -165,6 +175,17 @@ function TaskCard(props: {
               {assessment ? t('tasks.reassess') : t('tasks.assess')}
             </button>
           </div>
+        )}
+
+        {/* Planning follows the assessment; a plan made earlier stays visible while the task is reassessed. */}
+        {((assessment && !running) || props.plan || props.planRun) && (
+          <PlanBlock
+            requestId={request.id}
+            plan={props.plan}
+            run={props.planRun}
+            language={language}
+            claudeInstalled={props.claudeInstalled}
+          />
         )}
       </div>
     </article>

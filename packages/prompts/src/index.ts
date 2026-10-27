@@ -1,6 +1,7 @@
 /// <reference path="./raw.d.ts" />
 import assessTemplate from './assess.md?raw';
 import mapTemplate from './map.md?raw';
+import planTemplate from './plan.md?raw';
 import validationTemplate from './validation.md?raw';
 
 /** Fills `{{name}}` placeholders; a placeholder without a value is a bug, so it throws. */
@@ -18,6 +19,15 @@ export function mapPrompt(vars: { scan: string; tree: string; language: string }
 
 export function assessPrompt(vars: { task: string; context: string; language: string }): string {
   return render(assessTemplate, vars);
+}
+
+export function planPrompt(vars: {
+  task: string;
+  assessment: string;
+  context: string;
+  language: string;
+}): string {
+  return render(planTemplate, vars);
 }
 
 /** Follow-up when the agent's answer does not pass validation (SPEC §3.2). */
