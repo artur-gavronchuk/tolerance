@@ -1,5 +1,6 @@
 /// <reference path="./raw.d.ts" />
 import assessTemplate from './assess.md?raw';
+import implementTemplate from './implement.md?raw';
 import mapTemplate from './map.md?raw';
 import planTemplate from './plan.md?raw';
 import validationTemplate from './validation.md?raw';
@@ -28,6 +29,20 @@ export function planPrompt(vars: {
   language: string;
 }): string {
   return render(planTemplate, vars);
+}
+
+export function implementPrompt(vars: {
+  key: string;
+  title: string;
+  description: string;
+  allow: string;
+  deny: string;
+  criteria: string;
+  context: string;
+  commands: string;
+  language: string;
+}): string {
+  return render(implementTemplate, vars);
 }
 
 /** Follow-up when the agent's answer does not pass validation (SPEC §3.2). */

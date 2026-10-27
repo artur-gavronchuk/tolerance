@@ -11,7 +11,7 @@ export function RunProgress({ run, label, onCancel }: { run: Run; label: string;
   const events = useQuery(trpc.runs.events.queryOptions({ runId: run.id }));
   const elapsed = useElapsed(run.startedAt);
   const shown = (events.data ?? [])
-    .filter((e) => e.event.type === 'tool_call' || e.event.type === 'error')
+    .filter((e) => ['tool_call', 'permission_denied', 'error'].includes(e.event.type))
     .slice(-12);
 
   return (
@@ -46,6 +46,13 @@ function EventLine({ event }: { event: AgentEvent }) {
     return (
       <li className="truncate">
         <span className="text-faint">{t(`log.${e.kind}`)}</span> {e.target}
+      </li>
+    );
+  }
+  if (e.type === 'permission_denied') {
+    return (
+      <li className="truncate text-modify">
+        {t('log.denied')}: {e.name} {e.target}
       </li>
     );
   }

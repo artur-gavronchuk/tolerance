@@ -17,6 +17,7 @@ import {
   type Run,
   RunKind,
   RunStatus,
+  type Task,
 } from '@studio/schema';
 import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
 import { drizzle, type SqliteRemoteDatabase } from 'drizzle-orm/sqlite-proxy';
@@ -30,6 +31,7 @@ import {
   projects,
   repoMaps,
   runs,
+  tasks,
 } from './tables';
 
 export * as tables from './tables';
@@ -103,6 +105,7 @@ export class Db {
       ...input,
       testCommand: null,
       setupCommand: null,
+      allowedCommands: [],
       createdAt: Date.now(),
     };
     await this.orm.insert(projects).values(project);
@@ -257,6 +260,49 @@ export class Db {
       .where(eq(plans.id, planId));
   }
 
+  async setPlanStatus(planId: string, status: PlanStatus): Promise<void> {
+    await this.orm.update(plans).set({ status }).where(eq(plans.id, planId));
+  }
+
+  // ── plan tasks (started ones) ──
+
+  async addTask(input: Omit<Task, 'id' | 'createdAt'>): Promise<Task> {
+    const task: Task = { id: randomUUID(), createdAt: Date.now(), ...input };
+    await this.orm.insert(tasks).values(task);
+    return task;
+  }
+
+  async getTask(id: string): Promise<Task | undefined> {
+    const [row] = await this.orm.select().from(tasks).where(eq(tasks.id, id));
+    return row;
+  }
+
+  async findTask(planId: string, key: string): Promise<Task | undefined> {
+    const [row] = await this.orm
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.planId, planId), eq(tasks.key, key)));
+    return row;
+  }
+
+  async listTasks(planId: string): Promise<Task[]> {
+    return this.orm.select().from(tasks).where(eq(tasks.planId, planId)).orderBy(asc(tasks.createdAt));
+  }
+
+  async setTaskWorktree(id: string, worktreePath: string | null): Promise<void> {
+    await this.orm.update(tasks).set({ worktreePath }).where(eq(tasks.id, id));
+  }
+
+  async latestTaskRun(taskId: string): Promise<Run | undefined> {
+    const [row] = await this.orm
+      .select()
+      .from(runs)
+      .where(eq(runs.taskId, taskId))
+      .orderBy(desc(runs.startedAt))
+      .limit(1);
+    return row && toRun(row);
+  }
+
   private async withVariants(row: typeof plans.$inferSelect): Promise<PlanWithVariants> {
     const variants = await this.orm
       .select()
@@ -275,6 +321,7 @@ export class Db {
   async startRun(input: {
     projectId: string;
     requestId?: string;
+    taskId?: string;
     kind: RunKind;
     agentId: string;
   }): Promise<Run> {
@@ -282,9 +329,12 @@ export class Db {
       id: randomUUID(),
       ...input,
       requestId: input.requestId ?? null,
+      taskId: input.taskId ?? null,
       status: 'running',
       error: null,
       costUsd: null,
+      beforeSha: null,
+      afterSha: null,
       startedAt: Date.now(),
       endedAt: null,
     };
@@ -305,6 +355,11 @@ export class Db {
         endedAt: Date.now(),
       })
       .where(eq(runs.id, id));
+  }
+
+  /** Worktree heads of an implement run (SPEC §3.1). */
+  async setRunShas(id: string, shas: { beforeSha?: string | null; afterSha?: string | null }): Promise<void> {
+    await this.orm.update(runs).set(shas).where(eq(runs.id, id));
   }
 
   async latestRun(projectId: string, kind: RunKind): Promise<Run | undefined> {

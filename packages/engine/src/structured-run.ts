@@ -33,17 +33,11 @@ export async function executeStructuredRun<T>(
     save: (value: T) => Promise<void>;
   },
 ): Promise<void> {
-  const { db, notify } = deps;
+  const { db } = deps;
   const { run } = args;
   const runAgent = deps.runAgent ?? runClaudeStructured;
-  const changed = () => notify({ type: 'run', projectId: run.projectId, runId: run.id });
   const jsonSchema = z.toJSONSchema(args.schema);
-
-  // Events are appended in order; the UI is told after each one lands.
-  let pending = Promise.resolve();
-  const record = (event: NormalizedEvent) => {
-    pending = pending.then(() => db.appendEvent(run.id, event)).then(changed);
-  };
+  const { record, flush } = eventRecorder(deps, run);
 
   let costUsd = 0;
   try {
@@ -66,7 +60,7 @@ export async function executeStructuredRun<T>(
         ? (args.problems?.(parsed.data) ?? [])
         : parsed.error.issues.map((i) => `${i.path.join('.') || 'answer'}: ${i.message}`);
       if (parsed.success && problems.length === 0) {
-        await pending;
+        await flush();
         await args.save(parsed.data);
         await db.finishRun(run.id, { status: 'done', costUsd });
         return;
@@ -79,7 +73,7 @@ export async function executeStructuredRun<T>(
       sessionId = result.sessionId;
     }
   } catch (error) {
-    await pending;
+    await flush();
     if (error instanceof AgentCancelledError || args.signal.aborted) {
       await db.finishRun(run.id, { status: 'cancelled', costUsd });
     } else {
@@ -88,6 +82,18 @@ export async function executeStructuredRun<T>(
       await db.finishRun(run.id, { status: 'failed', error: message, costUsd });
     }
   }
+}
+
+/** Appends a run's events in order and tells the UI after each one lands; `flush` waits for the queue. */
+export function eventRecorder(deps: Pick<AgentDeps, 'db' | 'notify'>, run: Run) {
+  let pending = Promise.resolve();
+  const changed = () => deps.notify({ type: 'run', projectId: run.projectId, runId: run.id });
+  return {
+    record(event: NormalizedEvent) {
+      pending = pending.then(() => deps.db.appendEvent(run.id, event)).then(changed);
+    },
+    flush: () => pending,
+  };
 }
 
 /** One background run per key (a project, a request); a second start returns the active run. */
