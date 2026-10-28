@@ -2,6 +2,7 @@ import type { Project, Workspace } from '@studio/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { StatusDot, useAgentStatuses } from '../agent/status';
 import { useTRPC } from '../lib/trpc';
 import { TerminalPane } from './TerminalPane';
 import { disposeXterm } from './xterm-registry';
@@ -54,6 +55,7 @@ export function WorkspaceTabs(props: {
   }, [workspace.id, props.missing]);
 
   const terminals = list.data ?? [];
+  const status = useAgentStatuses().get(workspace.id);
   const hasSetup = workspace.setupStatus !== 'none' || Boolean(project.setupCommand);
   const agent = agentLabel(project.agentCommand ?? defaults.data?.agent ?? 'claude');
   const shellNumber = new Map(
@@ -96,6 +98,11 @@ export function WorkspaceTabs(props: {
             terminal.id,
             label(terminal.id, terminal.kind),
             <>
+              {terminal.kind === 'agent' && process.state === 'running' && (
+                <span className="mr-2.5 flex">
+                  <StatusDot status={status} />
+                </span>
+              )}
               {process.state === 'exited' && <span className="mr-1 text-[10px] text-faint">✕</span>}
               {terminal.kind === 'shell' && (
                 <button

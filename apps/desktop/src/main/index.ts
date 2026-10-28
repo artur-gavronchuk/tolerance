@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { openDb } from '@studio/db';
 import { Assessor, Implementer, Mapper, Planner, Workspaces } from '@studio/engine';
 import { app, BrowserWindow, nativeTheme, shell } from 'electron';
+import { startAgentStatus } from './agent-status';
 import { broadcast, sendPtyData, servePty, serveTrpc } from './ipc';
 import { adoptLoginShellPath } from './shell-path';
 import { PtyHost } from './terminals/pty-host';
@@ -12,6 +13,10 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 
 // Tests and side-by-side runs keep their database apart from the user's.
 if (process.env.STUDIO_USER_DATA) app.setPath('userData', process.env.STUDIO_USER_DATA);
+
+/** e2e runs: the window is never shown, Studio stays out of the Dock and never takes focus. */
+const hidden = process.env.STUDIO_HIDDEN_WINDOW === '1';
+if (hidden) app.dock?.hide();
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -28,10 +33,12 @@ function createWindow(): void {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      // A hidden test window must keep rendering and running timers.
+      backgroundThrottling: !hidden,
     },
   });
 
-  win.once('ready-to-show', () => win.show());
+  if (!hidden) win.once('ready-to-show', () => win.show());
 
   // Links open in the system browser, never inside the app window.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -61,21 +68,37 @@ app.whenReady().then(async () => {
   const planner = new Planner({ db, notify: broadcast });
   const implementer = new Implementer({ db, notify: broadcast });
   const workspaces = new Workspaces({ db, notify: broadcast });
+  const agentStatus = await startAgentStatus({
+    notify: broadcast,
+    // The dock shows how many workspaces wait for the developer.
+    setBadge: (count) => app.setBadgeCount(count),
+    onSession: (terminalId, sessionId) => {
+      void db.getTerminal(terminalId).then((terminal) => {
+        if (terminal && terminal.sessionId !== sessionId) void db.setTerminalSession(terminalId, sessionId);
+      });
+    },
+  });
+  const { statuses } = agentStatus;
   const host = new PtyHost({
-    data: sendPtyData,
+    data: (chunk) => {
+      sendPtyData(chunk);
+      statuses.statuses.output(chunk.terminalId);
+    },
     exit: (terminalId) => {
+      statuses.statuses.exited(terminalId);
       void db.getTerminal(terminalId).then((terminal) => {
         if (terminal) broadcast({ type: 'terminal', workspaceId: terminal.workspaceId, terminalId });
       });
     },
   });
-  const terminals = new Terminals({ db, host, notify: broadcast });
+  const terminals = new Terminals({ db, host, notify: broadcast, hooks: agentStatus.hooks });
   app.on('will-quit', () => {
     workspaces.killAll();
     host.killAll();
+    agentStatus.stop();
   });
   servePty(host);
-  serveTrpc(() => ({ db, mapper, assessor, planner, implementer, workspaces, terminals }));
+  serveTrpc(() => ({ db, mapper, assessor, planner, implementer, workspaces, terminals, statuses }));
 
   createWindow();
   app.on('activate', () => {

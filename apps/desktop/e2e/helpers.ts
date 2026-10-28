@@ -10,7 +10,14 @@ export async function launchStudio(env: Record<string, string> = {}) {
   const app = await electron.launch({
     args: ['.'],
     cwd: new URL('..', import.meta.url).pathname,
-    env: { ...process.env, ...env, STUDIO_USER_DATA: userData },
+    // No window on screen and no notifications: a test run must not get in the way of the person at the machine.
+    env: {
+      ...process.env,
+      STUDIO_NOTIFICATIONS: 'off',
+      STUDIO_HIDDEN_WINDOW: '1',
+      ...env,
+      STUDIO_USER_DATA: userData,
+    },
   });
   return { app, win: await app.firstWindow(), userData };
 }

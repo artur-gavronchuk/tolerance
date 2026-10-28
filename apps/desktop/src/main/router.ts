@@ -17,6 +17,7 @@ import { type Plan, ProjectSettings, planVariantProblems } from '@studio/schema'
 import { initTRPC, TRPCError } from '@trpc/server';
 import { app, BrowserWindow, dialog } from 'electron';
 import { z } from 'zod';
+import type { WorkspaceStatuses } from './agent-status/workspace-statuses';
 import { broadcast } from './ipc';
 import {
   DEFAULT_EDITOR,
@@ -36,6 +37,7 @@ export interface Context {
   implementer: Implementer;
   workspaces: Workspaces;
   terminals: Terminals;
+  statuses: WorkspaceStatuses;
 }
 
 const t = initTRPC.context<Context>().create({ isServer: true });
@@ -121,9 +123,21 @@ function notifyRequest(plan: Pick<Plan, 'projectId' | 'requestId'>) {
 
 export const router = t.router({
   system: t.router({
+    /** Brings the window to the front, e.g. after a click on an OS notification. */
+    focusWindow: t.procedure.mutation(() => {
+      const win = BrowserWindow.getAllWindows()[0];
+      if (!win || process.env.STUDIO_HIDDEN_WINDOW === '1') return;
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+      if (process.platform === 'darwin') app.focus({ steal: true });
+    }),
+
     info: t.procedure.query(async () => ({
       appVersion: app.getVersion(),
       claude: await detectClaude(),
+      /** OS notifications; tests turn them off so a run does not pop banners on the machine. */
+      notifications: process.env.STUDIO_NOTIFICATIONS !== 'off',
     })),
   }),
 
@@ -446,6 +460,16 @@ export const router = t.router({
       const terminal = await requireTerminal(ctx.db, input.terminalId);
       await ctx.terminals.close(terminal);
     }),
+  }),
+
+  /** What the agents of all workspaces are doing, and which workspace the developer looks at (D3). */
+  agents: t.router({
+    statuses: t.procedure.query(({ ctx }) => ctx.statuses.list()),
+
+    /** The open workspace while the window has focus, else null; looking at a workspace clears its mark. */
+    view: t.procedure
+      .input(z.object({ workspaceId: z.string().nullable() }))
+      .mutation(({ ctx, input }) => ctx.statuses.view(input.workspaceId)),
   }),
 
   runs: t.router({

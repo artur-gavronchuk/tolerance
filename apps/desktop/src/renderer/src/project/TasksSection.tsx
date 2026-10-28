@@ -55,8 +55,10 @@ function Composer(props: { project: Project; disabled: boolean; autoFocus: boole
   const create = useMutation(trpc.requests.create.mutationOptions());
   const input = useRef<HTMLTextAreaElement>(null);
   // Focused once the project turns out to have no tasks yet: writing one is the first thing to do.
+  // Not when the user is already typing elsewhere: the list loads late, and the keys would land here.
   useEffect(() => {
-    if (props.autoFocus) input.current?.focus();
+    const free = !document.activeElement || document.activeElement === document.body;
+    if (props.autoFocus && free) input.current?.focus();
   }, [props.autoFocus]);
   const canSend = !props.disabled && !create.isPending && text.trim().length > 0;
 

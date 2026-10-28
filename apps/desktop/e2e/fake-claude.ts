@@ -57,9 +57,33 @@ if (!args.includes('-p')) {
   // Interactive, as in a workspace terminal tab: say who we are, then echo what is typed.
   const id = args.includes('--session-id') ? args[args.indexOf('--session-id') + 1] : 'none';
   process.stdout.write('fake claude, session ' + id + ', in ' + require('node:path').basename(process.cwd()) + '\\r\\n> ');
-  require('node:readline').createInterface({ input: process.stdin }).on('line', (text) => {
+  // Hooks as Claude Code sends them, when started with Studio's --settings.
+  const settingsFile = args.includes('--settings') ? args[args.indexOf('--settings') + 1] : null;
+  const hookUrl = settingsFile ? JSON.parse(fs.readFileSync(settingsFile, 'utf8')).hooks.Stop[0].hooks[0].url : null;
+  const hook = (name) => hookUrl && fetch(hookUrl, { method: 'POST', headers: { Authorization: 'Bearer ' + process.env.STUDIO_HOOK_TOKEN }, body: JSON.stringify({ hook_event_name: name, session_id: id }) }).catch(() => {});
+  let asking = false;
+  require('node:readline').createInterface({ input: process.stdin }).on('line', async (text) => {
     if (text === 'exit') process.exit(0);
+    if (asking) {
+      // The answer to a permission request: the tool runs, then the turn ends.
+      asking = false;
+      await hook('PostToolUse');
+      process.stdout.write('ran it\\r\\n> ');
+      await hook('Stop');
+      return;
+    }
+    await hook('UserPromptSubmit');
+    if (text === 'ask later') {
+      // Asks for a permission after a while, so the developer can be elsewhere by then.
+      setTimeout(async () => {
+        asking = true;
+        process.stdout.write('May I run rm -rf build? (yes/no)\\r\\n> ');
+        await hook('PermissionRequest');
+      }, 1500);
+      return;
+    }
     process.stdout.write('you said: ' + text + '\\r\\n> ');
+    await hook('Stop');
   });
   return;
 }
