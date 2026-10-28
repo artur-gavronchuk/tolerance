@@ -90,6 +90,8 @@ async function runClaudeProcess(
   });
   const abort = () => child.kill('SIGTERM');
   opts.signal?.addEventListener('abort', abort, { once: true });
+  // Cancelled before the process existed: the listener above will never fire.
+  if (opts.signal?.aborted) abort();
 
   let stderr = '';
   child.stderr.on('data', (chunk) => {

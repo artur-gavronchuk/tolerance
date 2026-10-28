@@ -55,8 +55,10 @@ if (args.includes('--version')) { console.log('2.0.0 (Claude Code)'); process.ex
 const line = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
 if (!args.includes('-p')) {
   // Interactive, as in a workspace terminal tab: say who we are, then echo what is typed.
-  const id = args.includes('--session-id') ? args[args.indexOf('--session-id') + 1] : 'none';
-  process.stdout.write('fake claude, session ' + id + ', in ' + require('node:path').basename(process.cwd()) + '\\r\\n> ');
+  const flag = args.includes('--resume') ? '--resume' : '--session-id';
+  const id = args.includes(flag) ? args[args.indexOf(flag) + 1] : 'none';
+  const how = flag === '--resume' ? 'resumed session ' : 'session ';
+  process.stdout.write('fake claude, ' + how + id + ', in ' + require('node:path').basename(process.cwd()) + '\\r\\n> ');
   // Hooks as Claude Code sends them, when started with Studio's --settings.
   const settingsFile = args.includes('--settings') ? args[args.indexOf('--settings') + 1] : null;
   const hookUrl = settingsFile ? JSON.parse(fs.readFileSync(settingsFile, 'utf8')).hooks.Stop[0].hooks[0].url : null;

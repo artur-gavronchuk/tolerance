@@ -1,6 +1,7 @@
 import type { Run, Task, TaskSpecJson } from '@studio/schema';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { DiffText } from '../diff/DiffText';
 import { useTRPC } from '../lib/trpc';
 import { Notice, RunProgress } from './shared';
 
@@ -186,28 +187,4 @@ function TaskResult({ task, run }: { task: Task; run: Run | null }) {
       </div>
     </div>
   );
-}
-
-/** A unified diff as plain text, lines tinted by kind. Monaco comes later. */
-function DiffText({ patch }: { patch: string }) {
-  const lines = patch.split('\n');
-  return (
-    <pre className="max-h-[480px] overflow-auto rounded-md border border-line bg-panel py-1.5 font-mono text-[11.5px] leading-[1.45]">
-      {lines.map((line, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: static text, never reordered
-        <div key={i} className={`px-2 ${lineClass(line)}`}>
-          {line || ' '}
-        </div>
-      ))}
-    </pre>
-  );
-}
-
-function lineClass(line: string): string {
-  if (line.startsWith('diff --git')) return 'mt-2 font-semibold text-ink first:mt-0';
-  if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('index ')) return 'text-faint';
-  if (line.startsWith('@@')) return 'text-accent-fg';
-  if (line.startsWith('+')) return 'bg-add/10 text-add';
-  if (line.startsWith('-')) return 'bg-remove/10 text-remove';
-  return 'text-muted';
 }

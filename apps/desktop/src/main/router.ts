@@ -12,7 +12,20 @@ import {
   WorkspaceError,
   type Workspaces,
 } from '@studio/engine';
-import { defaultBranch, NotAGitRepoError, repoRoot } from '@studio/git';
+import {
+  branchState,
+  commitWorkspace,
+  createPullRequest,
+  defaultBranch,
+  diffFromMergeBase,
+  findPullRequest,
+  GhError,
+  GitActionError,
+  githubRepoUrl,
+  NotAGitRepoError,
+  pushBranch,
+  repoRoot,
+} from '@studio/git';
 import { type Plan, ProjectSettings, planVariantProblems } from '@studio/schema';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { app, BrowserWindow, dialog } from 'electron';
@@ -93,6 +106,16 @@ async function asUserError<T>(work: () => Promise<T>): Promise<T> {
     }
     if (error instanceof TerminalStateError) {
       throw new TRPCError({ code: 'CONFLICT', message: error.message, cause: error });
+    }
+    if (error instanceof GitActionError) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `git.${error.code}:${error.detail}`,
+        cause: error,
+      });
+    }
+    if (error instanceof GhError) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: `gh.${error.code}:${error.detail}`, cause: error });
     }
     if (error instanceof OpenInError) {
       throw new TRPCError({
@@ -433,6 +456,7 @@ export const router = t.router({
       .mutation(async ({ ctx, input }) => {
         await requireWorkspace(ctx.db, input.workspaceId);
         await ctx.terminals.ensureDefaults(input.workspaceId);
+        return ctx.terminals.list(input.workspaceId);
       }),
 
     addShell: t.procedure.input(z.object({ workspaceId: z.string() })).mutation(async ({ ctx, input }) => {
@@ -441,13 +465,25 @@ export const router = t.router({
     }),
 
     start: t.procedure
-      .input(z.object({ terminalId: z.string(), cols: z.number().int(), rows: z.number().int() }))
+      .input(
+        z.object({
+          terminalId: z.string(),
+          cols: z.number().int(),
+          rows: z.number().int(),
+          /** Agent tab: continue the stored Claude session instead of a new one (D4). */
+          resume: z.boolean().default(false),
+        }),
+      )
       .mutation(async ({ ctx, input }) => {
         const terminal = await requireTerminal(ctx.db, input.terminalId);
         const workspace = await requireWorkspace(ctx.db, terminal.workspaceId);
         const project = await requireProject(ctx.db, workspace.projectId);
         await asUserError(() =>
-          ctx.terminals.start({ project, workspace, terminal }, { cols: input.cols, rows: input.rows }),
+          ctx.terminals.start(
+            { project, workspace, terminal },
+            { cols: input.cols, rows: input.rows },
+            { resume: input.resume },
+          ),
         );
       }),
 
@@ -460,6 +496,74 @@ export const router = t.router({
       const terminal = await requireTerminal(ctx.db, input.terminalId);
       await ctx.terminals.close(terminal);
     }),
+  }),
+
+  /** The workspace branch against the project's main branch: diff, commit, push, pull request (D4). */
+  changes: t.router({
+    /** Uncommitted files, commits on the branch, upstream and what is not pushed yet. */
+    state: t.procedure.input(z.object({ workspaceId: z.string() })).query(async ({ ctx, input }) => {
+      const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+      if (!existsSync(workspace.path)) return null;
+      return branchState(workspace.path, workspace.baseRef);
+    }),
+
+    /** Committed and uncommitted changes from the merge-base with the main branch, untracked included. */
+    diff: t.procedure.input(z.object({ workspaceId: z.string() })).query(async ({ ctx, input }) => {
+      const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+      if (!existsSync(workspace.path)) return null;
+      return diffFromMergeBase({ cwd: workspace.path, base: workspace.baseRef });
+    }),
+
+    commit: t.procedure
+      .input(z.object({ workspaceId: z.string(), message: z.string().max(20_000) }))
+      .mutation(async ({ ctx, input }) => {
+        const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+        return asUserError(() => commitWorkspace(workspace.path, input.message));
+      }),
+
+    push: t.procedure.input(z.object({ workspaceId: z.string() })).mutation(async ({ ctx, input }) => {
+      const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+      await asUserError(() => pushBranch(workspace.path));
+    }),
+
+    /**
+     * The branch's pull request through `gh`. Without `gh` (or logged out) the UI shows the commands
+     * and a compare link instead; nothing is ever merged.
+     */
+    pullRequest: t.procedure.input(z.object({ workspaceId: z.string() })).query(async ({ ctx, input }) => {
+      const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+      const project = await requireProject(ctx.db, workspace.projectId);
+      const repoUrl = await githubRepoUrl(project.repoPath);
+      const manual = {
+        compareUrl: repoUrl
+          ? `${repoUrl}/compare/${project.defaultBranch}...${workspace.branch}?expand=1`
+          : null,
+        commands: [
+          `git push -u origin ${workspace.branch}`,
+          `gh pr create --head ${workspace.branch} --base ${project.defaultBranch} --fill`,
+        ],
+      };
+      try {
+        return { gh: 'ok' as const, url: await findPullRequest(workspace.path, workspace.branch), ...manual };
+      } catch (error) {
+        if (error instanceof GhError && error.code !== 'failed')
+          return { gh: error.code, url: null, ...manual };
+        throw error;
+      }
+    }),
+
+    /** Pushes what is not pushed yet, then opens the pull request into the main branch. */
+    createPullRequest: t.procedure
+      .input(z.object({ workspaceId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const workspace = await requireWorkspace(ctx.db, input.workspaceId);
+        const project = await requireProject(ctx.db, workspace.projectId);
+        return asUserError(async () => {
+          const state = await branchState(workspace.path, workspace.baseRef);
+          if (state.unpushed !== 0) await pushBranch(workspace.path);
+          return createPullRequest(workspace.path, { branch: workspace.branch, base: project.defaultBranch });
+        });
+      }),
   }),
 
   /** What the agents of all workspaces are doing, and which workspace the developer looks at (D3). */

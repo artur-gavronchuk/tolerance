@@ -1,6 +1,7 @@
 import { realpath } from 'node:fs/promises';
 import { git } from './exec';
 
+export * from './branch';
 export * from './diff';
 export { git } from './exec';
 export * from './workspace';

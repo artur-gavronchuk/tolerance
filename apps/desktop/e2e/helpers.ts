@@ -5,8 +5,9 @@ import { join } from 'node:path';
 import { _electron as electron, type Page } from '@playwright/test';
 
 /** Starts the built app with its own empty data folder. */
-export async function launchStudio(env: Record<string, string> = {}) {
-  const userData = mkdtempSync(join(tmpdir(), 'studio-e2e-'));
+export async function launchStudio(env: Record<string, string> = {}, opts: { userData?: string } = {}) {
+  // Passing the folder of an earlier launch restarts Studio on the same database.
+  const userData = opts.userData ?? mkdtempSync(join(tmpdir(), 'studio-e2e-'));
   const app = await electron.launch({
     args: ['.'],
     cwd: new URL('..', import.meta.url).pathname,
