@@ -444,6 +444,22 @@ export const TerminalProcess = z.object({
 });
 export type TerminalProcess = z.infer<typeof TerminalProcess>;
 
+/**
+ * What the agent of a workspace is doing (daily mode, D3): from Claude Code hooks, or for agents
+ * without hooks from the process alone. `stalled`: working, but silent for too long (SPEC §3.3).
+ */
+export const AgentStatus = z.enum(['working', 'needs_input', 'idle', 'stalled', 'exited']);
+export type AgentStatus = z.infer<typeof AgentStatus>;
+
+export const WorkspaceStatus = z.object({
+  workspaceId: z.string(),
+  projectId: z.string(),
+  status: AgentStatus,
+  /** Something happened the developer has not looked at yet: a question, or a finished turn. */
+  attention: z.boolean(),
+});
+export type WorkspaceStatus = z.infer<typeof WorkspaceStatus>;
+
 // ── Runs and agent events ───────────────────────────────────────────────────
 
 export const RunKind = z.enum([
@@ -518,4 +534,13 @@ export type StudioEvent =
   | { type: 'map'; projectId: string }
   | { type: 'request'; projectId: string; requestId: string }
   | { type: 'workspace'; projectId: string; workspaceId: string }
-  | { type: 'terminal'; workspaceId: string; terminalId: string };
+  | { type: 'terminal'; workspaceId: string; terminalId: string }
+  /** `notify`: the agent just asked something or finished its turn; the UI may show an OS notification. */
+  | {
+      type: 'agent';
+      projectId: string;
+      workspaceId: string;
+      /** "project / workspace", for the notification. */
+      title: string;
+      notify: 'needs_input' | 'idle' | 'stalled' | null;
+    };

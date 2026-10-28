@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { basename } from 'node:path';
 import type { Db } from '@studio/db';
 import type { Project, StudioEvent, Terminal, TerminalProcess, Workspace } from '@studio/schema';
+import { HOOK_TOKEN_ENV } from '../agent-status/hook-server';
 import type { PtyHost, PtySnapshot } from './pty-host';
 
 export const DEFAULT_AGENT = 'claude';
@@ -31,13 +32,19 @@ export function terminalCommand(input: {
   kind: Terminal['kind'];
   agentCommand: string | null;
   sessionId: string | null;
+  /** `claude --settings <file>` with Studio's status hooks; null when the hook server is down. */
+  hookSettings?: string | null;
   shell: string;
 }): { file: string; args: string[] } {
   const flags = shellFlags(input.shell);
   if (input.kind === 'shell') return { file: input.shell, args: flags };
   const agent = input.agentCommand?.trim() || DEFAULT_AGENT;
-  const line =
-    isClaude(agent) && input.sessionId ? `exec ${agent} --session-id ${input.sessionId}` : `exec ${agent}`;
+  const extra: string[] = [];
+  if (isClaude(agent)) {
+    if (input.hookSettings) extra.push('--settings', shellQuote(input.hookSettings));
+    if (input.sessionId) extra.push('--session-id', input.sessionId);
+  }
+  const line = ['exec', agent, ...extra].join(' ');
   return { file: input.shell, args: [...flags, '-c', line] };
 }
 
@@ -66,14 +73,39 @@ export function terminalEnv(
   };
 }
 
+/** One argument for `sh -c`, safe whatever it contains. */
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
 export class TerminalStateError extends Error {}
+
+/** How an agent tab reports its status (D3): the hook settings file and a token per start. */
+export interface AgentHooks {
+  settingsPath: string | null;
+  tokenFor(terminalId: string): string;
+  revoke(terminalId: string): void;
+  track(
+    terminalId: string,
+    owner: { workspaceId: string; projectId: string; title: string },
+    opts: { hooks: boolean },
+  ): void;
+  untrack(terminalId: string): void;
+}
 
 /**
  * Terminal tabs of workspaces: rows in SQLite, processes in {@link PtyHost}. A new workspace gets
  * the agent tab and a shell tab.
  */
 export class Terminals {
-  constructor(private readonly deps: { db: Db; host: PtyHost; notify: (event: StudioEvent) => void }) {}
+  constructor(
+    private readonly deps: {
+      db: Db;
+      host: PtyHost;
+      notify: (event: StudioEvent) => void;
+      hooks?: AgentHooks;
+    },
+  ) {}
 
   async list(workspaceId: string): Promise<{ terminal: Terminal; process: TerminalProcess }[]> {
     const rows = await this.deps.db.listTerminals(workspaceId);
@@ -104,24 +136,31 @@ export class Terminals {
     if (host.process(terminal.id).state === 'running') return;
     if (!existsSync(workspace.path)) throw new TerminalStateError('Workspace folder is missing');
 
+    const claude = terminal.kind === 'agent' && isClaude(project.agentCommand ?? DEFAULT_AGENT);
     let sessionId: string | null = null;
-    if (terminal.kind === 'agent' && isClaude(project.agentCommand ?? DEFAULT_AGENT)) {
+    if (claude) {
       sessionId = randomUUID();
       await db.setTerminalSession(terminal.id, sessionId);
     }
-    const shell = userShell();
+    const env = terminalEnv(process.env, { project, workspace });
+    const hooks = this.deps.hooks;
+    const hookSettings = claude ? (hooks?.settingsPath ?? null) : null;
+    if (hooks && hookSettings) env[HOOK_TOKEN_ENV] = hooks.tokenFor(terminal.id);
     const command = terminalCommand({
       kind: terminal.kind,
       agentCommand: project.agentCommand,
       sessionId,
-      shell,
+      hookSettings,
+      shell: userShell(),
     });
-    host.start(terminal.id, {
-      ...command,
-      cwd: workspace.path,
-      env: terminalEnv(process.env, { project, workspace }),
-      ...size,
-    });
+    host.start(terminal.id, { ...command, cwd: workspace.path, env, ...size });
+    if (terminal.kind === 'agent') {
+      hooks?.track(
+        terminal.id,
+        { workspaceId: workspace.id, projectId: project.id, title: `${project.name} / ${workspace.name}` },
+        { hooks: Boolean(hookSettings) },
+      );
+    }
     this.deps.notify({ type: 'terminal', workspaceId: workspace.id, terminalId: terminal.id });
   }
 
@@ -131,12 +170,18 @@ export class Terminals {
 
   /** Closes a tab: stops its program and removes it. */
   async close(terminal: Terminal): Promise<void> {
-    this.deps.host.dispose(terminal.id);
+    this.forget(terminal.id);
     await this.deps.db.removeTerminal(terminal.id);
   }
 
   /** Stops every program of a workspace, e.g. before its folder is removed. */
   async stopWorkspace(workspaceId: string): Promise<void> {
-    for (const terminal of await this.deps.db.listTerminals(workspaceId)) this.deps.host.dispose(terminal.id);
+    for (const terminal of await this.deps.db.listTerminals(workspaceId)) this.forget(terminal.id);
+  }
+
+  private forget(terminalId: string): void {
+    this.deps.host.dispose(terminalId);
+    this.deps.hooks?.revoke(terminalId);
+    this.deps.hooks?.untrack(terminalId);
   }
 }

@@ -9,6 +9,10 @@ export function useStudioEvents(): void {
   useEffect(
     () =>
       window.studio.onEvent((event) => {
+        if (event.type === 'agent') {
+          void queryClient.invalidateQueries({ queryKey: trpc.agents.statuses.queryKey() });
+          return;
+        }
         if (event.type === 'terminal') {
           void queryClient.invalidateQueries({
             queryKey: trpc.terminals.list.queryKey({ workspaceId: event.workspaceId }),

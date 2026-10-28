@@ -1,9 +1,10 @@
-import type { Project, Workspace } from '@studio/schema';
+import type { Project, Workspace, WorkspaceStatus } from '@studio/schema';
 import { QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { TRPCClientError } from '@trpc/client';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isWaiting, useAgentNotifications, useAgentStatuses, useReportView } from './agent/status';
 import { type Language, languages, setLanguage } from './i18n';
 import { useStudioEvents } from './lib/events';
 import { queryClient, TRPCProvider, trpcClient, useTRPC } from './lib/trpc';
@@ -74,6 +75,16 @@ function Shell() {
   });
   const openWorkspace = selected ? workspaces.data?.find((w) => w.workspace.id === workspaceId) : undefined;
 
+  // D3: which agents wait for the developer, OS notifications, and what is being looked at.
+  const statuses = useAgentStatuses();
+  const waiting = [...statuses.values()].filter(isWaiting);
+  const openAt = (projectId: string, id: string) => {
+    setSelectedId(projectId);
+    selectWorkspace(id);
+  };
+  useAgentNotifications(openAt, info.data?.notifications ?? false);
+  useReportView(openWorkspace?.workspace.id ?? null);
+
   async function addProject() {
     setError(null);
     try {
@@ -108,6 +119,9 @@ function Shell() {
         adding={pickFolder.isPending || add.isPending}
         workspaceId={openWorkspace?.workspace.id ?? null}
         onSelectWorkspace={selectWorkspace}
+        statuses={statuses}
+        waiting={waiting}
+        onOpenWaiting={(s) => openAt(s.projectId, s.workspaceId)}
         onWorkspaceCreated={(workspace, error) => {
           setFetchError(error ? { workspaceId: workspace.id, error } : null);
           selectWorkspace(workspace.id);
@@ -167,13 +181,28 @@ function Sidebar(props: {
   workspaceId: string | null;
   onSelectWorkspace: (id: string) => void;
   onWorkspaceCreated: (workspace: Workspace, fetchError: string | null) => void;
+  statuses: Map<string, WorkspaceStatus>;
+  waiting: WorkspaceStatus[];
+  onOpenWaiting: (status: WorkspaceStatus) => void;
 }) {
   const { t } = useTranslation();
+  const first = props.waiting[0];
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-bg">
       {/* Leaves room for the macOS window buttons. */}
-      <div className="drag flex h-10 shrink-0 items-center pl-20">
+      <div className="drag flex h-10 shrink-0 items-center justify-between pr-2 pl-20">
         <span className="text-[13px] font-semibold tracking-tight">Studio</span>
+        {first && (
+          <button
+            type="button"
+            title={t('agent.waitingHint')}
+            onClick={() => props.onOpenWaiting(first)}
+            className="no-drag flex items-center gap-1.5 rounded-full border border-modify/60 px-2 py-0.5 text-[11.5px] font-medium text-modify hover:bg-modify/10"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-modify" />
+            {t('agent.waiting', { count: props.waiting.length })}
+          </button>
+        )}
       </div>
       <div className="flex items-center justify-between px-3 pt-3 pb-1">
         <span className="text-[12px] font-medium text-muted">{t('sidebar.projects')}</span>
@@ -201,9 +230,12 @@ function Sidebar(props: {
                 onClick={() => props.onSelect(p.id)}
                 aria-current={p.id === props.selectedId && !props.workspaceId ? 'page' : undefined}
                 title={p.repoPath}
-                className="w-full truncate rounded-md px-1.5 py-1 text-left text-[13px] text-muted hover:bg-panel hover:text-ink aria-[current=page]:bg-sel aria-[current=page]:text-ink"
+                className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[13px] text-muted hover:bg-panel hover:text-ink aria-[current=page]:bg-sel aria-[current=page]:text-ink"
               >
-                {p.name}
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                {p.id !== props.selectedId && props.waiting.some((s) => s.projectId === p.id) && (
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-modify" />
+                )}
               </button>
               {p.id === props.selectedId && (
                 <WorkspaceList
@@ -211,6 +243,7 @@ function Sidebar(props: {
                   selectedId={props.workspaceId}
                   onSelect={props.onSelectWorkspace}
                   onCreated={props.onWorkspaceCreated}
+                  statuses={props.statuses}
                 />
               )}
             </li>

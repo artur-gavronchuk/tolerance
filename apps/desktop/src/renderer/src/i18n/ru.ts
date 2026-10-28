@@ -300,6 +300,26 @@ export const ru = {
       empty: 'Вывода пока нет.',
     },
   },
+  agent: {
+    waiting_one: 'ждёт {{count}}',
+    waiting_few: 'ждут {{count}}',
+    waiting_many: 'ждут {{count}}',
+    waiting_other: 'ждут {{count}}',
+    waitingHint:
+      'Воркспейсы, где агент ждёт вас: задал вопрос, просит разрешение или закончил ход. Нажмите, чтобы открыть первый.',
+    status: {
+      working: 'Агент работает',
+      needs_input: 'Агент ждёт ответа',
+      idle: 'Агент закончил ход',
+      stalled: 'Агент давно молчит',
+      exited: 'Агент остановлен',
+    },
+    notify: {
+      needs_input: 'Агент ждёт ответа: вопрос или разрешение.',
+      idle: 'Агент закончил ход.',
+      stalled: 'Агент молчит уже 10 минут.',
+    },
+  },
   terminal: {
     newShell: 'Новый shell',
     close: 'Закрыть {{name}}',

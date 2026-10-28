@@ -1,7 +1,8 @@
-import type { Workspace } from '@studio/schema';
+import type { Workspace, WorkspaceStatus } from '@studio/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { StatusDot } from '../agent/status';
 import { useTRPC } from '../lib/trpc';
 import { relativeTime, useNow, userError } from './shared';
 
@@ -11,6 +12,7 @@ export function WorkspaceList(props: {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onCreated: (workspace: Workspace, fetchError: string | null) => void;
+  statuses: Map<string, WorkspaceStatus>;
 }) {
   const trpc = useTRPC();
   const { t, i18n } = useTranslation();
@@ -67,6 +69,7 @@ export function WorkspaceList(props: {
               >
                 <span className="flex items-center gap-1.5">
                   <span className="min-w-0 flex-1 truncate text-[12.5px]">{workspace.name}</span>
+                  <StatusDot status={props.statuses.get(workspace.id)} />
                   {workspace.setupStatus === 'running' && (
                     <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent motion-reduce:animate-none" />
                   )}

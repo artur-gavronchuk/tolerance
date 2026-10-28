@@ -302,6 +302,26 @@ export const en: Messages = {
       empty: 'No output yet.',
     },
   },
+  agent: {
+    waiting_one: '{{count}} waiting',
+    waiting_few: '{{count}} waiting',
+    waiting_many: '{{count}} waiting',
+    waiting_other: '{{count}} waiting',
+    waitingHint:
+      'Workspaces where the agent waits for you: a question, a permission or a finished turn. Click to open the first.',
+    status: {
+      working: 'The agent is working',
+      needs_input: 'The agent waits for your answer',
+      idle: 'The agent finished its turn',
+      stalled: 'The agent has been silent for long',
+      exited: 'The agent is stopped',
+    },
+    notify: {
+      needs_input: 'The agent waits for you: a question or a permission.',
+      idle: 'The agent finished its turn.',
+      stalled: 'The agent has been silent for 10 minutes.',
+    },
+  },
   terminal: {
     newShell: 'New shell',
     close: 'Close {{name}}',
