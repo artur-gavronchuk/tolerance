@@ -1,7 +1,12 @@
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { openDb } from '@studio/db';
 import type { Project, TerminalProcess, Workspace } from '@studio/schema';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type PtyChunk, PtyHost } from './pty-host';
-import { isClaude, terminalCommand, terminalEnv } from './terminals';
+import { isClaude, Terminals, terminalCommand, terminalEnv } from './terminals';
 
 describe('PtyHost', () => {
   let host: PtyHost;
@@ -90,6 +95,19 @@ describe('terminal commands', () => {
     ).toEqual({ file: '/bin/sh', args: ['-i', '-c', 'exec claude --model opus --session-id abc'] });
   });
 
+  it('continues a stored Claude session with --resume', () => {
+    expect(
+      terminalCommand({
+        kind: 'agent',
+        agentCommand: null,
+        sessionId: 'abc',
+        resume: true,
+        hookSettings: '/h/my hooks.json',
+        shell: '/bin/zsh',
+      }).args.at(-1),
+    ).toBe("exec claude --settings '/h/my hooks.json' --resume abc");
+  });
+
   it('runs other agents as they are, and shells as interactive login shells', () => {
     expect(isClaude('/opt/homebrew/bin/claude')).toBe(true);
     expect(isClaude('codex')).toBe(false);
@@ -124,5 +142,77 @@ describe('terminal commands', () => {
     });
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined();
     expect(env.CLAUDECODE).toBeUndefined();
+  });
+});
+
+describe('resuming an agent session', () => {
+  it('starts a new session when Claude has nothing to resume, and keeps a session that resumes', async () => {
+    const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'studio-resume-')));
+    const saved = { PATH: process.env.PATH, SHELL: process.env.SHELL };
+    // A stand-in claude that knows one session: "known".
+    const bin = join(tmp, 'bin');
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, 'claude'),
+      `#!/bin/sh
+case "$*" in
+  *"--resume known"*) echo "resumed known"; sleep 30 ;;
+  *--resume*) echo "No conversation found with session ID"; exit 1 ;;
+  *) echo "fresh session $*"; sleep 30 ;;
+esac
+`,
+    );
+    chmodSync(join(bin, 'claude'), 0o755);
+    process.env.PATH = `${bin}:${saved.PATH}`;
+    process.env.SHELL = '/nonexistent';
+
+    const db = await openDb(
+      join(tmp, 'studio.db'),
+      fileURLToPath(new URL('../../../../../packages/db/drizzle', import.meta.url)),
+    );
+    let terminals: Terminals | undefined;
+    const host = new PtyHost({ data: () => {}, exit: (id, p) => void terminals?.exited(id, p.exitCode) });
+    terminals = new Terminals({ db, host, notify: () => {} });
+    try {
+      const project = await db.addProject({ name: 'arena', repoPath: tmp, defaultBranch: 'main' });
+      const workspace = await db.addWorkspace({
+        projectId: project.id,
+        name: 'w',
+        slug: 'w',
+        branch: 'studio/ws/w',
+        path: tmp,
+        baseRef: 'main',
+        baseSha: 'abc',
+        setupStatus: 'none',
+      });
+      await terminals.ensureDefaults(workspace.id);
+      const agentTab = async () => (await db.listTerminals(workspace.id))[0];
+      const size = { cols: 80, rows: 24 };
+
+      // A session id Claude never wrote (nothing was typed after the restart that lost it).
+      const first = await agentTab();
+      if (!first) throw new Error('no agent tab');
+      await db.setTerminalSession(first.id, 'gone');
+      await terminals.start({ project, workspace, terminal: (await agentTab()) ?? first }, size, {
+        resume: true,
+      });
+      await vi.waitFor(() => expect(host.snapshot(first.id).data).toContain('fresh session'), 5000);
+      const fresh = (await agentTab())?.sessionId;
+      expect(fresh).toMatch(/^[0-9a-f-]{36}$/);
+      expect(host.snapshot(first.id).data).toContain(`fresh session --session-id ${fresh}`);
+      host.dispose(first.id);
+
+      await db.setTerminalSession(first.id, 'known');
+      await terminals.start({ project, workspace, terminal: (await agentTab()) ?? first }, size, {
+        resume: true,
+      });
+      await vi.waitFor(() => expect(host.snapshot(first.id).data).toContain('resumed known'), 5000);
+      expect((await agentTab())?.sessionId).toBe('known');
+    } finally {
+      host.killAll();
+      db.close();
+      Object.assign(process.env, saved);
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

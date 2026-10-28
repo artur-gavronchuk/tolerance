@@ -9,6 +9,11 @@ export function userError(t: TFunction, error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const workspace = /^workspace\.(bad_name|setup_running|no_setup)$/.exec(message);
   if (workspace) return t(`errors.workspace.${workspace[1] as 'bad_name'}`);
+  const gitAction =
+    /^git\.(nothing_to_commit|empty_message|hook_failed|not_studio_branch|push_failed):(.*)$/s.exec(message);
+  if (gitAction) return t(`errors.git.${gitAction[1] as 'hook_failed'}`, { detail: gitAction[2] });
+  const gh = /^gh\.(missing|logged_out|failed):(.*)$/s.exec(message);
+  if (gh) return t(`errors.gh.${gh[1] as 'failed'}`, { detail: gh[2] });
   const open = /^open\.(editor_not_found|terminal_not_found|folder_failed):(.*)$/s.exec(message);
   if (open) return t(`errors.open.${open[1] as 'editor_not_found'}`, { detail: open[2] });
   return t('errors.generic', { message });

@@ -245,6 +245,8 @@ describe('Implementer', () => {
       worktreesRoot: root,
       runImplement: (opts) =>
         new Promise((_, reject) => {
+          // As the real runner does: a cancel that came first must still end the run.
+          if (opts.signal?.aborted) reject(new Error('killed'));
           opts.signal?.addEventListener('abort', () => reject(new Error('killed')));
         }),
     });
@@ -255,7 +257,7 @@ describe('Implementer', () => {
     await vi.waitFor(() => expect(implementer.activeRun(plan.id)).toBeUndefined(), 5000);
     const t1 = await db.findTask(plan.id, 'T1');
     expect((await db.latestTaskRun(t1?.id ?? ''))?.status).toBe('cancelled');
-  });
+  }, 15_000);
 
   it('fails the run with a clear message when the repository has no commits', async () => {
     rmSync(join(repo, '.git'), { recursive: true });

@@ -4,10 +4,12 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StatusDot, useAgentStatuses } from '../agent/status';
 import { useTRPC } from '../lib/trpc';
+import { ChangesPanel } from '../workspace/ChangesPanel';
 import { TerminalPane } from './TerminalPane';
 import { disposeXterm } from './xterm-registry';
 
 const SETUP_TAB = 'setup';
+const CHANGES_TAB = 'changes';
 /** The open tab of each workspace, kept while the app runs. */
 const activeTabs = new Map<string, string>();
 
@@ -32,7 +34,14 @@ export function WorkspaceTabs(props: {
   const list = useQuery(trpc.terminals.list.queryOptions({ workspaceId: workspace.id }));
   const defaults = useQuery(trpc.projects.openDefaults.queryOptions());
   const refresh = () => queryClient.invalidateQueries({ queryKey: listKey });
-  const ensure = useMutation(trpc.terminals.ensureDefaults.mutationOptions({ onSuccess: refresh }));
+  // The answer is the list itself: a list fetch still in flight from before must not win with no tabs.
+  const ensure = useMutation(
+    trpc.terminals.ensureDefaults.mutationOptions({
+      onSuccess: (tabs) => {
+        queryClient.setQueryData(listKey, tabs);
+      },
+    }),
+  );
   const addShell = useMutation(
     trpc.terminals.addShell.mutationOptions({
       onSuccess: async (terminal) => {
@@ -67,8 +76,12 @@ export function WorkspaceTabs(props: {
     return n === 1 ? 'shell' : `shell ${n}`;
   };
 
-  const ids = [...terminals.map((x) => x.terminal.id), ...(hasSetup ? [SETUP_TAB] : [])];
-  const current = active && ids.includes(active) ? active : (ids[0] ?? null);
+  const ids = [...terminals.map((x) => x.terminal.id), CHANGES_TAB, ...(hasSetup ? [SETUP_TAB] : [])];
+  // The agent tab opens by default; Changes only on request (or when there are no terminals at all).
+  const current =
+    active && ids.includes(active)
+      ? active
+      : (terminals[0]?.terminal.id ?? (list.isSuccess ? CHANGES_TAB : null));
   const open = terminals.find((x) => x.terminal.id === current);
 
   const tab = (id: string, text: string, extra?: ReactNode) => (
@@ -133,6 +146,7 @@ export function WorkspaceTabs(props: {
           </button>
         )}
         <div className="flex-1" />
+        {tab(CHANGES_TAB, t('changes.title'))}
         {hasSetup &&
           tab(
             SETUP_TAB,
@@ -147,6 +161,10 @@ export function WorkspaceTabs(props: {
       <div className="min-h-0 flex-1">
         {current === SETUP_TAB ? (
           <div className="h-full overflow-auto px-8 pb-8">{props.setup}</div>
+        ) : current === CHANGES_TAB ? (
+          <div className="h-full overflow-auto px-6">
+            <ChangesPanel project={project} workspace={workspace} />
+          </div>
         ) : open ? (
           <TerminalPane
             key={open.terminal.id}

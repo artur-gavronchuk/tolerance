@@ -87,13 +87,13 @@ test('a workspace opens with the agent and a shell that keep running across swit
   await win.getByRole('button', { name: 'Закрыть shell 2' }).click();
   await expect(win.getByRole('tab', { name: 'shell 2' })).toHaveCount(0);
 
-  // When the agent exits, it can be started again with a new session.
+  // When the agent exits, it can continue its session or start a new one; here, a new one.
   await win.getByRole('tab', { name: 'claude' }).click();
   await agent.click();
   await win.keyboard.type('exit');
   await win.keyboard.press('Enter');
   await expect(win.getByText('Процесс завершился, код 0.')).toBeVisible();
-  await win.getByRole('button', { name: 'Запустить claude' }).click();
+  await win.getByRole('button', { name: 'Новая сессия' }).click();
   const secondSession = async () =>
     (await tabs()).find((x) => x.terminal.kind === 'agent')?.terminal.sessionId;
   await expect.poll(secondSession).not.toBe(firstSession);

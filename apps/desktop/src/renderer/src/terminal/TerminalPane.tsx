@@ -45,10 +45,12 @@ export function TerminalPane(props: { terminal: Terminal; process: TerminalProce
     truncatedNote: t('terminal.truncated'),
   });
 
-  const run = () => {
+  const run = (resume = false) => {
     fitNow(entry);
-    start.mutate({ terminalId: terminal.id, cols: entry.term.cols, rows: entry.term.rows });
+    start.mutate({ terminalId: terminal.id, cols: entry.term.cols, rows: entry.term.rows, resume });
   };
+  // An agent tab with a known Claude session continues it rather than starting over (D4).
+  const resumable = terminal.kind === 'agent' && terminal.sessionId !== null;
 
   // Show the xterm here while the tab is open; park it when the tab or workspace is left.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attach once per tab; the entry is stable for its id.
@@ -70,7 +72,7 @@ export function TerminalPane(props: { terminal: Terminal; process: TerminalProce
     observer.observe(el);
     if (startsByItself(terminal, process)) {
       autoStarted.add(terminal.id);
-      void entry.ready.then(run);
+      void entry.ready.then(() => run());
     }
     return () => {
       observer.disconnect();
@@ -126,13 +128,24 @@ export function TerminalPane(props: { terminal: Terminal; process: TerminalProce
                 ? t('terminal.agentStopped', { agent: props.label })
                 : t('terminal.stopped')}
           </span>
+          {resumable && (
+            <button
+              type="button"
+              onClick={() => run(true)}
+              className="rounded-md border border-accent px-2 py-0.5 text-[12px] font-medium text-accent-fg hover:bg-accent/10"
+            >
+              {t('terminal.resume')}
+            </button>
+          )}
           <button
             type="button"
-            onClick={run}
+            onClick={() => run()}
             className="rounded-md border border-line px-2 py-0.5 text-[12px] hover:border-accent hover:text-accent-fg"
           >
             {terminal.kind === 'agent'
-              ? t('terminal.startAgent', { agent: props.label })
+              ? resumable
+                ? t('terminal.newSession')
+                : t('terminal.startAgent', { agent: props.label })
               : t('terminal.start')}
           </button>
           {start.error && <span className="text-remove">{userError(t, start.error)}</span>}

@@ -42,7 +42,9 @@ function createWindow(): void {
 
   // Links open in the system browser, never inside the app window.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://') || url.startsWith('http://')) void shell.openExternal(url);
+    // A hidden test run never opens the user's browser.
+    if (hidden) console.log(`open external: ${url}`);
+    else if (url.startsWith('https://') || url.startsWith('http://')) void shell.openExternal(url);
     return { action: 'deny' };
   });
 
@@ -84,8 +86,10 @@ app.whenReady().then(async () => {
       sendPtyData(chunk);
       statuses.statuses.output(chunk.terminalId);
     },
-    exit: (terminalId) => {
+    exit: (terminalId, process) => {
       statuses.statuses.exited(terminalId);
+      // A resume with nothing to resume falls back to a new session.
+      void terminals.exited(terminalId, process.exitCode);
       void db.getTerminal(terminalId).then((terminal) => {
         if (terminal) broadcast({ type: 'terminal', workspaceId: terminal.workspaceId, terminalId });
       });
