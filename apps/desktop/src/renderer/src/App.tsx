@@ -8,6 +8,7 @@ import { isWaiting, useAgentNotifications, useAgentStatuses, useReportView } fro
 import { type Language, languages, setLanguage } from './i18n';
 import { useStudioEvents } from './lib/events';
 import { queryClient, TRPCProvider, trpcClient, useTRPC } from './lib/trpc';
+import { PainButton, PainDialog, usePain } from './pain/Pain';
 import { ProjectView } from './project/ProjectView';
 import { applyTheme, storedTheme, swatches, type Theme, themes } from './theme';
 import { WorkspaceList } from './workspace/WorkspaceList';
@@ -85,6 +86,14 @@ function Shell() {
   useAgentNotifications(openAt, info.data?.notifications ?? false);
   useReportView(openWorkspace?.workspace.id ?? null);
 
+  // D5: the "Pain" box, from the sidebar button or the hotkey anywhere.
+  const pain = usePain({
+    projectId: selected?.id ?? null,
+    projectName: selected?.name ?? null,
+    workspaceId: openWorkspace?.workspace.id ?? null,
+    workspaceName: openWorkspace?.workspace.slug ?? null,
+  });
+
   async function addProject() {
     setError(null);
     try {
@@ -122,6 +131,7 @@ function Shell() {
         statuses={statuses}
         waiting={waiting}
         onOpenWaiting={(s) => openAt(s.projectId, s.workspaceId)}
+        onPain={pain.show}
         onWorkspaceCreated={(workspace, error) => {
           setFetchError(error ? { workspaceId: workspace.id, error } : null);
           selectWorkspace(workspace.id);
@@ -168,6 +178,7 @@ function Shell() {
         </div>
         <StatusBar />
       </main>
+      <PainDialog open={pain.open} onClose={pain.close} context={pain.context} />
     </div>
   );
 }
@@ -184,6 +195,7 @@ function Sidebar(props: {
   statuses: Map<string, WorkspaceStatus>;
   waiting: WorkspaceStatus[];
   onOpenWaiting: (status: WorkspaceStatus) => void;
+  onPain: () => void;
 }) {
   const { t } = useTranslation();
   const first = props.waiting[0];
@@ -251,6 +263,7 @@ function Sidebar(props: {
         </ul>
       )}
       <div className="mt-auto space-y-3 border-t border-line p-3">
+        <PainButton onClick={props.onPain} />
         <Preferences />
       </div>
     </aside>

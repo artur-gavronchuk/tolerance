@@ -30,6 +30,7 @@ import { type Plan, ProjectSettings, planVariantProblems } from '@studio/schema'
 import { initTRPC, TRPCError } from '@trpc/server';
 import { app, BrowserWindow, dialog } from 'electron';
 import { z } from 'zod';
+import { studioHome } from './agent-status';
 import type { WorkspaceStatuses } from './agent-status/workspace-statuses';
 import { broadcast } from './ipc';
 import {
@@ -40,6 +41,7 @@ import {
   openInEditor,
   openInTerminal,
 } from './open-in';
+import { appendPain, ensurePainsFile, MAX_PAIN, painLine, painsPath } from './pains';
 import { DEFAULT_AGENT, TerminalStateError, type Terminals } from './terminals/terminals';
 
 export interface Context {
@@ -161,6 +163,8 @@ export const router = t.router({
       claude: await detectClaude(),
       /** OS notifications; tests turn them off so a run does not pop banners on the machine. */
       notifications: process.env.STUDIO_NOTIFICATIONS !== 'off',
+      /** Where the "Pain" button writes (D5). */
+      painsPath: painsPath(studioHome()),
     })),
   }),
 
@@ -574,6 +578,36 @@ export const router = t.router({
     view: t.procedure
       .input(z.object({ workspaceId: z.string().nullable() }))
       .mutation(({ ctx, input }) => ctx.statuses.view(input.workspaceId)),
+  }),
+
+  /** D5: a one-line note on what got in the way, with where it happened, for a later pass with an agent. */
+  pains: t.router({
+    add: t.procedure
+      .input(
+        z.object({
+          text: z.string().trim().min(1).max(MAX_PAIN),
+          projectId: z.string().nullable(),
+          workspaceId: z.string().nullable(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const project = input.projectId ? await ctx.db.getProject(input.projectId) : undefined;
+        const workspace = input.workspaceId ? await ctx.db.getWorkspace(input.workspaceId) : undefined;
+        const line = painLine({
+          text: input.text,
+          project: project?.name ?? null,
+          workspace: workspace?.slug ?? null,
+          at: new Date(),
+        });
+        return { path: appendPain(studioHome(), line), line };
+      }),
+
+    /** Opens `pains.md` in the default app for Markdown; tests never open anything. */
+    open: t.procedure.mutation(async () => {
+      if (process.env.STUDIO_HIDDEN_WINDOW === '1') return;
+      const path = ensurePainsFile(studioHome());
+      await asUserError(() => openFolder(path));
+    }),
   }),
 
   runs: t.router({

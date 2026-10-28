@@ -377,6 +377,16 @@ export const ru = {
     resume: 'Продолжить сессию',
     newSession: 'Новая сессия',
   },
+  pain: {
+    button: 'Боль',
+    buttonHint: 'Записать, что мешает: строка уйдёт в ~/.studio/pains.md ({{hotkey}})',
+    title: 'Что мешает?',
+    placeholder: 'Одной строкой: что сломалось, чего не хватило',
+    hint: 'Enter — записать, Esc — закрыть',
+    nowhere: 'вне проекта',
+    saved: 'Боль записана',
+    openFile: 'Открыть pains.md',
+  },
   projectSettings: {
     title: 'Воркспейсы',
     lead: 'Как готовить новый воркспейс и чем его открывать.',
