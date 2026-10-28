@@ -380,6 +380,16 @@ export const en: Messages = {
     resume: 'Continue session',
     newSession: 'New session',
   },
+  pain: {
+    button: 'Pain',
+    buttonHint: 'Note what gets in the way: one line goes to ~/.studio/pains.md ({{hotkey}})',
+    title: 'What gets in the way?',
+    placeholder: 'One line: what broke, what was missing',
+    hint: 'Enter to save, Esc to close',
+    nowhere: 'outside a project',
+    saved: 'Pain saved',
+    openFile: 'Open pains.md',
+  },
   projectSettings: {
     title: 'Workspaces',
     lead: 'How a new workspace is prepared and what opens it.',
